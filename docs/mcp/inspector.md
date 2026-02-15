@@ -22,7 +22,7 @@ PlanExe has multiple MCP servers that can be connected to.
 
 1. Open [home.planexe.org](https://home.planexe.org)
 2. Sign in with Google
-3. Buy credits for 1 USD.
+3. Buy credits for 6 USD. It cost around 1.4 USD to create one plan, so that should be around 4 plans.
 4. Click `Generate new API key` and copy it to clipboard. You will need this API key, in order to connect to the server.
 
 ### Connect to MCP Server

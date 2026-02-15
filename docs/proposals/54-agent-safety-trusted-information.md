@@ -9,10 +9,10 @@
 
 ## The Million-Dollar Line
 
-**"PlanExe helps prevent your agents from getting STDs and spreading ACID."**
+**"PlanExe helps prevent your agents from getting STDs and spreading AIDS."**
 
 - **STD** = Search Transmitted Disease (prompt injection attacks from untrusted websites)
-- **ACID** = Agent Corruption & Injection Defects (systemic corruption spreading across your AI pipeline)
+- **AIDS** = Agent Injected Deceptive Scheming (systemic corruption spreading across your AI pipeline)
 
 ---
 
@@ -78,7 +78,7 @@ Don't let your agent stick itself raw into any old website. PlanExe is the prote
 - Reduced token burn (vector search vs. web scraping)
 - Sanitized, verified information pipeline
 
-**4. Prevention of ACID (Agent Corruption & Injection Defects)**  
+**4. Prevention of AIDS (Agent Injected Deceptive Scheming)**  
 - Stops corruption at the source
 - No advertiser manipulation
 - Audit trail for all information sources
@@ -145,7 +145,7 @@ AI scrapes content → no ad views → no revenue → publishers paywall content
 > "Gave my AI agent access to my credit card. Told it to make money. Woke up to a $5,000 charge for a scam course. PlanExe makes sure your agent doesn't do dumb shit."
 
 **Twitter Thread:**
-> "Your agent is going to get an STD. Search Transmitted Disease. It'll visit the wrong website, get prompt injected, and leak your banking info. Then it'll spread ACID - Agent Corruption & Injection Defects - corrupting your whole system. PlanExe is the condom. Thread 🧵"
+> "Your agent is going to get an STD. Search Transmitted Disease. It'll visit the wrong website, get prompt injected, and leak your banking info. Then it'll spread AIDS - Agent Injected Deceptive Scheming - corrupting your whole system. PlanExe is the condom. Thread 🧵"
 
 **LinkedIn (Professional Version):**
 > "As AI agents become autonomous economic actors, they face the same security challenges humans do online - but with potentially catastrophic consequences. PlanExe provides trusted information infrastructure to protect your AI operations from prompt injection attacks, advertiser manipulation, and unreliable sources."
@@ -252,7 +252,7 @@ AI scrapes content → no ad views → no revenue → publishers paywall content
 
 **The Problem:** AI agents are naive and will do catastrophically dumb things when exposed to the unfiltered web.
 
-**The Solution:** PlanExe provides trusted, curated information infrastructure - a condom against STDs and ACID.
+**The Solution:** PlanExe provides trusted, curated information infrastructure - a condom against STDs and AIDS.
 
 **The Opportunity:** First-mover advantage in a market that doesn't know it needs this yet, but will desperately need it within 12 months.
 

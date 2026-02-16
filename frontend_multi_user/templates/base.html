@@ -89,10 +89,43 @@
             font-size: 0.9rem;
             font-weight: 500;
             transition: color 0.15s;
+            position: relative;
         }
         .site-nav a:hover {
             color: var(--color-text);
             text-decoration: none;
+        }
+        .site-nav a.nav-active {
+            color: var(--color-text);
+        }
+        .site-nav a.nav-active::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -4px;
+            height: 2px;
+            border-radius: 2px;
+            background: var(--px-primary, #3578e5);
+        }
+        .site-brand-icon.nav-active {
+            color: var(--color-text);
+        }
+        .site-nav a.site-brand-icon.nav-active::after {
+            content: none;
+        }
+        .site-brand-icon.nav-active .site-brand-label {
+            position: relative;
+        }
+        .site-brand-icon.nav-active .site-brand-label::after {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: -4px;
+            height: 2px;
+            border-radius: 2px;
+            background: var(--px-primary, #3578e5);
         }
         .nav-user {
             color: var(--color-text) !important;
@@ -185,13 +218,13 @@
     <header class="site-header">
         <div class="header-inner">
             <nav class="site-nav">
-                <a href="{{ url_for('index') }}" class="site-brand-icon" aria-label="Home">
+                <a href="{{ url_for('index') }}" class="site-brand-icon {% if request.endpoint == 'index' %}nav-active{% endif %}" aria-label="Home">
                     <img src="https://planexe.org/planexe-icon.svg" alt="" width="24" height="24">
                     <span class="site-brand-label">Home</span>
                 </a>
                 <div class="site-nav-spacer"></div>
                 {% if current_user_name %}
-                    <a href="{{ url_for('account') }}" class="nav-user">{{ current_user_name }}</a>
+                    <a href="{{ url_for('account') }}" class="nav-user {% if request.endpoint == 'account' %}nav-active{% endif %}">{{ current_user_name }}</a>
                     <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}
                     <a href="https://planexe.org/" target="_blank">About</a>

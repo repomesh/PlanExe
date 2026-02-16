@@ -895,21 +895,21 @@ class MyFlaskApp:
         seconds = max(0, int((now - dt).total_seconds()))
         if seconds >= 365 * 24 * 3600:
             n = seconds // (365 * 24 * 3600)
-            return f"{n}year" if n == 1 else f"{n}years"
+            return f"{n} year" if n == 1 else f"{n} years"
         if seconds >= 30 * 24 * 3600:
             n = seconds // (30 * 24 * 3600)
-            return f"{n}month" if n == 1 else f"{n}months"
+            return f"{n} month" if n == 1 else f"{n} months"
         if seconds >= 24 * 3600:
             n = seconds // (24 * 3600)
-            return f"{n}day" if n == 1 else f"{n}days"
+            return f"{n} day" if n == 1 else f"{n} days"
         if seconds >= 3600:
             n = seconds // 3600
-            return f"{n}hour" if n == 1 else f"{n}hours"
+            return f"{n} hour" if n == 1 else f"{n} hours"
         if seconds >= 60:
             n = seconds // 60
-            return f"{n}min" if n == 1 else f"{n}mins"
+            return f"{n} min" if n == 1 else f"{n} mins"
         n = seconds
-        return f"{n}sec" if n == 1 else f"{n}secs"
+        return f"{n} sec" if n == 1 else f"{n} secs"
 
     def _read_inference_cost_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[float]:
         if not run_zip_snapshot:

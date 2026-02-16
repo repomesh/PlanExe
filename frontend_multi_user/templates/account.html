@@ -340,12 +340,6 @@
 {% endblock %}
 
 {% block content %}
-{# ── Back to dashboard ──────────────────────────────────────── #}
-<a href="{{ url_for('index') }}" class="back-link">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-    Back to Dashboard
-</a>
-
 <div class="acct-header">
     <h1>Account</h1>
     <p>Manage your profile, API access, and billing.</p>
@@ -439,7 +433,7 @@
                     <div class="billing-row">
                         <div class="billing-input-group">
                             <label for="credits">Credits</label>
-                            <input type="number" class="billing-input" name="credits" id="credits" value="1" min="1">
+                            <input type="number" class="billing-input" name="credits" id="credits" value="5" min="1">
                         </div>
                         {% if stripe_enabled %}
                             <button class="btn-acct btn-acct-primary">Pay with Stripe</button>
@@ -457,7 +451,7 @@
                         <div class="billing-row">
                             <div class="billing-input-group">
                                 <label for="credits_telegram">Credits</label>
-                                <input type="number" class="billing-input" name="credits" id="credits_telegram" value="1" min="1">
+                                <input type="number" class="billing-input" name="credits" id="credits_telegram" value="5" min="1">
                             </div>
                             <button class="btn-acct btn-acct-secondary">Pay with Telegram Stars</button>
                         </div>

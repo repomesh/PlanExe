@@ -16,6 +16,7 @@ import io
 import zipfile
 import secrets
 import hashlib
+import tempfile
 from urllib.parse import quote_plus, urlparse
 from typing import ClassVar, Dict, Optional, Tuple, Any
 from pathlib import Path
@@ -1704,6 +1705,80 @@ class MyFlaskApp:
             response = make_response(task.generated_report_html)
             response.headers['Content-Type'] = 'text/html'
             return response
+
+        @self.app.route('/plan')
+        @login_required
+        def plan():
+            run_id = request.args.get('id', '')
+            logger.info(f"Plan iframe wrapper requested for run_id: {run_id!r}")
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                logger.error(f"Task not found for run_id: {run_id!r}")
+                return jsonify({"error": "Task not found"}), 400
+
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                logger.warning("Unauthorized plan wrapper access attempt. run_id=%s user_id=%s", run_id, current_user.id)
+                return jsonify({"error": "Forbidden"}), 403
+
+            return render_template("plan_iframe.html", run_id=run_id, task=task)
+
+        @self.app.route('/plan/download/report')
+        @login_required
+        def plan_download_report():
+            run_id = request.args.get('id', '')
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+            if not task.generated_report_html:
+                return jsonify({"error": "Report not available"}), 404
+            buffer = io.BytesIO(task.generated_report_html.encode('utf-8'))
+            buffer.seek(0)
+            download_name = f"{task.id}-report.html"
+            return send_file(buffer, mimetype='text/html', as_attachment=True, download_name=download_name)
+
+        @self.app.route('/plan/download/zip')
+        @login_required
+        def plan_download_zip():
+            run_id = request.args.get('id', '')
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+            if not task.run_zip_snapshot:
+                return jsonify({"error": "Run zip not available"}), 404
+
+            # Sanitize run zip for end users: remove sensitive track_activity.jsonl files.
+            try:
+                with tempfile.TemporaryDirectory() as tmp_dir:
+                    extract_dir = Path(tmp_dir) / "extract"
+                    extract_dir.mkdir(parents=True, exist_ok=True)
+
+                    with zipfile.ZipFile(io.BytesIO(task.run_zip_snapshot), "r") as in_zip:
+                        in_zip.extractall(extract_dir)
+
+                    for sensitive_file in extract_dir.rglob("track_activity.jsonl"):
+                        try:
+                            sensitive_file.unlink()
+                        except OSError:
+                            logger.warning("Unable to remove sensitive file from zip staging: %s", sensitive_file)
+
+                    sanitized_buffer = io.BytesIO()
+                    with zipfile.ZipFile(sanitized_buffer, "w", compression=zipfile.ZIP_DEFLATED) as out_zip:
+                        for file_path in extract_dir.rglob("*"):
+                            if file_path.is_file():
+                                arcname = file_path.relative_to(extract_dir)
+                                out_zip.write(file_path, arcname=str(arcname))
+
+                    sanitized_buffer.seek(0)
+            except zipfile.BadZipFile:
+                logger.error("Invalid run zip snapshot for run_id=%s", run_id)
+                return jsonify({"error": "Run zip is invalid"}), 500
+
+            download_name = f"{task.id}.zip"
+            return send_file(sanitized_buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
 
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required

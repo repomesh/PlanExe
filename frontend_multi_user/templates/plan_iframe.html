@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Plan - PlanExe{% endblock %}
+{% block head %}
+<style>
+    .plan-meta-panel {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        margin-bottom: 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-card-bg);
+    }
+    .plan-meta-info {
+        min-width: 0;
+    }
+    .plan-meta-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--color-text);
+    }
+    .plan-meta-sub {
+        margin: 2px 0 0;
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+        word-break: break-all;
+    }
+    .plan-meta-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .btn-plan-meta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 7px 12px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        text-decoration: none;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--color-text);
+        background: var(--color-bg);
+    }
+    .btn-plan-meta:hover {
+        color: var(--color-text);
+        text-decoration: none;
+        border-color: var(--color-text-secondary);
+    }
+    .btn-plan-meta-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    .plan-state {
+        display: inline-flex;
+        align-items: center;
+        margin-top: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        text-transform: capitalize;
+    }
+    .plan-pending {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-bg-soft);
+        padding: 16px;
+        color: var(--color-text);
+    }
+    .plan-pending h3 {
+        margin: 0 0 6px;
+        font-size: 1rem;
+    }
+    .plan-pending p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--color-text-secondary);
+    }
+    .plan-frame-wrap {
+        width: 100%;
+        height: calc(100vh - 56px - 80px - 64px);
+        min-height: 520px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        background: var(--color-bg-soft);
+    }
+    .plan-frame {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        background: #fff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="plan-meta-panel">
+    <div class="plan-meta-info">
+        <p class="plan-meta-title">Plan</p>
+        <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
+        {% if not task.state or task.state.name != 'completed' %}
+        <p class="plan-state">
+            Status:
+            {% if task.state %}
+                {{ task.state.name | lower }}
+            {% else %}
+                pending
+            {% endif %}
+            {% if task.progress_percentage is not none %}
+                · {{ "%.0f"|format(task.progress_percentage) }}%
+            {% endif %}
+            {% if task.progress_message %}
+                · {{ task.progress_message }}
+            {% endif %}
+        </p>
+        {% endif %}
+    </div>
+    <div class="plan-meta-actions">
+        {% if task.generated_report_html %}
+        <a class="btn-plan-meta" href="{{ url_for('plan_download_report') }}?id={{ task.id }}">Download Report</a>
+        {% else %}
+        <span class="btn-plan-meta btn-plan-meta-disabled">Download Report</span>
+        {% endif %}
+        {% if task.run_zip_snapshot %}
+        <a class="btn-plan-meta" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}">Download ZIP</a>
+        {% else %}
+        <span class="btn-plan-meta btn-plan-meta-disabled">Download ZIP</span>
+        {% endif %}
+    </div>
+</div>
+
+{% if not task.generated_report_html %}
+<div class="plan-pending">
+    <h3>Plan is still being generated</h3>
+    <p>
+        {% if task.progress_message %}
+            {{ task.progress_message }}
+        {% else %}
+            This plan is in progress. Refresh this page in a little while.
+        {% endif %}
+    </p>
+</div>
+{% else %}
+<div class="plan-frame-wrap">
+    <iframe
+        class="plan-frame"
+        src="{{ url_for('viewplan') }}?run_id={{ run_id }}"
+        title="Plan report"
+        loading="eager"
+        referrerpolicy="no-referrer"
+    ></iframe>
+</div>
+{% endif %}
+{% endblock %}

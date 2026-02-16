@@ -499,9 +499,7 @@
 <h2 class="section-title">Recent Plans</h2>
 <div class="tasks-list">
     {% for task in recent_tasks %}
-    {% if task.generated_report_html %}
-    <a class="task-row-link" href="{{ url_for('viewplan') }}?run_id={{ task.id }}">
-    {% endif %}
+    <a class="task-row-link" href="{{ url_for('plan') }}?id={{ task.id }}">
     <div class="task-row">
         <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
         <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
@@ -509,9 +507,7 @@
             {% if task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
         </span>
     </div>
-    {% if task.generated_report_html %}
     </a>
-    {% endif %}
     {% endfor %}
 </div>
 {% else %}

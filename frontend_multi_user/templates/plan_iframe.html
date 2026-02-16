@@ -2,16 +2,31 @@
 {% block title %}Plan - PlanExe{% endblock %}
 {% block head %}
 <style>
+    html, body {
+        overflow: hidden;
+    }
+    .site-footer {
+        display: none;
+    }
+    .site-main {
+        max-width: none;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        min-height: calc(100vh - 56px);
+        height: calc(100vh - 56px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
     .plan-meta-panel {
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 12px;
         padding: 12px 14px;
-        margin-bottom: 12px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        background: var(--color-card-bg);
+        background: var(--color-card-background-secondary);
+        flex: 0 0 auto;
     }
     .plan-meta-info {
         min-width: 0;
@@ -68,10 +83,14 @@
     }
     .plan-frame-wrap {
         width: 100%;
-        height: calc(100vh - 56px - 80px - 64px);
-        min-height: 520px;
+        flex: 1 1 auto;
+        min-height: 0;
+        height: auto;
         border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: 0;
         overflow: hidden;
         background: var(--color-bg-soft);
     }

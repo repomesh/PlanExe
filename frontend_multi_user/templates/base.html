@@ -51,25 +51,27 @@
             height: 56px;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-start;
         }
-        .site-brand {
-            font-size: 1.125rem;
-            font-weight: 700;
-            color: var(--color-text);
-            text-decoration: none;
-            display: flex;
+        .site-brand-icon {
+            display: inline-flex;
             align-items: center;
+            justify-content: flex-start;
             gap: 8px;
-        }
-        .site-brand:hover,
-        .site-brand:focus {
+            height: 32px;
             color: var(--color-text);
             text-decoration: none;
+            border-radius: 6px;
         }
-        .site-brand img {
+        .site-brand-icon img {
             width: 24px;
             height: 24px;
+            display: block;
+        }
+        .site-brand-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            line-height: 1;
         }
         .site-nav {
             display: flex;
@@ -78,7 +80,9 @@
             list-style: none;
             margin: 0;
             padding: 0;
+            width: 100%;
         }
+        .site-nav-spacer { flex: 1 1 auto; }
         .site-nav a {
             color: var(--color-text-secondary);
             text-decoration: none;
@@ -180,13 +184,13 @@
 <body>
     <header class="site-header">
         <div class="header-inner">
-            <a href="{{ url_for('index') }}" class="site-brand">
-                <img src="https://planexe.org/planexe-icon.svg" alt="" width="24" height="24">
-                PlanExe
-            </a>
             <nav class="site-nav">
+                <a href="{{ url_for('index') }}" class="site-brand-icon" aria-label="Home">
+                    <img src="https://planexe.org/planexe-icon.svg" alt="" width="24" height="24">
+                    <span class="site-brand-label">Home</span>
+                </a>
+                <div class="site-nav-spacer"></div>
                 {% if current_user_name %}
-                    <a href="{{ url_for('index') }}">Dashboard</a>
                     <a href="{{ url_for('account') }}" class="nav-user">{{ current_user_name }}</a>
                     <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}

@@ -21,7 +21,7 @@
                          "Helvetica Neue", Arial, sans-serif;
             --radius: 8px;
             --radius-lg: 12px;
-            --max-width: 960px;
+            --max-width: 100%;
         }
 
         *, *::before, *::after { box-sizing: border-box; }
@@ -200,7 +200,8 @@
 
         /* keep Bootstrap .container constrained to our max-width */
         .container {
-            max-width: var(--max-width);
+            max-width: none;
+            width: 100%;
         }
     </style>
     {% if google_analytics_id %}

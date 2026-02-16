@@ -285,6 +285,128 @@
         font-size: 0.95rem;
     }
 
+    /* ── New plan form ──────────────────────────────── */
+    .new-plan-section {
+        background: var(--color-card-bg);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        margin-bottom: 32px;
+        box-shadow: 0 1px 3px var(--color-card-shadow);
+    }
+    .new-plan-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .new-plan-header svg {
+        width: 20px;
+        height: 20px;
+        color: var(--color-primary);
+        flex-shrink: 0;
+    }
+    .new-plan-header h2 {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin: 0;
+    }
+    .new-plan-body {
+        padding: 20px;
+    }
+    .new-plan-body textarea {
+        width: 100%;
+        min-height: 120px;
+        padding: 12px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        font-family: var(--font-sans);
+        font-size: 0.9rem;
+        line-height: 1.5;
+        resize: vertical;
+        outline: none;
+        transition: border-color 0.15s;
+        box-sizing: border-box;
+        color: var(--color-text);
+        background: var(--color-bg);
+    }
+    .new-plan-body textarea:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .new-plan-body textarea::placeholder {
+        color: var(--color-text-secondary);
+    }
+    .example-chips {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+    .example-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 12px;
+        background: var(--color-bg-soft);
+        border: 1px solid var(--color-border);
+        border-radius: 20px;
+        font-size: 0.78rem;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s;
+    }
+    .example-chip:hover {
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+    .new-plan-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-top: 14px;
+    }
+    .new-plan-footer .credit-hint {
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+    }
+    .btn-start-plan {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 28px;
+        background: var(--color-primary);
+        color: #fff;
+        border: none;
+        border-radius: var(--radius);
+        font-size: 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+    }
+    .btn-start-plan:hover {
+        background: var(--color-primary-hover);
+        transform: translateY(-1px);
+    }
+    .btn-start-plan:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none;
+    }
+    .btn-start-plan svg {
+        width: 16px;
+        height: 16px;
+    }
+    .char-count {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        text-align: right;
+        margin-top: 4px;
+        font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+    }
+
     /* ── Admin view ─────────────────────────────────── */
     .admin-notice {
         text-align: center;
@@ -333,6 +455,46 @@
     </div>
 </div>
 
+{# ── Start New Plan form ────────────────────────────────────── #}
+{% if nonce %}
+<div class="new-plan-section">
+    <div class="new-plan-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <h2>Start a New Plan</h2>
+    </div>
+    <div class="new-plan-body">
+        {% if example_prompts %}
+        <div class="example-chips">
+            {% for ep in example_prompts %}
+            <button type="button" class="example-chip" data-index="{{ loop.index0 }}">Example {{ loop.index }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <form id="new-plan-form" method="POST" action="{{ url_for('run') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="user_id" value="{{ user_id }}">
+            <input type="hidden" name="nonce" value="{{ nonce }}">
+            <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
+            <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
+            <div class="char-count" id="char-count">0 characters</div>
+            <div class="new-plan-footer">
+                <span class="credit-hint">
+                    {% if not user.free_plan_used %}
+                        Your first plan is free!
+                    {% else %}
+                        Uses 1 credit &middot; Balance: {{ credits_balance_display }}
+                    {% endif %}
+                </span>
+                <button type="submit" class="btn-start-plan" id="btn-start-plan">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Generate Plan
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <div class="quick-actions">
     <a href="{{ url_for('account') }}" class="btn-action btn-action-secondary">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -361,7 +523,7 @@
 </div>
 {% else %}
 <div class="empty-state">
-    <p>You haven't created any plans yet. Get started by creating your first one.</p>
+    <p>You haven't created any plans yet. Describe your idea above and click <strong>Generate Plan</strong> to get started.</p>
 </div>
 {% endif %}
 
@@ -416,5 +578,33 @@
         <a href="https://planexe.org/" target="_blank">planexe.org</a>
     </p>
 </section>
+{% endif %}
+
+{% if user and nonce and example_prompts %}
+<script>
+    // Example prompts loaded from the server
+    var examplePrompts = JSON.parse('{{ example_prompts | tojson | safe }}');
+    var textarea = document.getElementById('plan-prompt');
+    var charCount = document.getElementById('char-count');
+
+    // Update character count as the user types
+    function updateCount() {
+        var len = textarea.value.length;
+        charCount.textContent = len + ' character' + (len !== 1 ? 's' : '');
+    }
+    textarea.addEventListener('input', updateCount);
+
+    // Example chip click handlers — fill textarea with the example prompt
+    document.querySelectorAll('.example-chip').forEach(function(chip) {
+        chip.addEventListener('click', function() {
+            var idx = parseInt(this.getAttribute('data-index'), 10);
+            if (examplePrompts[idx]) {
+                textarea.value = examplePrompts[idx];
+                updateCount();
+                textarea.focus();
+            }
+        });
+    });
+</script>
 {% endif %}
 {% endblock %}

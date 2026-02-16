@@ -1020,6 +1020,9 @@ class MyFlaskApp:
             user = None
             recent_tasks: list[TaskItem] = []
             is_admin = False
+            nonce = None
+            user_id = None
+            example_prompts: list[str] = []
             if current_user.is_authenticated:
                 is_admin = current_user.is_admin
                 if not is_admin:
@@ -1027,13 +1030,21 @@ class MyFlaskApp:
                         user_uuid = uuid.UUID(str(current_user.id))
                         user = self.db.session.get(UserAccount, user_uuid)
                         if user:
+                            user_id = str(user.id)
+                            # Generate a nonce so the user can start a plan from the dashboard
+                            nonce = 'DASH_' + str(uuid.uuid4())
                             recent_tasks = (
                                 TaskItem.query
                                 .filter_by(user_id=str(user.id))
                                 .order_by(TaskItem.timestamp_created.desc())
-                                .limit(5)
+                                .limit(10)
                                 .all()
                             )
+                            # Load example prompts for the "Start New Plan" form
+                            for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
+                                prompt_item = self.prompt_catalog.find(prompt_uuid)
+                                if prompt_item:
+                                    example_prompts.append(prompt_item.prompt)
                     except Exception:
                         logger.debug("Could not load dashboard data", exc_info=True)
             return render_template(
@@ -1042,6 +1053,9 @@ class MyFlaskApp:
                 credits_balance_display=self._format_credit_display(user.credits_balance) if user else "0",
                 recent_tasks=recent_tasks,
                 is_admin=is_admin,
+                nonce=nonce,
+                user_id=user_id,
+                example_prompts=example_prompts,
             )
 
         @self.app.route('/healthcheck')

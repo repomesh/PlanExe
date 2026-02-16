@@ -884,8 +884,7 @@ class MyFlaskApp:
     @staticmethod
     def _format_credit_display(value: Any) -> str:
         amount = MyFlaskApp._to_credit_decimal(value)
-        text = format(amount, "f").rstrip("0").rstrip(".")
-        return text if text else "0"
+        return format(amount, ".2f")
 
     def _read_inference_cost_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[float]:
         if not run_zip_snapshot:

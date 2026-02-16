@@ -59,9 +59,9 @@ SHOW_DEMO_PLAN = False
 CREDIT_SCALE = Decimal("0.000000001")
 
 DEMO_FORM_RUN_PROMPT_UUIDS = [
-    "0ad5ea63-cf38-4d10-a3f3-d51baa609abd",
+    "ab700769-c3ba-4f8a-913d-8589fea4624e",
     "00e1c738-a663-476a-b950-62785922f6f0",
-    "3ca89453-e65b-4828-994f-dff0b679444a"
+    "e6ddd953-939f-4d15-89ec-fd3988f79123"
 ]
 
 def build_postgres_uri_from_env(env: Dict[str, str]) -> Tuple[str, Dict[str, str]]:

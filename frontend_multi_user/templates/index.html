@@ -583,7 +583,7 @@
 {% if user and nonce and example_prompts %}
 <script>
     // Example prompts loaded from the server
-    var examplePrompts = JSON.parse('{{ example_prompts | tojson | safe }}');
+    var examplePrompts = {{ example_prompts | tojson | safe }};
     var textarea = document.getElementById('plan-prompt');
     var charCount = document.getElementById('char-count');
 

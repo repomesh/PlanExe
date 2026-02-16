@@ -1022,6 +1022,7 @@ class MyFlaskApp:
             is_admin = False
             nonce = None
             user_id = None
+            can_create_plan = False
             example_prompts: list[str] = []
             if current_user.is_authenticated:
                 is_admin = current_user.is_admin
@@ -1045,12 +1046,15 @@ class MyFlaskApp:
                                 prompt_item = self.prompt_catalog.find(prompt_uuid)
                                 if prompt_item:
                                     example_prompts.append(prompt_item.prompt)
+                            credits_balance = self._to_credit_decimal(user.credits_balance)
+                            can_create_plan = (not user.free_plan_used) or (credits_balance >= Decimal("2"))
                     except Exception:
                         logger.debug("Could not load dashboard data", exc_info=True)
             return render_template(
                 'index.html',
                 user=user,
                 credits_balance_display=self._format_credit_display(user.credits_balance) if user else "0",
+                can_create_plan=can_create_plan,
                 recent_tasks=recent_tasks,
                 is_admin=is_admin,
                 nonce=nonce,
@@ -1706,8 +1710,8 @@ class MyFlaskApp:
                             parameters = {}
                         parameters["billing_skip_usage_charge"] = True
                     else:
-                        if (user.credits_balance or 0) <= 0:
-                            return jsonify({"error": "No credits available"}), 402
+                        if self._to_credit_decimal(user.credits_balance) < Decimal("2"):
+                            return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
 
                 task = TaskItem(
                     state=TaskState.pending,

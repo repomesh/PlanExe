@@ -479,12 +479,16 @@
                     {% if not user.free_plan_used %}
                         Your first plan is free!
                     {% else %}
-                        Uses 1 credit &middot; Balance: {{ credits_balance_display }}
+                        Estimated cost: 1-2 credits
                     {% endif %}
                 </span>
-                <button type="submit" class="btn-start-plan" id="btn-start-plan">
+                <button type="submit" class="btn-start-plan" id="btn-start-plan" {% if user.free_plan_used and not can_create_plan %}disabled{% endif %}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Generate Plan
+                    {% if user.free_plan_used and not can_create_plan %}
+                        Insufficient credits
+                    {% else %}
+                        Generate Plan
+                    {% endif %}
                 </button>
             </div>
         </form>

@@ -225,7 +225,6 @@
                 <div class="site-nav-spacer"></div>
                 {% if current_user_name %}
                     <a href="{{ url_for('account') }}" class="nav-user {% if request.endpoint == 'account' %}nav-active{% endif %}">{{ current_user_name }}</a>
-                    <a href="{{ url_for('logout') }}">Logout</a>
                 {% else %}
                     <a href="https://planexe.org/" target="_blank">About</a>
                     <a href="{{ url_for('login') }}" class="btn-nav">Sign In</a>

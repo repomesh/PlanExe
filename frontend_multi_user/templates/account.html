@@ -21,10 +21,17 @@
     .acct-header {
         margin-bottom: 24px;
     }
+    .acct-header-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 2px;
+    }
     .acct-header h1 {
         font-size: 1.5rem;
         font-weight: 700;
-        margin: 0 0 2px;
+        margin: 0;
     }
     .acct-header p {
         color: var(--color-text-secondary);
@@ -321,6 +328,10 @@
 
     /* ── Responsive ────────────────────────────────── */
     @media (max-width: 720px) {
+        .acct-header-top {
+            flex-direction: column;
+            align-items: flex-start;
+        }
         .acct-grid {
             grid-template-columns: 1fr;
         }
@@ -341,7 +352,10 @@
 
 {% block content %}
 <div class="acct-header">
-    <h1>Account</h1>
+    <div class="acct-header-top">
+        <h1>Account</h1>
+        <a href="{{ url_for('logout') }}" class="btn-acct btn-acct-secondary">Logout</a>
+    </div>
     <p>Manage your profile, API access, and billing.</p>
 </div>
 

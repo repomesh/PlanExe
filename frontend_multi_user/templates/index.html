@@ -456,7 +456,6 @@
 </div>
 
 {# ── Start New Plan form ────────────────────────────────────── #}
-{% if nonce %}
 <div class="new-plan-section">
     <div class="new-plan-header">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
@@ -470,10 +469,8 @@
             {% endfor %}
         </div>
         {% endif %}
-        <form id="new-plan-form" method="POST" action="{{ url_for('run') }}">
+        <form id="new-plan-form" method="POST" action="{{ url_for('create_plan') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="user_id" value="{{ user_id }}">
-            <input type="hidden" name="nonce" value="{{ nonce }}">
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
             <div class="char-count" id="char-count">0 characters</div>
@@ -493,7 +490,6 @@
         </form>
     </div>
 </div>
-{% endif %}
 
 {% if recent_tasks %}
 <h2 class="section-title">Recent Plans</h2>
@@ -569,7 +565,7 @@
 </section>
 {% endif %}
 
-{% if user and nonce and example_prompts %}
+{% if user and example_prompts %}
 <script>
     // Example prompts loaded from the server
     var examplePrompts = {{ example_prompts | tojson | safe }};

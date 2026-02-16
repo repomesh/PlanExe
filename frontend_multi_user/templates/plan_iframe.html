@@ -66,22 +66,6 @@
         color: var(--color-text-secondary);
         text-transform: capitalize;
     }
-    .plan-pending {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        background: var(--color-bg-soft);
-        padding: 16px;
-        color: var(--color-text);
-    }
-    .plan-pending h3 {
-        margin: 0 0 6px;
-        font-size: 1rem;
-    }
-    .plan-pending p {
-        margin: 0;
-        font-size: 0.9rem;
-        color: var(--color-text-secondary);
-    }
     .plan-frame-wrap {
         width: 100%;
         height: calc(100vh - 56px - 80px - 64px);
@@ -136,27 +120,13 @@
         {% endif %}
     </div>
 </div>
-
-{% if not task.generated_report_html %}
-<div class="plan-pending">
-    <h3>Plan is still being generated</h3>
-    <p>
-        {% if task.progress_message %}
-            {{ task.progress_message }}
-        {% else %}
-            This plan is in progress. Refresh this page in a little while.
-        {% endif %}
-    </p>
-</div>
-{% else %}
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
-        src="{{ url_for('viewplan') }}?run_id={{ run_id }}"
+        src="{% if task.generated_report_html %}{{ url_for('viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('run_status') }}?id={{ run_id }}{% endif %}"
         title="Plan report"
         loading="eager"
         referrerpolicy="no-referrer"
     ></iframe>
 </div>
-{% endif %}
 {% endblock %}

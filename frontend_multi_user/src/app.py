@@ -1647,6 +1647,117 @@ class MyFlaskApp:
                 self.db.session.commit()
             return render_template('run_via_database.html', run_id=task_id)
 
+        @self.app.route('/create_plan', methods=['POST'])
+        @login_required
+        @nocache
+        def create_plan():
+            # Form fields must come in POST body.
+            if request.args:
+                logger.error("endpoint /create_plan. POST request with urlencoded parameters detected. This is not allowed.")
+                return jsonify({"error": "POST request with urlencoded parameters detected. This is not allowed."}), 400
+
+            request_size_bytes: int = len(request.get_data())
+            request_content_type: str = request.headers.get('Content-Type', '')
+
+            prompt_param = request.form.get('prompt', '')
+            parameters = {key: value for key, value in request.form.items()}
+            parameters.pop('csrf_token', None)
+            parameters.pop('prompt', None)
+            parameters.pop('user_id', None)
+            parameters.pop('nonce', None)
+            parameters.pop('redirect_to_plan', None)
+            if len(parameters) == 0:
+                parameters = None
+
+            prompt_param_bytes = len(prompt_param.encode('utf-8'))
+            prompt_param_characters = len(prompt_param)
+            log_prompt_info = prompt_param[:100]
+            if len(prompt_param) > 100:
+                log_prompt_info += "... (truncated)"
+
+            if not prompt_param:
+                logger.error("endpoint /create_plan. No prompt provided")
+                return jsonify({"error": "No prompt provided"}), 400
+
+            if current_user.is_admin:
+                user_id_param = self.admin_username
+            else:
+                user_id_param = str(current_user.id)
+
+            logger.info(
+                "endpoint /create_plan (%s). Size of request: %s bytes. Starting run with prompt=%r, user_id=%r, parameters=%r, prompt_param_bytes=%s, prompt_param_characters=%s",
+                request.method,
+                request_size_bytes,
+                log_prompt_info,
+                user_id_param,
+                parameters,
+                prompt_param_bytes,
+                prompt_param_characters,
+            )
+
+            with self.app.app_context():
+                if not current_user.is_admin:
+                    user = self.db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
+                    if not user:
+                        return jsonify({"error": "User not found"}), 400
+                    if not user.free_plan_used:
+                        user.free_plan_used = True
+                        self.db.session.commit()
+                        if not isinstance(parameters, dict):
+                            parameters = {}
+                        parameters["billing_skip_usage_charge"] = True
+                    else:
+                        if (user.credits_balance or 0) <= 0:
+                            return jsonify({"error": "No credits available"}), 402
+
+                task = TaskItem(
+                    state=TaskState.pending,
+                    prompt=prompt_param,
+                    progress_percentage=0.0,
+                    progress_message="Awaiting server to start…",
+                    user_id=user_id_param,
+                    parameters=parameters
+                )
+                self.db.session.add(task)
+                self.db.session.commit()
+                task_id = task.id if hasattr(task, 'id') else None
+                logger.info("endpoint /create_plan. Task received: %r", task_id)
+
+                event_context = {
+                    "task_id": str(task_id),
+                    "request_size_bytes": request_size_bytes,
+                    "request_content_type": request_content_type,
+                    "prompt_param_bytes": prompt_param_bytes,
+                    "prompt_param_characters": prompt_param_characters,
+                    "prompt": prompt_param,
+                    "user_id": user_id_param,
+                    "parameters": parameters,
+                    "method": request.method
+                }
+                event = EventItem(
+                    event_type=EventType.TASK_PENDING,
+                    message="Enqueued task via /create_plan endpoint",
+                    context=event_context
+                )
+                self.db.session.add(event)
+                self.db.session.commit()
+
+            if task_id is None:
+                return jsonify({"error": "Unable to create task"}), 500
+            return redirect(url_for('plan', id=task_id))
+
+        @self.app.route('/run_status')
+        @login_required
+        @nocache
+        def run_status():
+            run_id = request.args.get('id', '')
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+            return render_template('run_via_database.html', run_id=run_id)
+
         @self.app.route('/progress')
         def get_progress():
             run_id = request.args.get('run_id', '')

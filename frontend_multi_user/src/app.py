@@ -886,6 +886,31 @@ class MyFlaskApp:
         amount = MyFlaskApp._to_credit_decimal(value)
         return format(amount, ".2f")
 
+    @staticmethod
+    def _format_relative_time(value: Any) -> str:
+        if not isinstance(value, datetime):
+            return "-"
+        now = datetime.now(UTC)
+        dt = value if value.tzinfo else value.replace(tzinfo=UTC)
+        seconds = max(0, int((now - dt).total_seconds()))
+        if seconds >= 365 * 24 * 3600:
+            n = seconds // (365 * 24 * 3600)
+            return f"{n}year" if n == 1 else f"{n}years"
+        if seconds >= 30 * 24 * 3600:
+            n = seconds // (30 * 24 * 3600)
+            return f"{n}month" if n == 1 else f"{n}months"
+        if seconds >= 24 * 3600:
+            n = seconds // (24 * 3600)
+            return f"{n}day" if n == 1 else f"{n}days"
+        if seconds >= 3600:
+            n = seconds // 3600
+            return f"{n}hour" if n == 1 else f"{n}hours"
+        if seconds >= 60:
+            n = seconds // 60
+            return f"{n}min" if n == 1 else f"{n}mins"
+        n = seconds
+        return f"{n}sec" if n == 1 else f"{n}secs"
+
     def _read_inference_cost_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[float]:
         if not run_zip_snapshot:
             return None
@@ -1823,7 +1848,29 @@ class MyFlaskApp:
         @self.app.route('/plan')
         @login_required
         def plan():
-            run_id = request.args.get('id', '')
+            run_id = request.args.get('id', '').strip()
+
+            if not run_id:
+                user_id = str(current_user.id)
+                tasks = (
+                    TaskItem.query
+                    .filter_by(user_id=user_id)
+                    .order_by(TaskItem.timestamp_created.desc())
+                    .all()
+                )
+                rows = []
+                for task in tasks:
+                    ts = task.timestamp_created
+                    created_compact = ts.strftime("%y%m%d-%H%M") if isinstance(ts, datetime) else "-"
+                    rows.append({
+                        "id": str(task.id),
+                        "created_compact": created_compact,
+                        "created_relative": self._format_relative_time(ts),
+                        "status": task.state.name if isinstance(task.state, TaskState) else "pending",
+                        "prompt": (task.prompt or "").strip(),
+                    })
+                return render_template("plan_list.html", plan_rows=rows)
+
             logger.info(f"Plan iframe wrapper requested for run_id: {run_id!r}")
             task = self.db.session.get(TaskItem, run_id)
             if task is None:

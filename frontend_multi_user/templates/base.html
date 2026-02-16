@@ -222,6 +222,9 @@
                     <img src="https://planexe.org/planexe-icon.svg" alt="" width="24" height="24">
                     <span class="site-brand-label">Home</span>
                 </a>
+                {% if current_user_name %}
+                    <a href="{{ url_for('plan') }}" class="{% if request.endpoint == 'plan' and not request.args.get('id') %}nav-active{% endif %}">Plans</a>
+                {% endif %}
                 <div class="site-nav-spacer"></div>
                 {% if current_user_name %}
                     <a href="{{ url_for('account') }}" class="nav-user {% if request.endpoint == 'account' %}nav-active{% endif %}">{{ current_user_name }}</a>

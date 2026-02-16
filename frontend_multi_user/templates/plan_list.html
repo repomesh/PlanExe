@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Plans - PlanExe{% endblock %}
+{% block head %}
+<style>
+    .plan-list-title {
+        margin: 0 0 14px;
+        font-size: 1.35rem;
+        font-weight: 700;
+    }
+    .plan-list-wrap {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-card-bg);
+        overflow: hidden;
+    }
+    .plan-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .plan-table th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-text-secondary);
+        background: var(--color-bg-soft);
+        border-bottom: 1px solid var(--color-border);
+    }
+    .plan-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.85rem;
+        color: var(--color-text);
+        vertical-align: middle;
+    }
+    .plan-table tr:last-child td {
+        border-bottom: none;
+    }
+    .plan-row {
+        cursor: pointer;
+    }
+    .plan-row:hover {
+        background: var(--color-bg-soft);
+    }
+    .plan-cell-id {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.78rem;
+    }
+    .plan-cell-status {
+        text-transform: capitalize;
+    }
+    .plan-cell-prompt {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .plan-empty {
+        padding: 20px 14px;
+        color: var(--color-text-secondary);
+        font-size: 0.9rem;
+    }
+    @media (max-width: 900px) {
+        .plan-table th:nth-child(3),
+        .plan-table td:nth-child(3) {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="plan-list-title">Plans</h1>
+<div class="plan-list-wrap">
+    {% if plan_rows %}
+    <table class="plan-table">
+        <thead>
+            <tr>
+                <th>yymmdd-hhss</th>
+                <th>relative time</th>
+                <th>id</th>
+                <th>status</th>
+                <th>prompt</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in plan_rows %}
+            <tr class="plan-row" data-href="{{ url_for('plan') }}?id={{ row.id }}">
+                <td>{{ row.created_compact }}</td>
+                <td>{{ row.created_relative }}</td>
+                <td class="plan-cell-id">{{ row.id }}</td>
+                <td class="plan-cell-status">{{ row.status | lower }}</td>
+                <td class="plan-cell-prompt" title="{{ row.prompt }}">{{ row.prompt }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="plan-empty">No plans yet.</div>
+    {% endif %}
+</div>
+
+<script>
+    document.querySelectorAll(".plan-row").forEach(function (row) {
+        row.addEventListener("click", function () {
+            var href = this.getAttribute("data-href");
+            if (href) {
+                window.location.href = href;
+            }
+        });
+    });
+</script>
+{% endblock %}

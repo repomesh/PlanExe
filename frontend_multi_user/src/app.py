@@ -1072,7 +1072,7 @@ class MyFlaskApp:
                                 if prompt_item:
                                     example_prompts.append(prompt_item.prompt)
                             credits_balance = self._to_credit_decimal(user.credits_balance)
-                            can_create_plan = (not user.free_plan_used) or (credits_balance >= Decimal("2"))
+                            can_create_plan = credits_balance >= Decimal("2")
                     except Exception:
                         logger.debug("Could not load dashboard data", exc_info=True)
             return render_template(
@@ -1728,15 +1728,8 @@ class MyFlaskApp:
                     user = self.db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
                     if not user:
                         return jsonify({"error": "User not found"}), 400
-                    if not user.free_plan_used:
-                        user.free_plan_used = True
-                        self.db.session.commit()
-                        if not isinstance(parameters, dict):
-                            parameters = {}
-                        parameters["billing_skip_usage_charge"] = True
-                    else:
-                        if self._to_credit_decimal(user.credits_balance) < Decimal("2"):
-                            return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
+                    if self._to_credit_decimal(user.credits_balance) < Decimal("2"):
+                        return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
 
                 task = TaskItem(
                     state=TaskState.pending,

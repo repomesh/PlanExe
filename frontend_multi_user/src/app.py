@@ -1951,6 +1951,12 @@ class MyFlaskApp:
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 return jsonify({"error": "Forbidden"}), 403
 
+            # Guard against stale UI: if task already completed (or report exists),
+            # ignore stop requests so completion billing cannot be bypassed.
+            if task.state == TaskState.completed or bool(task.generated_report_html):
+                logger.info("Ignoring stop request for already completed task %s", run_id)
+                return redirect(url_for('plan', id=run_id))
+
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
             if task.state == TaskState.pending:

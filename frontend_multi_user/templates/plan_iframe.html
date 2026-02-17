@@ -49,6 +49,9 @@
         gap: 8px;
         flex-wrap: wrap;
     }
+    .plan-action-form {
+        margin: 0;
+    }
     .btn-plan-meta {
         display: inline-flex;
         align-items: center;
@@ -127,6 +130,30 @@
         {% endif %}
     </div>
     <div class="plan-meta-actions">
+        {% if (task.state and task.state.name == 'failed') or task.stop_requested %}
+        <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="id" value="{{ task.id }}">
+            <button type="submit" class="btn-plan-meta">Retry</button>
+        </form>
+        {% else %}
+        <span class="btn-plan-meta btn-plan-meta-disabled">Retry</span>
+        {% endif %}
+
+        {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') %}
+            {% if task.stop_requested %}
+            <span class="btn-plan-meta btn-plan-meta-disabled">Stop</span>
+            {% else %}
+            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" value="{{ task.id }}">
+                <button type="submit" class="btn-plan-meta">Stop</button>
+            </form>
+            {% endif %}
+        {% else %}
+        <span class="btn-plan-meta btn-plan-meta-disabled">Stop</span>
+        {% endif %}
+
         {% if task.generated_report_html %}
         <a class="btn-plan-meta" href="{{ url_for('plan_download_report') }}?id={{ task.id }}">Download Report</a>
         {% else %}

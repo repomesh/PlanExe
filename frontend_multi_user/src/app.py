@@ -1941,6 +1941,48 @@ class MyFlaskApp:
             download_name = f"{task.id}.zip"
             return send_file(sanitized_buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
 
+        @self.app.route('/plan/stop', methods=['POST'])
+        @login_required
+        def plan_stop():
+            run_id = request.form.get('id', '').strip()
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+
+            task.stop_requested = True
+            task.stop_requested_timestamp = datetime.now(UTC)
+            if task.state == TaskState.pending:
+                task.state = TaskState.failed
+                task.progress_message = "Stop requested by user."
+            self.db.session.commit()
+            return redirect(url_for('plan', id=run_id))
+
+        @self.app.route('/plan/retry', methods=['POST'])
+        @login_required
+        def plan_retry():
+            run_id = request.form.get('id', '').strip()
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+
+            if task.state == TaskState.processing and not bool(task.stop_requested):
+                return jsonify({"error": "Task is currently processing. Stop it first before retrying."}), 409
+
+            task.state = TaskState.pending
+            task.stop_requested = False
+            task.stop_requested_timestamp = None
+            task.progress_percentage = 0.0
+            task.progress_message = "Retry requested by user."
+            task.generated_report_html = None
+            task.run_zip_snapshot = None
+            task.last_seen_timestamp = datetime.now(UTC)
+            self.db.session.commit()
+            return redirect(url_for('plan', id=run_id))
+
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required
         def download_task_report(task_id):

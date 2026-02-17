@@ -112,58 +112,42 @@
     <div class="plan-meta-info">
         <p class="plan-meta-title">Plan</p>
         <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
-        {% if not task.state or task.state.name != 'completed' %}
-        <p class="plan-state">
-            Status:
-            {% if task.state %}
-                {{ task.state.name | lower }}
-            {% else %}
-                pending
-            {% endif %}
-            {% if task.progress_percentage is not none %}
-                · {{ "%.0f"|format(task.progress_percentage) }}%
-            {% endif %}
-            {% if task.progress_message %}
-                · {{ task.progress_message }}
-            {% endif %}
+        <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
+            Status: <span id="plan-state-text">
+                {% if task.state %}
+                    {{ task.state.name | lower }}
+                {% else %}
+                    pending
+                {% endif %}
+                {% if task.progress_percentage is not none %}
+                    · {{ "%.0f"|format(task.progress_percentage) }}%
+                {% endif %}
+                {% if task.progress_message %}
+                    · {{ task.progress_message }}
+                {% endif %}
+            </span>
         </p>
-        {% endif %}
     </div>
     <div class="plan-meta-actions">
-        {% if (task.state and task.state.name == 'failed') or task.stop_requested %}
-        <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form">
+        <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="id" value="{{ task.id }}">
             <button type="submit" class="btn-plan-meta">Retry</button>
         </form>
-        {% else %}
-        <span class="btn-plan-meta btn-plan-meta-disabled">Retry</span>
-        {% endif %}
+        <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
 
-        {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') %}
-            {% if task.stop_requested %}
-            <span class="btn-plan-meta btn-plan-meta-disabled">Stop</span>
-            {% else %}
-            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="id" value="{{ task.id }}">
-                <button type="submit" class="btn-plan-meta">Stop</button>
-            </form>
-            {% endif %}
-        {% else %}
-        <span class="btn-plan-meta btn-plan-meta-disabled">Stop</span>
-        {% endif %}
+        <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="id" value="{{ task.id }}">
+            <button type="submit" class="btn-plan-meta">Stop</button>
+        </form>
+        <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
 
-        {% if task.generated_report_html %}
-        <a class="btn-plan-meta" href="{{ url_for('plan_download_report') }}?id={{ task.id }}">Download Report</a>
-        {% else %}
-        <span class="btn-plan-meta btn-plan-meta-disabled">Download Report</span>
-        {% endif %}
-        {% if task.run_zip_snapshot %}
-        <a class="btn-plan-meta" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}">Download ZIP</a>
-        {% else %}
-        <span class="btn-plan-meta btn-plan-meta-disabled">Download ZIP</span>
-        {% endif %}
+        <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+        <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
+
+        <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+        <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
     </div>
 </div>
 <div class="plan-frame-wrap">
@@ -175,4 +159,78 @@
         referrerpolicy="no-referrer"
     ></iframe>
 </div>
+<script>
+    (function () {
+        const planId = "{{ task.id }}";
+        const metaUrl = "{{ url_for('plan_meta') }}?id=" + encodeURIComponent(planId);
+        const stateEl = document.getElementById("plan-state");
+        const stateTextEl = document.getElementById("plan-state-text");
+
+        function setVisible(id, visible) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.display = visible ? "" : "none";
+        }
+
+        function updatePanel(meta) {
+            const state = (meta.state || "pending").toLowerCase();
+            const isCompleted = state === "completed";
+            const isActive = state === "pending" || state === "processing";
+
+            if (isCompleted) {
+                stateEl.style.display = "none";
+            } else {
+                stateEl.style.display = "";
+                const parts = [state];
+                if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
+                    parts.push(Math.round(meta.progress_percentage) + "%");
+                }
+                if (meta.progress_message) {
+                    parts.push(meta.progress_message);
+                }
+                stateTextEl.textContent = parts.join(" · ");
+            }
+
+            const canRetry = state === "failed" || !!meta.stop_requested;
+            setVisible("retry-form", canRetry);
+            setVisible("retry-disabled", !canRetry);
+
+            const canStop = (state === "pending" || state === "processing") && !meta.stop_requested;
+            setVisible("stop-form", canStop);
+            setVisible("stop-disabled", !canStop);
+
+            const hasReport = !!meta.generated_report_html;
+            setVisible("report-link", hasReport);
+            setVisible("report-disabled", !hasReport);
+
+            const hasZip = !!meta.run_zip_snapshot;
+            setVisible("zip-link", hasZip);
+            setVisible("zip-disabled", !hasZip);
+
+            return isActive;
+        }
+
+        let timer = null;
+        function pollMeta() {
+            fetch(metaUrl, { cache: "no-cache" })
+                .then(function (response) {
+                    if (!response.ok) throw new Error("Failed to fetch plan meta");
+                    return response.json();
+                })
+                .then(function (meta) {
+                    const shouldContinue = updatePanel(meta);
+                    if (!shouldContinue && timer) {
+                        clearInterval(timer);
+                        timer = null;
+                    }
+                })
+                .catch(function () {
+                    // Ignore transient errors; next poll will retry.
+                });
+        }
+
+        pollMeta();
+        timer = setInterval(pollMeta, 10000);
+    })();
+</script>
 {% endblock %}

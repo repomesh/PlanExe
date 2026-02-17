@@ -1989,6 +1989,27 @@ class MyFlaskApp:
             self.db.session.commit()
             return redirect(url_for('plan', id=run_id))
 
+        @self.app.route('/plan/meta')
+        @login_required
+        def plan_meta():
+            run_id = request.args.get('id', '').strip()
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+
+            state_name = task.state.name if isinstance(task.state, TaskState) else "pending"
+            return jsonify({
+                "id": str(task.id),
+                "state": state_name,
+                "progress_percentage": float(task.progress_percentage) if task.progress_percentage is not None else 0.0,
+                "progress_message": task.progress_message or "",
+                "generated_report_html": bool(task.generated_report_html),
+                "run_zip_snapshot": bool(task.run_zip_snapshot),
+                "stop_requested": bool(task.stop_requested),
+            }), 200
+
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required
         def download_task_report(task_id):

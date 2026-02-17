@@ -1044,6 +1044,7 @@ class MyFlaskApp:
         def index():
             user = None
             recent_tasks: list[TaskItem] = []
+            total_tasks_count = 0
             is_admin = False
             nonce = None
             user_id = None
@@ -1066,6 +1067,11 @@ class MyFlaskApp:
                                 .limit(10)
                                 .all()
                             )
+                            total_tasks_count = (
+                                TaskItem.query
+                                .filter_by(user_id=str(user.id))
+                                .count()
+                            )
                             # Load example prompts for the "Start New Plan" form
                             for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
                                 prompt_item = self.prompt_catalog.find(prompt_uuid)
@@ -1080,6 +1086,7 @@ class MyFlaskApp:
                 user=user,
                 credits_balance_display=self._format_credit_display(user.credits_balance) if user else "0",
                 can_create_plan=can_create_plan,
+                total_tasks_count=total_tasks_count,
                 recent_tasks=recent_tasks,
                 is_admin=is_admin,
                 nonce=nonce,

@@ -161,29 +161,44 @@
         /* ── Footer ─────────────────────────────────────── */
         .site-footer {
             border-top: 1px solid var(--color-border);
-            padding: 24px;
-            text-align: center;
+            padding: 20px 24px 28px;
+            text-align: left;
             color: var(--color-text-secondary);
             font-size: 0.85rem;
+            background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-soft) 100%);
         }
         .footer-inner {
             max-width: var(--max-width);
             margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
         }
         .footer-links {
-            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex-wrap: wrap;
         }
         .footer-links a {
-            color: var(--color-text-secondary);
+            color: var(--color-text);
             text-decoration: none;
-            margin: 0 12px;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-radius: 6px;
         }
         .footer-links a:hover {
             color: var(--color-text);
+            background: var(--color-bg-muted);
         }
         .footer-sep {
             color: var(--color-border);
-            margin: 0 4px;
+            margin: 0 2px;
+        }
+        .footer-copy {
+            white-space: nowrap;
         }
 
         /* ── Shared components ──────────────────────────── */
@@ -247,11 +262,13 @@
             <div class="footer-links">
                 <a href="https://planexe.org/">PlanExe</a>
                 <span class="footer-sep">&middot;</span>
+                <a href="https://docs.planexe.org/">Documentation</a>
+                <span class="footer-sep">&middot;</span>
                 <a href="https://github.com/PlanExeOrg/PlanExe">GitHub</a>
                 <span class="footer-sep">&middot;</span>
                 <a href="https://planexe.org/discord/">Discord</a>
             </div>
-            <div>Open source planning tool</div>
+            <div class="footer-copy">Open source planning tool</div>
         </div>
     </footer>
 </body>

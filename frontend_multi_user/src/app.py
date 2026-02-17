@@ -1013,6 +1013,39 @@ class MyFlaskApp:
             if self.open_access and not current_user.is_authenticated:
                 login_user(User(self.admin_username, is_admin=True))
 
+        @self.app.after_request
+        def _admin_full_width(response):
+            """Make Flask-Admin pages use full viewport width on large screens."""
+            try:
+                if not request.path.startswith('/admin'):
+                    return response
+                content_type = (response.headers.get("Content-Type") or "").lower()
+                if "text/html" not in content_type:
+                    return response
+
+                html = response.get_data(as_text=True)
+                marker = "planexe-admin-full-width"
+                if marker in html or "</head>" not in html:
+                    return response
+
+                css = """
+<style id="planexe-admin-full-width">
+  .container { width: 100% !important; max-width: none !important; }
+  .row { margin-left: 0 !important; margin-right: 0 !important; }
+  .col-md-10, .col-md-2, .col-lg-10, .col-lg-2, .col-sm-10, .col-sm-2 {
+    width: auto !important;
+    float: none !important;
+  }
+  .table-responsive { overflow-x: auto; }
+</style>
+""".strip()
+                html = html.replace("</head>", css + "\n</head>", 1)
+                response.set_data(html)
+                response.headers.pop("Content-Length", None)
+            except Exception:
+                logger.debug("Failed to inject admin full-width CSS", exc_info=True)
+            return response
+
         @self.app.context_processor
         def inject_current_user_name():
             """Inject current_user_name for header display (full name or None)."""

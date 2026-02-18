@@ -211,6 +211,7 @@
         <input type="hidden" name="nonce" value="{{ nonce }}">
         <!-- Values are submitted only when enabled (not disabled) -->
         <input type="hidden" name="speed_vs_detail" id="form-speed-vs-detail" value="ping_llm">
+        <input type="hidden" name="model_profile" id="form-model-profile" value="baseline">
         <input type="hidden" name="developer" id="form-developer" value="true">
     </form>
 
@@ -282,7 +283,7 @@
 
             if (methodSelect.value === 'GET') {
                 // GET method: build URL with query parameters
-                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id={{ user_id }}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}`;
+                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id={{ user_id }}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}&model_profile=baseline`;
                 if (developerChecked) {
                     url += '&developer';
                 }

@@ -468,6 +468,13 @@
         <form id="new-plan-form" method="POST" action="{{ url_for('create_plan') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
+            <label for="model-profile" style="display:block; margin-bottom:8px; font-size:0.9rem; color:#a0aec0;">Model profile</label>
+            <select id="model-profile" name="model_profile" style="margin-bottom:12px; width:100%; max-width:240px; padding:8px; border-radius:8px;">
+                <option value="baseline" selected>baseline</option>
+                <option value="premium">premium</option>
+                <option value="frontier">frontier</option>
+                <option value="custom">custom</option>
+            </select>
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
             <div class="char-count" id="char-count">0 characters</div>
             <div class="new-plan-footer">

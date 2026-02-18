@@ -6,8 +6,8 @@ PROMPT> python -m worker_plan_internal.llm_factory
 import logging
 from typing import Optional, Any
 from worker_plan_api.planexe_dotenv import PlanExeDotEnv
-from worker_plan_api.planexe_config import PlanExeConfig, PlanExeConfigError
 from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
+from worker_plan_api.model_profile import ModelProfileEnum, resolve_model_profile_from_env
 from llama_index.core.llms.llm import LLM
 # from llama_index.llms.mistralai import MistralAI
 from llama_index.llms.ollama import Ollama
@@ -31,12 +31,28 @@ logger = logging.getLogger(__name__)
 
 __all__ = ["get_llm", "LLMInfo", "get_llm_names_by_priority", "SPECIAL_AUTO_ID", "is_valid_llm_name", "obtain_llm_info"]
 
-planexe_llmconfig = PlanExeLLMConfig.load()
 
-def obtain_llm_info() -> LLMInfo:
+def _resolve_model_profile(model_profile: Optional[ModelProfileEnum | str]) -> ModelProfileEnum:
+    if isinstance(model_profile, ModelProfileEnum):
+        return model_profile
+    if isinstance(model_profile, str):
+        for enum_value in ModelProfileEnum:
+            if enum_value.value == model_profile.strip().lower():
+                return enum_value
+    return resolve_model_profile_from_env()
+
+
+def _load_llm_config(model_profile: Optional[ModelProfileEnum | str]) -> PlanExeLLMConfig:
+    resolved_profile = _resolve_model_profile(model_profile)
+    return PlanExeLLMConfig.load(model_profile=resolved_profile)
+
+
+def obtain_llm_info(model_profile: Optional[ModelProfileEnum | str] = None) -> LLMInfo:
     """
     Returns a list of available LLM names and Ollama status.
     """
+
+    planexe_llmconfig = _load_llm_config(model_profile)
 
     # Probe each Ollama service endpoint just once.
     error_message_list = []
@@ -124,23 +140,25 @@ def obtain_llm_info() -> LLMInfo:
         error_message_list=error_message_list,
     )
 
-def get_llm_names_by_priority() -> list[str]:
+def get_llm_names_by_priority(model_profile: Optional[ModelProfileEnum | str] = None) -> list[str]:
     """
     Returns a list of LLM names sorted by priority.
     Lowest values comes first.
     Highest values comes last.
     """
+    planexe_llmconfig = _load_llm_config(model_profile)
     configs = [(name, config) for name, config in planexe_llmconfig.llm_config_dict.items() if config.get("priority") is not None]
     configs.sort(key=lambda x: x[1].get("priority", 0))
     return [name for name, _ in configs]
 
-def is_valid_llm_name(llm_name: str) -> bool:
+def is_valid_llm_name(llm_name: str, model_profile: Optional[ModelProfileEnum | str] = None) -> bool:
     """
     Returns True if the LLM name is valid, False otherwise.
     """
+    planexe_llmconfig = _load_llm_config(model_profile)
     return llm_name in planexe_llmconfig.llm_config_dict
 
-def get_llm(llm_name: Optional[str] = None, **kwargs: Any) -> LLM:
+def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfileEnum | str] = None, **kwargs: Any) -> LLM:
     """
     Returns an LLM instance based on the config.json file or a fallback default.
 
@@ -153,11 +171,13 @@ def get_llm(llm_name: Optional[str] = None, **kwargs: Any) -> LLM:
         planexe_dotenv = PlanExeDotEnv.load()
         llm_name = planexe_dotenv.get("DEFAULT_LLM", "ollama-llama3.1")
 
+    planexe_llmconfig = _load_llm_config(model_profile)
+
     if llm_name == SPECIAL_AUTO_ID:
         logger.error(f"The special {SPECIAL_AUTO_ID!r} is not a LLM model that can be created. Please use a valid LLM name.")
         raise ValueError(f"The special {SPECIAL_AUTO_ID!r} is not a LLM model that can be created. Please use a valid LLM name.")
 
-    if not is_valid_llm_name(llm_name):
+    if not is_valid_llm_name(llm_name, model_profile=model_profile):
         logger.error(f"Cannot create LLM, the llm_name {llm_name!r} is not found in llm_config.json.")
         raise ValueError(f"Cannot create LLM, the llm_name {llm_name!r} is not found in llm_config.json.")
 

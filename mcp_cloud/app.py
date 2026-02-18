@@ -29,6 +29,7 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, Tool, TextContent
 from pydantic import BaseModel
+from worker_plan_api.model_profile import normalize_model_profile
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 _dotenv_loaded, _dotenv_paths = load_planexe_dotenv(Path(__file__).parent)
@@ -148,6 +149,12 @@ SpeedVsDetailInput = Literal[
     "fast",
     "all",
 ]
+ModelProfileInput = Literal[
+    "baseline",
+    "premium",
+    "frontier",
+    "custom",
+]
 SPEED_VS_DETAIL_ALIASES = {
     "ping": "ping_llm",
     "fast": "fast_but_skip_details",
@@ -157,6 +164,7 @@ SPEED_VS_DETAIL_ALIASES = {
 class TaskCreateRequest(BaseModel):
     prompt: str
     speed_vs_detail: Optional[SpeedVsDetailInput] = None
+    model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
 class TaskStatusRequest(BaseModel):
@@ -251,6 +259,7 @@ def _create_task_sync(
     with app.app_context():
         parameters = dict(config or {})
         parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
+        parameters["model_profile"] = normalize_model_profile(parameters.get("model_profile")).value
         parameters["trigger_source"] = "mcp task_create"
 
         task = TaskItem(
@@ -628,12 +637,17 @@ def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
 def _merge_task_create_config(
     config: Optional[dict[str, Any]],
     speed_vs_detail: Optional[str],
+    model_profile: Optional[str],
 ) -> Optional[dict[str, Any]]:
     merged = dict(config or {})
     if isinstance(speed_vs_detail, str):
         candidate = speed_vs_detail.strip()
         if candidate and "speed_vs_detail" not in merged and "speed" not in merged:
             merged["speed_vs_detail"] = candidate
+    if isinstance(model_profile, str):
+        candidate_profile = model_profile.strip()
+        if candidate_profile and "model_profile" not in merged:
+            merged["model_profile"] = candidate_profile
     return merged or None
 
 # Context var set by HTTP server so download URLs use the request's host when
@@ -908,6 +922,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
         - speed_vs_detail: Optional mode ("ping" | "fast" | "all").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -916,7 +931,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     """
     req = TaskCreateRequest(**arguments)
 
-    merged_config = _merge_task_create_config(None, req.speed_vs_detail)
+    merged_config = _merge_task_create_config(None, req.speed_vs_detail, req.model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:

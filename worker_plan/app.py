@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
 from worker_plan_api.generate_run_id import generate_run_id
 from worker_plan_api.llm_info import LLMInfo
+from worker_plan_api.model_profile import ModelProfileEnum, DEFAULT_MODEL_PROFILE, normalize_model_profile
 from worker_plan_internal.plan.pipeline_environment import PipelineEnvironmentEnum
 from worker_plan_api.plan_file import PlanFile
 from worker_plan_api.start_time import StartTime
@@ -61,6 +62,7 @@ class StartRunRequest(BaseModel):
     plan_prompt: str = Field(..., description="The user provided plan description.")
     llm_model: str = Field(..., description="LLM model identifier.")
     speed_vs_detail: str = Field(..., description="Speed vs detail preference.")
+    model_profile: str = Field(DEFAULT_MODEL_PROFILE.value, description="LLM model profile (baseline, premium, frontier, custom).")
     openrouter_api_key: Optional[str] = Field(None, description="Optional OpenRouter API key.")
     run_id: Optional[str] = Field(None, description="Existing run ID to retry.")
 
@@ -162,12 +164,19 @@ def build_display_run_dir(run_dir: Path) -> str:
     return str(run_dir)
 
 
-def build_env(run_dir: Path, llm_model: str, speed_vs_detail: str, openrouter_api_key: Optional[str]) -> Dict[str, str]:
+def build_env(
+    run_dir: Path,
+    llm_model: str,
+    speed_vs_detail: str,
+    model_profile: ModelProfileEnum,
+    openrouter_api_key: Optional[str],
+) -> Dict[str, str]:
     env = os.environ.copy()
     env[PipelineEnvironmentEnum.RUN_ID_DIR.value] = str(run_dir)
     env["PLANEXE_TASK_ID"] = run_dir.name
     env[PipelineEnvironmentEnum.LLM_MODEL.value] = llm_model
     env[PipelineEnvironmentEnum.SPEED_VS_DETAIL.value] = speed_vs_detail
+    env[PipelineEnvironmentEnum.MODEL_PROFILE.value] = model_profile.value
     if openrouter_api_key:
         env["OPENROUTER_API_KEY"] = openrouter_api_key
     return env
@@ -215,7 +224,14 @@ def start_run(request: StartRunRequest) -> StartRunResponse:
         if existing and existing.is_running():
             raise HTTPException(status_code=409, detail=f"Run {run_id} is already active.")
 
-    env = build_env(run_dir=run_dir, llm_model=request.llm_model, speed_vs_detail=request.speed_vs_detail, openrouter_api_key=request.openrouter_api_key)
+    model_profile = normalize_model_profile(request.model_profile)
+    env = build_env(
+        run_dir=run_dir,
+        llm_model=request.llm_model,
+        speed_vs_detail=request.speed_vs_detail,
+        model_profile=model_profile,
+        openrouter_api_key=request.openrouter_api_key,
+    )
     process = start_pipeline_subprocess(env)
 
     info = RunProcessInfo(

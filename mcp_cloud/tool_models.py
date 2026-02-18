@@ -123,6 +123,10 @@ class TaskCreateInput(BaseModel):
         default="ping",
         description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
     )
+    model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        default="baseline",
+        description="LLM profile mapping to llm_config.<profile>.json (baseline, premium, frontier, custom).",
+    )
     user_api_key: str | None = Field(
         default=None,
         description="Optional user API key for credits and attribution.",

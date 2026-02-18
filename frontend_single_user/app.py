@@ -21,6 +21,7 @@ import time
 load_dotenv()
 from worker_plan_api.llm_info import LLMInfo, OllamaStatus
 from worker_plan_api.speedvsdetail import SpeedVsDetailEnum
+from worker_plan_api.model_profile import ModelProfileEnum
 from worker_plan_api.prompt_catalog import PromptCatalog
 
 logger = logging.getLogger(__name__)
@@ -292,6 +293,8 @@ class SessionState:
         self.llm_model = default_model_value
         # Settings: The speedvsdetail that the user has picked.
         self.speedvsdetail = SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW
+        # Settings: selected model profile.
+        self.model_profile = ModelProfileEnum.BASELINE.value
         # The run id of the currently running pipeline process (managed by worker service).
         self.active_run_id: Optional[str] = None
         # A threading.Event used to signal that the running process should stop.
@@ -318,6 +321,7 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     openrouter_api_key = settings.get("openrouter_api_key_text", "")
     model = settings.get("model_radio", default_model_value)
     speedvsdetail = settings.get("speedvsdetail_radio", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)
+    model_profile = settings.get("model_profile_radio", ModelProfileEnum.BASELINE.value)
 
     # When making changes to the llm_config.json, it may happen that the selected model is no longer among the available_model_names.
     # In that case, set the model to the default_model_value.
@@ -325,12 +329,16 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
         logger.info(f"initialize_browser_settings: model '{model}' is not in available_model_names. Setting to default_model_value: {default_model_value}")
         model = default_model_value
 
+    if model_profile not in [e.value for e in ModelProfileEnum]:
+        model_profile = ModelProfileEnum.BASELINE.value
+
     session_state.openrouter_api_key = openrouter_api_key
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
-    return openrouter_api_key, model, speedvsdetail, browser_state, session_state
+    session_state.model_profile = model_profile
+    return openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state
 
-def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, browser_state, session_state: SessionState):
+def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state: SessionState):
     try:
         settings = json.loads(browser_state) if browser_state else {}
     except Exception:
@@ -338,11 +346,13 @@ def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, b
     settings["openrouter_api_key_text"] = openrouter_api_key
     settings["model_radio"] = model
     settings["speedvsdetail_radio"] = speedvsdetail
+    settings["model_profile_radio"] = model_profile
     updated_browser_state = json.dumps(settings)
     session_state.openrouter_api_key = openrouter_api_key
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
-    return updated_browser_state, openrouter_api_key, model, speedvsdetail, session_state
+    session_state.model_profile = model_profile
+    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, session_state
 
 def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_state: SessionState):
     """
@@ -358,6 +368,7 @@ def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_stat
     session_state.openrouter_api_key = settings.get("openrouter_api_key_text", session_state.openrouter_api_key)
     session_state.llm_model = settings.get("model_radio", session_state.llm_model)
     session_state.speedvsdetail = settings.get("speedvsdetail_radio", session_state.speedvsdetail)
+    session_state.model_profile = settings.get("model_profile_radio", session_state.model_profile)
 
     # Check if an OpenRouter API key is required and provided.
     if CONFIG.run_planner_check_api_key_is_provided:
@@ -394,6 +405,7 @@ def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_stat
         "plan_prompt": plan_prompt,
         "llm_model": session_state.llm_model,
         "speed_vs_detail": speedvsdetail_string,
+        "model_profile": session_state.model_profile,
         "openrouter_api_key": session_state.openrouter_api_key or None,
     }
     if run_id:
@@ -714,6 +726,19 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
             interactive=True 
         )
 
+        model_profile_radio = gr.Radio(
+            [
+                ("Baseline", ModelProfileEnum.BASELINE.value),
+                ("Premium", ModelProfileEnum.PREMIUM.value),
+                ("Frontier", ModelProfileEnum.FRONTIER.value),
+                ("Custom", ModelProfileEnum.CUSTOM.value),
+            ],
+            value=ModelProfileEnum.BASELINE.value,
+            label="Model Profile",
+            info="Select which llm_config profile file to use.",
+            interactive=True,
+        )
+
         speedvsdetail_items = [
             ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
             ("Fast, but few details", SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS),
@@ -803,8 +828,8 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     # Unified change callbacks for settings.
     openrouter_api_key_text.change(
         fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, session_state]
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -813,8 +838,8 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
 
     model_radio.change(
         fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, session_state]
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -823,8 +848,18 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
 
     speedvsdetail_radio.change(
         fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, session_state]
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+    ).then(
+        fn=check_api_key,
+        inputs=[session_state],
+        outputs=[api_key_warning]
+    )
+
+    model_profile_radio.change(
+        fn=update_browser_settings_callback,
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -841,7 +876,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     demo_text2plan.load(
         fn=initialize_browser_settings,
         inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, browser_state, session_state]
+        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],

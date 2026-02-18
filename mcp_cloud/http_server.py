@@ -316,6 +316,7 @@ def _normalize_tool_result(result: Any) -> tuple[list[dict[str, Any]], Optional[
 
 
 SpeedVsDetailInput = Literal["ping", "fast", "all"]
+ModelProfileInput = Literal["baseline", "premium", "frontier", "custom"]
 ResultArtifactInput = Literal["report", "zip"]
 
 
@@ -327,12 +328,17 @@ async def task_create(
             description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
         ),
     ] = "ping",
+    model_profile: Annotated[
+        ModelProfileInput,
+        Field(description="LLM profile: baseline, premium, frontier, custom."),
+    ] = "baseline",
 ) -> Annotated[CallToolResult, TaskCreateOutput]:
     """Create a new PlanExe task. Use prompt_examples first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
         "prompt": prompt,
         "speed_vs_detail": speed_vs_detail,
+        "model_profile": model_profile,
     }
     if authenticated_user_api_key:
         arguments["user_api_key"] = authenticated_user_api_key

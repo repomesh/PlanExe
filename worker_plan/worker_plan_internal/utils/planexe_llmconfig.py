@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict
 import json
 from worker_plan_api.planexe_config import PlanExeConfig
+from worker_plan_api.model_profile import ModelProfileEnum
 from worker_plan_api.planexe_dotenv import PlanExeDotEnv
 import logging
 
@@ -20,8 +21,15 @@ class PlanExeLLMConfig:
     llm_config_dict: dict[str, Any]
 
     @classmethod
-    def load(cls):
-        config = PlanExeConfig.load()
+    def load(
+        cls,
+        model_profile: ModelProfileEnum | str | None = None,
+        llm_config_json_name_override: str | None = None,
+    ):
+        config = PlanExeConfig.load(
+            model_profile_override=model_profile,
+            llm_config_json_name_override=llm_config_json_name_override,
+        )
         config.raise_if_required_files_not_found()
         planexe_dotenv = PlanExeDotEnv.load()
 

@@ -1011,7 +1011,7 @@ class MyFlaskApp:
         @self.app.before_request
         def _auto_login_open_access():
             """In open access mode, auto-login as admin so @login_required routes work."""
-            if self.open_access and not current_user.is_authenticated:
+            if self.open_access and not current_user.is_authenticated and not session.get("open_access_logged_out"):
                 login_user(User(self.admin_username, is_admin=True))
 
         @self.app.after_request
@@ -1178,6 +1178,7 @@ class MyFlaskApp:
                 username = request.form.get('username')
                 password = request.form.get('password')
                 if username == self.admin_username and password == self.admin_password:
+                    session.pop("open_access_logged_out", None)
                     user = User(self.admin_username, is_admin=True)
                     login_user(user)
                     return redirect(url_for('admin.index'))
@@ -1229,6 +1230,7 @@ class MyFlaskApp:
                     profile = self._get_user_from_provider(provider, token)
 
                 user = self._upsert_user_from_oauth(provider, profile)
+                session.pop("open_access_logged_out", None)
                 login_user(User(user.id, is_admin=user.is_admin))
                 new_api_key = self._get_or_create_api_key(user)
                 if new_api_key:
@@ -1247,6 +1249,9 @@ class MyFlaskApp:
         @self.app.route('/logout')
         @login_required
         def logout():
+            # In open-access mode, remember explicit logout in this browser session.
+            # Otherwise before_request auto-login would sign admin back in immediately.
+            session["open_access_logged_out"] = True
             logout_user()
             return redirect(url_for('index'))
 

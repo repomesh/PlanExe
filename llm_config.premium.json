@@ -1,72 +1,10 @@
 {
-    "openai-paid-gpt-5-nano": {
-        "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan.",
-        "luigi_workers": 4,
-        "class": "OpenAI",
-        "arguments": {
-            "model": "gpt-5-nano",
-            "api_key": "${OPENAI_API_KEY}",
-            "temperature": 1.0,
-            "timeout": 120.0,
-            "context_window": 400000,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 128000,
-            "max_retries": 5
-        }
-    },
-    "openrouter-paid-openai-gpt-oss-20b": {
-        "comment": "This is very fast. It's paid, so check the pricing before use. Created August 5, 2025. 131,072 context. $0.05/M input tokens. $0.20/M output tokens. This is a reasoning model, and uses more tokens than LLMs.",
+    "openrouter-paid-z-ai-glm-4-7-flash": {
+        "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 19, 2026. 202,752 context. $0.06/M input tokens. $0.40/M output tokens.",
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
-            "model": "openai/gpt-oss-20b",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 8192,
-            "max_retries": 5
-        }
-    },
-    "openrouter-paid-nvidia-nemotron-3-nano-30b-a3b": {
-        "comment": "This is very fast. It's paid, so check the pricing before use. Created Dec 14, 2025. 262,144 context. $0.06/M input tokens. $0.24/M output tokens. This is a reasoning model, and uses more tokens than LLMs.",
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "nvidia/nemotron-3-nano-30b-a3b",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 8192,
-            "max_retries": 5
-        }
-    },
-    "openrouter-paid-gemini-2.0-flash-001": {
-        "comment": "This is very fast. It's paid, so check the pricing before use. Created Feb 25, 2025. 1,048,576 context. $0.075/M input tokens. $0.30/M output tokens.",
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "google/gemini-2.0-flash-001",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 8192,
-            "max_retries": 5
-        },
-        "priority": 2
-    },
-    "openrouter-paid-openai-gpt-4o-mini": {
-        "comment": "This is medium fast. It's paid, so check the pricing before use. Created Jul 18, 2024. 128,000 context. Starting at $0.15/M input tokens. Starting at $0.60/M output tokens.",
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "openai/gpt-4o-mini",
+            "model": "z-ai/glm-4.7-flash",
             "api_key": "${OPENROUTER_API_KEY}",
             "temperature": 0.1,
             "timeout": 60.0,
@@ -77,12 +15,28 @@
         },
         "priority": 1
     },
-    "openrouter-paid-qwen3-30b-a3b": {
-        "comment": "This is slow. It's paid, so check the pricing before use. Created Apr 28, 2025. 40,960 context. $0.08/M input tokens. $0.29/M output tokens.",
+    "openrouter-paid-stepfun-step-3-5-flash": {
+        "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
-            "model": "qwen/qwen3-30b-a3b",
+            "model": "stepfun/step-3.5-flash",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "priority": 2
+    },
+    "openrouter-paid-z-ai-glm-5": {
+        "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "z-ai/glm-5",
             "api_key": "${OPENROUTER_API_KEY}",
             "temperature": 0.1,
             "timeout": 60.0,
@@ -93,21 +47,38 @@
         },
         "priority": 3
     },
-    "alibabacloud-paid-qwen-flash-2025-07-28": {
-        "comment": "This is slow. It's paid, so check the pricing before use. Snapshot from 2025-07-28. 1,000,000 context. $0.05/M input tokens. $0.40/M output tokens.",
+    "openrouter-paid-qwen-qwen3-5-397b-a17b": {
+        "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 16, 2026. 262,144 context. Pricing varies by context length: starting at $0.15/M input, $1.00/M output; highest tier $0.60/M input, $3.60/M output (when input > 128k tokens).",
         "luigi_workers": 4,
-        "class": "OpenAILike",
+        "class": "OpenRouter",
         "arguments": {
-            "model": "qwen-flash-2025-07-28",
-            "api_key": "${DASHSCOPE_API_KEY}",
-            "api_base": "https://dashscope-us.aliyuncs.com/compatible-mode/v1",
+            "model": "qwen/qwen3.5-397b-a17b",
+            "api_key": "${OPENROUTER_API_KEY}",
             "temperature": 0.1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 16384,
+            "max_tokens": 8192,
             "max_retries": 5
-        }
+        },
+        "priority": 4
+    },
+    "openai-paid-gpt-5-mini": {
+        "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. Last priority fallback.",
+        "luigi_workers": 4,
+        "class": "OpenAI",
+        "arguments": {
+            "model": "gpt-5-mini",
+            "api_key": "${OPENAI_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 120.0,
+            "context_window": 400000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 128000,
+            "max_retries": 5
+        },
+        "priority": 5
     },
     "ollama-llama3.1": {
         "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",

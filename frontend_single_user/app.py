@@ -21,7 +21,8 @@ import time
 load_dotenv()
 from worker_plan_api.llm_info import LLMInfo, OllamaStatus
 from worker_plan_api.speedvsdetail import SpeedVsDetailEnum
-from worker_plan_api.model_profile import ModelProfileEnum
+from worker_plan_api.model_profile import ModelProfileEnum, default_filename_for_profile
+from worker_plan_api.planexe_config import PlanExeConfig
 from worker_plan_api.prompt_catalog import PromptCatalog
 
 logger = logging.getLogger(__name__)
@@ -243,6 +244,42 @@ for config_index, config_item in enumerate(trimmed_llm_config_items):
     tuple_item = (config_item.label, config_item.id)
     available_model_names.append(tuple_item)
 
+
+def _profile_models_markdown(profile_value: str) -> str:
+    try:
+        profile = ModelProfileEnum(profile_value)
+    except Exception:
+        profile = ModelProfileEnum.BASELINE
+    profile_config = PlanExeConfig.load(model_profile_override=profile)
+    profile_path = profile_config.llm_config_json_path
+    profile_filename = profile_config.llm_config_json_name or default_filename_for_profile(profile)
+    if profile_path is None:
+        return f"**Models in `{profile.value}`** (`{profile_filename}`)\n- Config file not found."
+    try:
+        with profile_path.open("r", encoding="utf-8") as fh:
+            model_map = json.load(fh)
+    except Exception as exc:
+        return f"**Models in `{profile.value}`** (`{profile_filename}`)\n- Failed to read config: `{exc}`"
+    if not isinstance(model_map, dict) or len(model_map) == 0:
+        return f"**Models in `{profile.value}`** (`{profile_filename}`)\n- No models configured."
+
+    def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
+        data = item[1] if isinstance(item[1], dict) else {}
+        priority = data.get("priority")
+        if not isinstance(priority, int):
+            priority = 999999
+        return priority, item[0]
+
+    rows: list[str] = []
+    for model_id, model_data in sorted(model_map.items(), key=sort_key):
+        model_name = model_id
+        if isinstance(model_data, dict):
+            arguments = model_data.get("arguments")
+            if isinstance(arguments, dict) and isinstance(arguments.get("model"), str):
+                model_name = arguments["model"]
+        rows.append(f"- `{model_name}`")
+    return "\n".join([f"**Models in `{profile.value}`** (`{profile_filename}`):"] + rows)
+
 class MarkdownBuilder:
     """
     Helper class to build Markdown-formatted strings.
@@ -336,7 +373,7 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
-    return openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state
+    return openrouter_api_key, model, speedvsdetail, model_profile, _profile_models_markdown(model_profile), browser_state, session_state
 
 def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state: SessionState):
     try:
@@ -352,7 +389,7 @@ def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, m
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
-    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, session_state
+    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, _profile_models_markdown(model_profile), session_state
 
 def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_state: SessionState):
     """
@@ -735,9 +772,22 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
             ],
             value=ModelProfileEnum.BASELINE.value,
             label="Model Profile",
-            info="Select which llm_config profile file to use.",
+            info="Select which profile file is used by auto model selection.",
             interactive=True,
         )
+        gr.Markdown(
+            "\n".join(
+                [
+                    "**Profile details**",
+                    "- `baseline` -> `llm_config.json` (default balanced profile).",
+                    "- `premium` -> `llm_config.premium.json` (higher-cost model ordering).",
+                    "- `frontier` -> `llm_config.frontier.json` (most capable model ordering).",
+                    "- `custom` -> `llm_config.custom.json` or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`.",
+                    "- The exact models come from the selected JSON file priorities.",
+                ]
+            )
+        )
+        profile_models_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
 
         speedvsdetail_items = [
             ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
@@ -829,7 +879,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     openrouter_api_key_text.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -839,7 +889,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     model_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -849,7 +899,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     speedvsdetail_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -859,7 +909,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     model_profile_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -876,7 +926,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     demo_text2plan.load(
         fn=initialize_browser_settings,
         inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state]
+        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, browser_state, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],

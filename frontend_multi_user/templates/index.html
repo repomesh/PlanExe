@@ -470,11 +470,19 @@
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
             <label for="model-profile" style="display:block; margin-bottom:8px; font-size:0.9rem; color:#a0aec0;">Model profile</label>
             <select id="model-profile" name="model_profile" style="margin-bottom:12px; width:100%; max-width:240px; padding:8px; border-radius:8px;">
-                <option value="baseline" selected>baseline</option>
-                <option value="premium">premium</option>
-                <option value="frontier">frontier</option>
-                <option value="custom">custom</option>
+                <option value="baseline" selected>baseline (default balanced)</option>
+                <option value="premium">premium (higher-cost ordering)</option>
+                <option value="frontier">frontier (highest-capability ordering)</option>
+                <option value="custom">custom (your custom file)</option>
             </select>
+            <div style="margin-bottom:12px; font-size:0.85rem; color:#6b7280; line-height:1.4;">
+                baseline -> <code>llm_config.json</code>,
+                premium -> <code>llm_config.premium.json</code>,
+                frontier -> <code>llm_config.frontier.json</code>,
+                custom -> <code>llm_config.custom.json</code> (or <code>PLANEXE_LLM_CONFIG_CUSTOM_FILENAME</code>).
+                The actual models are read from the selected file's priority order.
+            </div>
+            <div id="model-profile-models" style="margin-bottom:12px; font-size:0.85rem; color:#4b5563; line-height:1.4;"></div>
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
             <div class="char-count" id="char-count">0 characters</div>
             <div class="new-plan-footer">
@@ -591,6 +599,34 @@
             }
         });
     });
+</script>
+{% endif %}
+{% if user %}
+<script>
+    var profileToModels = {{ model_profile_models_json | safe }};
+    var profileSelect = document.getElementById('model-profile');
+    var profileModelsDiv = document.getElementById('model-profile-models');
+
+    function renderProfileModels() {
+        if (!profileSelect || !profileModelsDiv) {
+            return;
+        }
+        var profile = profileSelect.value || 'baseline';
+        var models = profileToModels[profile] || [];
+        if (models.length === 0) {
+            profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong> none found';
+            return;
+        }
+        var lines = models.map(function(modelName) {
+            return '<li><code>' + modelName + '</code></li>';
+        }).join('');
+        profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong><ul style="margin:6px 0 0 16px;">' + lines + '</ul>';
+    }
+
+    if (profileSelect) {
+        profileSelect.addEventListener('change', renderProfileModels);
+    }
+    renderProfileModels();
 </script>
 {% endif %}
 {% endblock %}

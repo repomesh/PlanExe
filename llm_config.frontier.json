@@ -1,6 +1,7 @@
 {
     "openrouter-paid-z-ai-glm-5": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
+        "priority": 1,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -10,13 +11,13 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 60000,
+            "max_tokens": 32000,
             "max_retries": 5
-        },
-        "priority": 1
+        }
     },
     "openrouter-paid-moonshotai-kimi-k2-5": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Jan 27, 2026. 262,144 context. $0.23/M input tokens. $3.00/M output tokens.",
+        "priority": 2,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -26,13 +27,13 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 60000,
+            "max_tokens": 32000,
             "max_retries": 5
-        },
-        "priority": 2
+        }
     },
     "openrouter-paid-qwen-qwen3-5-397b-a17b": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 16, 2026. 262,144 context. Pricing: $0.60/M input tokens. $3.60/M output tokens.",
+        "priority": 3,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -42,13 +43,13 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 60000,
+            "max_tokens": 32000,
             "max_retries": 5
-        },
-        "priority": 3
+        }
     },
     "openrouter-paid-google-gemini-2-5-flash-lite": {
         "comment": "This is very fast. It's paid, so check the pricing before use. Fallback option. Available on OpenRouter.",
+        "priority": 4,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -58,9 +59,8 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 60000,
+            "max_tokens": 32000,
             "max_retries": 5
-        },
-        "priority": 4
+        }
     }
 }

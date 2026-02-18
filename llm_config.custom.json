@@ -17,7 +17,7 @@
     },
     "openrouter-paid-gemini-3-flash-preview": {
         "comment": "last resort fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
-        "priority": 2,
+        "priority": 12,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -49,7 +49,7 @@
     },
     "openrouter-paid-qwen3-coder-next": {
         "comment": "Code-focused fallback sharing priority tier 3, targeting Qwen3 Coder Next via OpenRouter.",
-        "priority": 4,
+        "priority": 2,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {

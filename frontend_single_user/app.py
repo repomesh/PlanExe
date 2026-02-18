@@ -272,12 +272,15 @@ def _profile_models_markdown(profile_value: str) -> str:
 
     rows: list[str] = []
     for model_id, model_data in sorted(model_map.items(), key=sort_key):
+        priority_label = "n/a"
+        if isinstance(model_data, dict) and isinstance(model_data.get("priority"), int):
+            priority_label = str(model_data["priority"])
         model_name = model_id
         if isinstance(model_data, dict):
             arguments = model_data.get("arguments")
             if isinstance(arguments, dict) and isinstance(arguments.get("model"), str):
                 model_name = arguments["model"]
-        rows.append(f"- `{model_name}`")
+        rows.append(f"- P{priority_label}: `{model_name}`")
     return "\n".join([f"**Models in `{profile.value}`** (`{profile_filename}`):"] + rows)
 
 class MarkdownBuilder:
@@ -373,7 +376,8 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
-    return openrouter_api_key, model, speedvsdetail, model_profile, _profile_models_markdown(model_profile), browser_state, session_state
+    profile_markdown = _profile_models_markdown(model_profile)
+    return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, profile_markdown, browser_state, session_state
 
 def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state: SessionState):
     try:
@@ -389,7 +393,8 @@ def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, m
     session_state.llm_model = model
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
-    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, _profile_models_markdown(model_profile), session_state
+    profile_markdown = _profile_models_markdown(model_profile)
+    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, profile_markdown, session_state
 
 def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_state: SessionState):
     """
@@ -733,6 +738,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                     stop_btn = gr.Button("Stop")
                     retry_btn = gr.Button("Retry")
                     open_dir_btn = gr.Button("Open Output Dir", visible=OPEN_DIR_BUTTON_INITIAL_VISIBILITY)
+                active_config_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
 
                 output_markdown = gr.Markdown("Output will appear here...")
                 status_markdown = gr.Markdown("Status messages will appear here...")
@@ -879,7 +885,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     openrouter_api_key_text.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -889,7 +895,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     model_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -899,7 +905,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     speedvsdetail_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -909,7 +915,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     model_profile_radio.change(
         fn=update_browser_settings_callback,
         inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, session_state]
+        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],
@@ -926,7 +932,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     demo_text2plan.load(
         fn=initialize_browser_settings,
         inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, browser_state, session_state]
+        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, browser_state, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],

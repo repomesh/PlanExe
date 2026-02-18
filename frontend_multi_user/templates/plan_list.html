@@ -58,6 +58,13 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         font-size: 0.73rem;
     }
+    .plan-no-telephone,
+    .plan-no-telephone a,
+    .plan-table a[x-apple-data-detectors] {
+        color: inherit !important;
+        text-decoration: none !important;
+        pointer-events: none !important;
+    }
     .plan-cell-status {
         text-transform: capitalize;
         white-space: nowrap;
@@ -138,8 +145,8 @@
             {% set status = (row.status | lower) %}
             <tr class="plan-row" data-href="{{ url_for('plan') }}?id={{ row.id }}" title="Open run {{ row.id }}">
                 <td class="plan-cell-status"><span class="status-chip status-{{ status }}">{{ status }}</span></td>
-                <td class="plan-cell-id">{{ row.id }}</td>
-                <td class="plan-cell-created">{{ row.created_compact }}</td>
+                <td class="plan-cell-id"><span class="plan-no-telephone">{{ row.id }}</span></td>
+                <td class="plan-cell-created"><span class="plan-no-telephone">{{ row.created_compact }}</span></td>
                 <td class="plan-cell-time">{{ row.created_relative }}</td>
                 <td class="plan-cell-prompt" title="{{ row.prompt }}">{{ row.prompt }}</td>
             </tr>

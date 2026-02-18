@@ -19,6 +19,11 @@ models. Keep interfaces stable across services.
 - If schema usage changes (e.g., new TaskItem columns), update the
   `_ensure_taskitem_artifact_columns()` helper and keep changes backward
   compatible.
+- Artifact storage model:
+  - Use `TaskItem.run_activity_overview_json` as primary UI cost/usage source.
+  - Keep `TaskItem.run_track_activity_jsonl` internal/admin-only.
+  - User zip downloads should serve layout-versioned snapshots directly for
+    new tasks; sanitize legacy snapshots only.
 - Do not store run state in module-level globals; fetch state from Postgres or
   `worker_plan` per request.
 - Forbidden imports: `worker_plan_internal`, `worker_plan.app`,

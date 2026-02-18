@@ -27,8 +27,11 @@ Always check the package-level `AGENTS.md` for file-specific rules
 ## Hard rules (agent safety)
 - Do not add real API keys or passwords to `.env`, `.env.*`, or `llm_config.json`.
 - Treat `track_activity.jsonl` as sensitive (may contain API keys/tokens).
-  Never expose it to end users; sanitize `TaskItem.run_zip_snapshot` downloads by
-  removing `track_activity.jsonl` before returning a zip.
+  Never expose it to end users.
+  Store `track_activity.jsonl` in `TaskItem.run_track_activity_jsonl` and keep
+  it out of downloadable zips at artifact creation time. Legacy snapshots may
+  be sanitized at download time, but new snapshots should be served directly
+  without unzip/recompress.
 - Do not change run-dir validation or path-allowlist logic in `open_dir_server/app.py`
   unless explicitly instructed.
 - Shared packages (`database_api`, `worker_plan_api`) must not import service apps

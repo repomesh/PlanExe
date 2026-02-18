@@ -16,6 +16,10 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - Task management maps to `TaskItem` records (each task = one TaskItem).
   - Events are queried from `EventItem` database records.
 - Use the TaskItem UUID as the MCP `task_id`.
+- Download contract:
+  - `track_activity.jsonl` is internal-only (`TaskItem.run_track_activity_jsonl`).
+  - Downloadable zip artifacts must never include `track_activity.jsonl`.
+  - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.
 

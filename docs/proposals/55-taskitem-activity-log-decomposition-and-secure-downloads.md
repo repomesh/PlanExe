@@ -1,7 +1,7 @@
 ---
 title: TaskItem Activity Log Decomposition and Secure Downloads
 date: 2026-02-18
-status: proposal
+status: completed
 author: PlanExe Team
 ---
 
@@ -9,7 +9,7 @@ author: PlanExe Team
 
 **Author:** PlanExe Team  
 **Date:** 2026-02-18  
-**Status:** Proposal  
+**Status:** Completed (implemented on 2026-02-18)  
 **Tags:** `taskitem`, `security`, `performance`, `mcp`, `cost-visibility`
 
 ---
@@ -120,3 +120,38 @@ Mitigations:
 - Treat `track_activity.jsonl` as sensitive by default and never include it in user-export bundles.
 - Keep `activity_overview` as the canonical user-facing cost source.
 - Add automated regression test: unzip any downloadable snapshot and assert `track_activity.jsonl` is absent.
+
+## Completed Implementation (2026-02-18)
+Implemented code paths:
+
+- New `TaskItem` fields added and wired:
+  - `run_track_activity_jsonl`
+  - `run_track_activity_bytes`
+  - `run_activity_overview_json`
+  - `run_artifact_layout_version`
+- Worker finalization now writes split activity fields and builds `run_zip_snapshot` without `track_activity.jsonl`.
+- `frontend_multi_user` and `mcp_cloud` download paths now serve new-layout zips directly and only sanitize legacy snapshots.
+- `worker_plan` zip endpoint now excludes `track_activity.jsonl`.
+- UI telemetry/cost views now read `run_activity_overview_json` first, with legacy zip fallback.
+- Admin tooling exposes internal track-activity download in an admin-only endpoint.
+
+This completes the operational objective of removing unzip/recompress work for new runs while preserving backward compatibility for legacy runs.
+
+## Issues Encountered and Resolutions
+1. Retry path kept stale artifact fields
+- Issue: `/plan/retry` cleared `generated_report_html` and `run_zip_snapshot` but initially left new split fields populated.
+- Impact: stale telemetry/cost/internal activity metadata could appear until rerun completion.
+- Resolution: updated retry reset to also clear `run_track_activity_jsonl`, `run_track_activity_bytes`, `run_activity_overview_json`, and `run_artifact_layout_version`.
+
+2. Existing AGENTS guidance conflicted with new design
+- Issue: root guidance still mandated runtime sanitization of `run_zip_snapshot` for all downloads.
+- Impact: this contradicted the completed split-artifact model where new snapshots are already safe.
+- Resolution: updated AGENTS guidance to enforce: never include `track_activity.jsonl` when creating downloadable zips; sanitize legacy snapshots only.
+
+3. Security invariant lacked explicit regression coverage
+- Issue: tests covered metadata/download flow but did not explicitly assert stripping of `track_activity.jsonl`.
+- Resolution: added regression tests for both frontend legacy-zip sanitization and MCP legacy-zip sanitization to ensure `track_activity.jsonl` is absent from downloadable artifacts.
+
+## Remaining Work (Optional)
+- Phase B backfill job is still optional operational work: historical tasks can be migrated from zip-only storage into split fields to reduce fallback usage.
+- Phase C hard cutover (removing fallback sanitization entirely) can be done after backfill confidence is high.

@@ -15,6 +15,12 @@ PlanExe pipeline, and updates task state/progress.
   `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_*`).
 - When changing schema usage, add columns in a backward-compatible way and
   ensure `ensure_taskitem_artifact_columns()` or related helpers are updated.
+- Artifact storage model:
+  - Persist `track_activity.jsonl` into `TaskItem.run_track_activity_jsonl`
+    (+ bytes in `run_track_activity_bytes`).
+  - Persist `activity_overview.json` into `TaskItem.run_activity_overview_json`.
+  - Build `run_zip_snapshot` without `track_activity.jsonl` and set
+    `run_artifact_layout_version` for new runs.
 - Forbidden imports: `worker_plan.app`, `frontend_*`, `open_dir_server`.
 
 ## Testing

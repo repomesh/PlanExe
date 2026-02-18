@@ -21,12 +21,17 @@
     }
     .plan-meta-panel {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        flex-direction: column;
+        gap: 10px;
         padding: 12px 14px;
         background: var(--color-card-background-secondary);
         flex: 0 0 auto;
+    }
+    .plan-meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
     }
     .plan-meta-info {
         min-width: 0;
@@ -64,6 +69,7 @@
         font-weight: 600;
         color: var(--color-text);
         background: var(--color-bg);
+        cursor: pointer;
     }
     .btn-plan-meta:hover {
         color: var(--color-text);
@@ -84,14 +90,83 @@
         color: var(--color-text-secondary);
         text-transform: capitalize;
     }
-    .plan-trace-panel {
+    .plan-prompt-panel {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg);
+        padding: 10px;
+        min-width: 0;
+    }
+    .plan-prompt-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .plan-prompt-title {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .plan-prompt-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn-plan-prompt {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg-soft);
+        color: var(--color-text);
+        cursor: pointer;
+    }
+    .btn-plan-prompt:hover {
+        border-color: var(--color-text-secondary);
+    }
+    .btn-plan-prompt:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .plan-prompt-content {
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg-soft);
+        color: var(--color-text);
+        font-size: 0.86rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+        max-height: 420px;
+        font-family: "SF Mono", "Fira Code", "Consolas", "Liberation Mono", monospace;
+    }
+    .plan-prompt-content.is-collapsed {
+        max-height: 220px;
+    }
+    .plan-telemetry-panel {
         padding: 8px 12px 10px;
         border-top: 1px solid var(--color-border);
         border-bottom: 1px solid var(--color-border);
         background: var(--color-bg);
         flex: 0 0 auto;
     }
-    .plan-trace-title {
+    .plan-telemetry-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .plan-telemetry-title {
         margin: 0;
         font-size: 0.82rem;
         font-weight: 700;
@@ -99,113 +174,106 @@
         letter-spacing: 0.02em;
         text-transform: uppercase;
     }
-    .plan-trace-grid {
+    .plan-telemetry-updated {
+        margin: 2px 0 0;
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        line-height: 1.2;
+    }
+    .plan-telemetry-hint {
+        margin: 6px 0 0;
+        font-size: 0.82rem;
+        color: var(--color-text-secondary);
+        line-height: 1.35;
+    }
+    .plan-telemetry-hint.pending {
+        color: #2f5f9f;
+    }
+    .plan-telemetry-copy-wrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .plan-telemetry-copy-status {
+        min-height: 1em;
+        font-size: 0.78rem;
+        color: var(--color-text-secondary);
+    }
+    .plan-telemetry-copy-status.error {
+        color: #b42318;
+    }
+    .plan-telemetry-grid {
         margin-top: 6px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(120px, 1fr));
+        grid-template-columns: repeat(5, minmax(120px, 1fr));
         gap: 6px;
     }
-    .plan-trace-item {
+    .plan-telemetry-item {
         border: 1px solid var(--color-border);
         border-radius: 6px;
         background: var(--color-bg-soft);
         padding: 5px 8px;
         min-height: 48px;
     }
-    .plan-trace-label {
+    .plan-telemetry-label {
         margin: 0;
-        font-size: 0.74rem;
+        font-size: 0.76rem;
         font-weight: 600;
         color: var(--color-text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.01em;
     }
-    .plan-trace-value {
+    .plan-telemetry-value {
         margin: 3px 0 0;
-        font-size: 0.86rem;
+        font-size: 0.88rem;
         font-weight: 500;
         color: var(--color-text);
         line-height: 1.3;
         word-break: break-word;
     }
-    .plan-trace-subtitle {
-        margin: 8px 0 0;
-        font-size: 0.76rem;
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-        font-weight: 700;
-    }
-    .plan-trace-table-wrap {
-        margin-top: 5px;
-        max-height: 130px;
-        overflow: auto;
-        border: 1px solid var(--color-border);
-        border-radius: 6px;
-        background: var(--color-bg-soft);
-    }
-    .plan-trace-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-    }
-    .plan-trace-table th,
-    .plan-trace-table td {
-        padding: 5px 7px;
-        border-bottom: 1px solid var(--color-border);
-        font-size: 0.76rem;
-        color: var(--color-text);
-        text-align: left;
-        vertical-align: top;
-        word-break: break-word;
-    }
-    .plan-trace-table th {
-        font-size: 0.7rem;
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.02em;
-    }
-    .plan-trace-table tr:last-child td {
-        border-bottom: none;
-    }
-    .plan-trace-error {
-        margin-top: 6px;
-        font-size: 0.78rem;
-        color: #b42318;
-        word-break: break-word;
-    }
-    .plan-trace-no-data {
+    .plan-telemetry-source-list {
         margin-top: 4px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .plan-telemetry-source-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        width: fit-content;
+        max-width: 100%;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        background: var(--color-bg-muted);
+        color: var(--color-text);
+        font-size: 0.74rem;
+        font-weight: 500;
+        line-height: 1.1;
+        padding: 3px 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .plan-telemetry-source-chip.ok {
+        border-color: #95d5b2;
+        background: #ecfdf3;
+        color: #1d6f42;
+    }
+    .plan-telemetry-routes {
+        margin: 6px 0 0;
         font-size: 0.8rem;
         color: var(--color-text-secondary);
-    }
-    .plan-trace-partial {
-        margin-top: 8px;
-        border: 1px solid var(--color-border);
-        border-radius: 6px;
-        background: var(--color-bg-soft);
-        padding: 0 8px 7px;
-    }
-    .plan-trace-partial summary {
-        cursor: pointer;
-        padding: 6px 0;
-        font-size: 0.78rem;
-        font-weight: 600;
-        color: var(--color-text);
-    }
-    .plan-trace-partial pre {
-        margin: 0;
-        max-height: 140px;
-        overflow: auto;
-        background: var(--color-bg);
-        border: 1px solid var(--color-border);
-        border-radius: 4px;
-        padding: 7px;
-        font-size: 0.75rem;
         line-height: 1.35;
+        word-break: break-word;
     }
-    @media (max-width: 980px) {
-        .plan-trace-grid {
+    @media (max-width: 1200px) {
+        .plan-telemetry-grid {
+            grid-template-columns: repeat(3, minmax(120px, 1fr));
+        }
+    }
+    @media (max-width: 800px) {
+        .plan-telemetry-grid {
             grid-template-columns: repeat(2, minmax(120px, 1fr));
         }
     }
@@ -234,46 +302,115 @@
 
 {% block content %}
 <div class="plan-meta-panel">
-    <div class="plan-meta-info">
-        <p class="plan-meta-title">Plan</p>
-        <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
-        <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
-            Status: <span id="plan-state-text">
-                {% if task.state %}
-                    {{ task.state.name | lower }}
-                {% else %}
-                    pending
-                {% endif %}
-                {% if task.progress_percentage is not none %}
-                    · {{ "%.0f"|format(task.progress_percentage) }}%
-                {% endif %}
-                {% if task.progress_message %}
-                    · {{ task.progress_message }}
-                {% endif %}
-            </span>
-        </p>
+    <div class="plan-meta-top">
+        <div class="plan-meta-info">
+            <p class="plan-meta-title">Plan</p>
+            <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
+            <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
+                Status: <span id="plan-state-text">
+                    {% if task.state %}
+                        {{ task.state.name | lower }}
+                    {% else %}
+                        pending
+                    {% endif %}
+                    {% if task.progress_percentage is not none %}
+                        · {{ "%.0f"|format(task.progress_percentage) }}%
+                    {% endif %}
+                    {% if task.progress_message %}
+                        · {{ task.progress_message }}
+                    {% endif %}
+                </span>
+            </p>
+        </div>
+        <div class="plan-meta-actions">
+            <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" value="{{ task.id }}">
+                <button type="submit" class="btn-plan-meta">Retry</button>
+            </form>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
+
+            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" value="{{ task.id }}">
+                <button type="submit" class="btn-plan-meta">Stop</button>
+            </form>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
+
+            <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
+
+            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+        </div>
     </div>
-    <div class="plan-meta-actions">
-        <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="id" value="{{ task.id }}">
-            <button type="submit" class="btn-plan-meta">Retry</button>
-        </form>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
 
-        <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="id" value="{{ task.id }}">
-            <button type="submit" class="btn-plan-meta">Stop</button>
-        </form>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
-
-        <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
-
-        <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+    <div class="plan-prompt-panel">
+        <div class="plan-prompt-header">
+            <p class="plan-prompt-title">Prompt</p>
+            <div class="plan-prompt-actions">
+                <button type="button" id="copy-prompt-btn" class="btn-plan-prompt">Copy</button>
+                <button type="button" id="toggle-prompt-btn" class="btn-plan-prompt" style="display:none">Expand</button>
+            </div>
+        </div>
+        <pre id="plan-prompt-content" class="plan-prompt-content">{{ task.prompt or '' }}</pre>
     </div>
+</div>
+<div class="plan-telemetry-panel">
+    <div class="plan-telemetry-head">
+        <div>
+            <p class="plan-telemetry-title">Usage &amp; Cost</p>
+            <p class="plan-telemetry-updated" id="telemetry-updated">Updated: waiting for telemetry</p>
+        </div>
+        <div class="plan-telemetry-copy-wrap">
+            <button type="button" class="btn-plan-meta" id="copy-telemetry-btn">Copy telemetry JSON</button>
+            <span class="plan-telemetry-copy-status" id="copy-telemetry-status"></span>
+        </div>
+    </div>
+    <p class="plan-telemetry-hint" id="telemetry-hint">Telemetry is being prepared.</p>
+    <div class="plan-telemetry-grid">
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Prompt tokens</p>
+            <p class="plan-telemetry-value" id="telemetry-prompt-tokens">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Completion tokens</p>
+            <p class="plan-telemetry-value" id="telemetry-completion-tokens">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Thinking tokens</p>
+            <p class="plan-telemetry-value" id="telemetry-thinking-tokens">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Total tokens</p>
+            <p class="plan-telemetry-value" id="telemetry-total-tokens">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Token cost (USD)</p>
+            <p class="plan-telemetry-value" id="telemetry-token-cost">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Activity cost (USD)</p>
+            <p class="plan-telemetry-value" id="telemetry-activity-cost">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Provider(s)</p>
+            <p class="plan-telemetry-value" id="telemetry-providers">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Model(s)</p>
+            <p class="plan-telemetry-value" id="telemetry-models">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Calls</p>
+            <p class="plan-telemetry-value" id="telemetry-calls">Pending...</p>
+        </div>
+        <div class="plan-telemetry-item">
+            <p class="plan-telemetry-label">Telemetry source</p>
+            <div class="plan-telemetry-source-list" id="telemetry-source-lines"></div>
+        </div>
+    </div>
+    <p class="plan-telemetry-routes" id="telemetry-routes">Routes: Pending...</p>
 </div>
 <div class="plan-trace-panel">
     <p class="plan-trace-title">Failure Modes &amp; Execution Trace</p>
@@ -346,10 +483,24 @@
 <script>
     (function () {
         const planId = "{{ task.id }}";
+        const promptText = {{ (task.prompt or '') | tojson }};
         const metaUrl = "{{ url_for('plan_meta') }}?id=" + encodeURIComponent(planId);
+        const telemetryUrl = "{{ url_for('plan_telemetry') }}?id=" + encodeURIComponent(planId);
         const stateEl = document.getElementById("plan-state");
         const stateTextEl = document.getElementById("plan-state-text");
-        const initialFailureTrace = {{ failure_trace | tojson }};
+        const copyTelemetryButton = document.getElementById("copy-telemetry-btn");
+        const copyTelemetryStatus = document.getElementById("copy-telemetry-status");
+        const telemetryHintEl = document.getElementById("telemetry-hint");
+        const telemetryUpdatedEl = document.getElementById("telemetry-updated");
+        const telemetrySourceLinesEl = document.getElementById("telemetry-source-lines");
+        const initialTelemetry = {{ telemetry | tojson }};
+        const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
+        let currentPlanState = initialState;
+        let copyStatusTimer = null;
+
+        const promptContentEl = document.getElementById("plan-prompt-content");
+        const copyPromptBtn = document.getElementById("copy-prompt-btn");
+        const togglePromptBtn = document.getElementById("toggle-prompt-btn");
 
         function setVisible(id, visible) {
             const el = document.getElementById(id);
@@ -357,136 +508,211 @@
             el.style.display = visible ? "" : "none";
         }
 
-        function setText(id, value) {
+        function setText(id, text) {
             const el = document.getElementById(id);
             if (!el) return;
-            el.textContent = value;
+            el.textContent = text;
         }
 
         function isActiveState(state) {
             return state === "pending" || state === "processing";
         }
 
-        function missingValue(state) {
-            return isActiveState(state) ? "Pending..." : "Not available";
+        function missingValueText(state) {
+            return isActiveState(state) ? "Pending..." : "No telemetry";
         }
 
-        function cleanText(value) {
-            if (value === null || value === undefined) return null;
-            const text = String(value).trim();
-            return text.length ? text : null;
-        }
-
-        function formatSeconds(value, state) {
-            if (value === null || value === undefined || value === "") {
-                return missingValue(state);
+        function formatInt(value, state) {
+            if (value === null || value === undefined) {
+                return missingValueText(state);
             }
             const parsed = Number(value);
             if (!Number.isFinite(parsed)) {
-                return missingValue(state);
+                return missingValueText(state);
             }
-            return parsed.toFixed(2) + " s";
+            return Math.round(parsed).toLocaleString();
         }
 
-        function formatRetry(trace, state) {
-            if (!trace || !trace.retries) return missingValue(state);
-            const retryCount = trace.retries.count;
-            if (retryCount !== null && retryCount !== undefined) {
-                return String(retryCount);
+        function formatUsd(value, state) {
+            if (value === null || value === undefined) {
+                return missingValueText(state);
             }
-            const inferred = trace.retries.count_inferred_from_attempts;
-            if (inferred !== null && inferred !== undefined) {
-                return String(inferred) + " (inferred)";
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+                return missingValueText(state);
             }
-            return missingValue(state);
+            return "$" + parsed.toFixed(6).replace(/\.?0+$/, "");
         }
 
-        function formatProviderSwitch(trace, state) {
-            if (!trace || !trace.provider_switch) return missingValue(state);
-            const explicit = cleanText(trace.provider_switch.indicator);
-            if (explicit) return explicit;
-            const inferred = trace.provider_switch.inferred_count_from_routes;
-            if (inferred !== null && inferred !== undefined) {
-                return String(inferred) + " (inferred)";
+        function formatList(values, state) {
+            if (!Array.isArray(values)) {
+                return missingValueText(state);
             }
-            return missingValue(state);
+            const cleaned = values.filter(function (item) {
+                return !!item;
+            });
+            if (!cleaned.length) {
+                return missingValueText(state);
+            }
+            return cleaned.join(", ");
         }
 
-        function escapeHtml(text) {
-            return String(text)
-                .replace(/&/g, "&amp;")
-                .replace(/</g, "&lt;")
-                .replace(/>/g, "&gt;")
-                .replace(/\"/g, "&quot;")
-                .replace(/'/g, "&#39;");
+        function setCopyStatus(message, isError) {
+            if (!copyTelemetryStatus) return;
+            if (copyStatusTimer) {
+                clearTimeout(copyStatusTimer);
+                copyStatusTimer = null;
+            }
+            copyTelemetryStatus.textContent = message;
+            copyTelemetryStatus.classList.toggle("error", !!isError);
+            if (message) {
+                copyStatusTimer = setTimeout(function () {
+                    copyTelemetryStatus.textContent = "";
+                    copyTelemetryStatus.classList.remove("error");
+                }, 4500);
+            }
         }
 
-        function renderExecutionTrace(trace, state) {
-            const body = document.getElementById("trace-attempts-body");
-            if (!body) return;
+        function copyText(text) {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                return navigator.clipboard.writeText(text);
+            }
+            return new Promise(function (resolve, reject) {
+                try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.setAttribute("readonly", "");
+                    textArea.style.position = "absolute";
+                    textArea.style.left = "-9999px";
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    const copied = document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                    if (!copied) {
+                        reject(new Error("copy failed"));
+                        return;
+                    }
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            });
+        }
 
-            const rows = trace && Array.isArray(trace.execution_trace) ? trace.execution_trace : [];
-            if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="5" class="plan-trace-no-data">' + escapeHtml(missingValue(state)) + '</td></tr>';
+        function setTelemetryHint(state, hasData) {
+            if (!telemetryHintEl) return;
+            telemetryHintEl.classList.remove("pending");
+            if (isActiveState(state)) {
+                telemetryHintEl.textContent = "Telemetry is collected while the plan runs. Final totals appear when generation is complete.";
+                telemetryHintEl.classList.add("pending");
                 return;
             }
-
-            const htmlRows = rows.map(function (row) {
-                const timestamp = cleanText(row.timestamp) || "-";
-                const provider = cleanText(row.provider);
-                const model = cleanText(row.model);
-                const route = provider && model ? (provider + "/" + model) : (provider || model || "-");
-                const duration = formatSeconds(row.duration_seconds, state);
-                const success = row.success === true ? "success" : (row.success === false ? "failed" : "-");
-                const errorText = cleanText(row.error_message) || "-";
-                return '<tr>' +
-                    '<td>' + escapeHtml(timestamp) + '</td>' +
-                    '<td>' + escapeHtml(route) + '</td>' +
-                    '<td>' + escapeHtml(duration) + '</td>' +
-                    '<td>' + escapeHtml(success) + '</td>' +
-                    '<td>' + escapeHtml(errorText) + '</td>' +
-                    '</tr>';
-            });
-            body.innerHTML = htmlRows.join("");
+            if (!hasData) {
+                telemetryHintEl.textContent = "Run finished, but no telemetry was captured for this plan.";
+                return;
+            }
+            telemetryHintEl.textContent = "Telemetry captured from token metrics and run artifacts.";
         }
 
-        function updateFailureTrace(trace, state) {
-            const payload = trace || {};
-            const error = payload.error || {};
-            const timing = payload.timing || {};
-            const fallback = payload.fallback || {};
+        function updateTelemetryUpdated() {
+            if (!telemetryUpdatedEl) return;
+            const now = new Date();
+            telemetryUpdatedEl.textContent = "Updated: " + now.toLocaleTimeString();
+        }
 
-            setText("trace-stage", cleanText(payload.stage) || missingValue(state));
-            setText("trace-error-type", cleanText(error.type) || missingValue(state));
-            setText("trace-retries", formatRetry(payload, state));
-            setText("trace-provider-switch", formatProviderSwitch(payload, state));
-            setText("trace-fallback", cleanText(fallback.indicator) || missingValue(state));
-            setText("trace-queue-time", formatSeconds(timing.pending_to_processing_seconds, state));
-            setText("trace-processing-time", formatSeconds(timing.processing_to_terminal_seconds, state));
-            setText("trace-llm-total-time", formatSeconds(timing.llm_attempts_total_duration_seconds, state));
+        function buildSourceChip(text, isOk) {
+            const chip = document.createElement("span");
+            chip.className = "plan-telemetry-source-chip" + (isOk ? " ok" : "");
+            chip.textContent = text;
+            return chip;
+        }
 
-            const errorMessage = cleanText(error.message);
-            setText("trace-error-message", errorMessage ? ("Error: " + errorMessage) : "");
+        function updateTelemetrySource(sourceAvailability, state) {
+            if (!telemetrySourceLinesEl) return;
+            telemetrySourceLinesEl.innerHTML = "";
 
-            renderExecutionTrace(payload, state);
+            const tokenRows = sourceAvailability.token_metrics_row_count;
+            const activityPresent = sourceAvailability.activity_overview_present === true;
+            const active = isActiveState(state);
 
-            const partialOutput = payload.partial_output;
-            const partialWrap = document.getElementById("trace-partial-wrap");
-            const partialEl = document.getElementById("trace-partial-output");
-            const partialText = cleanText(partialOutput);
-            if (partialWrap && partialEl) {
-                if (partialText) {
-                    partialEl.textContent = partialText;
-                    partialWrap.style.display = "";
-                } else {
-                    partialEl.textContent = "";
-                    partialWrap.style.display = "none";
+            let tokenText = "";
+            let tokenOk = false;
+            if (tokenRows === null || tokenRows === undefined) {
+                tokenText = active ? "Token metrics: pending" : "Token metrics: unavailable";
+            } else {
+                const suffix = tokenRows === 1 ? "row" : "rows";
+                tokenText = "Token metrics: " + tokenRows + " " + suffix;
+                tokenOk = tokenRows > 0;
+            }
+
+            let activityText = "";
+            if (activityPresent) {
+                activityText = "Activity overview: available";
+            } else if (active) {
+                activityText = "Activity overview: pending";
+            } else {
+                activityText = "Activity overview: unavailable";
+            }
+
+            telemetrySourceLinesEl.appendChild(buildSourceChip(tokenText, tokenOk));
+            telemetrySourceLinesEl.appendChild(buildSourceChip(activityText, activityPresent));
+        }
+
+        function updateTelemetryPanel(telemetry, state) {
+            const usage = (telemetry && telemetry.usage) || {};
+            const cost = (telemetry && telemetry.cost) || {};
+            const providerModel = (telemetry && telemetry.provider_model) || {};
+            const calls = (telemetry && telemetry.calls) || {};
+            const sourceAvailability = (telemetry && telemetry.source_availability) || {};
+            const hasData = !!(telemetry && telemetry.has_data);
+
+            setText("telemetry-prompt-tokens", formatInt(usage.prompt_tokens, state));
+            setText("telemetry-completion-tokens", formatInt(usage.completion_tokens, state));
+            setText("telemetry-thinking-tokens", formatInt(usage.thinking_tokens, state));
+            setText("telemetry-total-tokens", formatInt(usage.total_tokens, state));
+
+            setText("telemetry-token-cost", formatUsd(cost.token_metrics_usd, state));
+            setText("telemetry-activity-cost", formatUsd(cost.activity_overview_usd, state));
+
+            setText("telemetry-providers", formatList(providerModel.providers, state));
+            setText("telemetry-models", formatList(providerModel.models, state));
+
+            let callText = missingValueText(state);
+            if (calls.total !== null && calls.total !== undefined) {
+                callText = "total " + calls.total;
+                if (calls.successful !== null && calls.successful !== undefined) {
+                    callText += ", ok " + calls.successful;
+                }
+                if (calls.failed !== null && calls.failed !== undefined) {
+                    callText += ", failed " + calls.failed;
                 }
             }
+            setText("telemetry-calls", callText);
+
+            updateTelemetrySource(sourceAvailability, state);
+
+            let routesText = "Routes: " + missingValueText(state);
+            if (Array.isArray(providerModel.routes) && providerModel.routes.length) {
+                const renderedRoutes = providerModel.routes.map(function (route) {
+                    const provider = route.provider || "";
+                    const model = route.model || "";
+                    const routeName = provider && model ? provider + ":" + model : (model || provider || "unknown");
+                    if (route.calls === null || route.calls === undefined) {
+                        return routeName;
+                    }
+                    return routeName + " (" + route.calls + " calls)";
+                });
+                routesText = "Routes: " + renderedRoutes.join(" | ");
+            }
+            setText("telemetry-routes", routesText);
+
+            setTelemetryHint(state, hasData);
+            updateTelemetryUpdated();
         }
 
         function updatePanel(meta) {
             const state = (meta.state || "pending").toLowerCase();
+            currentPlanState = state;
             const isCompleted = state === "completed";
             const isActive = state === "pending" || state === "processing";
 
@@ -520,11 +746,120 @@
             setVisible("zip-link", hasZip);
             setVisible("zip-disabled", !hasZip);
 
-            updateFailureTrace(meta.failure_trace, state);
+            updateTelemetryPanel(meta.telemetry, state);
 
             return isActive;
         }
 
+        if (copyTelemetryButton) {
+            copyTelemetryButton.addEventListener("click", function () {
+                if (copyTelemetryButton.disabled) {
+                    return;
+                }
+                copyTelemetryButton.disabled = true;
+                setCopyStatus("Copying...", false);
+                fetch(telemetryUrl, { cache: "no-cache" })
+                    .then(function (response) {
+                        if (!response.ok) {
+                            throw new Error("Failed to fetch telemetry");
+                        }
+                        return response.json();
+                    })
+                    .then(function (payload) {
+                        return copyText(JSON.stringify(payload, null, 2)).then(function () {
+                            return payload;
+                        });
+                    })
+                    .then(function (payload) {
+                        const active = isActiveState(currentPlanState);
+                        const hasData = !!payload.has_data;
+                        if (active && hasData) {
+                            setCopyStatus("Copied partial telemetry", false);
+                        } else if (active && !hasData) {
+                            setCopyStatus("Copied status; telemetry still pending", false);
+                        } else if (!active && !hasData) {
+                            setCopyStatus("Copied; no telemetry captured", false);
+                        } else {
+                            setCopyStatus("Copied telemetry JSON", false);
+                        }
+                    })
+                    .catch(function () {
+                        setCopyStatus("Copy failed", true);
+                    })
+                    .finally(function () {
+                        copyTelemetryButton.disabled = false;
+                    });
+            });
+        }
+
+        function initPromptPanel() {
+            if (!promptContentEl || !copyPromptBtn || !togglePromptBtn) {
+                return;
+            }
+
+            const collapsedClass = "is-collapsed";
+            const maxCollapsedHeight = 220;
+            let expanded = false;
+
+            function applyPromptCollapseState() {
+                const needsCollapse = promptContentEl.scrollHeight > maxCollapsedHeight;
+                if (!needsCollapse) {
+                    promptContentEl.classList.remove(collapsedClass);
+                    togglePromptBtn.style.display = "none";
+                    togglePromptBtn.setAttribute("aria-expanded", "true");
+                    return;
+                }
+                promptContentEl.classList.toggle(collapsedClass, !expanded);
+                togglePromptBtn.style.display = "inline-flex";
+                togglePromptBtn.textContent = expanded ? "Collapse" : "Expand";
+                togglePromptBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+            }
+
+            function measureWhenReady() {
+                const run = function () {
+                    window.requestAnimationFrame(applyPromptCollapseState);
+                };
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(run).catch(run);
+                    return;
+                }
+                run();
+            }
+
+            togglePromptBtn.addEventListener("click", function () {
+                expanded = !expanded;
+                applyPromptCollapseState();
+            });
+
+            copyPromptBtn.addEventListener("click", function () {
+                if (copyPromptBtn.disabled) {
+                    return;
+                }
+                copyPromptBtn.disabled = true;
+                copyPromptBtn.textContent = "Copying...";
+                copyText(promptText)
+                    .then(function () {
+                        copyPromptBtn.textContent = "Copied";
+                    })
+                    .catch(function () {
+                        copyPromptBtn.textContent = "Copy failed";
+                    })
+                    .finally(function () {
+                        setTimeout(function () {
+                            copyPromptBtn.textContent = "Copy";
+                            copyPromptBtn.disabled = false;
+                        }, 1200);
+                    });
+            });
+
+            if (document.readyState === "complete") {
+                measureWhenReady();
+            } else {
+                window.addEventListener("load", measureWhenReady, { once: true });
+            }
+        }
+
+        updateTelemetryPanel(initialTelemetry, initialState);
         let timer = null;
         function pollMeta() {
             fetch(metaUrl, { cache: "no-cache" })
@@ -544,8 +879,7 @@
                 });
         }
 
-        const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
-        updateFailureTrace(initialFailureTrace, initialState);
+        initPromptPanel();
         pollMeta();
         timer = setInterval(pollMeta, 10000);
     })();

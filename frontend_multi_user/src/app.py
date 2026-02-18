@@ -183,6 +183,11 @@ class MyFlaskApp:
         self.prompt_catalog = PromptCatalog()
         self.prompt_catalog.load_simple_plan_prompts()
 
+        # Lightweight in-process cache for terminal task telemetry snapshots.
+        # This avoids repeatedly re-querying/re-parsing run artifacts when the
+        # plan iframe polls /plan/meta after a task is already finished.
+        self._plan_telemetry_cache: dict[tuple[str, str, bool], dict[str, Any]] = {}
+
         # Point to the "templates" dir.
         # Prefer top-level templates dir (frontend_multi_user/templates) when running from Docker image.
         default_template_folder = Path(__file__).parent / "templates"
@@ -892,33 +897,6 @@ class MyFlaskApp:
         return text if text else None
 
     @staticmethod
-    def _extract_exception_type(message: Any) -> Optional[str]:
-        text = MyFlaskApp._clean_text(message)
-        if text is None:
-            return None
-        match = re.search(r"([A-Za-z_][A-Za-z0-9_\.]*Error)\b", text)
-        if match:
-            return match.group(1)
-        return None
-
-    @staticmethod
-    def _extract_nested_value(payload: Any, key_names: set[str]) -> Any:
-        if isinstance(payload, dict):
-            for key, value in payload.items():
-                if str(key).strip().lower() in key_names and value not in (None, "", [], {}):
-                    return value
-            for value in payload.values():
-                found = MyFlaskApp._extract_nested_value(value, key_names)
-                if found not in (None, "", [], {}):
-                    return found
-        elif isinstance(payload, list):
-            for item in payload:
-                found = MyFlaskApp._extract_nested_value(item, key_names)
-                if found not in (None, "", [], {}):
-                    return found
-        return None
-
-    @staticmethod
     def _extract_provider_model_from_activity_key(model_key: Any) -> tuple[Optional[str], Optional[str]]:
         key = MyFlaskApp._clean_text(model_key)
         if key is None:
@@ -989,21 +967,26 @@ class MyFlaskApp:
             return None
         return self._safe_float(payload.get("total_cost"))
 
-    def _find_latest_task_event(self, task_id: str, event_type: EventType, max_events_to_scan: int = 2000) -> Optional[EventItem]:
-        events = (
-            EventItem.query
-            .filter_by(event_type=event_type)
-            .order_by(EventItem.timestamp.desc(), EventItem.id.desc())
-            .limit(max_events_to_scan)
-            .all()
-        )
-        for event in events:
-            context = event.context if isinstance(event.context, dict) else {}
-            if str(context.get("task_id") or "").strip() == task_id:
-                return event
-        return None
+    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool]]:
+        state = task.state if isinstance(task.state, TaskState) else None
+        if include_raw or state not in (TaskState.completed, TaskState.failed):
+            return None
+        return (str(task.id), state.name, bool(task.run_zip_snapshot))
 
-    def _build_plan_failure_trace(self, task: TaskItem) -> dict[str, Any]:
+    def _build_plan_telemetry(
+        self,
+        task: TaskItem,
+        include_raw: bool = False,
+        expose_raw_usage_data: bool = False,
+    ) -> dict[str, Any]:
+        cache_key = self._build_plan_telemetry_cache_key(task, include_raw)
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if isinstance(telemetry_cache, dict):
+                cached = telemetry_cache.get(cache_key)
+                if isinstance(cached, dict):
+                    return cached
+
         task_id = str(task.id)
         token_metrics_rows = (
             TokenMetrics.query
@@ -1011,122 +994,51 @@ class MyFlaskApp:
             .order_by(TokenMetrics.timestamp.asc(), TokenMetrics.id.asc())
             .all()
         )
-        failed_rows = [row for row in token_metrics_rows if (row.success is False) or bool(row.error_message)]
-        latest_failed_row = failed_rows[-1] if failed_rows else None
-
-        latest_failed_event = self._find_latest_task_event(task_id, EventType.TASK_FAILED)
-        latest_processing_event = self._find_latest_task_event(task_id, EventType.TASK_PROCESSING)
-        latest_completed_event = self._find_latest_task_event(task_id, EventType.TASK_COMPLETED)
-        latest_terminal_event = latest_failed_event or latest_completed_event
-
-        failed_event_context = latest_failed_event.context if latest_failed_event and isinstance(latest_failed_event.context, dict) else {}
-        processing_event_context = latest_processing_event.context if latest_processing_event and isinstance(latest_processing_event.context, dict) else {}
-        terminal_event_context = latest_terminal_event.context if latest_terminal_event and isinstance(latest_terminal_event.context, dict) else {}
-        latest_failed_usage = latest_failed_row.raw_usage_data if latest_failed_row and isinstance(latest_failed_row.raw_usage_data, dict) else {}
-        task_parameters = task.parameters if isinstance(task.parameters, dict) else {}
+        token_summary = TokenMetricsSummary(task_id=task_id, metrics=token_metrics_rows)
         activity_overview = self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
 
-        nested_sources: list[Any] = [
-            failed_event_context,
-            processing_event_context,
-            terminal_event_context,
-            latest_failed_usage,
-            task_parameters,
-            activity_overview,
+        has_prompt_tokens = any(row.input_tokens is not None for row in token_metrics_rows)
+        has_completion_tokens = any(row.output_tokens is not None for row in token_metrics_rows)
+        has_thinking_tokens = any(row.thinking_tokens is not None for row in token_metrics_rows)
+        has_any_metric_tokens = has_prompt_tokens or has_completion_tokens or has_thinking_tokens
+
+        activity_prompt_tokens = self._safe_int(activity_overview.get("total_input_tokens")) if isinstance(activity_overview, dict) else None
+        activity_completion_tokens = self._safe_int(activity_overview.get("total_output_tokens")) if isinstance(activity_overview, dict) else None
+        activity_thinking_tokens = self._safe_int(activity_overview.get("total_thinking_tokens")) if isinstance(activity_overview, dict) else None
+        activity_total_tokens = self._safe_int(activity_overview.get("total_tokens")) if isinstance(activity_overview, dict) else None
+
+        prompt_tokens = token_summary.total_input_tokens if has_prompt_tokens else activity_prompt_tokens
+        completion_tokens = token_summary.total_output_tokens if has_completion_tokens else activity_completion_tokens
+        thinking_tokens = token_summary.total_thinking_tokens if has_thinking_tokens else activity_thinking_tokens
+
+        if has_any_metric_tokens:
+            total_tokens = token_summary.total_tokens
+        elif activity_total_tokens is not None:
+            total_tokens = activity_total_tokens
+        elif any(value is not None for value in [prompt_tokens, completion_tokens, thinking_tokens]):
+            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0) + (thinking_tokens or 0)
+        else:
+            total_tokens = None
+
+        metric_cost_values = [
+            self._safe_float(row.cost_usd)
+            for row in token_metrics_rows
+            if row.cost_usd is not None
         ]
+        metric_cost_values = [value for value in metric_cost_values if value is not None]
+        token_metrics_cost_usd = sum(metric_cost_values) if metric_cost_values else None
+        activity_overview_cost_usd = self._safe_float(activity_overview.get("total_cost")) if isinstance(activity_overview, dict) else None
 
-        stage = None
-        for source in nested_sources:
-            stage = self._clean_text(
-                self._extract_nested_value(
-                    source,
-                    {
-                        "stage",
-                        "failed_stage",
-                        "failure_stage",
-                        "error_stage",
-                        "pipeline_stage",
-                    },
-                )
-            )
-            if stage:
-                break
-
-        explicit_error_type = None
-        for source in nested_sources:
-            explicit_error_type = self._clean_text(
-                self._extract_nested_value(source, {"error_type", "exception_type", "exception_class"})
-            )
-            if explicit_error_type:
-                break
-
-        error_message = self._clean_text(latest_failed_row.error_message if latest_failed_row else None)
-        if error_message is None:
-            for source in nested_sources:
-                error_message = self._clean_text(
-                    self._extract_nested_value(
-                        source,
-                        {
-                            "error_message",
-                            "message",
-                            "machai_error_message",
-                            "exception",
-                            "error",
-                            "detail",
-                        },
-                    )
-                )
-                if error_message:
-                    break
-
-        error_type = explicit_error_type or self._extract_exception_type(error_message)
-
-        retry_count = None
-        for source in nested_sources:
-            retry_count = self._safe_int(
-                self._extract_nested_value(
-                    source,
-                    {
-                        "retry_count",
-                        "retries",
-                        "retry_attempts",
-                        "attempt_count",
-                        "attempts",
-                    },
-                )
-            )
-            if retry_count is not None:
-                break
-
-        fallback_indicator = None
-        for source in nested_sources:
-            fallback_value = self._extract_nested_value(
-                source,
-                {
-                    "fallback",
-                    "fallback_used",
-                    "used_fallback",
-                    "fallback_model",
-                    "fallback_provider",
-                },
-            )
-            fallback_text = self._clean_text(fallback_value)
-            if fallback_text is not None:
-                fallback_indicator = fallback_text
-                break
-            if isinstance(fallback_value, bool):
-                fallback_indicator = "true" if fallback_value else "false"
-                break
-
-        routes_map: dict[tuple[Optional[str], Optional[str]], int] = {}
-        for row in token_metrics_rows:
-            provider = self._clean_text(row.upstream_provider)
-            model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
-            if provider is None and model is None:
-                continue
-            key = (provider, model)
-            routes_map[key] = routes_map.get(key, 0) + 1
-        if not routes_map and isinstance(activity_overview, dict):
+        provider_model_counts: dict[tuple[Optional[str], Optional[str]], int] = {}
+        if token_metrics_rows:
+            for row in token_metrics_rows:
+                provider = self._clean_text(row.upstream_provider)
+                model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
+                if provider is None and model is None:
+                    continue
+                key = (provider, model)
+                provider_model_counts[key] = provider_model_counts.get(key, 0) + 1
+        elif isinstance(activity_overview, dict):
             models_payload = activity_overview.get("models")
             if isinstance(models_payload, dict):
                 for model_key, model_stats in models_payload.items():
@@ -1134,7 +1046,7 @@ class MyFlaskApp:
                     if provider is None and model is None:
                         continue
                     calls = self._safe_int(model_stats.get("calls")) if isinstance(model_stats, dict) else None
-                    routes_map[(provider, model)] = calls if calls and calls > 0 else 0
+                    provider_model_counts[(provider, model)] = calls if calls and calls > 0 else 0
 
         routes = [
             {
@@ -1142,136 +1054,114 @@ class MyFlaskApp:
                 "model": model,
                 "calls": calls if calls > 0 else None,
             }
-            for (provider, model), calls in routes_map.items()
+            for (provider, model), calls in provider_model_counts.items()
         ]
         routes.sort(key=lambda row: (-(row["calls"] or 0), row["provider"] or "", row["model"] or ""))
 
-        provider_switch_indicator = None
-        for source in nested_sources:
-            provider_switch_indicator = self._clean_text(
-                self._extract_nested_value(
-                    source,
-                    {
-                        "provider_switch",
-                        "provider_switched",
-                        "switched_provider",
-                        "provider_switch_count",
-                    },
-                )
-            )
-            if provider_switch_indicator:
-                break
+        providers = sorted({row["provider"] for row in routes if row.get("provider")})
+        models = sorted({row["model"] for row in routes if row.get("model")})
 
-        unique_routes_count = len(routes)
-        inferred_provider_switch_count = unique_routes_count - 1 if unique_routes_count > 1 else 0
-
-        pending_to_processing_seconds = self._safe_float(processing_event_context.get("duration_between_pending_and_processing"))
-        processing_to_terminal_seconds = self._safe_float(terminal_event_context.get("duration_between_processing_and_completion"))
-
-        llm_duration_values = [
-            self._safe_float(row.duration_seconds)
-            for row in token_metrics_rows
-            if row.duration_seconds is not None
-        ]
-        llm_duration_values = [value for value in llm_duration_values if value is not None]
-        llm_duration_total_seconds = sum(llm_duration_values) if llm_duration_values else None
-
-        partial_output = None
-        for source in [latest_failed_usage, failed_event_context, task_parameters]:
-            partial_output = self._extract_nested_value(
-                source,
-                {
-                    "partial_output",
-                    "partial_response",
-                    "partial_result",
-                    "response_excerpt",
-                    "partial_text",
-                    "raw_partial_output",
-                },
-            )
-            if partial_output not in (None, "", [], {}):
-                break
-
-        if isinstance(partial_output, (dict, list)):
-            try:
-                partial_output = json.dumps(partial_output, indent=2, sort_keys=True)
-            except Exception:
-                partial_output = str(partial_output)
+        if token_metrics_rows:
+            total_calls = token_summary.total_calls
+            successful_calls = token_summary.successful_calls
+            failed_calls = token_summary.failed_calls
         else:
-            partial_output = self._clean_text(partial_output)
+            total_calls = None
+            successful_calls = None
+            failed_calls = None
+            if isinstance(activity_overview, dict):
+                models_payload = activity_overview.get("models")
+                if isinstance(models_payload, dict):
+                    total_calls = 0
+                    for model_stats in models_payload.values():
+                        calls = self._safe_int(model_stats.get("calls")) if isinstance(model_stats, dict) else None
+                        total_calls += calls or 0
 
-        execution_attempts = []
-        for row in token_metrics_rows:
-            route_provider = self._clean_text(row.upstream_provider)
-            route_model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
-            success_state = True if row.success is True else False if row.success is False else None
-            execution_attempts.append(
-                {
-                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
-                    "provider": route_provider,
-                    "model": route_model,
-                    "duration_seconds": self._safe_float(row.duration_seconds),
-                    "success": success_state,
-                    "error_message": self._clean_text(row.error_message),
-                }
-            )
-
-        inferred_retry_count = len(token_metrics_rows) - 1 if token_metrics_rows else None
-
-        failure_trace: dict[str, Any] = {
+        telemetry: dict[str, Any] = {
             "task_id": task_id,
-            "stage": stage,
-            "error": {
-                "type": error_type,
-                "message": error_message,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "thinking_tokens": thinking_tokens,
+                "total_tokens": total_tokens,
             },
-            "retries": {
-                "count": retry_count,
-                "count_inferred_from_attempts": inferred_retry_count,
-                "attempt_count": len(token_metrics_rows) if token_metrics_rows else None,
-                "failed_attempts": len(failed_rows) if token_metrics_rows else None,
+            "cost": {
+                "token_metrics_usd": token_metrics_cost_usd,
+                "activity_overview_usd": activity_overview_cost_usd,
+                "currency": "USD" if token_metrics_cost_usd is not None or activity_overview_cost_usd is not None else None,
             },
-            "fallback": {
-                "indicator": fallback_indicator,
-            },
-            "provider_switch": {
-                "indicator": provider_switch_indicator,
-                "inferred_count_from_routes": inferred_provider_switch_count if routes else None,
+            "provider_model": {
+                "providers": providers,
+                "models": models,
                 "routes": routes,
             },
-            "timing": {
-                "pending_to_processing_seconds": pending_to_processing_seconds,
-                "processing_to_terminal_seconds": processing_to_terminal_seconds,
-                "llm_attempts_total_duration_seconds": llm_duration_total_seconds,
+            "calls": {
+                "total": total_calls,
+                "successful": successful_calls,
+                "failed": failed_calls,
             },
-            "partial_output": partial_output,
-            "execution_trace": execution_attempts,
             "source_paths": {
-                "events_table": "events.context.{task_id, duration_between_pending_and_processing, duration_between_processing_and_completion, machai_error_message}",
-                "token_metrics_table": "token_metrics.{timestamp, upstream_provider, upstream_model, llm_model, duration_seconds, success, error_message, raw_usage_data}",
-                "task_parameters": "taskitem.parameters",
+                "token_metrics_table": "token_metrics.{input_tokens, output_tokens, thinking_tokens, cost_usd, upstream_provider, upstream_model}",
                 "activity_overview_json": "TaskItem.run_zip_snapshot -> */activity_overview.json",
             },
+            "source_availability": {
+                "token_metrics_row_count": len(token_metrics_rows),
+                "activity_overview_present": isinstance(activity_overview, dict),
+            },
         }
-        failure_trace["has_data"] = any(
+        telemetry["has_data"] = any(
             [
-                failure_trace["stage"] is not None,
-                failure_trace["error"]["type"] is not None,
-                failure_trace["error"]["message"] is not None,
-                failure_trace["retries"]["count"] is not None,
-                failure_trace["retries"]["count_inferred_from_attempts"] is not None,
-                failure_trace["fallback"]["indicator"] is not None,
-                failure_trace["provider_switch"]["indicator"] is not None,
-                failure_trace["provider_switch"]["inferred_count_from_routes"] is not None,
-                failure_trace["timing"]["pending_to_processing_seconds"] is not None,
-                failure_trace["timing"]["processing_to_terminal_seconds"] is not None,
-                failure_trace["timing"]["llm_attempts_total_duration_seconds"] is not None,
-                bool(failure_trace["execution_trace"]),
-                failure_trace["partial_output"] is not None,
+                telemetry["usage"]["prompt_tokens"] is not None,
+                telemetry["usage"]["completion_tokens"] is not None,
+                telemetry["usage"]["thinking_tokens"] is not None,
+                telemetry["usage"]["total_tokens"] is not None,
+                telemetry["cost"]["token_metrics_usd"] is not None,
+                telemetry["cost"]["activity_overview_usd"] is not None,
+                bool(telemetry["provider_model"]["routes"]),
+                telemetry["calls"]["total"] is not None,
             ]
         )
 
-        return failure_trace
+        if include_raw:
+            raw_token_metrics_rows = []
+            for row in token_metrics_rows:
+                raw_token_metrics_rows.append(
+                    {
+                        "id": row.id,
+                        "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                        "task_id": row.task_id,
+                        "user_id": row.user_id,
+                        "llm_model": row.llm_model,
+                        "upstream_provider": row.upstream_provider,
+                        "upstream_model": row.upstream_model,
+                        "input_tokens": row.input_tokens,
+                        "output_tokens": row.output_tokens,
+                        "thinking_tokens": row.thinking_tokens,
+                        "cost_usd": row.cost_usd,
+                        "duration_seconds": row.duration_seconds,
+                        "success": row.success,
+                        "error_message": row.error_message,
+                        # Guardrail: provider-native usage payloads can be verbose
+                        # and may include integration-specific fields. They are only
+                        # exposed when the dedicated /plan/telemetry route opts in.
+                        "raw_usage_data": row.raw_usage_data if expose_raw_usage_data else None,
+                    }
+                )
+            telemetry["source_data"] = {
+                "activity_overview": activity_overview,
+                "token_metrics": raw_token_metrics_rows,
+            }
+
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if not isinstance(telemetry_cache, dict):
+                telemetry_cache = {}
+                self._plan_telemetry_cache = telemetry_cache
+            telemetry_cache[cache_key] = telemetry
+            if len(telemetry_cache) > 512:
+                telemetry_cache.pop(next(iter(telemetry_cache)))
+
+        return telemetry
 
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
@@ -2337,8 +2227,8 @@ class MyFlaskApp:
                 logger.warning("Unauthorized plan wrapper access attempt. run_id=%s user_id=%s", run_id, current_user.id)
                 return jsonify({"error": "Forbidden"}), 403
 
-            failure_trace = self._build_plan_failure_trace(task)
-            return render_template("plan_iframe.html", run_id=run_id, task=task, failure_trace=failure_trace)
+            telemetry = self._build_plan_telemetry(task, include_raw=False)
+            return render_template("plan_iframe.html", run_id=run_id, task=task, telemetry=telemetry)
 
         @self.app.route('/plan/download/report')
         @login_required
@@ -2457,7 +2347,7 @@ class MyFlaskApp:
                 return jsonify({"error": "Forbidden"}), 403
 
             state_name = task.state.name if isinstance(task.state, TaskState) else "pending"
-            failure_trace = self._build_plan_failure_trace(task)
+            telemetry = self._build_plan_telemetry(task, include_raw=False)
             return jsonify({
                 "id": str(task.id),
                 "state": state_name,
@@ -2466,8 +2356,24 @@ class MyFlaskApp:
                 "generated_report_html": bool(task.generated_report_html),
                 "run_zip_snapshot": bool(task.run_zip_snapshot),
                 "stop_requested": bool(task.stop_requested),
-                "failure_trace": failure_trace,
+                "telemetry": telemetry,
             }), 200
+
+        @self.app.route('/plan/telemetry')
+        @login_required
+        def plan_telemetry():
+            run_id = request.args.get('id', '').strip()
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+
+            # Intentional: this endpoint is for authenticated owner/admin
+            # troubleshooting and may include provider raw_usage_data payloads.
+            # Keep /plan/meta sanitized (include_raw=False).
+            telemetry = self._build_plan_telemetry(task, include_raw=True, expose_raw_usage_data=True)
+            return jsonify(telemetry), 200
 
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required

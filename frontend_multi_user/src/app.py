@@ -897,6 +897,33 @@ class MyFlaskApp:
         return text if text else None
 
     @staticmethod
+    def _extract_exception_type(message: Any) -> Optional[str]:
+        text = MyFlaskApp._clean_text(message)
+        if text is None:
+            return None
+        match = re.search(r"([A-Za-z_][A-Za-z0-9_\.]*Error)\b", text)
+        if match:
+            return match.group(1)
+        return None
+
+    @staticmethod
+    def _extract_nested_value(payload: Any, key_names: set[str]) -> Any:
+        if isinstance(payload, dict):
+            for key, value in payload.items():
+                if str(key).strip().lower() in key_names and value not in (None, "", [], {}):
+                    return value
+            for value in payload.values():
+                found = MyFlaskApp._extract_nested_value(value, key_names)
+                if found not in (None, "", [], {}):
+                    return found
+        elif isinstance(payload, list):
+            for item in payload:
+                found = MyFlaskApp._extract_nested_value(item, key_names)
+                if found not in (None, "", [], {}):
+                    return found
+        return None
+
+    @staticmethod
     def _extract_provider_model_from_activity_key(model_key: Any) -> tuple[Optional[str], Optional[str]]:
         key = MyFlaskApp._clean_text(model_key)
         if key is None:
@@ -966,6 +993,290 @@ class MyFlaskApp:
         if not isinstance(payload, dict):
             return None
         return self._safe_float(payload.get("total_cost"))
+
+    def _find_latest_task_event(self, task_id: str, event_type: EventType, max_events_to_scan: int = 2000) -> Optional[EventItem]:
+        events = (
+            EventItem.query
+            .filter_by(event_type=event_type)
+            .order_by(EventItem.timestamp.desc(), EventItem.id.desc())
+            .limit(max_events_to_scan)
+            .all()
+        )
+        for event in events:
+            context = event.context if isinstance(event.context, dict) else {}
+            if str(context.get("task_id") or "").strip() == task_id:
+                return event
+        return None
+
+    def _build_plan_failure_trace(self, task: TaskItem) -> dict[str, Any]:
+        task_id = str(task.id)
+        token_metrics_rows = (
+            TokenMetrics.query
+            .filter_by(task_id=task_id)
+            .order_by(TokenMetrics.timestamp.asc(), TokenMetrics.id.asc())
+            .all()
+        )
+        failed_rows = [row for row in token_metrics_rows if (row.success is False) or bool(row.error_message)]
+        latest_failed_row = failed_rows[-1] if failed_rows else None
+
+        latest_failed_event = self._find_latest_task_event(task_id, EventType.TASK_FAILED)
+        latest_processing_event = self._find_latest_task_event(task_id, EventType.TASK_PROCESSING)
+        latest_completed_event = self._find_latest_task_event(task_id, EventType.TASK_COMPLETED)
+        latest_terminal_event = latest_failed_event or latest_completed_event
+
+        failed_event_context = latest_failed_event.context if latest_failed_event and isinstance(latest_failed_event.context, dict) else {}
+        processing_event_context = latest_processing_event.context if latest_processing_event and isinstance(latest_processing_event.context, dict) else {}
+        terminal_event_context = latest_terminal_event.context if latest_terminal_event and isinstance(latest_terminal_event.context, dict) else {}
+        latest_failed_usage = latest_failed_row.raw_usage_data if latest_failed_row and isinstance(latest_failed_row.raw_usage_data, dict) else {}
+        task_parameters = task.parameters if isinstance(task.parameters, dict) else {}
+        activity_overview = self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
+
+        nested_sources: list[Any] = [
+            failed_event_context,
+            processing_event_context,
+            terminal_event_context,
+            latest_failed_usage,
+            task_parameters,
+            activity_overview,
+        ]
+
+        stage = None
+        for source in nested_sources:
+            stage = self._clean_text(
+                self._extract_nested_value(
+                    source,
+                    {
+                        "stage",
+                        "failed_stage",
+                        "failure_stage",
+                        "error_stage",
+                        "pipeline_stage",
+                    },
+                )
+            )
+            if stage:
+                break
+
+        explicit_error_type = None
+        for source in nested_sources:
+            explicit_error_type = self._clean_text(
+                self._extract_nested_value(source, {"error_type", "exception_type", "exception_class"})
+            )
+            if explicit_error_type:
+                break
+
+        error_message = self._clean_text(latest_failed_row.error_message if latest_failed_row else None)
+        if error_message is None:
+            for source in nested_sources:
+                error_message = self._clean_text(
+                    self._extract_nested_value(
+                        source,
+                        {
+                            "error_message",
+                            "message",
+                            "machai_error_message",
+                            "exception",
+                            "error",
+                            "detail",
+                        },
+                    )
+                )
+                if error_message:
+                    break
+
+        error_type = explicit_error_type or self._extract_exception_type(error_message)
+
+        retry_count = None
+        for source in nested_sources:
+            retry_count = self._safe_int(
+                self._extract_nested_value(
+                    source,
+                    {
+                        "retry_count",
+                        "retries",
+                        "retry_attempts",
+                        "attempt_count",
+                        "attempts",
+                    },
+                )
+            )
+            if retry_count is not None:
+                break
+
+        fallback_indicator = None
+        for source in nested_sources:
+            fallback_value = self._extract_nested_value(
+                source,
+                {
+                    "fallback",
+                    "fallback_used",
+                    "used_fallback",
+                    "fallback_model",
+                    "fallback_provider",
+                },
+            )
+            fallback_text = self._clean_text(fallback_value)
+            if fallback_text is not None:
+                fallback_indicator = fallback_text
+                break
+            if isinstance(fallback_value, bool):
+                fallback_indicator = "true" if fallback_value else "false"
+                break
+
+        routes_map: dict[tuple[Optional[str], Optional[str]], int] = {}
+        for row in token_metrics_rows:
+            provider = self._clean_text(row.upstream_provider)
+            model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
+            if provider is None and model is None:
+                continue
+            key = (provider, model)
+            routes_map[key] = routes_map.get(key, 0) + 1
+        if not routes_map and isinstance(activity_overview, dict):
+            models_payload = activity_overview.get("models")
+            if isinstance(models_payload, dict):
+                for model_key, model_stats in models_payload.items():
+                    provider, model = self._extract_provider_model_from_activity_key(model_key)
+                    if provider is None and model is None:
+                        continue
+                    calls = self._safe_int(model_stats.get("calls")) if isinstance(model_stats, dict) else None
+                    routes_map[(provider, model)] = calls if calls and calls > 0 else 0
+
+        routes = [
+            {
+                "provider": provider,
+                "model": model,
+                "calls": calls if calls > 0 else None,
+            }
+            for (provider, model), calls in routes_map.items()
+        ]
+        routes.sort(key=lambda row: (-(row["calls"] or 0), row["provider"] or "", row["model"] or ""))
+
+        provider_switch_indicator = None
+        for source in nested_sources:
+            provider_switch_indicator = self._clean_text(
+                self._extract_nested_value(
+                    source,
+                    {
+                        "provider_switch",
+                        "provider_switched",
+                        "switched_provider",
+                        "provider_switch_count",
+                    },
+                )
+            )
+            if provider_switch_indicator:
+                break
+
+        unique_routes_count = len(routes)
+        inferred_provider_switch_count = unique_routes_count - 1 if unique_routes_count > 1 else 0
+
+        pending_to_processing_seconds = self._safe_float(processing_event_context.get("duration_between_pending_and_processing"))
+        processing_to_terminal_seconds = self._safe_float(terminal_event_context.get("duration_between_processing_and_completion"))
+
+        llm_duration_values = [
+            self._safe_float(row.duration_seconds)
+            for row in token_metrics_rows
+            if row.duration_seconds is not None
+        ]
+        llm_duration_values = [value for value in llm_duration_values if value is not None]
+        llm_duration_total_seconds = sum(llm_duration_values) if llm_duration_values else None
+
+        partial_output = None
+        for source in [latest_failed_usage, failed_event_context, task_parameters]:
+            partial_output = self._extract_nested_value(
+                source,
+                {
+                    "partial_output",
+                    "partial_response",
+                    "partial_result",
+                    "response_excerpt",
+                    "partial_text",
+                    "raw_partial_output",
+                },
+            )
+            if partial_output not in (None, "", [], {}):
+                break
+
+        if isinstance(partial_output, (dict, list)):
+            try:
+                partial_output = json.dumps(partial_output, indent=2, sort_keys=True)
+            except Exception:
+                partial_output = str(partial_output)
+        else:
+            partial_output = self._clean_text(partial_output)
+
+        execution_attempts = []
+        for row in token_metrics_rows:
+            route_provider = self._clean_text(row.upstream_provider)
+            route_model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
+            success_state = True if row.success is True else False if row.success is False else None
+            execution_attempts.append(
+                {
+                    "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                    "provider": route_provider,
+                    "model": route_model,
+                    "duration_seconds": self._safe_float(row.duration_seconds),
+                    "success": success_state,
+                    "error_message": self._clean_text(row.error_message),
+                }
+            )
+
+        inferred_retry_count = len(token_metrics_rows) - 1 if token_metrics_rows else None
+
+        failure_trace: dict[str, Any] = {
+            "task_id": task_id,
+            "stage": stage,
+            "error": {
+                "type": error_type,
+                "message": error_message,
+            },
+            "retries": {
+                "count": retry_count,
+                "count_inferred_from_attempts": inferred_retry_count,
+                "attempt_count": len(token_metrics_rows) if token_metrics_rows else None,
+                "failed_attempts": len(failed_rows) if token_metrics_rows else None,
+            },
+            "fallback": {
+                "indicator": fallback_indicator,
+            },
+            "provider_switch": {
+                "indicator": provider_switch_indicator,
+                "inferred_count_from_routes": inferred_provider_switch_count if routes else None,
+                "routes": routes,
+            },
+            "timing": {
+                "pending_to_processing_seconds": pending_to_processing_seconds,
+                "processing_to_terminal_seconds": processing_to_terminal_seconds,
+                "llm_attempts_total_duration_seconds": llm_duration_total_seconds,
+            },
+            "partial_output": partial_output,
+            "execution_trace": execution_attempts,
+            "source_paths": {
+                "events_table": "events.context.{task_id, duration_between_pending_and_processing, duration_between_processing_and_completion, machai_error_message}",
+                "token_metrics_table": "token_metrics.{timestamp, upstream_provider, upstream_model, llm_model, duration_seconds, success, error_message, raw_usage_data}",
+                "task_parameters": "taskitem.parameters",
+                "activity_overview_json": "TaskItem.run_zip_snapshot -> */activity_overview.json",
+            },
+        }
+        failure_trace["has_data"] = any(
+            [
+                failure_trace["stage"] is not None,
+                failure_trace["error"]["type"] is not None,
+                failure_trace["error"]["message"] is not None,
+                failure_trace["retries"]["count"] is not None,
+                failure_trace["retries"]["count_inferred_from_attempts"] is not None,
+                failure_trace["fallback"]["indicator"] is not None,
+                failure_trace["provider_switch"]["indicator"] is not None,
+                failure_trace["provider_switch"]["inferred_count_from_routes"] is not None,
+                failure_trace["timing"]["pending_to_processing_seconds"] is not None,
+                failure_trace["timing"]["processing_to_terminal_seconds"] is not None,
+                failure_trace["timing"]["llm_attempts_total_duration_seconds"] is not None,
+                bool(failure_trace["execution_trace"]),
+                failure_trace["partial_output"] is not None,
+            ]
+        )
+
+        return failure_trace
 
     def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool]]:
         state = task.state if isinstance(task.state, TaskState) else None
@@ -2228,7 +2539,8 @@ class MyFlaskApp:
                 return jsonify({"error": "Forbidden"}), 403
 
             telemetry = self._build_plan_telemetry(task, include_raw=False)
-            return render_template("plan_iframe.html", run_id=run_id, task=task, telemetry=telemetry)
+            failure_trace = self._build_plan_failure_trace(task)
+            return render_template("plan_iframe.html", run_id=run_id, task=task, telemetry=telemetry, failure_trace=failure_trace)
 
         @self.app.route('/plan/download/report')
         @login_required
@@ -2348,6 +2660,7 @@ class MyFlaskApp:
 
             state_name = task.state.name if isinstance(task.state, TaskState) else "pending"
             telemetry = self._build_plan_telemetry(task, include_raw=False)
+            failure_trace = self._build_plan_failure_trace(task)
             return jsonify({
                 "id": str(task.id),
                 "state": state_name,
@@ -2357,6 +2670,7 @@ class MyFlaskApp:
                 "run_zip_snapshot": bool(task.run_zip_snapshot),
                 "stop_requested": bool(task.stop_requested),
                 "telemetry": telemetry,
+                "failure_trace": failure_trace,
             }), 200
 
         @self.app.route('/plan/telemetry')

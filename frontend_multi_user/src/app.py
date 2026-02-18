@@ -183,6 +183,11 @@ class MyFlaskApp:
         self.prompt_catalog = PromptCatalog()
         self.prompt_catalog.load_simple_plan_prompts()
 
+        # Lightweight in-process cache for terminal task telemetry snapshots.
+        # This avoids repeatedly re-querying/re-parsing run artifacts when the
+        # plan iframe polls /plan/meta after a task is already finished.
+        self._plan_telemetry_cache: dict[tuple[str, str, bool], dict[str, Any]] = {}
+
         # Point to the "templates" dir.
         # Prefer top-level templates dir (frontend_multi_user/templates) when running from Docker image.
         default_template_folder = Path(__file__).parent / "templates"
@@ -962,7 +967,26 @@ class MyFlaskApp:
             return None
         return self._safe_float(payload.get("total_cost"))
 
-    def _build_plan_telemetry(self, task: TaskItem, include_raw: bool = False) -> dict[str, Any]:
+    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool]]:
+        state = task.state if isinstance(task.state, TaskState) else None
+        if include_raw or state not in (TaskState.completed, TaskState.failed):
+            return None
+        return (str(task.id), state.name, bool(task.run_zip_snapshot))
+
+    def _build_plan_telemetry(
+        self,
+        task: TaskItem,
+        include_raw: bool = False,
+        expose_raw_usage_data: bool = False,
+    ) -> dict[str, Any]:
+        cache_key = self._build_plan_telemetry_cache_key(task, include_raw)
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if isinstance(telemetry_cache, dict):
+                cached = telemetry_cache.get(cache_key)
+                if isinstance(cached, dict):
+                    return cached
+
         task_id = str(task.id)
         token_metrics_rows = (
             TokenMetrics.query
@@ -1117,13 +1141,25 @@ class MyFlaskApp:
                         "duration_seconds": row.duration_seconds,
                         "success": row.success,
                         "error_message": row.error_message,
-                        "raw_usage_data": row.raw_usage_data,
+                        # Guardrail: provider-native usage payloads can be verbose
+                        # and may include integration-specific fields. They are only
+                        # exposed when the dedicated /plan/telemetry route opts in.
+                        "raw_usage_data": row.raw_usage_data if expose_raw_usage_data else None,
                     }
                 )
             telemetry["source_data"] = {
                 "activity_overview": activity_overview,
                 "token_metrics": raw_token_metrics_rows,
             }
+
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if not isinstance(telemetry_cache, dict):
+                telemetry_cache = {}
+                self._plan_telemetry_cache = telemetry_cache
+            telemetry_cache[cache_key] = telemetry
+            if len(telemetry_cache) > 512:
+                telemetry_cache.pop(next(iter(telemetry_cache)))
 
         return telemetry
 
@@ -2333,7 +2369,10 @@ class MyFlaskApp:
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 return jsonify({"error": "Forbidden"}), 403
 
-            telemetry = self._build_plan_telemetry(task, include_raw=True)
+            # Intentional: this endpoint is for authenticated owner/admin
+            # troubleshooting and may include provider raw_usage_data payloads.
+            # Keep /plan/meta sanitized (include_raw=False).
+            telemetry = self._build_plan_telemetry(task, include_raw=True, expose_raw_usage_data=True)
             return jsonify(telemetry), 200
 
         @self.app.route('/admin/task/<uuid:task_id>/report')

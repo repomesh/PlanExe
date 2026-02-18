@@ -91,6 +91,10 @@ db.init_app(app)
 
 def ensure_taskitem_stop_columns() -> None:
     statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested_timestamp TIMESTAMP",
     )
@@ -550,6 +554,48 @@ async def fetch_zip_from_worker_plan(run_id: str) -> Optional[bytes]:
     except Exception as e:
         logger.error(f"Error fetching zip from worker_plan: {e}", exc_info=True)
         return None
+
+
+def _sanitize_legacy_zip_snapshot(zip_bytes: bytes) -> Optional[bytes]:
+    """Remove internal track_activity.jsonl files from legacy zip snapshots."""
+    try:
+        with zipfile.ZipFile(BytesIO(zip_bytes), "r") as in_zip:
+            entries = [name for name in in_zip.namelist() if not name.endswith("/")]
+            if not any(name.endswith("/track_activity.jsonl") or name == "track_activity.jsonl" for name in entries):
+                return zip_bytes
+            out_buffer = BytesIO()
+            with zipfile.ZipFile(out_buffer, "w", compression=zipfile.ZIP_DEFLATED) as out_zip:
+                for name in entries:
+                    if name.endswith("/track_activity.jsonl") or name == "track_activity.jsonl":
+                        continue
+                    out_zip.writestr(name, in_zip.read(name))
+            return out_buffer.getvalue()
+    except Exception as exc:
+        logger.warning("Unable to sanitize legacy run zip snapshot: %s", exc)
+        return None
+
+
+async def fetch_user_downloadable_zip(task_id: str) -> Optional[bytes]:
+    """
+    Fetch a user-downloadable zip for a task.
+    New layout snapshots are served directly from TaskItem.run_zip_snapshot.
+    Legacy/task-dir fallbacks are sanitized to remove track_activity.jsonl.
+    """
+    task = await asyncio.to_thread(get_task_by_id, task_id)
+    if task is None:
+        return None
+
+    snapshot_bytes = task.run_zip_snapshot if task.run_zip_snapshot is not None else None
+    layout_version = task.run_artifact_layout_version or 0
+    if snapshot_bytes is not None:
+        if layout_version >= 2:
+            return snapshot_bytes
+        return _sanitize_legacy_zip_snapshot(snapshot_bytes)
+
+    worker_plan_zip = await fetch_zip_from_worker_plan(str(task.id))
+    if worker_plan_zip is None:
+        return None
+    return _sanitize_legacy_zip_snapshot(worker_plan_zip)
 
 def compute_sha256(content: str | bytes) -> str:
     """Compute SHA256 hash of content."""
@@ -1090,7 +1136,7 @@ async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
 
     run_id = task_snapshot["id"]
     if artifact == "zip":
-        content_bytes = await fetch_zip_from_worker_plan(run_id)
+        content_bytes = await fetch_user_downloadable_zip(run_id)
         if content_bytes is None:
             task_state = task_snapshot["state"]
             if task_state in (TaskState.pending, TaskState.processing) or task_state is None:

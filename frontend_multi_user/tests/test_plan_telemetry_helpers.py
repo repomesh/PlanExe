@@ -61,12 +61,21 @@ class TestPlanTelemetryHelpers(unittest.TestCase):
         buffer.seek(0)
         return buffer.getvalue()
 
-    def _task(self, task_id: str = "task-1", run_zip_snapshot: bytes | None = None, state=None):
+    def _task(
+        self,
+        task_id: str = "task-1",
+        run_zip_snapshot: bytes | None = None,
+        run_activity_overview_json: dict | None = None,
+        run_artifact_layout_version: int | None = None,
+        state=None,
+    ):
         if state is None and TaskState is not None:
             state = TaskState.processing
         return SimpleNamespace(
             id=task_id,
             run_zip_snapshot=run_zip_snapshot,
+            run_activity_overview_json=run_activity_overview_json,
+            run_artifact_layout_version=run_artifact_layout_version,
             state=state,
             generated_report_html=None,
         )
@@ -134,6 +143,28 @@ class TestPlanTelemetryHelpers(unittest.TestCase):
 
         invalid_cost = self.app_obj._read_inference_cost_from_run_zip(b"not-a-zip")
         self.assertIsNone(invalid_cost)
+
+    def test_read_activity_overview_prefers_task_column(self) -> None:
+        task = self._task(
+            run_zip_snapshot=self._make_zip_snapshot({"total_cost": 99.0}),
+            run_activity_overview_json={"total_cost": 1.25, "total_input_tokens": 12},
+            run_artifact_layout_version=2,
+        )
+        payload = self.app_obj._read_activity_overview_from_task(task)
+        self.assertEqual(payload, {"total_cost": 1.25, "total_input_tokens": 12})
+
+    def test_sanitize_legacy_run_zip_for_download_removes_track_activity(self) -> None:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("030-report.html", "<html>ok</html>")
+            archive.writestr("nested/track_activity.jsonl", "{\"event\":\"secret\"}\n")
+        sanitized = self.app_obj._sanitize_legacy_run_zip_for_download(buffer.getvalue())
+        self.assertIsNotNone(sanitized)
+        assert sanitized is not None
+        with zipfile.ZipFile(sanitized, "r") as archive:
+            files = sorted(archive.namelist())
+        self.assertIn("030-report.html", files)
+        self.assertNotIn("nested/track_activity.jsonl", files)
 
     def test_build_plan_telemetry_uses_activity_overview_fallback_without_metrics(self) -> None:
         overview = {

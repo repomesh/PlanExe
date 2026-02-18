@@ -58,6 +58,18 @@ class TaskItem(db.Model):
     # A zip archive of the run directory for this task (stored for both success and failure).
     run_zip_snapshot = db.Column(db.LargeBinary, nullable=True)
 
+    # Internal-only raw activity log (contains sensitive provider payloads).
+    run_track_activity_jsonl = db.Column(db.Text, nullable=True)
+
+    # Original byte size for run_track_activity_jsonl (for observability/migration checks).
+    run_track_activity_bytes = db.Column(db.Integer, nullable=True)
+
+    # User-facing usage/cost summary from activity_overview.json.
+    run_activity_overview_json = db.Column(JSON, nullable=True, default=None)
+
+    # Artifact schema/version marker (legacy snapshots are NULL/1, split-storage snapshots are 2+).
+    run_artifact_layout_version = db.Column(db.Integer, nullable=True, default=None)
+
     def __repr__(self):
         return f"{self.id}: {self.timestamp_created}, {self.state}, {self.prompt!r}, parameters: {self.parameters!r}"
 

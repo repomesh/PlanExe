@@ -186,6 +186,14 @@ def ensure_taskitem_artifact_columns() -> None:
             conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS generated_report_html TEXT"))
         if "run_zip_snapshot" not in columns:
             conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_zip_snapshot BYTEA"))
+        if "run_track_activity_jsonl" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT"))
+        if "run_track_activity_bytes" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER"))
+        if "run_activity_overview_json" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON"))
+        if "run_artifact_layout_version" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER"))
         if "stop_requested" not in columns:
             conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN"))
         if "stop_requested_timestamp" not in columns:
@@ -390,7 +398,8 @@ get_dispatcher().add_event_handler(track_activity)
 
 def create_zip_bytes(run_dir: Path) -> bytes:
     """
-    Create an in-memory zip of a run directory (skipping log.txt) and return the bytes.
+    Create an in-memory zip of a run directory and return the bytes.
+    The downloadable snapshot excludes internal-only activity logs.
     """
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
@@ -398,10 +407,39 @@ def create_zip_bytes(run_dir: Path) -> bytes:
             for file in files:
                 if file == "log.txt":
                     continue
+                if file == ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value:
+                    continue
                 file_path = Path(root) / file
                 zipf.write(file_path, file_path.relative_to(run_dir))
     buffer.seek(0)
     return buffer.read()
+
+
+def read_activity_artifacts(run_id_dir: Path) -> tuple[Optional[str], Optional[int], Optional[dict[str, object]]]:
+    """Read track/activity artifacts from a run directory for TaskItem persistence."""
+    track_activity_path = run_id_dir / ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value
+    activity_overview_path = run_id_dir / ExtraFilenameEnum.ACTIVITY_OVERVIEW_JSON.value
+
+    run_track_activity_jsonl: Optional[str] = None
+    run_track_activity_bytes: Optional[int] = None
+    if track_activity_path.exists():
+        try:
+            raw_track_activity = track_activity_path.read_bytes()
+            run_track_activity_bytes = len(raw_track_activity)
+            run_track_activity_jsonl = raw_track_activity.decode("utf-8", errors="replace")
+        except Exception as exc:
+            logger.warning("Unable to read %s for run %s: %s", track_activity_path, run_id_dir, exc)
+
+    run_activity_overview_json: Optional[dict[str, object]] = None
+    if activity_overview_path.exists():
+        try:
+            overview_payload = json.loads(activity_overview_path.read_text(encoding="utf-8"))
+            if isinstance(overview_payload, dict):
+                run_activity_overview_json = overview_payload
+        except Exception as exc:
+            logger.warning("Unable to parse %s for run %s: %s", activity_overview_path, run_id_dir, exc)
+
+    return run_track_activity_jsonl, run_track_activity_bytes, run_activity_overview_json
 
 
 def _read_inference_cost_usd_from_run_dir(run_id_dir: Path) -> float:
@@ -603,6 +641,7 @@ def execute_pipeline_for_job(task_id: str, user_id: str, run_id_dir: Path, speed
         run_zip_bytes = create_zip_bytes(run_id_dir)
     except Exception as exc:
         logger.warning("Unable to create zip snapshot for task %s: %s", task_id, exc)
+    run_track_activity_jsonl, run_track_activity_bytes, run_activity_overview_json = read_activity_artifacts(run_id_dir)
 
     # count number of files in the run_id_dir
     number_of_files_in_run_id_dir: int = len([f for f in run_id_dir.iterdir() if f.is_file()])
@@ -631,6 +670,10 @@ def execute_pipeline_for_job(task_id: str, user_id: str, run_id_dir: Path, speed
             stop_requested = bool(task.stop_requested)
             task.generated_report_html = report_html if pipeline_instance.has_report_file else None
             task.run_zip_snapshot = run_zip_bytes
+            task.run_track_activity_jsonl = run_track_activity_jsonl
+            task.run_track_activity_bytes = run_track_activity_bytes
+            task.run_activity_overview_json = run_activity_overview_json
+            task.run_artifact_layout_version = 2
             try:
                 db.session.commit()
             except Exception as exc:

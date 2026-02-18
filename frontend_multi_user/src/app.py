@@ -288,6 +288,14 @@ class MyFlaskApp:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS generated_report_html TEXT"))
                 if "run_zip_snapshot" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_zip_snapshot BYTEA"))
+                if "run_track_activity_jsonl" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT"))
+                if "run_track_activity_bytes" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER"))
+                if "run_activity_overview_json" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON"))
+                if "run_artifact_layout_version" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER"))
                 if "stop_requested" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN"))
                 if "stop_requested_timestamp" not in columns:
@@ -994,6 +1002,55 @@ class MyFlaskApp:
             return None
         return self._safe_float(payload.get("total_cost"))
 
+    def _read_activity_overview_from_task(self, task: TaskItem) -> Optional[dict[str, Any]]:
+        raw_payload = getattr(task, "run_activity_overview_json", None)
+        if isinstance(raw_payload, dict):
+            return raw_payload
+        if isinstance(raw_payload, str):
+            try:
+                decoded_payload = json.loads(raw_payload)
+                if isinstance(decoded_payload, dict):
+                    return decoded_payload
+            except Exception as exc:
+                logger.warning("Unable to parse task.run_activity_overview_json for %s: %s", task.id, exc)
+        return self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
+
+    def _read_inference_cost_from_task(self, task: TaskItem) -> Optional[float]:
+        payload = self._read_activity_overview_from_task(task)
+        if not isinstance(payload, dict):
+            return None
+        return self._safe_float(payload.get("total_cost"))
+
+    def _sanitize_legacy_run_zip_for_download(self, run_zip_snapshot: bytes) -> Optional[io.BytesIO]:
+        """
+        Legacy snapshots may contain track_activity.jsonl.
+        Remove it before user download while newer layout versions can be served directly.
+        """
+        try:
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                extract_dir = Path(tmp_dir) / "extract"
+                extract_dir.mkdir(parents=True, exist_ok=True)
+
+                with zipfile.ZipFile(io.BytesIO(run_zip_snapshot), "r") as in_zip:
+                    in_zip.extractall(extract_dir)
+
+                for sensitive_file in extract_dir.rglob(ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value):
+                    try:
+                        sensitive_file.unlink()
+                    except OSError:
+                        logger.warning("Unable to remove sensitive file from zip staging: %s", sensitive_file)
+
+                sanitized_buffer = io.BytesIO()
+                with zipfile.ZipFile(sanitized_buffer, "w", compression=zipfile.ZIP_DEFLATED) as out_zip:
+                    for file_path in extract_dir.rglob("*"):
+                        if file_path.is_file():
+                            arcname = file_path.relative_to(extract_dir)
+                            out_zip.write(file_path, arcname=str(arcname))
+                sanitized_buffer.seek(0)
+                return sanitized_buffer
+        except zipfile.BadZipFile:
+            return None
+
     def _find_latest_task_event(self, task_id: str, event_type: EventType, max_events_to_scan: int = 2000) -> Optional[EventItem]:
         events = (
             EventItem.query
@@ -1029,7 +1086,7 @@ class MyFlaskApp:
         terminal_event_context = latest_terminal_event.context if latest_terminal_event and isinstance(latest_terminal_event.context, dict) else {}
         latest_failed_usage = latest_failed_row.raw_usage_data if latest_failed_row and isinstance(latest_failed_row.raw_usage_data, dict) else {}
         task_parameters = task.parameters if isinstance(task.parameters, dict) else {}
-        activity_overview = self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
+        activity_overview = self._read_activity_overview_from_task(task)
 
         nested_sources: list[Any] = [
             failed_event_context,
@@ -1255,7 +1312,7 @@ class MyFlaskApp:
                 "events_table": "events.context.{task_id, duration_between_pending_and_processing, duration_between_processing_and_completion, machai_error_message}",
                 "token_metrics_table": "token_metrics.{timestamp, upstream_provider, upstream_model, llm_model, duration_seconds, success, error_message, raw_usage_data}",
                 "task_parameters": "taskitem.parameters",
-                "activity_overview_json": "TaskItem.run_zip_snapshot -> */activity_overview.json",
+                "activity_overview_json": "TaskItem.run_activity_overview_json (fallback: TaskItem.run_zip_snapshot -> */activity_overview.json)",
             },
         }
         failure_trace["has_data"] = any(
@@ -1282,7 +1339,12 @@ class MyFlaskApp:
         state = task.state if isinstance(task.state, TaskState) else None
         if include_raw or state not in (TaskState.completed, TaskState.failed):
             return None
-        return (str(task.id), state.name, bool(task.run_zip_snapshot))
+        return (
+            str(task.id),
+            state.name,
+            bool(task.run_zip_snapshot),
+            bool(getattr(task, "run_activity_overview_json", None)),
+        )
 
     def _build_plan_telemetry(
         self,
@@ -1306,7 +1368,7 @@ class MyFlaskApp:
             .all()
         )
         token_summary = TokenMetricsSummary(task_id=task_id, metrics=token_metrics_rows)
-        activity_overview = self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
+        activity_overview = self._read_activity_overview_from_task(task)
 
         has_prompt_tokens = any(row.input_tokens is not None for row in token_metrics_rows)
         has_completion_tokens = any(row.output_tokens is not None for row in token_metrics_rows)
@@ -1413,7 +1475,7 @@ class MyFlaskApp:
             },
             "source_paths": {
                 "token_metrics_table": "token_metrics.{input_tokens, output_tokens, thinking_tokens, cost_usd, upstream_provider, upstream_model}",
-                "activity_overview_json": "TaskItem.run_zip_snapshot -> */activity_overview.json",
+                "activity_overview_json": "TaskItem.run_activity_overview_json (fallback: TaskItem.run_zip_snapshot -> */activity_overview.json)",
             },
             "source_availability": {
                 "token_metrics_row_count": len(token_metrics_rows),
@@ -1509,7 +1571,7 @@ class MyFlaskApp:
 
         for task in tasks:
             task_id = str(task.id)
-            tracked_usage_cost_usd = self._read_inference_cost_from_run_zip(task.run_zip_snapshot)
+            tracked_usage_cost_usd = self._read_inference_cost_from_task(task)
 
             billing_event = billing_events_by_task_id.get(task_id)
             context = billing_event.context if billing_event and isinstance(billing_event.context, dict) else {}
@@ -2570,35 +2632,18 @@ class MyFlaskApp:
             if not task.run_zip_snapshot:
                 return jsonify({"error": "Run zip not available"}), 404
 
-            # Sanitize run zip for end users: remove sensitive track_activity.jsonl files.
-            try:
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    extract_dir = Path(tmp_dir) / "extract"
-                    extract_dir.mkdir(parents=True, exist_ok=True)
-
-                    with zipfile.ZipFile(io.BytesIO(task.run_zip_snapshot), "r") as in_zip:
-                        in_zip.extractall(extract_dir)
-
-                    for sensitive_file in extract_dir.rglob("track_activity.jsonl"):
-                        try:
-                            sensitive_file.unlink()
-                        except OSError:
-                            logger.warning("Unable to remove sensitive file from zip staging: %s", sensitive_file)
-
-                    sanitized_buffer = io.BytesIO()
-                    with zipfile.ZipFile(sanitized_buffer, "w", compression=zipfile.ZIP_DEFLATED) as out_zip:
-                        for file_path in extract_dir.rglob("*"):
-                            if file_path.is_file():
-                                arcname = file_path.relative_to(extract_dir)
-                                out_zip.write(file_path, arcname=str(arcname))
-
-                    sanitized_buffer.seek(0)
-            except zipfile.BadZipFile:
-                logger.error("Invalid run zip snapshot for run_id=%s", run_id)
-                return jsonify({"error": "Run zip is invalid"}), 500
+            layout_version = self._safe_int(getattr(task, "run_artifact_layout_version", None)) or 0
+            if layout_version >= 2:
+                buffer = io.BytesIO(task.run_zip_snapshot)
+                buffer.seek(0)
+            else:
+                buffer = self._sanitize_legacy_run_zip_for_download(task.run_zip_snapshot)
+                if buffer is None:
+                    logger.error("Invalid legacy run zip snapshot for run_id=%s", run_id)
+                    return jsonify({"error": "Run zip is invalid"}), 500
 
             download_name = f"{task.id}.zip"
-            return send_file(sanitized_buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
+            return send_file(buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
 
         @self.app.route('/plan/stop', methods=['POST'])
         @login_required
@@ -2644,6 +2689,10 @@ class MyFlaskApp:
             task.progress_message = "Retry requested by user."
             task.generated_report_html = None
             task.run_zip_snapshot = None
+            task.run_track_activity_jsonl = None
+            task.run_track_activity_bytes = None
+            task.run_activity_overview_json = None
+            task.run_artifact_layout_version = None
             task.last_seen_timestamp = datetime.now(UTC)
             self.db.session.commit()
             return redirect(url_for('plan', id=run_id))
@@ -2709,6 +2758,17 @@ class MyFlaskApp:
             buffer.seek(0)
             download_name = f"{task_id}.zip"
             return send_file(buffer, mimetype='application/zip', as_attachment=True, download_name=download_name)
+
+        @self.app.route('/admin/task/<uuid:task_id>/track_activity')
+        @admin_required
+        def download_task_track_activity(task_id):
+            task = self.db.session.get(TaskItem, task_id)
+            if task is None or not task.run_track_activity_jsonl:
+                return "Track activity not found", 404
+            buffer = io.BytesIO(task.run_track_activity_jsonl.encode('utf-8'))
+            buffer.seek(0)
+            download_name = f"{task_id}-track_activity.jsonl"
+            return send_file(buffer, mimetype='application/x-ndjson', as_attachment=True, download_name=download_name)
 
         @self.app.route('/demo_run')
         @admin_required

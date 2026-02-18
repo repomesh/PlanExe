@@ -21,7 +21,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from worker_plan_api.filenames import FilenameEnum
+from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
 from worker_plan_api.generate_run_id import generate_run_id
 from worker_plan_api.llm_info import LLMInfo
 from worker_plan_internal.plan.pipeline_environment import PipelineEnvironmentEnum
@@ -359,6 +359,8 @@ def create_zip_for_run(run_dir: Path) -> Path:
             for root, _, files in os.walk(run_dir):
                 for file in files:
                     if file == "log.txt":
+                        continue
+                    if file == ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value:
                         continue
                     file_path = Path(root) / file
                     zipf.write(file_path, file_path.relative_to(run_dir))

@@ -53,7 +53,7 @@ from mcp_cloud.app import (
     ZIP_FILENAME,
     clear_download_base_url,
     fetch_artifact_from_worker_plan,
-    fetch_zip_from_worker_plan,
+    fetch_user_downloadable_zip,
     handle_task_create,
     handle_task_status,
     handle_task_stop,
@@ -594,7 +594,7 @@ async def download_report(task_id: str, filename: str) -> Response:
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if filename == ZIP_FILENAME:
-        content_bytes = await fetch_zip_from_worker_plan(str(task.id))
+        content_bytes = await fetch_user_downloadable_zip(str(task.id))
         if content_bytes is None:
             raise HTTPException(status_code=404, detail="Report not found")
         headers = {"Content-Disposition": f'attachment; filename="{task_id}.zip"'}

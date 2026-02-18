@@ -9,6 +9,7 @@ from database_api.model_taskitem import TaskState
 from mcp_cloud.app import (
     REPORT_FILENAME,
     ZIP_CONTENT_TYPE,
+    _sanitize_legacy_zip_snapshot,
     extract_file_from_zip_bytes,
     handle_task_file_info,
     handle_list_tools,
@@ -68,7 +69,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
             with patch(
-                "mcp_cloud.app.fetch_zip_from_worker_plan",
+                "mcp_cloud.app.fetch_user_downloadable_zip",
                 new=AsyncMock(return_value=content_bytes),
             ):
                 result = asyncio.run(handle_task_file_info({"task_id": task_id, "artifact": "zip"}))
@@ -87,7 +88,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
             with patch(
-                "mcp_cloud.app.fetch_zip_from_worker_plan",
+                "mcp_cloud.app.fetch_user_downloadable_zip",
                 new=AsyncMock(return_value=content_bytes),
             ):
                 result = asyncio.run(handle_task_file_info({"task_id": task_id, "artifact": "zip"}))
@@ -95,6 +96,18 @@ class TestTaskFileInfoTool(unittest.TestCase):
         payload = result.structuredContent
         self.assertEqual(payload["download_size"], len(content_bytes))
         self.assertEqual(payload["content_type"], ZIP_CONTENT_TYPE)
+
+    def test_sanitize_legacy_zip_snapshot_removes_track_activity_jsonl(self):
+        buffer = BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.writestr(REPORT_FILENAME, "<html>ok</html>")
+            zip_file.writestr("nested/track_activity.jsonl", "{\"event\":\"secret\"}\n")
+        sanitized = _sanitize_legacy_zip_snapshot(buffer.getvalue())
+        self.assertIsNotNone(sanitized)
+        assert sanitized is not None
+        files = list_files_from_zip_bytes(sanitized)
+        self.assertIn(REPORT_FILENAME, files)
+        self.assertNotIn("nested/track_activity.jsonl", files)
 
 
 if __name__ == "__main__":

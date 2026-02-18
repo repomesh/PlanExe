@@ -115,11 +115,17 @@ class TaskItemView(AdminOnlyModelView):
         'view_plan',
         'generated_report_html',
         'run_zip_snapshot',
+        'run_activity_overview_json',
+        'run_track_activity',
+        'run_artifact_layout_version',
     ]
     column_labels = {
         'view_plan': 'View Plan',
         'generated_report_html': 'Report',
         'run_zip_snapshot': 'Run Zip',
+        'run_activity_overview_json': 'Activity Overview',
+        'run_track_activity': 'Track Activity',
+        'run_artifact_layout_version': 'Artifact Layout',
     }
     column_default_sort = ('timestamp_created', False)  # Sort by creation timestamp, newest first
     column_searchable_list = ['id', 'prompt', 'user_id']
@@ -136,6 +142,14 @@ class TaskItemView(AdminOnlyModelView):
         'run_zip_snapshot': lambda v, c, m, p: Markup(
             f'<a href="{url_for("download_task_run_zip", task_id=str(m.id))}">Download ({len(m.run_zip_snapshot) / 1024:.1f} KB)</a>'
         ) if m.run_zip_snapshot else '—',
+        'run_activity_overview_json': lambda v, c, m, p: (
+            json.dumps(m.run_activity_overview_json, ensure_ascii=False)[:120] + '...'
+            if m.run_activity_overview_json and len(json.dumps(m.run_activity_overview_json, ensure_ascii=False)) > 120
+            else (json.dumps(m.run_activity_overview_json, ensure_ascii=False) if m.run_activity_overview_json else '—')
+        ),
+        'run_track_activity': lambda v, c, m, p: Markup(
+            f'<a href="{url_for("download_task_track_activity", task_id=str(m.id))}">Download ({((m.run_track_activity_bytes if m.run_track_activity_bytes is not None else len(m.run_track_activity_jsonl.encode("utf-8"))) / 1024):.1f} KB)</a>'
+        ) if m.run_track_activity_jsonl else '—',
     }
 
 class NonceItemView(AdminOnlyModelView):

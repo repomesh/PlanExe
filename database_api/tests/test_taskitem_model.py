@@ -34,4 +34,8 @@ class TestTaskItemModel(unittest.TestCase):
             self.assertIsNotNone(fetched)
             self.assertTrue(hasattr(fetched, "stop_requested"))
             self.assertTrue(hasattr(fetched, "stop_requested_timestamp"))
+            self.assertTrue(hasattr(fetched, "run_track_activity_jsonl"))
+            self.assertTrue(hasattr(fetched, "run_track_activity_bytes"))
+            self.assertTrue(hasattr(fetched, "run_activity_overview_json"))
+            self.assertTrue(hasattr(fetched, "run_artifact_layout_version"))
             self.assertFalse(bool(fetched.stop_requested))

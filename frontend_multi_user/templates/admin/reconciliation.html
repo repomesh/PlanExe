@@ -79,7 +79,7 @@
 {% block body %}
 <div class="recon-wrap">
   <h2>Reconciliation and Drift Detection</h2>
-  <p>Compares billed usage cost from task billing events against tracked inference cost from <code>activity_overview.json</code> in <code>run_zip_snapshot</code>.</p>
+  <p>Compares billed usage cost from task billing events against tracked inference cost from <code>run_activity_overview_json</code> (fallback: <code>activity_overview.json</code> in <code>run_zip_snapshot</code>).</p>
 
   <div class="recon-summary">
     <div class="recon-card">Tasks checked: <strong>{{ summary.total_tasks_checked }}</strong></div>

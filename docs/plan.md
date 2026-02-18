@@ -93,22 +93,23 @@ Obtain info about what resources the user has available, and if they are willing
 
 # Secondary issues
 
-## Luigi can run tasks in parallel
+## Polishing of MCP flow via planexe.org
 
-I'm not making use of it. 
+As of 2026-feb-18, I'm focusing on improving MCP.
+PlanExe is already working with OpenClaw.
+But it's not as smooth as I would like.
 
-Until 2026-jan-01 I had this limitation: The PythonAnywhere doesn't like long running child processes/threads, anything longer than 5 minutes gets killed. There are always-on workers, but these must not spawn long running processes/threads. I'm considering finding another provider.
-Starting from 2026-jan-01 I’m using Docker and no longer using pythonanywhere, I can start looking into running parallel tasks within Luigi.
+The user adds credits here. Start with 5 USD, so you can create around 3 plans.
+https://home.planexe.org/
 
-## MCP on Railway
+The agents use the api here. When AI agents connect to the MCP interface, the credits are consumed. Between 1-2 USD per plan creation.
+https://mcp.planexe.org/mcp
+
+
+## MCP with BYOK
 
 Doing inference in the cloud cost money.
-If users are to use MCP in the cloud, they will have to pay for it.
-
-- Scenario A: Users can buy credit via `PLANEXE_MCP_API_KEY`.
-- Scenario B: Users can BYOK (Bring your own key).
-
-Both scenarios will need user management with login.
+Users can BYOK (Bring your own key), and choose what models they want to use.
 
 ---
 
@@ -119,12 +120,6 @@ Both scenarios will need user management with login.
 Currently I only capture the final response, without any reasoning.
 I want to capture the reasoning, since it may be helpful for troubleshooting.
 Or for other AIs to assess the reasoning steps leading up to the response.
-
-
-## Token counting
-
-So that I can see how much does it cost to generate a plan.
-Reasoning models. How many tokens are spent on reasoning vs generating the final response.
 
 
 ## Debugging

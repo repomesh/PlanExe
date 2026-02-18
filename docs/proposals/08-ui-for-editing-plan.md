@@ -1,19 +1,28 @@
 ---
 title: UI for Editing Plans
 date: 2026-02-10
-status: proposal
+status: in-progress
 author: Simon Strandgaard
 ---
 
 # UI for Editing Plans
 
 ## Status
-Draft
+In progress
+
+Implementation update (2026-02-18):
+
+- `frontend_multi_user` (deployed at [home.planexe.org](https://home.planexe.org/)) now has a user-facing **Generate Plan** flow.
+- Users can now use `/plan` to:
+  - list their plans
+  - inspect an individual plan
+  - download report/zip artifacts
+- End users no longer need to navigate Flask-Admin for normal plan creation and viewing.
 
 ## Context
-The production site at [home.planexe.org](https://home.planexe.org/) currently does not provide a user-facing UI for creating plans. Users can sign in and manage accounts, but there is no end-user workflow for creating, revisiting, or editing plans in the browser.
+The production site at [home.planexe.org](https://home.planexe.org/) now provides a user-facing UI for creating and viewing plans in the browser.
 
-Today there are two ways to create plans, but neither is suitable as the long-term end-user experience.
+Before this update, plan creation and inspection required either MCP usage or Flask-Admin. That limitation has been removed for the core create/view flow.
 
 ### MCP Interface
 The MCP interface can create plans and store them in the database. It also uses `example_prompts`, which helps users land on a reasonable starting prompt instead of a blank textarea.
@@ -41,11 +50,13 @@ Limitations:
 
 ## Goals
 
-- Provide a user-facing plan creation UI on [home.planexe.org](https://home.planexe.org/) and when running locally via docker.
+- Keep the existing user-facing plan creation and browsing UI stable on [home.planexe.org](https://home.planexe.org/) and in local docker deployments.
 
 - Ensure plans are persisted and can be revisited.
 
 - Enforce credit checks before plan creation.
+
+- Add a true browser-based **editing** workflow for existing plans.
 
 - Keep the frontend implementation simple and fully under our control.
 
@@ -69,6 +80,8 @@ Limitations:
 - Validate credits and refuse creation when funds are insufficient.
 
 - Persist created plans and allow users to browse past plans.
+
+Status: Completed.
 
 ### Phase 2: UI for Editing Plans
 
@@ -108,3 +121,8 @@ Limitations:
 - Edit-to-recompute latency
 - Usability score in editor sessions
 
+## What Changed and Why It Matters
+
+- Users can now generate and inspect plans without Flask-Admin, reducing operational friction and support burden.
+- `/plan` is now the canonical user entry point for plan history and detail views.
+- This proposal is now focused on the remaining gap: safe, structured editing of existing plans and downstream recomputation.

@@ -10,10 +10,10 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         },
-        "priority": 1
+        "priority": 6
     },
     "openrouter-paid-stepfun-step-3-5-flash": {
         "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
@@ -26,7 +26,7 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         },
         "priority": 2
@@ -42,7 +42,7 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         },
         "priority": 3
@@ -58,10 +58,10 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         },
-        "priority": 4
+        "priority": 1
     },
     "openai-paid-gpt-5-mini": {
         "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. Last priority fallback.",
@@ -79,63 +79,5 @@
             "max_retries": 5
         },
         "priority": 5
-    },
-    "ollama-llama3.1": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
-        "luigi_workers": 1,
-        "class": "Ollama",
-        "arguments": {
-            "model": "llama3.1:latest",
-            "temperature": 0.5,
-            "request_timeout": 120.0,
-            "is_function_calling_model": false
-        }
-    },
-    "docker-ollama-llama3.1": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
-        "luigi_workers": 1,
-        "class": "Ollama",
-        "arguments": {
-            "model": "llama3.1:latest",
-            "base_url": "http://host.docker.internal:11434",
-            "temperature": 0.5,
-            "request_timeout": 120.0,
-            "is_function_calling_model": false
-        }
-    },
-    "ollama-qwen2.5-coder": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
-        "luigi_workers": 1,
-        "class": "Ollama",
-        "arguments": {
-            "model": "qwen2.5-coder:latest",
-            "temperature": 0.5,
-            "request_timeout": 120.0,
-            "is_function_calling_model": false
-        }
-    },
-    "lmstudio-qwen2.5-7b-instruct-1m": {
-        "comment": "This runs on your own computer. It's free. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in .venv on the host computer. No use of docker.",
-        "luigi_workers": 1,
-        "class": "LMStudio",
-        "arguments": {
-            "model_name": "qwen2.5-7b-instruct-1m",
-            "base_url": "http://localhost:1234/v1",
-            "temperature": 0.2,
-            "request_timeout": 120.0,
-            "is_function_calling_model": false
-        }
-    },
-    "docker-lmstudio-qwen2.5-7b-instruct-1m": {
-        "comment": "This runs on your own computer. It's free. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
-        "luigi_workers": 1,
-        "class": "LMStudio",
-        "arguments": {
-            "model_name": "qwen2.5-7b-instruct-1m",
-            "base_url": "http://host.docker.internal:1234/v1",
-            "temperature": 0.2,
-            "request_timeout": 120.0,
-            "is_function_calling_model": false
-        }
     }
 }

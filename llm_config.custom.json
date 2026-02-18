@@ -11,12 +11,12 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         }
     },
     "openrouter-paid-gemini-3-flash-preview": {
-        "comment": "Secondary fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
+        "comment": "last resort fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
         "priority": 2,
         "luigi_workers": 4,
         "class": "OpenRouter",
@@ -27,7 +27,7 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         }
     },
@@ -43,13 +43,13 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         }
     },
     "openrouter-paid-qwen3-coder-next": {
         "comment": "Code-focused fallback sharing priority tier 3, targeting Qwen3 Coder Next via OpenRouter.",
-        "priority": 3,
+        "priority": 4,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -59,13 +59,13 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         }
     },
     "openrouter-paid-nvidia-nemotron-3-nano-30b-a3b": {
         "comment": "Last-resort fallback. Paid OpenRouter access to NVIDIA Nemotron 3 Nano 30B A3B for extended context needs.",
-        "priority": 4,
+        "priority": 5,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -75,7 +75,7 @@
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 32000,
             "max_retries": 5
         }
     }

@@ -3,9 +3,14 @@
 {% block head %}
 <style>
     .plan-list-title {
-        margin: 0 0 14px;
-        font-size: 1.35rem;
+        margin: 0 0 8px;
+        font-size: 1.2rem;
         font-weight: 700;
+    }
+    .plan-list-subtitle {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        color: var(--color-text-secondary);
     }
     .plan-list-wrap {
         border: 1px solid var(--color-border);
@@ -20,19 +25,20 @@
     }
     .plan-table th {
         text-align: left;
-        padding: 10px 12px;
-        font-size: 0.72rem;
+        padding: 8px 10px;
+        font-size: 0.66rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.04em;
+        letter-spacing: 0.05em;
         color: var(--color-text-secondary);
         background: var(--color-bg-soft);
         border-bottom: 1px solid var(--color-border);
+        white-space: nowrap;
     }
     .plan-table td {
-        padding: 10px 12px;
+        padding: 8px 10px;
         border-bottom: 1px solid var(--color-border);
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         color: var(--color-text);
         vertical-align: middle;
     }
@@ -45,13 +51,47 @@
     .plan-row:hover {
         background: var(--color-bg-soft);
     }
-    .plan-cell-id {
+
+    .plan-cell-id,
+    .plan-cell-time,
+    .plan-cell-created {
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 0.78rem;
+        font-size: 0.73rem;
     }
     .plan-cell-status {
         text-transform: capitalize;
+        white-space: nowrap;
     }
+    .status-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        border: 1px solid var(--color-border);
+        padding: 1px 7px;
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--color-text-secondary);
+        background: var(--color-bg-soft);
+    }
+    .status-chip.status-completed {
+        border-color: #2e7d32;
+        color: #2e7d32;
+        background: #e8f5e9;
+    }
+    .status-chip.status-processing,
+    .status-chip.status-pending {
+        border-color: #1565c0;
+        color: #1565c0;
+        background: #e3f2fd;
+    }
+    .status-chip.status-failed {
+        border-color: #c62828;
+        color: #c62828;
+        background: #ffebee;
+    }
+
     .plan-cell-prompt {
         white-space: nowrap;
         overflow: hidden;
@@ -62,9 +102,16 @@
         color: var(--color-text-secondary);
         font-size: 0.9rem;
     }
-    @media (max-width: 900px) {
-        .plan-table th:nth-child(3),
-        .plan-table td:nth-child(3) {
+
+    @media (max-width: 1040px) {
+        .plan-table th:nth-child(5),
+        .plan-table td:nth-child(5) {
+            display: none;
+        }
+    }
+    @media (max-width: 840px) {
+        .plan-table th:nth-child(2),
+        .plan-table td:nth-child(2) {
             display: none;
         }
     }
@@ -73,25 +120,27 @@
 
 {% block content %}
 <h1 class="plan-list-title">Plans</h1>
+<p class="plan-list-subtitle">Technical queue view · newest first · click row to inspect</p>
 <div class="plan-list-wrap">
     {% if plan_rows %}
     <table class="plan-table">
         <thead>
             <tr>
-                <th>yymmdd-hhmm</th>
-                <th>relative time</th>
-                <th>id</th>
-                <th>status</th>
-                <th>prompt</th>
+                <th title="Task state for triage">status</th>
+                <th title="Task UUID">id</th>
+                <th title="Absolute creation timestamp (YYMMDD-HHMM)">created</th>
+                <th title="Human-friendly age">age</th>
+                <th title="Prompt preview">prompt</th>
             </tr>
         </thead>
         <tbody>
             {% for row in plan_rows %}
-            <tr class="plan-row" data-href="{{ url_for('plan') }}?id={{ row.id }}">
-                <td>{{ row.created_compact }}</td>
-                <td>{{ row.created_relative }}</td>
+            {% set status = (row.status | lower) %}
+            <tr class="plan-row" data-href="{{ url_for('plan') }}?id={{ row.id }}" title="Open run {{ row.id }}">
+                <td class="plan-cell-status"><span class="status-chip status-{{ status }}">{{ status }}</span></td>
                 <td class="plan-cell-id">{{ row.id }}</td>
-                <td class="plan-cell-status">{{ row.status | lower }}</td>
+                <td class="plan-cell-created">{{ row.created_compact }}</td>
+                <td class="plan-cell-time">{{ row.created_relative }}</td>
                 <td class="plan-cell-prompt" title="{{ row.prompt }}">{{ row.prompt }}</td>
             </tr>
             {% endfor %}

@@ -183,6 +183,11 @@ class MyFlaskApp:
         self.prompt_catalog = PromptCatalog()
         self.prompt_catalog.load_simple_plan_prompts()
 
+        # Lightweight in-process cache for terminal task telemetry snapshots.
+        # This avoids repeatedly re-querying/re-parsing run artifacts when the
+        # plan iframe polls /plan/meta after a task is already finished.
+        self._plan_telemetry_cache: dict[tuple[str, str, bool], dict[str, Any]] = {}
+
         # Point to the "templates" dir.
         # Prefer top-level templates dir (frontend_multi_user/templates) when running from Docker image.
         default_template_folder = Path(__file__).parent / "templates"
@@ -876,6 +881,34 @@ class MyFlaskApp:
             return None
 
     @staticmethod
+    def _safe_int(value: Any) -> Optional[int]:
+        if value is None:
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _clean_text(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text if text else None
+
+    @staticmethod
+    def _extract_provider_model_from_activity_key(model_key: Any) -> tuple[Optional[str], Optional[str]]:
+        key = MyFlaskApp._clean_text(model_key)
+        if key is None:
+            return None, None
+        if ":" not in key:
+            return None, key
+        provider, model = key.split(":", 1)
+        provider_clean = provider.strip() or None
+        model_clean = model.strip() or None
+        return provider_clean, model_clean
+
+    @staticmethod
     def _to_credit_decimal(value: Any) -> Decimal:
         try:
             return Decimal(str(value or 0)).quantize(CREDIT_SCALE)
@@ -912,7 +945,7 @@ class MyFlaskApp:
         n = seconds
         return f"{n} sec" if n == 1 else f"{n} secs"
 
-    def _read_inference_cost_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[float]:
+    def _read_activity_overview_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[dict[str, Any]]:
         if not run_zip_snapshot:
             return None
         try:
@@ -921,10 +954,214 @@ class MyFlaskApp:
                 for member_name in archive.namelist():
                     if member_name.endswith(activity_name):
                         payload = json.loads(archive.read(member_name).decode("utf-8"))
-                        return self._safe_float(payload.get("total_cost", 0.0))
+                        if isinstance(payload, dict):
+                            return payload
+                        return None
         except Exception as exc:
             logger.warning("Unable to parse run_zip_snapshot activity overview: %s", exc)
         return None
+
+    def _read_inference_cost_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[float]:
+        payload = self._read_activity_overview_from_run_zip(run_zip_snapshot)
+        if not isinstance(payload, dict):
+            return None
+        return self._safe_float(payload.get("total_cost"))
+
+    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool]]:
+        state = task.state if isinstance(task.state, TaskState) else None
+        if include_raw or state not in (TaskState.completed, TaskState.failed):
+            return None
+        return (str(task.id), state.name, bool(task.run_zip_snapshot))
+
+    def _build_plan_telemetry(
+        self,
+        task: TaskItem,
+        include_raw: bool = False,
+        expose_raw_usage_data: bool = False,
+    ) -> dict[str, Any]:
+        cache_key = self._build_plan_telemetry_cache_key(task, include_raw)
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if isinstance(telemetry_cache, dict):
+                cached = telemetry_cache.get(cache_key)
+                if isinstance(cached, dict):
+                    return cached
+
+        task_id = str(task.id)
+        token_metrics_rows = (
+            TokenMetrics.query
+            .filter_by(task_id=task_id)
+            .order_by(TokenMetrics.timestamp.asc(), TokenMetrics.id.asc())
+            .all()
+        )
+        token_summary = TokenMetricsSummary(task_id=task_id, metrics=token_metrics_rows)
+        activity_overview = self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
+
+        has_prompt_tokens = any(row.input_tokens is not None for row in token_metrics_rows)
+        has_completion_tokens = any(row.output_tokens is not None for row in token_metrics_rows)
+        has_thinking_tokens = any(row.thinking_tokens is not None for row in token_metrics_rows)
+        has_any_metric_tokens = has_prompt_tokens or has_completion_tokens or has_thinking_tokens
+
+        activity_prompt_tokens = self._safe_int(activity_overview.get("total_input_tokens")) if isinstance(activity_overview, dict) else None
+        activity_completion_tokens = self._safe_int(activity_overview.get("total_output_tokens")) if isinstance(activity_overview, dict) else None
+        activity_thinking_tokens = self._safe_int(activity_overview.get("total_thinking_tokens")) if isinstance(activity_overview, dict) else None
+        activity_total_tokens = self._safe_int(activity_overview.get("total_tokens")) if isinstance(activity_overview, dict) else None
+
+        prompt_tokens = token_summary.total_input_tokens if has_prompt_tokens else activity_prompt_tokens
+        completion_tokens = token_summary.total_output_tokens if has_completion_tokens else activity_completion_tokens
+        thinking_tokens = token_summary.total_thinking_tokens if has_thinking_tokens else activity_thinking_tokens
+
+        if has_any_metric_tokens:
+            total_tokens = token_summary.total_tokens
+        elif activity_total_tokens is not None:
+            total_tokens = activity_total_tokens
+        elif any(value is not None for value in [prompt_tokens, completion_tokens, thinking_tokens]):
+            total_tokens = (prompt_tokens or 0) + (completion_tokens or 0) + (thinking_tokens or 0)
+        else:
+            total_tokens = None
+
+        metric_cost_values = [
+            self._safe_float(row.cost_usd)
+            for row in token_metrics_rows
+            if row.cost_usd is not None
+        ]
+        metric_cost_values = [value for value in metric_cost_values if value is not None]
+        token_metrics_cost_usd = sum(metric_cost_values) if metric_cost_values else None
+        activity_overview_cost_usd = self._safe_float(activity_overview.get("total_cost")) if isinstance(activity_overview, dict) else None
+
+        provider_model_counts: dict[tuple[Optional[str], Optional[str]], int] = {}
+        if token_metrics_rows:
+            for row in token_metrics_rows:
+                provider = self._clean_text(row.upstream_provider)
+                model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
+                if provider is None and model is None:
+                    continue
+                key = (provider, model)
+                provider_model_counts[key] = provider_model_counts.get(key, 0) + 1
+        elif isinstance(activity_overview, dict):
+            models_payload = activity_overview.get("models")
+            if isinstance(models_payload, dict):
+                for model_key, model_stats in models_payload.items():
+                    provider, model = self._extract_provider_model_from_activity_key(model_key)
+                    if provider is None and model is None:
+                        continue
+                    calls = self._safe_int(model_stats.get("calls")) if isinstance(model_stats, dict) else None
+                    provider_model_counts[(provider, model)] = calls if calls and calls > 0 else 0
+
+        routes = [
+            {
+                "provider": provider,
+                "model": model,
+                "calls": calls if calls > 0 else None,
+            }
+            for (provider, model), calls in provider_model_counts.items()
+        ]
+        routes.sort(key=lambda row: (-(row["calls"] or 0), row["provider"] or "", row["model"] or ""))
+
+        providers = sorted({row["provider"] for row in routes if row.get("provider")})
+        models = sorted({row["model"] for row in routes if row.get("model")})
+
+        if token_metrics_rows:
+            total_calls = token_summary.total_calls
+            successful_calls = token_summary.successful_calls
+            failed_calls = token_summary.failed_calls
+        else:
+            total_calls = None
+            successful_calls = None
+            failed_calls = None
+            if isinstance(activity_overview, dict):
+                models_payload = activity_overview.get("models")
+                if isinstance(models_payload, dict):
+                    total_calls = 0
+                    for model_stats in models_payload.values():
+                        calls = self._safe_int(model_stats.get("calls")) if isinstance(model_stats, dict) else None
+                        total_calls += calls or 0
+
+        telemetry: dict[str, Any] = {
+            "task_id": task_id,
+            "usage": {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "thinking_tokens": thinking_tokens,
+                "total_tokens": total_tokens,
+            },
+            "cost": {
+                "token_metrics_usd": token_metrics_cost_usd,
+                "activity_overview_usd": activity_overview_cost_usd,
+                "currency": "USD" if token_metrics_cost_usd is not None or activity_overview_cost_usd is not None else None,
+            },
+            "provider_model": {
+                "providers": providers,
+                "models": models,
+                "routes": routes,
+            },
+            "calls": {
+                "total": total_calls,
+                "successful": successful_calls,
+                "failed": failed_calls,
+            },
+            "source_paths": {
+                "token_metrics_table": "token_metrics.{input_tokens, output_tokens, thinking_tokens, cost_usd, upstream_provider, upstream_model}",
+                "activity_overview_json": "TaskItem.run_zip_snapshot -> */activity_overview.json",
+            },
+            "source_availability": {
+                "token_metrics_row_count": len(token_metrics_rows),
+                "activity_overview_present": isinstance(activity_overview, dict),
+            },
+        }
+        telemetry["has_data"] = any(
+            [
+                telemetry["usage"]["prompt_tokens"] is not None,
+                telemetry["usage"]["completion_tokens"] is not None,
+                telemetry["usage"]["thinking_tokens"] is not None,
+                telemetry["usage"]["total_tokens"] is not None,
+                telemetry["cost"]["token_metrics_usd"] is not None,
+                telemetry["cost"]["activity_overview_usd"] is not None,
+                bool(telemetry["provider_model"]["routes"]),
+                telemetry["calls"]["total"] is not None,
+            ]
+        )
+
+        if include_raw:
+            raw_token_metrics_rows = []
+            for row in token_metrics_rows:
+                raw_token_metrics_rows.append(
+                    {
+                        "id": row.id,
+                        "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+                        "task_id": row.task_id,
+                        "user_id": row.user_id,
+                        "llm_model": row.llm_model,
+                        "upstream_provider": row.upstream_provider,
+                        "upstream_model": row.upstream_model,
+                        "input_tokens": row.input_tokens,
+                        "output_tokens": row.output_tokens,
+                        "thinking_tokens": row.thinking_tokens,
+                        "cost_usd": row.cost_usd,
+                        "duration_seconds": row.duration_seconds,
+                        "success": row.success,
+                        "error_message": row.error_message,
+                        # Guardrail: provider-native usage payloads can be verbose
+                        # and may include integration-specific fields. They are only
+                        # exposed when the dedicated /plan/telemetry route opts in.
+                        "raw_usage_data": row.raw_usage_data if expose_raw_usage_data else None,
+                    }
+                )
+            telemetry["source_data"] = {
+                "activity_overview": activity_overview,
+                "token_metrics": raw_token_metrics_rows,
+            }
+
+        if cache_key is not None:
+            telemetry_cache = getattr(self, "_plan_telemetry_cache", None)
+            if not isinstance(telemetry_cache, dict):
+                telemetry_cache = {}
+                self._plan_telemetry_cache = telemetry_cache
+            telemetry_cache[cache_key] = telemetry
+            if len(telemetry_cache) > 512:
+                telemetry_cache.pop(next(iter(telemetry_cache)))
+
+        return telemetry
 
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
@@ -1990,7 +2227,8 @@ class MyFlaskApp:
                 logger.warning("Unauthorized plan wrapper access attempt. run_id=%s user_id=%s", run_id, current_user.id)
                 return jsonify({"error": "Forbidden"}), 403
 
-            return render_template("plan_iframe.html", run_id=run_id, task=task)
+            telemetry = self._build_plan_telemetry(task, include_raw=False)
+            return render_template("plan_iframe.html", run_id=run_id, task=task, telemetry=telemetry)
 
         @self.app.route('/plan/download/report')
         @login_required
@@ -2109,6 +2347,7 @@ class MyFlaskApp:
                 return jsonify({"error": "Forbidden"}), 403
 
             state_name = task.state.name if isinstance(task.state, TaskState) else "pending"
+            telemetry = self._build_plan_telemetry(task, include_raw=False)
             return jsonify({
                 "id": str(task.id),
                 "state": state_name,
@@ -2117,7 +2356,24 @@ class MyFlaskApp:
                 "generated_report_html": bool(task.generated_report_html),
                 "run_zip_snapshot": bool(task.run_zip_snapshot),
                 "stop_requested": bool(task.stop_requested),
+                "telemetry": telemetry,
             }), 200
+
+        @self.app.route('/plan/telemetry')
+        @login_required
+        def plan_telemetry():
+            run_id = request.args.get('id', '').strip()
+            task = self.db.session.get(TaskItem, run_id)
+            if task is None:
+                return jsonify({"error": "Task not found"}), 400
+            if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+                return jsonify({"error": "Forbidden"}), 403
+
+            # Intentional: this endpoint is for authenticated owner/admin
+            # troubleshooting and may include provider raw_usage_data payloads.
+            # Keep /plan/meta sanitized (include_raw=False).
+            telemetry = self._build_plan_telemetry(task, include_raw=True, expose_raw_usage_data=True)
+            return jsonify(telemetry), 200
 
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required

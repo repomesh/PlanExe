@@ -1204,13 +1204,14 @@ class MyFlaskApp:
         for row in token_metrics_rows:
             route_provider = self._clean_text(row.upstream_provider)
             route_model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
+            success_state = True if row.success is True else False if row.success is False else None
             execution_attempts.append(
                 {
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
                     "provider": route_provider,
                     "model": route_model,
                     "duration_seconds": self._safe_float(row.duration_seconds),
-                    "success": bool(row.success),
+                    "success": success_state,
                     "error_message": self._clean_text(row.error_message),
                 }
             )

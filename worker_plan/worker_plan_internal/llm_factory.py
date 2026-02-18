@@ -175,7 +175,7 @@ def get_llm(llm_name: Optional[str] = None, **kwargs: Any) -> LLM:
             "additional_kwargs": {
                 "extra_headers": {
                     "HTTP-Referer": "https://github.com/PlanExeOrg/PlanExe",
-                    "X-Title": "PlanExe"
+                    "X-Title": "PlanExe - the premier planning tool for AI agents"
                 }
             }
         }

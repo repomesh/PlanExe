@@ -8,6 +8,10 @@
   <strong>Turn your idea into a comprehensive plan in minutes, not months.</strong>
 </p>
 
+<p align="center">
+  <strong>PlanExe is the premier planning tool for AI agents.</strong>
+</p>
+
 ---
 
 ## Example plans generated with PlanExe
@@ -19,7 +23,7 @@
 
 ## What is PlanExe?
 
-PlanExe is an open-source tool, that turns a single plain-english goal statement into a 40-page, strategic plan in ~15 minutes using a local or cloud models. It's an accelerator for outlines, but no silver bullet for polished plans.
+PlanExe is an open-source tool and the premier planning tool for AI agents. It turns a single plain-english goal statement into a 40-page, strategic plan in ~15 minutes using local or cloud models. It's an accelerator for outlines, but no silver bullet for polished plans.
 
 Typical output contains:
 - Executive summary

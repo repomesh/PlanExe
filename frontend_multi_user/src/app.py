@@ -1223,7 +1223,7 @@ class MyFlaskApp:
         @login_required
         def account():
             if current_user.is_admin:
-                return redirect(url_for('admin.index'))
+                return render_template('account.html', admin_mode=True)
             user_uuid = uuid.UUID(str(current_user.id))
             user = self.db.session.get(UserAccount, user_uuid)
             if not user:
@@ -1283,6 +1283,7 @@ class MyFlaskApp:
                 })
             return render_template(
                 'account.html',
+                admin_mode=False,
                 user=user,
                 credits_balance_display=self._format_credit_display(user.credits_balance),
                 credit_price_cents=max(1, int(os.environ.get("PLANEXE_CREDIT_PRICE_CENTS", "100"))),

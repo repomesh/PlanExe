@@ -359,6 +359,13 @@
     <p>Manage your profile, API access, and billing.</p>
 </div>
 
+{% if admin_mode %}
+<div class="card">
+    <p style="margin: 0 0 10px;"><strong>Admin account</strong></p>
+    <p style="margin: 0 0 14px; color: var(--color-text-secondary);">You are signed in with admin credentials.</p>
+    <a href="{{ url_for('admin.index') }}" class="btn-acct btn-acct-primary">Open Admin Panel</a>
+</div>
+{% else %}
 <div class="acct-grid">
     {# ── Left: profile sidebar ─────────────────────────────────── #}
     <aside>
@@ -509,6 +516,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 {% if new_api_key %}
 <script>

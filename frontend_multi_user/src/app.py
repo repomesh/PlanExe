@@ -1038,9 +1038,30 @@ class MyFlaskApp:
     float: none !important;
   }
   .table-responsive { overflow-x: auto; }
+  #planexe-admin-logout {
+    position: fixed;
+    right: 16px;
+    top: 64px;
+    z-index: 2000;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid #d0d7de;
+    background: #fff;
+    color: #24292f;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  #planexe-admin-logout:hover {
+    background: #f6f8fa;
+    text-decoration: none;
+  }
 </style>
 """.strip()
                 html = html.replace("</head>", css + "\n</head>", 1)
+                if 'id="planexe-admin-logout"' not in html and "</body>" in html:
+                    logout_html = '<a id="planexe-admin-logout" href="/logout">Logout</a>'
+                    html = html.replace("</body>", logout_html + "\n</body>", 1)
                 response.set_data(html)
                 response.headers.pop("Content-Length", None)
             except Exception:

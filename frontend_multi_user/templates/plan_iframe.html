@@ -84,6 +84,131 @@
         color: var(--color-text-secondary);
         text-transform: capitalize;
     }
+    .plan-trace-panel {
+        padding: 8px 12px 10px;
+        border-top: 1px solid var(--color-border);
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg);
+        flex: 0 0 auto;
+    }
+    .plan-trace-title {
+        margin: 0;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: var(--color-text);
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+    .plan-trace-grid {
+        margin-top: 6px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(120px, 1fr));
+        gap: 6px;
+    }
+    .plan-trace-item {
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-bg-soft);
+        padding: 5px 8px;
+        min-height: 48px;
+    }
+    .plan-trace-label {
+        margin: 0;
+        font-size: 0.74rem;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.01em;
+    }
+    .plan-trace-value {
+        margin: 3px 0 0;
+        font-size: 0.86rem;
+        font-weight: 500;
+        color: var(--color-text);
+        line-height: 1.3;
+        word-break: break-word;
+    }
+    .plan-trace-subtitle {
+        margin: 8px 0 0;
+        font-size: 0.76rem;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+        font-weight: 700;
+    }
+    .plan-trace-table-wrap {
+        margin-top: 5px;
+        max-height: 130px;
+        overflow: auto;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-bg-soft);
+    }
+    .plan-trace-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+    }
+    .plan-trace-table th,
+    .plan-trace-table td {
+        padding: 5px 7px;
+        border-bottom: 1px solid var(--color-border);
+        font-size: 0.76rem;
+        color: var(--color-text);
+        text-align: left;
+        vertical-align: top;
+        word-break: break-word;
+    }
+    .plan-trace-table th {
+        font-size: 0.7rem;
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+    }
+    .plan-trace-table tr:last-child td {
+        border-bottom: none;
+    }
+    .plan-trace-error {
+        margin-top: 6px;
+        font-size: 0.78rem;
+        color: #b42318;
+        word-break: break-word;
+    }
+    .plan-trace-no-data {
+        margin-top: 4px;
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+    }
+    .plan-trace-partial {
+        margin-top: 8px;
+        border: 1px solid var(--color-border);
+        border-radius: 6px;
+        background: var(--color-bg-soft);
+        padding: 0 8px 7px;
+    }
+    .plan-trace-partial summary {
+        cursor: pointer;
+        padding: 6px 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--color-text);
+    }
+    .plan-trace-partial pre {
+        margin: 0;
+        max-height: 140px;
+        overflow: auto;
+        background: var(--color-bg);
+        border: 1px solid var(--color-border);
+        border-radius: 4px;
+        padding: 7px;
+        font-size: 0.75rem;
+        line-height: 1.35;
+    }
+    @media (max-width: 980px) {
+        .plan-trace-grid {
+            grid-template-columns: repeat(2, minmax(120px, 1fr));
+        }
+    }
     .plan-frame-wrap {
         width: 100%;
         flex: 1 1 auto;
@@ -150,6 +275,65 @@
         <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
     </div>
 </div>
+<div class="plan-trace-panel">
+    <p class="plan-trace-title">Failure Modes &amp; Execution Trace</p>
+    <div class="plan-trace-grid">
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Stage</p>
+            <p class="plan-trace-value" id="trace-stage">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Error type</p>
+            <p class="plan-trace-value" id="trace-error-type">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Retries</p>
+            <p class="plan-trace-value" id="trace-retries">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Provider switch</p>
+            <p class="plan-trace-value" id="trace-provider-switch">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Fallback</p>
+            <p class="plan-trace-value" id="trace-fallback">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Queue → Processing</p>
+            <p class="plan-trace-value" id="trace-queue-time">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Processing → Terminal</p>
+            <p class="plan-trace-value" id="trace-processing-time">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">LLM duration total</p>
+            <p class="plan-trace-value" id="trace-llm-total-time">Pending...</p>
+        </div>
+    </div>
+    <p class="plan-trace-error" id="trace-error-message"></p>
+    <p class="plan-trace-subtitle">Execution Trace</p>
+    <div class="plan-trace-table-wrap">
+        <table class="plan-trace-table">
+            <thead>
+                <tr>
+                    <th>Timestamp</th>
+                    <th>Provider/Model</th>
+                    <th>Duration</th>
+                    <th>Status</th>
+                    <th>Error</th>
+                </tr>
+            </thead>
+            <tbody id="trace-attempts-body">
+                <tr><td colspan="5" class="plan-trace-no-data">Pending...</td></tr>
+            </tbody>
+        </table>
+    </div>
+    <details class="plan-trace-partial" id="trace-partial-wrap" style="display:none">
+        <summary>Partial output (if available)</summary>
+        <pre id="trace-partial-output"></pre>
+    </details>
+</div>
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
@@ -165,11 +349,140 @@
         const metaUrl = "{{ url_for('plan_meta') }}?id=" + encodeURIComponent(planId);
         const stateEl = document.getElementById("plan-state");
         const stateTextEl = document.getElementById("plan-state-text");
+        const initialFailureTrace = {{ failure_trace | tojson }};
 
         function setVisible(id, visible) {
             const el = document.getElementById(id);
             if (!el) return;
             el.style.display = visible ? "" : "none";
+        }
+
+        function setText(id, value) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.textContent = value;
+        }
+
+        function isActiveState(state) {
+            return state === "pending" || state === "processing";
+        }
+
+        function missingValue(state) {
+            return isActiveState(state) ? "Pending..." : "Not available";
+        }
+
+        function cleanText(value) {
+            if (value === null || value === undefined) return null;
+            const text = String(value).trim();
+            return text.length ? text : null;
+        }
+
+        function formatSeconds(value, state) {
+            if (value === null || value === undefined || value === "") {
+                return missingValue(state);
+            }
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+                return missingValue(state);
+            }
+            return parsed.toFixed(2) + " s";
+        }
+
+        function formatRetry(trace, state) {
+            if (!trace || !trace.retries) return missingValue(state);
+            const retryCount = trace.retries.count;
+            if (retryCount !== null && retryCount !== undefined) {
+                return String(retryCount);
+            }
+            const inferred = trace.retries.count_inferred_from_attempts;
+            if (inferred !== null && inferred !== undefined) {
+                return String(inferred) + " (inferred)";
+            }
+            return missingValue(state);
+        }
+
+        function formatProviderSwitch(trace, state) {
+            if (!trace || !trace.provider_switch) return missingValue(state);
+            const explicit = cleanText(trace.provider_switch.indicator);
+            if (explicit) return explicit;
+            const inferred = trace.provider_switch.inferred_count_from_routes;
+            if (inferred !== null && inferred !== undefined) {
+                return String(inferred) + " (inferred)";
+            }
+            return missingValue(state);
+        }
+
+        function escapeHtml(text) {
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function renderExecutionTrace(trace, state) {
+            const body = document.getElementById("trace-attempts-body");
+            if (!body) return;
+
+            const rows = trace && Array.isArray(trace.execution_trace) ? trace.execution_trace : [];
+            if (!rows.length) {
+                body.innerHTML = '<tr><td colspan="5" class="plan-trace-no-data">' + escapeHtml(missingValue(state)) + '</td></tr>';
+                return;
+            }
+
+            const htmlRows = rows.map(function (row) {
+                const timestamp = cleanText(row.timestamp) || "-";
+                const provider = cleanText(row.provider);
+                const model = cleanText(row.model);
+                const route = provider && model ? (provider + "/" + model) : (provider || model || "-");
+                const duration = formatSeconds(row.duration_seconds, state);
+                const success = row.success === true ? "success" : (row.success === false ? "failed" : "-");
+                const errorText = cleanText(row.error_message) || "-";
+                return '<tr>' +
+                    '<td>' + escapeHtml(timestamp) + '</td>' +
+                    '<td>' + escapeHtml(route) + '</td>' +
+                    '<td>' + escapeHtml(duration) + '</td>' +
+                    '<td>' + escapeHtml(success) + '</td>' +
+                    '<td>' + escapeHtml(errorText) + '</td>' +
+                    '</tr>';
+            });
+            body.innerHTML = htmlRows.join("");
+        }
+
+        function updateFailureTrace(trace, state) {
+            const payload = trace || {};
+            const error = payload.error || {};
+            const timing = payload.timing || {};
+            const fallback = payload.fallback || {};
+
+            setText("trace-stage", cleanText(payload.stage) || missingValue(state));
+            setText("trace-error-type", cleanText(error.type) || missingValue(state));
+            setText("trace-retries", formatRetry(payload, state));
+            setText("trace-provider-switch", formatProviderSwitch(payload, state));
+            setText("trace-fallback", cleanText(fallback.indicator) || missingValue(state));
+            setText("trace-queue-time", formatSeconds(timing.pending_to_processing_seconds, state));
+            setText("trace-processing-time", formatSeconds(timing.processing_to_terminal_seconds, state));
+            setText("trace-llm-total-time", formatSeconds(timing.llm_attempts_total_duration_seconds, state));
+
+            const errorMessage = cleanText(error.message);
+            setText("trace-error-message", errorMessage ? ("Error: " + errorMessage) : "");
+
+            renderExecutionTrace(payload, state);
+
+            const partialOutput = payload.partial_output;
+            const partialWrap = document.getElementById("trace-partial-wrap");
+            const partialEl = document.getElementById("trace-partial-output");
+            const partialText = cleanText(partialOutput);
+            if (partialWrap && partialEl) {
+                if (partialText) {
+                    partialEl.textContent = partialText;
+                    partialWrap.style.display = "";
+                } else {
+                    partialEl.textContent = "";
+                    partialWrap.style.display = "none";
+                }
+            }
         }
 
         function updatePanel(meta) {
@@ -207,6 +520,8 @@
             setVisible("zip-link", hasZip);
             setVisible("zip-disabled", !hasZip);
 
+            updateFailureTrace(meta.failure_trace, state);
+
             return isActive;
         }
 
@@ -229,6 +544,8 @@
                 });
         }
 
+        const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
+        updateFailureTrace(initialFailureTrace, initialState);
         pollMeta();
         timer = setInterval(pollMeta, 10000);
     })();

@@ -19,6 +19,7 @@ import hashlib
 import tempfile
 from urllib.parse import quote_plus, urlparse
 from typing import ClassVar, Dict, Optional, Tuple, Any
+from types import SimpleNamespace
 from pathlib import Path
 from flask import Flask, render_template, Response, request, jsonify, send_file, redirect, url_for, session, abort
 from flask_admin import Admin, AdminIndexView, expose
@@ -1083,41 +1084,50 @@ class MyFlaskApp:
             user_id = None
             can_create_plan = False
             example_prompts: list[str] = []
+            credits_balance_display = "0"
             if current_user.is_authenticated:
                 is_admin = current_user.is_admin
-                if not is_admin:
-                    try:
+                try:
+                    if is_admin:
+                        user_id = self.admin_username
+                        user = SimpleNamespace(name="Admin", given_name=None)
+                        credits_balance_display = "N/A"
+                        can_create_plan = True
+                    else:
                         user_uuid = uuid.UUID(str(current_user.id))
                         user = self.db.session.get(UserAccount, user_uuid)
                         if user:
                             user_id = str(user.id)
-                            # Generate a nonce so the user can start a plan from the dashboard
-                            nonce = 'DASH_' + str(uuid.uuid4())
-                            recent_tasks = (
-                                TaskItem.query
-                                .filter_by(user_id=str(user.id))
-                                .order_by(TaskItem.timestamp_created.desc())
-                                .limit(10)
-                                .all()
-                            )
-                            total_tasks_count = (
-                                TaskItem.query
-                                .filter_by(user_id=str(user.id))
-                                .count()
-                            )
-                            # Load example prompts for the "Start New Plan" form
-                            for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
-                                prompt_item = self.prompt_catalog.find(prompt_uuid)
-                                if prompt_item:
-                                    example_prompts.append(prompt_item.prompt)
                             credits_balance = self._to_credit_decimal(user.credits_balance)
+                            credits_balance_display = self._format_credit_display(user.credits_balance)
                             can_create_plan = credits_balance >= Decimal("2")
-                    except Exception:
-                        logger.debug("Could not load dashboard data", exc_info=True)
+
+                    if user_id:
+                        # Generate a nonce so the user can start a plan from the dashboard
+                        nonce = 'DASH_' + str(uuid.uuid4())
+                        recent_tasks = (
+                            TaskItem.query
+                            .filter_by(user_id=str(user_id))
+                            .order_by(TaskItem.timestamp_created.desc())
+                            .limit(10)
+                            .all()
+                        )
+                        total_tasks_count = (
+                            TaskItem.query
+                            .filter_by(user_id=str(user_id))
+                            .count()
+                        )
+                        # Load example prompts for the "Start New Plan" form
+                        for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
+                            prompt_item = self.prompt_catalog.find(prompt_uuid)
+                            if prompt_item:
+                                example_prompts.append(prompt_item.prompt)
+                except Exception:
+                    logger.debug("Could not load dashboard data", exc_info=True)
             return render_template(
                 'index.html',
                 user=user,
-                credits_balance_display=self._format_credit_display(user.credits_balance) if user else "0",
+                credits_balance_display=credits_balance_display,
                 can_create_plan=can_create_plan,
                 total_tasks_count=total_tasks_count,
                 recent_tasks=recent_tasks,

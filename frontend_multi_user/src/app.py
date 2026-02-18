@@ -36,7 +36,7 @@ from worker_plan_api.start_time import StartTime
 from worker_plan_api.plan_file import PlanFile
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
 from worker_plan_api.prompt_catalog import PromptCatalog
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 from sqlalchemy.exc import OperationalError
 from database_api.model_taskitem import TaskItem, TaskState
 from database_api.model_event import EventType, EventItem
@@ -358,6 +358,16 @@ class MyFlaskApp:
                 if "frontend_multi_user_config" not in columns:
                     conn.execute(text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS frontend_multi_user_config JSON"))
 
+        def _ensure_taskitem_indexes() -> None:
+            insp = inspect(self.db.engine)
+            if "task_item" not in set(insp.get_table_names()):
+                return
+            with self.db.engine.begin() as conn:
+                conn.execute(text(
+                    "CREATE INDEX IF NOT EXISTS idx_task_item_user_id_timestamp_created "
+                    "ON task_item (user_id, timestamp_created)"
+                ))
+
         def _seed_initial_records() -> None:
             # Add initial records if the table is empty
             if TaskItem.query.count() == 0:
@@ -388,6 +398,7 @@ class MyFlaskApp:
                         _ensure_token_metrics_columns()
                         _ensure_fractional_credit_columns()
                         _ensure_user_account_columns()
+                        _ensure_taskitem_indexes()
                         _seed_initial_records()
                     return
                 except OperationalError as exc:
@@ -2643,8 +2654,13 @@ class MyFlaskApp:
             if not run_id:
                 user_id = str(current_user.id)
                 tasks = (
-                    TaskItem.query
-                    .filter_by(user_id=user_id)
+                    self.db.session.query(
+                        TaskItem.id,
+                        TaskItem.timestamp_created,
+                        TaskItem.state,
+                        func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                    )
+                    .filter(TaskItem.user_id == user_id)
                     .order_by(TaskItem.timestamp_created.desc())
                     .all()
                 )
@@ -2657,7 +2673,7 @@ class MyFlaskApp:
                         "created_compact": created_compact,
                         "created_relative": self._format_relative_time(ts),
                         "status": task.state.name if isinstance(task.state, TaskState) else "pending",
-                        "prompt": (task.prompt or "").strip(),
+                        "prompt": (task.prompt_preview or "").strip(),
                     })
                 return render_template("plan_list.html", plan_rows=rows)
 

@@ -161,7 +161,15 @@ When a plan is submitted via `/api/rank`, the system:
 
    - Technical completeness (0-1 float)
 
-   - Feasibility (0-1 float)
+   - **Internal consistency** (0-1 float): timelines, budgets, dependencies, and claims do not contradict each other
+
+   - **Feasibility (technical & operational)** (0-1 float): can it be built/executed with known methods and resources
+
+   - **Legality / regulatory pathway clarity** (0-1 float): named regulators, plausible approval route, required permits/approvals, compliance gates
+
+   - **Ethics / social license** (0-1 float): consent, harms, perverse incentives, reputational risk, public legitimacy
+
+   - Budget realism (0-1 float)
 
    - Impact estimate (0-1 float)
 
@@ -303,18 +311,34 @@ def update_elo(elo_a: float, elo_b: float, prob_a: float, K: int = 32) -> tuple[
 The system uses the following prompt structure for pairwise comparisons:
 
 ```
-You are evaluating two business plans. Your task:
+You are evaluating two plans. Your task:
 
-1. Read both plans carefully (plan_a and plan_b)
-2. Choose 5-7 KPIs most relevant to these specific plans
-3. Add ONE final KPI named by you that captures important remaining considerations
-4. Score each KPI for both plans on a 1-5 integer Likert scale:
+0. Safety: You are only scoring the quality of the plans. Do NOT provide operational instructions that would enable wrongdoing. If a plan involves harm/abuse, score it accordingly and keep reasoning high-level.
+
+1. Read both plans carefully (plan_a and plan_b).
+
+2. Choose 5–7 KPIs most relevant to THESE specific plans.
+   - You MUST include:
+     a) one KPI about internal consistency (dates, budgets, dependencies, contradictions)
+     b) one KPI about legality/regulatory pathway OR ethics/social license if either is materially relevant
+   - If the plans are "bizarre" or norm-breaking, explicitly separate:
+     - technical feasibility (can it be built?)
+     - permissibility/legitimacy (would regulators/public/partners accept it?)
+
+3. Add ONE final KPI named by you that captures the primary failure mode you believe will kill the weaker plan first
+   (e.g., donor supply bottleneck, sovereignty/legitimacy, public backlash, missing permits, unrealistic schedule).
+
+4. Score each KPI for both plans on a 1–5 integer Likert scale:
    - 1 = Very poor
-   - 2 = Below average  
+   - 2 = Below average
    - 3 = Average
    - 4 = Above average
    - 5 = Excellent
-5. Provide ≤30-word reasoning for each KPI score
+
+5. Provide ≤30-word reasoning for each KPI score.
+   - Penalize "template boilerplate" (generic stakeholder/compliance language) when it is not backed by concrete mechanisms, gates, owners, or numbers.
+   - Penalize category-level impossibilities (e.g., "mandatory global adoption by 2026") even if the task list looks polished.
+   - Reward concrete go/no-go gates, accountable governance, and realistic timelines/budgets.
 
 Output format (JSON array):
 [
@@ -414,6 +438,41 @@ This prevents the system from ignoring plan-specific strengths/weaknesses not co
 
 ---
 
+
+
+### Bizarre / Adversarial Plan Stress Testing
+
+Some submitted plans will be intentionally extreme (e.g., "subscription face swapping", "mandatory flat-earth education", unusual post-mortem requests).
+These are valuable because they surface failure modes that *normal* business plans hide behind polished boilerplate.
+
+**How the evaluator should treat bizarre plans**
+
+- **Do not normalize the premise.** If the core objective is category-level impossible (politically, ethically, or legally), score it down even if the Gantt chart is detailed.
+
+- **Split feasibility into two questions:**
+  1) *Technical/operational feasibility:* can a competent team build/run it?
+  2) *Permissibility/legitimacy:* would regulators, donors/partners, and the public accept it?
+
+- **Prefer "primary failure mode" reasoning** over laundry-list risks:
+  - *What kills it first?* (e.g., donor supply, sovereignty, permits, social backlash, liability/insurance)
+
+- **Penalize template language** unless it is backed by:
+  - named decision-makers/owners
+  - explicit go/no-go gates
+  - realistic budgets with line items and contingencies
+  - jurisdiction-specific regulatory steps
+
+**Recommended always-on KPIs for robustness**
+
+Even when the LLM selects KPIs dynamically, these dimensions should remain highly weighted across most plan pairs:
+
+- Internal consistency (dates/budgets/dependencies)
+- Legal/regulatory pathway clarity
+- Ethics/social license & incentive hazards
+- Budget realism
+- Execution operating model (owners, cadence, change control, incident response)
+
+**Dataset note:** include a small "bizarre plans" suite in evaluation fixtures to ensure the system does not reward confident prose over real-world constraints.
 ## API Reference
 
 ### Authentication

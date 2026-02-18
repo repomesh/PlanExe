@@ -1038,6 +1038,20 @@ class MyFlaskApp:
     float: none !important;
   }
   .table-responsive { overflow-x: auto; }
+  #planexe-admin-nav-dashboard {
+    margin-top: 8px;
+    margin-right: 8px;
+    padding: 6px 12px !important;
+    border: 1px solid #d0d7de;
+    border-radius: 999px;
+    background: #fff;
+    color: #24292f !important;
+    line-height: 1.2 !important;
+  }
+  #planexe-admin-nav-dashboard:hover {
+    background: #f6f8fa !important;
+    color: #24292f !important;
+  }
   #planexe-admin-logout {
     position: fixed;
     right: 16px;
@@ -1062,6 +1076,31 @@ class MyFlaskApp:
                 if 'id="planexe-admin-logout"' not in html and "</body>" in html:
                     logout_html = '<a id="planexe-admin-logout" href="/logout">Logout</a>'
                     html = html.replace("</body>", logout_html + "\n</body>", 1)
+                if 'id="planexe-admin-nav-dashboard"' not in html and "</body>" in html:
+                    dashboard_nav_script = """
+<script id="planexe-admin-nav-dashboard">
+(function () {
+  var rightNav = document.querySelector('.navbar .navbar-nav.navbar-right');
+  if (!rightNav) {
+    var navbarCollapse = document.querySelector('.navbar .navbar-collapse');
+    if (!navbarCollapse) return;
+    rightNav = document.createElement('ul');
+    rightNav.className = 'nav navbar-nav navbar-right';
+    navbarCollapse.appendChild(rightNav);
+  }
+  if (document.getElementById('planexe-admin-nav-dashboard-item')) return;
+  var li = document.createElement('li');
+  li.id = 'planexe-admin-nav-dashboard-item';
+  var a = document.createElement('a');
+  a.id = 'planexe-admin-nav-dashboard';
+  a.href = '/';
+  a.textContent = 'Dashboard';
+  li.appendChild(a);
+  rightNav.insertBefore(li, rightNav.firstChild);
+})();
+</script>
+""".strip()
+                    html = html.replace("</body>", dashboard_nav_script + "\n</body>", 1)
                 response.set_data(html)
                 response.headers.pop("Content-Length", None)
             except Exception:

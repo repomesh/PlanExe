@@ -655,6 +655,33 @@ class MyFlaskApp:
             return client.get("users/@me").json()
         raise ValueError(f"Unsupported OAuth provider: {provider}")
 
+    def _avatar_url_from_profile(self, provider: str, profile: dict[str, Any]) -> Optional[str]:
+        """Return a normalized avatar URL for OAuth profiles.
+
+        Discord workaround: the OAuth `/users/@me` response returns `avatar` as
+        a hash (not a full URL). Convert that hash to a CDN URL so templates can
+        render a real image instead of a broken `<img src=\"<hash>\">`.
+        """
+        picture = profile.get("picture")
+        if isinstance(picture, str) and picture:
+            return picture
+
+        avatar_url = profile.get("avatar_url")
+        if isinstance(avatar_url, str) and avatar_url:
+            return avatar_url
+
+        avatar = profile.get("avatar")
+        if provider == "discord":
+            user_id = profile.get("id")
+            if isinstance(avatar, str) and avatar and isinstance(user_id, str) and user_id:
+                extension = "gif" if avatar.startswith("a_") else "png"
+                return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar}.{extension}"
+            return None
+
+        if isinstance(avatar, str) and avatar:
+            return avatar
+        return None
+
     def _upsert_user_from_oauth(self, provider: str, profile: dict[str, Any]) -> UserAccount:
         # Validate required fields
         provider_user_id = str(profile.get("sub") or profile.get("id") or "")
@@ -679,7 +706,7 @@ class MyFlaskApp:
             existing_provider.last_login_at = now
             if user:
                 user.last_login_at = now
-                self._update_user_from_profile(user, profile)
+                self._update_user_from_profile(user, provider, profile)
                 self.db.session.commit()
                 return user
 
@@ -689,7 +716,7 @@ class MyFlaskApp:
             given_name=profile.get("given_name"),
             family_name=profile.get("family_name"),
             locale=profile.get("locale"),
-            avatar_url=profile.get("picture") or profile.get("avatar_url") or profile.get("avatar"),
+            avatar_url=self._avatar_url_from_profile(provider, profile),
             last_login_at=now,
         )
         self.db.session.add(user)
@@ -707,13 +734,13 @@ class MyFlaskApp:
         self.db.session.commit()
         return user
 
-    def _update_user_from_profile(self, user: UserAccount, profile: dict[str, Any]) -> None:
+    def _update_user_from_profile(self, user: UserAccount, provider: str, profile: dict[str, Any]) -> None:
         user.email = profile.get("email") or user.email
         user.name = profile.get("name") or profile.get("username") or profile.get("login") or user.name
         user.given_name = profile.get("given_name") or user.given_name
         user.family_name = profile.get("family_name") or user.family_name
         user.locale = profile.get("locale") or user.locale
-        user.avatar_url = profile.get("picture") or profile.get("avatar_url") or profile.get("avatar") or user.avatar_url
+        user.avatar_url = self._avatar_url_from_profile(provider, profile) or user.avatar_url
 
     def _get_or_create_api_key(self, user: UserAccount) -> str:
         api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")

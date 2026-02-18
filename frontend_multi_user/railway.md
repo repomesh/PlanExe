@@ -12,6 +12,8 @@ PLANEXE_OAUTH_GOOGLE_CLIENT_ID='insert-your-clientid'
 PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET='insert-your-secret'
 PLANEXE_OAUTH_GITHUB_CLIENT_ID='insert-your-clientid'
 PLANEXE_OAUTH_GITHUB_CLIENT_SECRET='insert-your-secret'
+PLANEXE_OAUTH_DISCORD_CLIENT_ID='insert-your-clientid'
+PLANEXE_OAUTH_DISCORD_CLIENT_SECRET='insert-your-secret'
 PLANEXE_FRONTEND_MULTIUSER_SECRET_KEY='insert-a-long-random-secret-for-sessions'
 PLANEXE_STRIPE_SECRET_KEY='insert-your-secret'
 ```

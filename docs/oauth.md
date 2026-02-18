@@ -56,6 +56,21 @@ Notes:
 - Keep `PLANEXE_FRONTEND_MULTIUSER_SECRET_KEY` stable across deploys, otherwise login sessions break.
 - If `PLANEXE_AUTH_REQUIRED=true` and no OAuth provider is configured, startup fails by design.
 
+## Credential storage
+
+Track OAuth credentials in a password manager, for example 1Password.
+
+- Store each provider's values (production and localhost) as separate entries.
+- Also store the direct settings URL for each OAuth app/client in the same entry.
+  Example: `https://discord.com/developers/applications/123456789012345/information`
+- Never commit client secrets to git, docs, screenshots, or chat logs.
+
+Provider naming is mostly the same:
+
+- GitHub: `Client ID` and `Client Secret`
+- Google: `Client ID` and `Client Secret` (OAuth 2.0 Client)
+- Discord: `Client ID` and `Client Secret` (OAuth2 section)
+
 ## Production setup
 
 Use your real public domain, for example `https://home.planexe.org`.
@@ -134,6 +149,15 @@ In Discord application OAuth2 settings, add:
 - `http://localhost:5001/auth/discord/callback`
 
 Set Discord client ID/secret env vars.
+
+Discord-specific flow (localhost):
+
+1. Open your app's OAuth2 page, for example:
+   `https://discord.com/developers/applications/1234567890/oauth2`
+2. Copy `Client ID`.
+3. Reset and copy `Client Secret`.
+4. Under Redirects, add:
+   `http://localhost:5001/auth/discord/callback`
 
 ## Troubleshooting
 

@@ -1663,29 +1663,22 @@ class MyFlaskApp:
     color: #24292f !important;
   }
   #planexe-admin-logout {
-    position: fixed;
-    right: 16px;
-    top: 64px;
-    z-index: 2000;
-    padding: 6px 12px;
-    border-radius: 6px;
+    margin-top: 8px;
+    margin-right: 8px;
+    padding: 6px 12px !important;
     border: 1px solid #d0d7de;
+    border-radius: 999px;
     background: #fff;
-    color: #24292f;
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
+    color: #24292f !important;
+    line-height: 1.2 !important;
   }
   #planexe-admin-logout:hover {
-    background: #f6f8fa;
-    text-decoration: none;
+    background: #f6f8fa !important;
+    color: #24292f !important;
   }
 </style>
 """.strip()
                 html = html.replace("</head>", css + "\n</head>", 1)
-                if 'id="planexe-admin-logout"' not in html and "</body>" in html:
-                    logout_html = '<a id="planexe-admin-logout" href="/logout">Logout</a>'
-                    html = html.replace("</body>", logout_html + "\n</body>", 1)
                 if 'id="planexe-admin-nav-dashboard"' not in html and "</body>" in html:
                     dashboard_nav_script = """
 <script id="planexe-admin-nav-dashboard">
@@ -1698,15 +1691,31 @@ class MyFlaskApp:
     rightNav.className = 'nav navbar-nav navbar-right';
     navbarCollapse.appendChild(rightNav);
   }
-  if (document.getElementById('planexe-admin-nav-dashboard-item')) return;
-  var li = document.createElement('li');
-  li.id = 'planexe-admin-nav-dashboard-item';
-  var a = document.createElement('a');
-  a.id = 'planexe-admin-nav-dashboard';
-  a.href = '/';
-  a.textContent = 'Dashboard';
-  li.appendChild(a);
-  rightNav.insertBefore(li, rightNav.firstChild);
+  var logoutLi = document.getElementById('planexe-admin-nav-logout-item');
+  if (!logoutLi) {
+    logoutLi = document.createElement('li');
+    logoutLi.id = 'planexe-admin-nav-logout-item';
+    var logoutA = document.createElement('a');
+    logoutA.id = 'planexe-admin-logout';
+    logoutA.href = '/logout';
+    logoutA.textContent = 'Logout';
+    logoutLi.appendChild(logoutA);
+  }
+  var dashboardLi = document.getElementById('planexe-admin-nav-dashboard-item');
+  if (!dashboardLi) {
+    dashboardLi = document.createElement('li');
+    dashboardLi.id = 'planexe-admin-nav-dashboard-item';
+    var dashboardA = document.createElement('a');
+    dashboardA.id = 'planexe-admin-nav-dashboard';
+    dashboardA.href = '/';
+    dashboardA.textContent = 'Dashboard';
+    dashboardLi.appendChild(dashboardA);
+  }
+  // Keep order stable as Logout, Dashboard. Dashboard is rightmost and acts
+  // as the "back to home" toggle at the same top-right location as home's
+  // "Admin Panel" button.
+  rightNav.appendChild(logoutLi);
+  rightNav.appendChild(dashboardLi);
 })();
 </script>
 """.strip()

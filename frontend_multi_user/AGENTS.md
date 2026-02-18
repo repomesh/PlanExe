@@ -24,6 +24,11 @@ models. Keep interfaces stable across services.
   - Keep `TaskItem.run_track_activity_jsonl` internal/admin-only.
   - User zip downloads should serve layout-versioned snapshots directly for
     new tasks; sanitize legacy snapshots only.
+- Admin navbar UX invariant:
+  - Keep the top-right corner behavior as a location-based toggle.
+  - On `/`, users see `Admin Panel` in the top-right corner.
+  - On `/admin`, keep `Dashboard` in that same top-right corner location, with
+    `Logout` immediately to its left (`Logout`, then `Dashboard`).
 - Do not store run state in module-level globals; fetch state from Postgres or
   `worker_plan` per request.
 - Forbidden imports: `worker_plan_internal`, `worker_plan.app`,

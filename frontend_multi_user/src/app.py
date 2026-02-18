@@ -1181,7 +1181,7 @@ class MyFlaskApp:
                     session.pop("open_access_logged_out", None)
                     user = User(self.admin_username, is_admin=True)
                     login_user(user)
-                    return redirect(url_for('admin.index'))
+                    return redirect(url_for('index'))
                 return 'Invalid credentials', 401
             return render_template(
                 'login.html',

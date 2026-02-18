@@ -349,6 +349,15 @@ class MyFlaskApp:
                         "USING credits::NUMERIC(18,9)"
                     ))
 
+        def _ensure_user_account_columns() -> None:
+            insp = inspect(self.db.engine)
+            if "user_account" not in set(insp.get_table_names()):
+                return
+            columns = {col["name"] for col in insp.get_columns("user_account")}
+            with self.db.engine.begin() as conn:
+                if "frontend_multi_user_config" not in columns:
+                    conn.execute(text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS frontend_multi_user_config JSON"))
+
         def _seed_initial_records() -> None:
             # Add initial records if the table is empty
             if TaskItem.query.count() == 0:
@@ -378,6 +387,7 @@ class MyFlaskApp:
                         _ensure_taskitem_artifact_columns()
                         _ensure_token_metrics_columns()
                         _ensure_fractional_credit_columns()
+                        _ensure_user_account_columns()
                         _seed_initial_records()
                     return
                 except OperationalError as exc:
@@ -979,6 +989,58 @@ class MyFlaskApp:
             return f"{n} min" if n == 1 else f"{n} mins"
         n = seconds
         return f"{n} sec" if n == 1 else f"{n} secs"
+
+    def _get_current_user_account(self) -> Optional[UserAccount]:
+        if not current_user.is_authenticated:
+            return None
+        try:
+            user_uuid = uuid.UUID(str(current_user.id))
+        except ValueError:
+            if current_user.is_admin and str(current_user.id) == self.admin_username:
+                admin_pref_id = uuid.uuid5(uuid.NAMESPACE_URL, f"planexe-admin-pref:{self.admin_username}")
+                user = self.db.session.get(UserAccount, admin_pref_id)
+                if user is None:
+                    user = UserAccount(
+                        id=admin_pref_id,
+                        is_admin=True,
+                        name="Admin",
+                    )
+                    self.db.session.add(user)
+                    self.db.session.commit()
+                return user
+            return None
+        return self.db.session.get(UserAccount, user_uuid)
+
+    @staticmethod
+    def _normalize_plan_view_mode(value: Any) -> str:
+        mode = str(value or "").strip().lower()
+        if mode in {"info", "view"}:
+            return mode
+        return "view"
+
+    def _get_plan_view_mode_preference(self) -> str:
+        user = self._get_current_user_account()
+        if user is None:
+            return "view"
+        config = user.frontend_multi_user_config if isinstance(user.frontend_multi_user_config, dict) else {}
+        plan_page = config.get("plan_page") if isinstance(config.get("plan_page"), dict) else {}
+        return self._normalize_plan_view_mode(plan_page.get("selected_segment"))
+
+    def _set_plan_view_mode_preference(self, mode: str) -> None:
+        user = self._get_current_user_account()
+        if user is None:
+            return
+        normalized_mode = self._normalize_plan_view_mode(mode)
+        # JSON columns are not mutation-tracked by default; build fresh dicts so
+        # SQLAlchemy sees a new value and persists the update reliably.
+        existing_config = user.frontend_multi_user_config if isinstance(user.frontend_multi_user_config, dict) else {}
+        config = dict(existing_config)
+        existing_plan_page = config.get("plan_page") if isinstance(config.get("plan_page"), dict) else {}
+        plan_page = dict(existing_plan_page)
+        plan_page["selected_segment"] = normalized_mode
+        config["plan_page"] = plan_page
+        user.frontend_multi_user_config = config
+        self.db.session.commit()
 
     def _read_activity_overview_from_run_zip(self, run_zip_snapshot: Optional[bytes]) -> Optional[dict[str, Any]]:
         if not run_zip_snapshot:
@@ -2611,7 +2673,15 @@ class MyFlaskApp:
 
             telemetry = self._build_plan_telemetry(task, include_raw=False)
             failure_trace = self._build_plan_failure_trace(task)
-            return render_template("plan_iframe.html", run_id=run_id, task=task, telemetry=telemetry, failure_trace=failure_trace)
+            preferred_plan_view_mode = self._get_plan_view_mode_preference()
+            return render_template(
+                "plan_iframe.html",
+                run_id=run_id,
+                task=task,
+                telemetry=telemetry,
+                failure_trace=failure_trace,
+                preferred_plan_view_mode=preferred_plan_view_mode,
+            )
 
         @self.app.route('/plan/download/report')
         @login_required
@@ -2730,6 +2800,14 @@ class MyFlaskApp:
                 "telemetry": telemetry,
                 "failure_trace": failure_trace,
             }), 200
+
+        @self.app.route('/plan/view-mode', methods=['POST'])
+        @login_required
+        def plan_view_mode():
+            payload = request.get_json(silent=True) if request.is_json else request.form
+            mode = self._normalize_plan_view_mode((payload or {}).get("mode"))
+            self._set_plan_view_mode_preference(mode)
+            return jsonify({"status": "ok", "mode": mode}), 200
 
         @self.app.route('/plan/telemetry')
         @login_required

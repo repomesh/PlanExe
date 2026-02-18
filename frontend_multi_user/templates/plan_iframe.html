@@ -19,6 +19,57 @@
         flex-direction: column;
         overflow: hidden;
     }
+    .plan-mode-bar {
+        flex: 0 0 auto;
+        display: flex;
+        justify-content: center;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg);
+    }
+    .plan-segmented {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        padding: 2px;
+        background: var(--color-bg-soft);
+        gap: 2px;
+    }
+    .plan-segmented-btn {
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: var(--color-text-secondary);
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1;
+        padding: 7px 14px;
+        cursor: pointer;
+    }
+    .plan-segmented-btn.is-active {
+        background: var(--color-bg);
+        color: var(--color-text);
+        box-shadow: 0 0 0 1px var(--color-border);
+    }
+    .plan-info-view {
+        display: none;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+    }
+    .plan-info-view.is-active {
+        display: block;
+    }
+    .plan-report-view {
+        display: none;
+        flex: 1 1 auto;
+        min-height: 0;
+        flex-direction: column;
+    }
+    .plan-report-view.is-active {
+        display: flex;
+    }
     .plan-meta-panel {
         display: flex;
         flex-direction: column;
@@ -425,6 +476,13 @@
 {% endblock %}
 
 {% block content %}
+<div class="plan-mode-bar">
+    <div class="plan-segmented" role="tablist" aria-label="Plan page mode">
+        <button type="button" class="plan-segmented-btn" id="plan-mode-info" data-mode="info" role="tab" aria-selected="false">Info</button>
+        <button type="button" class="plan-segmented-btn" id="plan-mode-view" data-mode="view" role="tab" aria-selected="false">View Plan</button>
+    </div>
+</div>
+<div class="plan-info-view" id="plan-info-view">
 <div class="plan-meta-panel">
     <div class="plan-meta-top">
         <div class="plan-meta-info">
@@ -595,6 +653,8 @@
         <pre id="trace-partial-output"></pre>
     </details>
 </div>
+</div>
+<div class="plan-report-view" id="plan-report-view">
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
@@ -603,6 +663,7 @@
         loading="eager"
         referrerpolicy="no-referrer"
     ></iframe>
+</div>
 </div>
 <script>
     (function () {
@@ -620,6 +681,11 @@
         const initialTelemetry = {{ telemetry | tojson }};
         const initialFailureTrace = {{ failure_trace | tojson }};
         const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
+        const preferredPlanViewMode = {{ (preferred_plan_view_mode or "view") | tojson }};
+        const csrfToken = {{ csrf_token() | tojson }};
+        const infoViewEl = document.getElementById("plan-info-view");
+        const reportViewEl = document.getElementById("plan-report-view");
+        const modeButtons = Array.from(document.querySelectorAll(".plan-segmented-btn"));
         let currentPlanState = initialState;
         let copyStatusTimer = null;
 
@@ -637,6 +703,40 @@
             const el = document.getElementById(id);
             if (!el) return;
             el.textContent = text;
+        }
+
+        function normalizePlanViewMode(mode) {
+            return mode === "info" ? "info" : "view";
+        }
+
+        function applyPlanViewMode(mode, persist) {
+            const normalizedMode = normalizePlanViewMode(mode);
+            const showInfo = normalizedMode === "info";
+            if (infoViewEl) {
+                infoViewEl.classList.toggle("is-active", showInfo);
+            }
+            if (reportViewEl) {
+                reportViewEl.classList.toggle("is-active", !showInfo);
+            }
+            modeButtons.forEach(function (button) {
+                const active = button.getAttribute("data-mode") === normalizedMode;
+                button.classList.toggle("is-active", active);
+                button.setAttribute("aria-selected", active ? "true" : "false");
+            });
+
+            if (!persist) {
+                return;
+            }
+            fetch("{{ url_for('plan_view_mode') }}", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-CSRFToken": csrfToken,
+                },
+                body: JSON.stringify({ mode: normalizedMode }),
+            }).catch(function () {
+                // Preference persistence failure should not block interaction.
+            });
         }
 
         function isActiveState(state) {
@@ -1105,6 +1205,12 @@
 
         updateTelemetryPanel(initialTelemetry, initialState);
         updateFailureTrace(initialFailureTrace, initialState);
+        applyPlanViewMode(preferredPlanViewMode, false);
+        modeButtons.forEach(function (button) {
+            button.addEventListener("click", function () {
+                applyPlanViewMode(button.getAttribute("data-mode"), true);
+            });
+        });
         let timer = null;
         function pollMeta() {
             fetch(metaUrl, { cache: "no-cache" })

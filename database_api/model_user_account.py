@@ -32,5 +32,8 @@ class UserAccount(db.Model):
     # Last time the user logged in via OAuth.
     last_login_at = db.Column(db.DateTime, nullable=True)
 
+    # Frontend-specific user preferences (JSON blob).
+    frontend_multi_user_config = db.Column(db.JSON, nullable=True, default=None)
+
     def __repr__(self) -> str:
         return f"UserAccount(id={self.id}, email={self.email!r}, credits={self.credits_balance})"

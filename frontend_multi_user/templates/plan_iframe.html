@@ -19,24 +19,14 @@
         flex-direction: column;
         overflow: hidden;
     }
-
     .plan-meta-panel {
-        padding: 10px 12px;
         display: flex;
         flex-direction: column;
         gap: 10px;
         padding: 12px 14px;
         background: var(--color-card-background-secondary);
-        border-bottom: 1px solid var(--color-border);
         flex: 0 0 auto;
-        overflow-y: auto;
     }
-    .plan-meta-header {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-        margin-bottom: 8px;
     .plan-meta-top {
         display: flex;
         align-items: center;
@@ -48,99 +38,21 @@
     }
     .plan-meta-title {
         margin: 0;
-        font-size: 0.9rem;
+        font-size: 0.95rem;
         font-weight: 700;
         color: var(--color-text);
     }
     .plan-meta-sub {
-        margin: 0;
-        font-size: 0.75rem;
+        margin: 2px 0 0;
+        font-size: 0.8rem;
         color: var(--color-text-secondary);
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         word-break: break-all;
     }
-
-    .plan-ops-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-    .ops-card {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        background: var(--color-bg);
-        padding: 7px 8px;
-        min-width: 0;
-    }
-    .ops-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        margin: 0 0 4px;
-        font-size: 0.66rem;
-        font-weight: 700;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--color-text-secondary);
-    }
-    .ops-help {
-        cursor: help;
-        border-bottom: 1px dotted var(--color-border);
-    }
-    .ops-value {
-        margin: 0;
-        font-size: 0.78rem;
-        color: var(--color-text);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .ops-value-mono {
-        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        font-size: 0.75rem;
-    }
-    .ops-muted {
-        color: var(--color-text-secondary);
-    }
-
-    .state-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        border-radius: 999px;
-        border: 1px solid var(--color-border);
-        padding: 1px 7px;
-        font-size: 0.68rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--color-text-secondary);
-        background: var(--color-bg-soft);
-        margin-right: 4px;
-    }
-    .state-completed {
-        border-color: #2e7d32;
-        color: #2e7d32;
-        background: #e8f5e9;
-    }
-    .state-processing {
-        border-color: #1565c0;
-        color: #1565c0;
-        background: #e3f2fd;
-    }
-    .state-failed {
-        border-color: #c62828;
-        color: #c62828;
-        background: #ffebee;
-    }
-
     .plan-meta-actions {
         display: flex;
         align-items: center;
+        gap: 8px;
         flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 8px;
     }
     .plan-action-form {
         margin: 0;
@@ -149,15 +61,14 @@
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 6px 9px;
+        padding: 7px 12px;
         border: 1px solid var(--color-border);
         border-radius: var(--radius);
         text-decoration: none;
-        font-size: 0.75rem;
+        font-size: 0.82rem;
         font-weight: 600;
         color: var(--color-text);
         background: var(--color-bg);
-        line-height: 1.2;
         cursor: pointer;
     }
     .btn-plan-meta:hover {
@@ -170,43 +81,14 @@
         cursor: not-allowed;
         pointer-events: none;
     }
-
-    .plan-prompt-wrap {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        background: var(--color-bg);
-        overflow: hidden;
-    }
-    .plan-prompt-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 6px 8px;
-        cursor: pointer;
-        font-size: 0.74rem;
-        color: var(--color-text-secondary);
-        user-select: none;
-    }
-    .plan-prompt-summary strong {
-        color: var(--color-text);
-    }
-    .plan-prompt-actions {
+    .plan-state {
         display: inline-flex;
-        gap: 6px;
         align-items: center;
-    }
-    .plan-prompt-content {
-        margin: 0;
-        padding: 8px;
-        border-top: 1px solid var(--color-border);
-        font-size: 0.75rem;
-        line-height: 1.35;
-        white-space: pre-wrap;
-        word-break: break-word;
-        max-height: 220px;
-        overflow: auto;
-        background: var(--color-bg-soft);
+        margin-top: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--color-text-secondary);
+        text-transform: capitalize;
     }
     .plan-prompt-panel {
         border: 1px solid var(--color-border);
@@ -399,7 +281,12 @@
         width: 100%;
         flex: 1 1 auto;
         min-height: 0;
-        border-top: 1px solid var(--color-border);
+        height: auto;
+        border: 1px solid var(--color-border);
+        border-left: 0;
+        border-right: 0;
+        border-bottom: 0;
+        border-radius: 0;
         overflow: hidden;
         background: var(--color-bg-soft);
     }
@@ -410,21 +297,10 @@
         display: block;
         background: #fff;
     }
-
-    @media (max-width: 780px) {
-        .plan-meta-header {
-            flex-direction: column;
-            align-items: flex-start;
-        }
-    }
 </style>
 {% endblock %}
 
 {% block content %}
-{% set params = task.parameters if task.parameters is mapping else {} %}
-{% set provider = params.get('provider') or params.get('llm_provider') or params.get('inference_provider') %}
-{% set model = params.get('model') or params.get('llm_model') or params.get('inference_model') %}
-{% set prompt_text = (task.prompt or '').strip() %}
 <div class="plan-meta-panel">
     <div class="plan-meta-top">
         <div class="plan-meta-info">
@@ -536,7 +412,6 @@
     </div>
     <p class="plan-telemetry-routes" id="telemetry-routes">Routes: Pending...</p>
 </div>
-
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
@@ -546,7 +421,6 @@
         referrerpolicy="no-referrer"
     ></iframe>
 </div>
-
 <script>
     (function () {
         const planId = "{{ task.id }}";
@@ -783,20 +657,18 @@
             const isCompleted = state === "completed";
             const isActive = state === "pending" || state === "processing";
 
-            const progressParts = [];
-            if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
-                progressParts.push(Math.round(meta.progress_percentage) + "%");
-            }
-            if (meta.progress_message) {
-                progressParts.push(meta.progress_message);
-            }
-            stateTextEl.textContent = progressParts.length ? progressParts.join(" · ") : "0%";
-            applyStateBadge(state);
-
-            if (traceSummaryEl) {
-                traceSummaryEl.textContent = meta.stop_requested
-                    ? "stop_requested=true"
-                    : (meta.progress_message || "no trace message");
+            if (isCompleted) {
+                stateEl.style.display = "none";
+            } else {
+                stateEl.style.display = "";
+                const parts = [state];
+                if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
+                    parts.push(Math.round(meta.progress_percentage) + "%");
+                }
+                if (meta.progress_message) {
+                    parts.push(meta.progress_message);
+                }
+                stateTextEl.textContent = parts.join(" · ");
             }
 
             const canRetry = state === "failed" || !!meta.stop_requested;

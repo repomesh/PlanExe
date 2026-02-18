@@ -3,7 +3,7 @@
 {% block head %}
 <style>
     .form-signin {
-        max-width: 330px;
+        max-width: 420px;
         padding: 15px;
         margin: 0 auto;
     }
@@ -34,6 +34,27 @@
         border-top-left-radius: 0;
         border-top-right-radius: 0;
     }
+    .admin-login-box {
+        max-width: 420px;
+        margin: 28px auto 0 auto;
+        text-align: center;
+    }
+    .admin-login-box summary {
+        cursor: pointer;
+        font-weight: 500;
+        color: var(--color-text-secondary);
+        outline: none;
+        user-select: none;
+        font-size: 0.85rem;
+        list-style: none;
+    }
+    .admin-login-box summary::-webkit-details-marker {
+        display: none;
+    }
+    .admin-login-form {
+        margin-top: 10px;
+        text-align: left;
+    }
 </style>
 {% endblock %}
 {% block content %}
@@ -62,15 +83,15 @@
     </div>
     {% endif %}
 
-    <div class="form-signin" style="margin-top: 16px;">
-        <h4>Or sign in with username and password</h4>
-        <form method="POST">
+    <details class="admin-login-box">
+        <summary>Admin login</summary>
+        <form method="POST" class="admin-login-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <label for="username" class="sr-only">Username</label>
-            <input type="text" id="username" name="username" class="form-control" placeholder="Username" required autofocus>
+            <input type="text" id="username" name="username" class="form-control" placeholder="Username" required>
             <label for="password" class="sr-only">Password</label>
             <input type="password" id="password" name="password" class="form-control" placeholder="Password" required style="margin-top: 8px;">
             <button class="btn btn-default btn-block" type="submit" style="margin-top: 10px;">Sign in</button>
         </form>
-    </div>
+    </details>
 {% endblock %}

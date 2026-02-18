@@ -21,12 +21,17 @@
     }
     .plan-meta-panel {
         display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        flex-direction: column;
+        gap: 10px;
         padding: 12px 14px;
         background: var(--color-card-background-secondary);
         flex: 0 0 auto;
+    }
+    .plan-meta-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
     }
     .plan-meta-info {
         min-width: 0;
@@ -64,6 +69,7 @@
         font-weight: 600;
         color: var(--color-text);
         background: var(--color-bg);
+        cursor: pointer;
     }
     .btn-plan-meta:hover {
         color: var(--color-text);
@@ -83,6 +89,68 @@
         font-weight: 600;
         color: var(--color-text-secondary);
         text-transform: capitalize;
+    }
+    .plan-prompt-panel {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg);
+        padding: 10px;
+        min-width: 0;
+    }
+    .plan-prompt-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+    }
+    .plan-prompt-title {
+        margin: 0;
+        font-size: 0.8rem;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+    .plan-prompt-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .btn-plan-prompt {
+        padding: 4px 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg-soft);
+        color: var(--color-text);
+        cursor: pointer;
+    }
+    .btn-plan-prompt:hover {
+        border-color: var(--color-text-secondary);
+    }
+    .btn-plan-prompt:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .plan-prompt-content {
+        margin: 0;
+        padding: 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg-soft);
+        color: var(--color-text);
+        font-size: 0.86rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+        overflow: auto;
+        max-height: 420px;
+        font-family: "SF Mono", "Fira Code", "Consolas", "Liberation Mono", monospace;
+    }
+    .plan-prompt-content.is-collapsed {
+        max-height: 220px;
     }
     .plan-telemetry-panel {
         padding: 8px 12px 10px;
@@ -234,45 +302,58 @@
 
 {% block content %}
 <div class="plan-meta-panel">
-    <div class="plan-meta-info">
-        <p class="plan-meta-title">Plan</p>
-        <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
-        <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
-            Status: <span id="plan-state-text">
-                {% if task.state %}
-                    {{ task.state.name | lower }}
-                {% else %}
-                    pending
-                {% endif %}
-                {% if task.progress_percentage is not none %}
-                    · {{ "%.0f"|format(task.progress_percentage) }}%
-                {% endif %}
-                {% if task.progress_message %}
-                    · {{ task.progress_message }}
-                {% endif %}
-            </span>
-        </p>
+    <div class="plan-meta-top">
+        <div class="plan-meta-info">
+            <p class="plan-meta-title">Plan</p>
+            <p class="plan-meta-sub">id: {{ task.id }}{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
+            <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
+                Status: <span id="plan-state-text">
+                    {% if task.state %}
+                        {{ task.state.name | lower }}
+                    {% else %}
+                        pending
+                    {% endif %}
+                    {% if task.progress_percentage is not none %}
+                        · {{ "%.0f"|format(task.progress_percentage) }}%
+                    {% endif %}
+                    {% if task.progress_message %}
+                        · {{ task.progress_message }}
+                    {% endif %}
+                </span>
+            </p>
+        </div>
+        <div class="plan-meta-actions">
+            <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" value="{{ task.id }}">
+                <button type="submit" class="btn-plan-meta">Retry</button>
+            </form>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
+
+            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="id" value="{{ task.id }}">
+                <button type="submit" class="btn-plan-meta">Stop</button>
+            </form>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
+
+            <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
+
+            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+        </div>
     </div>
-    <div class="plan-meta-actions">
-        <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="id" value="{{ task.id }}">
-            <button type="submit" class="btn-plan-meta">Retry</button>
-        </form>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
 
-        <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="id" value="{{ task.id }}">
-            <button type="submit" class="btn-plan-meta">Stop</button>
-        </form>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
-
-        <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
-
-        <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
-        <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+    <div class="plan-prompt-panel">
+        <div class="plan-prompt-header">
+            <p class="plan-prompt-title">Prompt</p>
+            <div class="plan-prompt-actions">
+                <button type="button" id="copy-prompt-btn" class="btn-plan-prompt">Copy</button>
+                <button type="button" id="toggle-prompt-btn" class="btn-plan-prompt" style="display:none">Expand</button>
+            </div>
+        </div>
+        <pre id="plan-prompt-content" class="plan-prompt-content">{{ task.prompt or '' }}</pre>
     </div>
 </div>
 <div class="plan-telemetry-panel">
@@ -343,6 +424,7 @@
 <script>
     (function () {
         const planId = "{{ task.id }}";
+        const promptText = {{ (task.prompt or '') | tojson }};
         const metaUrl = "{{ url_for('plan_meta') }}?id=" + encodeURIComponent(planId);
         const telemetryUrl = "{{ url_for('plan_telemetry') }}?id=" + encodeURIComponent(planId);
         const stateEl = document.getElementById("plan-state");
@@ -356,6 +438,10 @@
         const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
         let currentPlanState = initialState;
         let copyStatusTimer = null;
+
+        const promptContentEl = document.getElementById("plan-prompt-content");
+        const copyPromptBtn = document.getElementById("copy-prompt-btn");
+        const togglePromptBtn = document.getElementById("toggle-prompt-btn");
 
         function setVisible(id, visible) {
             const el = document.getElementById(id);
@@ -647,6 +733,73 @@
             });
         }
 
+        function initPromptPanel() {
+            if (!promptContentEl || !copyPromptBtn || !togglePromptBtn) {
+                return;
+            }
+
+            const collapsedClass = "is-collapsed";
+            const maxCollapsedHeight = 220;
+            let expanded = false;
+
+            function applyPromptCollapseState() {
+                const needsCollapse = promptContentEl.scrollHeight > maxCollapsedHeight;
+                if (!needsCollapse) {
+                    promptContentEl.classList.remove(collapsedClass);
+                    togglePromptBtn.style.display = "none";
+                    togglePromptBtn.setAttribute("aria-expanded", "true");
+                    return;
+                }
+                promptContentEl.classList.toggle(collapsedClass, !expanded);
+                togglePromptBtn.style.display = "inline-flex";
+                togglePromptBtn.textContent = expanded ? "Collapse" : "Expand";
+                togglePromptBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+            }
+
+            function measureWhenReady() {
+                const run = function () {
+                    window.requestAnimationFrame(applyPromptCollapseState);
+                };
+                if (document.fonts && document.fonts.ready) {
+                    document.fonts.ready.then(run).catch(run);
+                    return;
+                }
+                run();
+            }
+
+            togglePromptBtn.addEventListener("click", function () {
+                expanded = !expanded;
+                applyPromptCollapseState();
+            });
+
+            copyPromptBtn.addEventListener("click", function () {
+                if (copyPromptBtn.disabled) {
+                    return;
+                }
+                copyPromptBtn.disabled = true;
+                copyPromptBtn.textContent = "Copying...";
+                copyText(promptText)
+                    .then(function () {
+                        copyPromptBtn.textContent = "Copied";
+                    })
+                    .catch(function () {
+                        copyPromptBtn.textContent = "Copy failed";
+                    })
+                    .finally(function () {
+                        setTimeout(function () {
+                            copyPromptBtn.textContent = "Copy";
+                            copyPromptBtn.disabled = false;
+                        }, 1200);
+                    });
+            });
+
+            if (document.readyState === "complete") {
+                measureWhenReady();
+            } else {
+                window.addEventListener("load", measureWhenReady, { once: true });
+            }
+        }
+
         updateTelemetryPanel(initialTelemetry, initialState);
         let timer = null;
         function pollMeta() {
@@ -667,6 +820,7 @@
                 });
         }
 
+        initPromptPanel();
         pollMeta();
         timer = setInterval(pollMeta, 10000);
     })();

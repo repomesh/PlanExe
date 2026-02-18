@@ -83,7 +83,7 @@
     </div>
     {% endif %}
 
-    <details class="admin-login-box">
+    <details class="admin-login-box" {% if not oauth_providers %}open{% endif %}>
         <summary>Admin login</summary>
         <form method="POST" class="admin-login-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

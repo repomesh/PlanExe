@@ -7,7 +7,7 @@
         "arguments": {
             "model": "openai/gpt-oss-120b",
             "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
+            "temperature": 1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
@@ -23,7 +23,7 @@
         "arguments": {
             "model": "google/gemini-3-flash-preview",
             "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
+            "temperature": 1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
@@ -37,9 +37,9 @@
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
-            "model": "minimax/minimax-01",
+            "model": "minimax/minimax-m2.5",
             "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
+            "temperature": 1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
@@ -53,9 +53,9 @@
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
-            "model": "qwen/qwq-32b-preview",
+            "model": "qwen/qwen3.5-397b-a17b",
             "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
+            "temperature": 1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,
@@ -71,7 +71,7 @@
         "arguments": {
             "model": "nvidia/nemotron-3-nano-30b-a3b",
             "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 0.1,
+            "temperature": 1,
             "timeout": 60.0,
             "is_function_calling_model": false,
             "is_chat_model": true,

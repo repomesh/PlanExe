@@ -412,65 +412,6 @@
     </div>
     <p class="plan-telemetry-routes" id="telemetry-routes">Routes: Pending...</p>
 </div>
-<div class="plan-trace-panel">
-    <p class="plan-trace-title">Failure Modes &amp; Execution Trace</p>
-    <div class="plan-trace-grid">
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Stage</p>
-            <p class="plan-trace-value" id="trace-stage">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Error type</p>
-            <p class="plan-trace-value" id="trace-error-type">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Retries</p>
-            <p class="plan-trace-value" id="trace-retries">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Provider switch</p>
-            <p class="plan-trace-value" id="trace-provider-switch">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Fallback</p>
-            <p class="plan-trace-value" id="trace-fallback">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Queue → Processing</p>
-            <p class="plan-trace-value" id="trace-queue-time">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">Processing → Terminal</p>
-            <p class="plan-trace-value" id="trace-processing-time">Pending...</p>
-        </div>
-        <div class="plan-trace-item">
-            <p class="plan-trace-label">LLM duration total</p>
-            <p class="plan-trace-value" id="trace-llm-total-time">Pending...</p>
-        </div>
-    </div>
-    <p class="plan-trace-error" id="trace-error-message"></p>
-    <p class="plan-trace-subtitle">Execution Trace</p>
-    <div class="plan-trace-table-wrap">
-        <table class="plan-trace-table">
-            <thead>
-                <tr>
-                    <th>Timestamp</th>
-                    <th>Provider/Model</th>
-                    <th>Duration</th>
-                    <th>Status</th>
-                    <th>Error</th>
-                </tr>
-            </thead>
-            <tbody id="trace-attempts-body">
-                <tr><td colspan="5" class="plan-trace-no-data">Pending...</td></tr>
-            </tbody>
-        </table>
-    </div>
-    <details class="plan-trace-partial" id="trace-partial-wrap" style="display:none">
-        <summary>Partial output (if available)</summary>
-        <pre id="trace-partial-output"></pre>
-    </details>
-</div>
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"

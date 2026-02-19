@@ -1902,13 +1902,25 @@ class MyFlaskApp:
                     if user_id:
                         # Generate a nonce so the user can start a plan from the dashboard
                         nonce = 'DASH_' + str(uuid.uuid4())
-                        recent_tasks = (
-                            TaskItem.query
-                            .filter_by(user_id=str(user_id))
+                        recent_task_rows = (
+                            self.db.session.query(
+                                TaskItem.id,
+                                TaskItem.state,
+                                func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                            )
+                            .filter(TaskItem.user_id == str(user_id))
                             .order_by(TaskItem.timestamp_created.desc())
                             .limit(10)
                             .all()
                         )
+                        recent_tasks = [
+                            SimpleNamespace(
+                                id=str(task.id),
+                                state=task.state if isinstance(task.state, TaskState) else None,
+                                prompt=(task.prompt_preview or "").strip(),
+                            )
+                            for task in recent_task_rows
+                        ]
                         total_tasks_count = (
                             TaskItem.query
                             .filter_by(user_id=str(user_id))

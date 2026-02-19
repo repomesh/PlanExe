@@ -368,22 +368,97 @@
         gap: 12px;
         margin-top: 14px;
     }
-    .new-plan-footer .credit-hint {
-        font-size: 0.8rem;
-        color: var(--color-text-secondary);
-    }
     .new-plan-footer .footer-spacer {
         flex: 1 1 auto;
     }
     .new-plan-footer .model-profile-inline {
         width: auto;
-        min-width: 220px;
-        max-width: 260px;
-        padding: 8px 10px;
+        min-width: 0;
+        max-width: none;
+    }
+    .model-profile-picker {
+        position: relative;
+    }
+    .model-profile-button {
+        width: auto;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 0;
+        padding: 6px 8px;
         border-radius: 8px;
         border: 1px solid var(--color-border);
-        background: var(--color-bg);
+        background: var(--color-bg-soft);
         color: var(--color-text);
+        cursor: pointer;
+        text-align: left;
+    }
+    .model-profile-button:hover {
+        border-color: var(--color-primary);
+    }
+    .model-profile-selected {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+    }
+    .model-profile-title {
+        font-size: 0.82rem;
+        font-weight: 700;
+    }
+    .model-profile-subtitle {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+    }
+    .model-profile-caret {
+        color: var(--color-text);
+        opacity: 0.95;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        flex: 0 0 16px;
+    }
+    .model-profile-caret svg {
+        width: 16px;
+        height: 16px;
+        display: block;
+    }
+    .model-profile-menu {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        width: max-content;
+        min-width: 260px;
+        z-index: 20;
+        background: var(--color-bg);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        box-shadow: 0 8px 24px var(--color-card-shadow);
+        overflow: hidden;
+        display: none;
+    }
+    .model-profile-menu.open {
+        display: block;
+    }
+    .model-profile-option {
+        width: 100%;
+        border: none;
+        border-bottom: 1px solid var(--color-border);
+        background: transparent;
+        color: var(--color-text);
+        text-align: left;
+        padding: 10px 12px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .model-profile-option:last-child {
+        border-bottom: none;
+    }
+    .model-profile-option:hover {
+        background: var(--color-bg-soft);
     }
     .btn-start-plan {
         display: inline-flex;
@@ -484,14 +559,36 @@
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
             <div class="char-count" id="char-count">0 characters</div>
             <div class="new-plan-footer">
-                <span class="credit-hint">Estimated cost: 1-2 credits</span>
+                <div class="model-profile-inline model-profile-picker">
+                    <input type="hidden" name="model_profile" id="model-profile" value="baseline">
+                    <button type="button" id="model-profile-button" class="model-profile-button" aria-haspopup="listbox" aria-expanded="false">
+                        <span class="model-profile-title" id="model-profile-selected-title">Baseline</span>
+                        <span class="model-profile-caret" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </span>
+                    </button>
+                    <div id="model-profile-menu" class="model-profile-menu" role="listbox">
+                        <button type="button" class="model-profile-option" data-value="baseline">
+                            <span class="model-profile-title">Baseline</span>
+                            <span class="model-profile-subtitle">Cheap and fast.</span>
+                        </button>
+                        <button type="button" class="model-profile-option" data-value="premium">
+                            <span class="model-profile-title">Premium</span>
+                            <span class="model-profile-subtitle">Expensive, slow, high quality.</span>
+                        </button>
+                        <button type="button" class="model-profile-option" data-value="frontier">
+                            <span class="model-profile-title">Frontier</span>
+                            <span class="model-profile-subtitle">Most capable models first.</span>
+                        </button>
+                        <button type="button" class="model-profile-option" data-value="custom">
+                            <span class="model-profile-title">Custom</span>
+                            <span class="model-profile-subtitle">Use your own config file.</span>
+                        </button>
+                    </div>
+                </div>
                 <div class="footer-spacer"></div>
-                <select id="model-profile" name="model_profile" class="model-profile-inline">
-                    <option value="baseline" selected>baseline</option>
-                    <option value="premium">premium</option>
-                    <option value="frontier">frontier</option>
-                    <option value="custom">custom</option>
-                </select>
                 <button type="submit" class="btn-start-plan" id="btn-start-plan" {% if not can_create_plan %}disabled{% endif %}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     {% if not can_create_plan %}
@@ -604,6 +701,55 @@
             }
         });
     });
+</script>
+{% endif %}
+{% if user %}
+<script>
+    (function() {
+        var hiddenInput = document.getElementById('model-profile');
+        var button = document.getElementById('model-profile-button');
+        var menu = document.getElementById('model-profile-menu');
+        var titleEl = document.getElementById('model-profile-selected-title');
+
+        if (!hiddenInput || !button || !menu || !titleEl) {
+            return;
+        }
+
+        function closeMenu() {
+            menu.classList.remove('open');
+            button.setAttribute('aria-expanded', 'false');
+        }
+
+        function selectOption(optionEl) {
+            var value = optionEl.getAttribute('data-value') || 'baseline';
+            var nextTitle = optionEl.querySelector('.model-profile-title');
+            hiddenInput.value = value;
+            titleEl.textContent = nextTitle ? nextTitle.textContent : 'Baseline';
+            closeMenu();
+        }
+
+        button.addEventListener('click', function() {
+            var isOpen = menu.classList.contains('open');
+            if (isOpen) {
+                closeMenu();
+            } else {
+                menu.classList.add('open');
+                button.setAttribute('aria-expanded', 'true');
+            }
+        });
+
+        menu.querySelectorAll('.model-profile-option').forEach(function(optionEl) {
+            optionEl.addEventListener('click', function() {
+                selectOption(optionEl);
+            });
+        });
+
+        document.addEventListener('click', function(event) {
+            if (!menu.contains(event.target) && !button.contains(event.target)) {
+                closeMenu();
+            }
+        });
+    })();
 </script>
 {% endif %}
 {% endblock %}

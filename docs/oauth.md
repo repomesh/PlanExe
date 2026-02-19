@@ -88,13 +88,27 @@ Verify what the app is using:
 - Open `https://home.planexe.org/api/oauth-redirect-uri`
 - Confirm `redirect_uri=` matches the URI in Google exactly.
 
-### GitHub (production)
+### GitHub - production
 
 Create OAuth App at [github.com/settings/developers](https://github.com/settings/developers):
 
 - Application name: `PlanExe`
 - Homepage URL: `https://planexe.org/`
 - Authorization callback URL: `https://home.planexe.org/auth/github/callback`
+- Device Flow: off
+
+Set credentials in:
+
+- `PLANEXE_OAUTH_GITHUB_CLIENT_ID`
+- `PLANEXE_OAUTH_GITHUB_CLIENT_SECRET`
+
+### GitHub - localhost
+
+Create OAuth App at [github.com/settings/developers](https://github.com/settings/developers):
+
+- Application name: `PlanExe Localhost`
+- Homepage URL: `http://localhost:5001/`
+- Authorization callback URL: `http://localhost:5001/auth/github/callback`
 - Device Flow: off
 
 Set credentials in:
@@ -170,17 +184,6 @@ Set:
 
 - `PLANEXE_FRONTEND_MULTIUSER_PUBLIC_URL=http://localhost:5001`
 - Google client ID/secret env vars.
-
-### GitHub (localhost)
-
-In [github.com/settings/developers](https://github.com/settings/developers), create a local OAuth app:
-
-- Application name: `PlanExe Localhost`
-- Homepage URL: `http://localhost:5001/`
-- Authorization callback URL: `http://localhost:5001/auth/github/callback`
-- Device Flow: off
-
-Set GitHub client ID/secret env vars.
 
 ## Troubleshooting
 

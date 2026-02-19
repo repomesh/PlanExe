@@ -441,6 +441,16 @@
     .model-profile-menu.open {
         display: block;
     }
+    .model-profile-menu-header {
+        padding: 8px 12px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--color-text-secondary);
+        border-bottom: 1px solid var(--color-border);
+        background: var(--color-bg-soft);
+    }
     .model-profile-option {
         width: 100%;
         border: none;
@@ -561,6 +571,7 @@
                         </span>
                     </button>
                     <div id="model-profile-menu" class="model-profile-menu" role="listbox">
+                        <div class="model-profile-menu-header">Select model profile</div>
                         <button type="button" class="model-profile-option" data-value="baseline">
                             <span class="model-profile-title">Baseline</span>
                             <span class="model-profile-subtitle">Cheap and fast.</span>

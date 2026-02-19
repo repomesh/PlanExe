@@ -1,5 +1,20 @@
 """
 Locate PlanExe config files (.env and llm_config profile files).
+The .env file is optional when environment variables are provided by the host.
+
+Finds config files by checking locations in this order:
+1. Directory from PLANEXE_CONFIG_PATH (must be an absolute directory path).
+2. Current working directory (CWD).
+3. PlanExe project root (three levels above this file).
+
+Usage without PLANEXE_CONFIG_PATH:
+PROMPT> python -m worker_plan_api.planexe_config
+
+Usage with PLANEXE_CONFIG_PATH:
+PROMPT> PLANEXE_CONFIG_PATH='/Users/neoneye/git/PlanExeGroup/PlanExe' python -m worker_plan_api.planexe_config
+
+IDEA: validate the contents of ".env"
+IDEA: validate the contents of profile config files (llm_config*.json)
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,6 +59,12 @@ class PlanExeConfig:
     llm_config_json_path: Optional[Path]
 
     def raise_if_required_files_not_found(self) -> None:
+        """
+        Raises PlanExeConfigError if required configuration files are not found.
+        The .env file is optional and may be provided by the host environment.
+
+        :raises: PlanExeConfigError when required files are missing.
+        """
         missing_files = []
         if self.llm_config_json_path is None:
             missing_files.append(self.llm_config_json_name)
@@ -54,6 +75,7 @@ class PlanExeConfig:
             raise PlanExeConfigError(msg)
         if self.dotenv_path is None:
             logger.info("Optional configuration file '.env' not found; relying on environment variables only.")
+        # If no missing files, method completes silently.
 
     @classmethod
     def load(
@@ -61,6 +83,14 @@ class PlanExeConfig:
         model_profile_override: Optional[ModelProfileEnum | str] = None,
         llm_config_json_name_override: Optional[str] = None,
     ) -> 'PlanExeConfig':
+        """
+        Loads configuration paths by searching predefined locations and resolving
+        the effective model profile / profile config filename.
+
+        :param model_profile_override: Optional explicit profile override.
+        :param llm_config_json_name_override: Optional explicit config filename override.
+        :return: A new PlanExeConfig instance with resolved paths and profile metadata.
+        """
         logger.debug("PlanExeConfig.load() creating a new instance...")
         planexe_config_path = cls.resolve_planexe_config_path()
 
@@ -107,6 +137,12 @@ class PlanExeConfig:
 
     @classmethod
     def resolve_planexe_config_path(cls) -> Optional[Path]:
+        """
+        Resolves and validates PLANEXE_CONFIG_PATH.
+        The value must be an absolute path to an existing directory.
+
+        :return: Path object when valid, otherwise None.
+        """
         path_str = os.environ.get(EnvNameEnum.PLANEXE_CONFIG_PATH.value)
         if path_str is None:
             logger.debug("PLANEXE_CONFIG_PATH is not set")
@@ -133,17 +169,35 @@ class PlanExeConfig:
         planexe_config_path: Optional[Path],
         is_optional: bool = False,
     ) -> Optional[Path]:
+        """
+        Finds a specific configuration file based on a precedence of locations.
+
+        Search order:
+        1. Directory from validated PLANEXE_CONFIG_PATH (if provided and valid).
+        2. Current Working Directory (CWD).
+        3. PlanExe project root.
+
+        :param filename: The name of the file to find (e.g., ".env").
+        :param planexe_config_path: The validated absolute directory path from PLANEXE_CONFIG_PATH.
+        :param is_optional: When True, missing file is logged at INFO instead of WARNING.
+        :return: The Path to the file if found, otherwise None.
+        """
+        # Step 1: Check if PLANEXE_CONFIG_PATH is set and contains the file.
         if planexe_config_path is not None:
             config_file_path = planexe_config_path / filename
             if config_file_path.is_file():
                 logger.debug(f"Found {filename!r} at config_file_path: {config_file_path!r}")
                 return config_file_path
 
+        # Step 2: Check if file exists in current working directory.
         cwd_file_path = Path.cwd() / filename
         if cwd_file_path.is_file():
             logger.debug(f"Found {filename!r} at cwd_file_path: {cwd_file_path!r}")
             return cwd_file_path
 
+        # Step 3: Check if file exists in PlanExe root directory.
+        # This file is at: worker_plan/worker_plan_api/planexe_config.py
+        # So we need 3 .parent calls to reach the PlanExe root.
         root_file_path = Path(__file__).parent.parent.parent / filename
         if root_file_path.is_file():
             logger.debug(f"Found {filename!r} at root_file_path: {root_file_path!r}")

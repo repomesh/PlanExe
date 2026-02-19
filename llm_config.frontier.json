@@ -1,7 +1,7 @@
 {
     "openrouter-paid-z-ai-glm-5": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
-        "priority": 1,
+        "priority": 11,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -17,7 +17,7 @@
     },
     "openrouter-paid-moonshotai-kimi-k2-5": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Jan 27, 2026. 262,144 context. $0.23/M input tokens. $3.00/M output tokens.",
-        "priority": 2,
+        "priority": 111,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -33,7 +33,7 @@
     },
     "openrouter-paid-qwen-qwen3-5-397b-a17b": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 16, 2026. 262,144 context. Pricing: $0.60/M input tokens. $3.60/M output tokens.",
-        "priority": 3,
+        "priority": 1,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {

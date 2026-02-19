@@ -1,7 +1,7 @@
 {
     "openrouter-paid-openai-gpt-oss-120b": {
         "comment": "Strict-priority primary model. Paid OpenRouter route to OpenAI GPT-OSS-120B. Created Jul 18, 2024. 128,000 context. $0.15/M input tokens. $0.60/M output tokens.",
-        "priority": 1,
+        "priority": 11,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
@@ -15,13 +15,13 @@
             "max_retries": 5
         }
     },
-    "openrouter-paid-gemini-3-flash-preview": {
+    "openrouter-paid-google/gemini-2.5-flash-lite-preview-09-2025": {
         "comment": "last resort fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
         "priority": 12,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {
-            "model": "google/gemini-3-flash-preview",
+            "model": "google/gemini-2.5-flash-lite-preview-09-2025",
             "api_key": "${OPENROUTER_API_KEY}",
             "temperature": 1,
             "timeout": 60.0,
@@ -49,7 +49,7 @@
     },
     "openrouter-paid-qwen3-coder-next": {
         "comment": "Code-focused fallback sharing priority tier 3, targeting Qwen3 Coder Next via OpenRouter.",
-        "priority": 2,
+        "priority": 1,
         "luigi_workers": 4,
         "class": "OpenRouter",
         "arguments": {

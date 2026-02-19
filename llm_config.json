@@ -28,7 +28,8 @@
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/openai/gpt-oss-20b"
     },
     "openrouter-paid-nvidia-nemotron-3-nano-30b-a3b": {
         "comment": "This is very fast. It's paid, so check the pricing before use. Created Dec 14, 2025. 262,144 context. $0.06/M input tokens. $0.24/M output tokens. This is a reasoning model, and uses more tokens than LLMs.",
@@ -43,12 +44,14 @@
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/nvidia/nemotron-3-nano-30b-a3b"
     },
     "openrouter-paid-gemini-2.0-flash-001": {
         "comment": "This is very fast. It's paid, so check the pricing before use. Created Feb 25, 2025. 1,048,576 context. $0.075/M input tokens. $0.30/M output tokens.",
         "priority": 1,
         "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/google/gemini-2.0-flash-001",
         "class": "OpenRouter",
         "arguments": {
             "model": "google/gemini-2.0-flash-001",
@@ -75,7 +78,8 @@
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/openai/gpt-4o-mini"
     },
     "openrouter-paid-qwen3-30b-a3b": {
         "comment": "This is slow. It's paid, so check the pricing before use. Created Apr 28, 2025. 40,960 context. $0.08/M input tokens. $0.29/M output tokens.",
@@ -91,7 +95,8 @@
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/qwen/qwen3-30b-a3b"
     },
     "alibabacloud-paid-qwen-flash-2025-07-28": {
         "comment": "This is slow. It's paid, so check the pricing before use. Snapshot from 2025-07-28. 1,000,000 context. $0.05/M input tokens. $0.40/M output tokens.",

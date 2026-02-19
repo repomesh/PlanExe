@@ -13,7 +13,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/z-ai/glm-4.7-flash"
     },
     "openrouter-paid-stepfun-step-3-5-flash": {
         "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
@@ -29,7 +30,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/stepfun/step-3.5-flash"
     },
     "openrouter-google/gemini-2.5-flash-lite-preview-09-2025": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
@@ -45,7 +47,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/google/gemini-2.5-flash-lite-preview-09-2025"
     },
     "openrouter-paid-qwen-qwen3-5-397b-a17b": {
         "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 16, 2026. 262,144 context. Pricing varies by context length: starting at $0.15/M input, $1.00/M output; highest tier $0.60/M input, $3.60/M output (when input > 128k tokens).",
@@ -61,7 +64,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/qwen/qwen3.5-397b-a17b"
     },
     "openai-paid-gpt-5-mini": {
         "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. Last priority fallback.",

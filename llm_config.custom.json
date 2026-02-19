@@ -13,7 +13,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/openai/gpt-oss-120b"
     },
     "openrouter-paid-google/gemini-2.5-flash-lite-preview-09-2025": {
         "comment": "last resort fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
@@ -29,7 +30,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/google/gemini-2.5-flash-lite-preview-09-2025"
     },
     "openrouter-paid-minimax-m2.5": {
         "comment": "Tertiary option. Paid OpenRouter route to MiniMax M2.5 for cost-aware reasoning depth.",
@@ -45,7 +47,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/minimax/minimax-m2.5"
     },
     "openrouter-paid-qwen3-coder-next": {
         "comment": "Code-focused fallback sharing priority tier 3, targeting Qwen3 Coder Next via OpenRouter.",
@@ -61,7 +64,8 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/qwen/qwen3.5-397b-a17b"
     },
     "openrouter-paid-nvidia-nemotron-3-nano-30b-a3b": {
         "comment": "Last-resort fallback. Paid OpenRouter access to NVIDIA Nemotron 3 Nano 30B A3B for extended context needs.",
@@ -77,6 +81,7 @@
             "is_chat_model": true,
             "max_tokens": 32000,
             "max_retries": 5
-        }
+        },
+        "model_info_url": "https://openrouter.ai/nvidia/nemotron-3-nano-30b-a3b"
     }
 }

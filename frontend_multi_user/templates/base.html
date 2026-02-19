@@ -242,6 +242,7 @@
                 </a>
                 {% if current_user_name %}
                     <a href="{{ url_for('plan') }}" class="{% if request.endpoint == 'plan' and not request.args.get('id') %}nav-active{% endif %}">Plans</a>
+                    <a href="{{ url_for('models') }}" class="{% if request.endpoint == 'models' %}nav-active{% endif %}">Models</a>
                 {% endif %}
                 <div class="site-nav-spacer"></div>
                 {% if current_user_name %}

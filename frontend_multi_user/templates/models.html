@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Models - PlanExe{% endblock %}
+
+{% block content %}
+<section class="content-card">
+    <h1 style="margin-top:0;">Models</h1>
+    <p style="color:#6b7280; margin-bottom:16px;">Inspect models by profile.</p>
+
+    <label for="model-profile" style="display:block; margin-bottom:8px; font-size:0.9rem; color:#6b7280;">Model profile</label>
+    <select id="model-profile" style="margin-bottom:12px; width:100%; max-width:260px; padding:8px; border-radius:8px;">
+        <option value="baseline" selected>baseline</option>
+        <option value="premium">premium</option>
+        <option value="frontier">frontier</option>
+        <option value="custom">custom</option>
+    </select>
+
+    <div id="model-profile-models" style="font-size:0.95rem; color:#374151; line-height:1.5;"></div>
+</section>
+
+<script>
+    var profileToModels = {{ model_profile_models_json | safe }};
+    var profileSelect = document.getElementById('model-profile');
+    var profileModelsDiv = document.getElementById('model-profile-models');
+
+    function renderProfileModels() {
+        if (!profileSelect || !profileModelsDiv) {
+            return;
+        }
+        var profile = profileSelect.value || 'baseline';
+        var models = profileToModels[profile] || [];
+        if (models.length === 0) {
+            profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong> none found';
+            return;
+        }
+        var lines = models.map(function(modelName) {
+            return '<li><code>' + modelName + '</code></li>';
+        }).join('');
+        profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong><ul style="margin:8px 0 0 18px;">' + lines + '</ul>';
+    }
+
+    profileSelect.addEventListener('change', renderProfileModels);
+    renderProfileModels();
+</script>
+{% endblock %}

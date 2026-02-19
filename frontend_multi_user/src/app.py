@@ -1982,6 +1982,13 @@ class MyFlaskApp:
                 nonce=nonce,
                 user_id=user_id,
                 example_prompts=example_prompts,
+            )
+
+        @self.app.route('/models')
+        @login_required
+        def models():
+            return render_template(
+                'models.html',
                 model_profile_models_json=json.dumps(_profile_model_name_map()),
             )
 

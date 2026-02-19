@@ -68,7 +68,7 @@
     .models-table {
         width: 100%;
         border-collapse: collapse;
-        table-layout: fixed;
+        table-layout: auto;
         font-size: 0.84rem;
     }
     .models-table th {
@@ -97,7 +97,8 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .models-col-prio {
-        width: 5%;
+        width: 1%;
+        max-width: 40px;
         text-align: right;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         white-space: nowrap;
@@ -110,8 +111,16 @@
         width: 40%;
     }
     .models-col-info {
-        width: 12%;
+        width: 1%;
+        max-width: 40px;
         white-space: nowrap;
+    }
+    th.models-col-prio,
+    td.models-col-prio,
+    th.models-col-info,
+    td.models-col-info {
+        padding-left: 6px;
+        padding-right: 6px;
     }
     .models-col-info a {
         text-decoration: none;

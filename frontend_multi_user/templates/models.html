@@ -104,8 +104,40 @@
         white-space: nowrap;
     }
     .models-col-model {
-        width: 21%;
+        width: 18%;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .models-col-pricing {
+        width: 8%;
+        white-space: nowrap;
+    }
+    .pricing-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 46px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--color-border);
+        background: var(--color-bg-soft);
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .pricing-badge.pricing-free {
+        color: #0d6832;
+        border-color: #84d7a7;
+        background: #eaf9f0;
+    }
+    .pricing-badge.pricing-paid {
+        color: #7a3412;
+        border-color: #fdba74;
+        background: #fff4e8;
+    }
+    .pricing-badge.pricing-unknown {
+        color: var(--color-text-secondary);
     }
     .models-col-comment {
         width: 40%;
@@ -157,6 +189,7 @@
                     <th class="models-col-prio">Prio</th>
                     <th class="models-col-key">Key</th>
                     <th class="models-col-model">arguments.model</th>
+                    <th class="models-col-pricing">Pricing</th>
                     <th class="models-col-comment">Comment</th>
                     <th class="models-col-info">Info</th>
                 </tr>
@@ -167,6 +200,14 @@
                     <td class="models-col-prio">{{ model_row.prio or "-" }}</td>
                     <td class="models-col-key">{{ model_row.key }}</td>
                     <td class="models-col-model">{{ model_row.model or "-" }}</td>
+                    <td class="models-col-pricing">
+                        {% set pricing_value = (model_row.pricing_kind or "").lower() %}
+                        {% if pricing_value in ["free", "paid"] %}
+                        <span class="pricing-badge pricing-{{ pricing_value }}">{{ pricing_value }}</span>
+                        {% else %}
+                        <span class="pricing-badge pricing-unknown">unknown</span>
+                        {% endif %}
+                    </td>
                     <td class="models-col-comment">{{ model_row.comment or "-" }}</td>
                     <td class="models-col-info">
                         {% if model_row.model_info_url %}

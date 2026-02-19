@@ -164,6 +164,7 @@ def _profile_model_rows_map() -> Dict[str, list[dict[str, str]]]:
             comment = ""
             prio = ""
             model_info_url = ""
+            pricing_kind = ""
             if isinstance(model_data, dict):
                 args = model_data.get("arguments")
                 if isinstance(args, dict) and isinstance(args.get("model"), str):
@@ -176,10 +177,13 @@ def _profile_model_rows_map() -> Dict[str, list[dict[str, str]]]:
                     prio = str(model_data["priority"])
                 if isinstance(model_data.get("model_info_url"), str):
                     model_info_url = model_data["model_info_url"]
+                if isinstance(model_data.get("pricing_kind"), str):
+                    pricing_kind = model_data["pricing_kind"]
             rows.append(
                 {
                     "key": model_key,
                     "prio": prio,
+                    "pricing_kind": pricing_kind,
                     "model": model_name,
                     "comment": comment,
                     "model_info_url": model_info_url,

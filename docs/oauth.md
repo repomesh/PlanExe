@@ -75,18 +75,32 @@ Provider naming is mostly the same:
 
 Use your real public domain, for example `https://home.planexe.org`.
 
-### Google (production)
+### Google - production
 
-1. In Google Cloud Console, create OAuth client type `Web application`.
-2. Add authorized redirect URI:
-   `https://home.planexe.org/auth/google/callback`
-3. Set client ID/secret in:
-   `PLANEXE_OAUTH_GOOGLE_CLIENT_ID` and `PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET`.
+In Google OAuth client (`Web application`), add:
+
+- `https://home.planexe.org/auth/google/callback`
+
+Set:
+
+- `PLANEXE_OAUTH_GOOGLE_CLIENT_ID`
+- `PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET`
 
 Verify what the app is using:
 
 - Open `https://home.planexe.org/api/oauth-redirect-uri`
 - Confirm `redirect_uri=` matches the URI in Google exactly.
+
+### Google - localhost
+
+In Google OAuth client (`Web application`), add:
+
+- `http://localhost:5001/auth/google/callback`
+
+Set:
+
+- `PLANEXE_OAUTH_GOOGLE_CLIENT_ID`
+- `PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET`
 
 ### GitHub - production
 
@@ -174,20 +188,10 @@ Discord flow:
 
 Use `http://localhost:5001` as public URL.
 
-### Google (localhost)
-
-In Google OAuth client (`Web application`), add:
-
-- `http://localhost:5001/auth/google/callback`
-
-Set:
-
-- `PLANEXE_FRONTEND_MULTIUSER_PUBLIC_URL=http://localhost:5001`
-- Google client ID/secret env vars.
-
 ## Troubleshooting
 
-- `404` on `/login/<provider>`: provider env vars are missing (client ID/secret).
+- `404` on `/login/<provider>`: provider env vars are missing.
+  Required pairs: `PLANEXE_OAUTH_GOOGLE_CLIENT_ID`/`PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET`, `PLANEXE_OAUTH_GITHUB_CLIENT_ID`/`PLANEXE_OAUTH_GITHUB_CLIENT_SECRET`, `PLANEXE_OAUTH_DISCORD_CLIENT_ID`/`PLANEXE_OAUTH_DISCORD_CLIENT_SECRET`.
 - Redirect mismatch errors: callback URI in provider console does not exactly match PlanExe callback.
 - Login does not persist after redirect: `PLANEXE_FRONTEND_MULTIUSER_SECRET_KEY` is missing or changed.
 - Browser says insecure cookie on localhost over HTTP: expected in local dev; production should use HTTPS.

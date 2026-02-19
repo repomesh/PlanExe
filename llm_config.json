@@ -105,7 +105,7 @@
         "pricing_kind": "paid"
     },
     "alibabacloud-paid-qwen-flash-2025-07-28": {
-        "comment": "This is slow. Snapshot from 2025-07-28. 1,000,000 context. $0.05/M input tokens. $0.40/M output tokens.",
+        "comment": "This is slow. Requires a DASHSCOPE_API_KEY created on the Alibaba Cloud website. Snapshot from 2025-07-28. 1,000,000 context. $0.05/M input tokens. $0.40/M output tokens.",
         "luigi_workers": 4,
         "class": "OpenAILike",
         "arguments": {
@@ -122,7 +122,7 @@
         "pricing_kind": "paid"
     },
     "ollama-llama3.1": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
+        "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
         "class": "Ollama",
         "arguments": {
@@ -134,7 +134,7 @@
         "pricing_kind": "free"
     },
     "docker-ollama-llama3.1": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
+        "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
         "luigi_workers": 1,
         "class": "Ollama",
         "arguments": {
@@ -147,7 +147,7 @@
         "pricing_kind": "free"
     },
     "ollama-qwen2.5-coder": {
-        "comment": "This runs on your own computer. It's free. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
+        "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
         "class": "Ollama",
         "arguments": {
@@ -159,7 +159,7 @@
         "pricing_kind": "free"
     },
     "lmstudio-qwen2.5-7b-instruct-1m": {
-        "comment": "This runs on your own computer. It's free. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in .venv on the host computer. No use of docker.",
+        "comment": "This runs on your own computer. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
         "class": "LMStudio",
         "arguments": {
@@ -172,7 +172,7 @@
         "pricing_kind": "free"
     },
     "docker-lmstudio-qwen2.5-7b-instruct-1m": {
-        "comment": "This runs on your own computer. It's free. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
+        "comment": "This runs on your own computer. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
         "luigi_workers": 1,
         "class": "LMStudio",
         "arguments": {

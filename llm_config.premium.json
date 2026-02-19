@@ -72,7 +72,7 @@
         "pricing_kind": "paid"
     },
     "openai-paid-gpt-5-mini": {
-        "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. Last priority fallback.",
+        "comment": "This is slow. Requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan.",
         "priority": 5,
         "luigi_workers": 4,
         "class": "OpenAI",

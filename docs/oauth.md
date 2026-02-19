@@ -102,12 +102,17 @@ Set credentials in:
 - `PLANEXE_OAUTH_GITHUB_CLIENT_ID`
 - `PLANEXE_OAUTH_GITHUB_CLIENT_SECRET`
 
-### Discord (production)
+### Discord - production
 
 Create an application in the Discord developer portal:
 [discord.com/developers/applications](https://discord.com/developers/applications)
 
-Under OAuth2 settings, add redirect URI:
+Name it `PlanExe`.
+
+Open the OAuth2 page for your app (example):
+`https://discord.com/developers/applications/1473810102153773206/oauth2`
+
+Under OAuth2 settings, add this redirect:
 
 - `https://home.planexe.org/auth/discord/callback`
 
@@ -115,6 +120,41 @@ Set credentials in:
 
 - `PLANEXE_OAUTH_DISCORD_CLIENT_ID`
 - `PLANEXE_OAUTH_DISCORD_CLIENT_SECRET`
+
+Discord flow:
+
+1. Open your app's OAuth2 page.
+2. Copy `Client ID`.
+3. Reset and copy `Client Secret`.
+4. Under Redirects, add:
+   `https://home.planexe.org/auth/discord/callback`
+
+### Discord - localhost
+
+Create an application in the Discord developer portal:
+[discord.com/developers/applications](https://discord.com/developers/applications)
+
+Name it `PlanExe Localhost`.
+
+Open the OAuth2 page for your app (example):
+`https://discord.com/developers/applications/1473810102153773206/oauth2`
+
+Under OAuth2 settings, add this redirect:
+
+- `http://localhost:5001/auth/discord/callback`
+
+Set credentials in:
+
+- `PLANEXE_OAUTH_DISCORD_CLIENT_ID`
+- `PLANEXE_OAUTH_DISCORD_CLIENT_SECRET`
+
+Discord flow:
+
+1. Open your app's OAuth2 page.
+2. Copy `Client ID`.
+3. Reset and copy `Client Secret`.
+4. Under Redirects, add:
+   `http://localhost:5001/auth/discord/callback`
 
 ## Localhost setup (development)
 
@@ -141,23 +181,6 @@ In [github.com/settings/developers](https://github.com/settings/developers), cre
 - Device Flow: off
 
 Set GitHub client ID/secret env vars.
-
-### Discord (localhost)
-
-In Discord application OAuth2 settings, add:
-
-- `http://localhost:5001/auth/discord/callback`
-
-Set Discord client ID/secret env vars.
-
-Discord-specific flow (localhost):
-
-1. Open your app's OAuth2 page, for example:
-   `https://discord.com/developers/applications/1234567890/oauth2`
-2. Copy `Client ID`.
-3. Reset and copy `Client Secret`.
-4. Under Redirects, add:
-   `http://localhost:5001/auth/discord/callback`
 
 ## Troubleshooting
 

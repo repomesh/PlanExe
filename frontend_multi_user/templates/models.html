@@ -93,7 +93,7 @@
         border-bottom: none;
     }
     .models-col-key {
-        width: 24%;
+        width: 22%;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .models-col-prio {
@@ -103,11 +103,23 @@
         white-space: nowrap;
     }
     .models-col-model {
-        width: 23%;
+        width: 21%;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .models-col-comment {
-        width: 45%;
+        width: 40%;
+    }
+    .models-col-info {
+        width: 12%;
+        white-space: nowrap;
+    }
+    .models-col-info a {
+        text-decoration: none;
+        color: var(--color-primary);
+        font-weight: 600;
+    }
+    .models-col-info a:hover {
+        text-decoration: underline;
     }
 </style>
 {% endblock %}
@@ -137,6 +149,7 @@
                     <th class="models-col-key">Key</th>
                     <th class="models-col-model">arguments.model</th>
                     <th class="models-col-comment">Comment</th>
+                    <th class="models-col-info">Info</th>
                 </tr>
             </thead>
             <tbody>
@@ -146,6 +159,13 @@
                     <td class="models-col-key">{{ model_row.key }}</td>
                     <td class="models-col-model">{{ model_row.model or "-" }}</td>
                     <td class="models-col-comment">{{ model_row.comment or "-" }}</td>
+                    <td class="models-col-info">
+                        {% if model_row.model_info_url %}
+                        <a href="{{ model_row.model_info_url }}" target="_blank" rel="noopener noreferrer">Open</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
                 </tr>
             {% endfor %}
             </tbody>

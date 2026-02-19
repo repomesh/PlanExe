@@ -751,6 +751,18 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                 )
 
     with gr.Tab("Settings"):
+        speedvsdetail_items = [
+            ("Ping", SpeedVsDetailEnum.PING_LLM),
+            ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
+            ("Fast, but few details", SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS),
+        ]
+        speedvsdetail_radio = gr.Radio(
+            speedvsdetail_items,
+            value=SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
+            label="Speed vs Detail",
+            interactive=True 
+        )
+
         if CONFIG.visible_llm_info:
             if llm_info.ollama_status == OllamaStatus.ollama_not_running:
                 gr.Markdown("**Ollama is not running**, so Ollama models are unavailable. Please start Ollama to use them.")
@@ -795,16 +807,6 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
         )
         profile_models_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
 
-        speedvsdetail_items = [
-            ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
-            ("Fast, but few details", SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS),
-        ]
-        speedvsdetail_radio = gr.Radio(
-            speedvsdetail_items,
-            value=SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
-            label="Speed vs Detail",
-            interactive=True 
-        )
         openrouter_api_key_text = gr.Textbox(
             label="OpenRouter API Key",
             type="password",

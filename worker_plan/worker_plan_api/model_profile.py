@@ -28,7 +28,8 @@ ENV_PLANEXE_LLM_CONFIG_NAME_LEGACY = "PLANEXE_LLM_CONFIG_NAME"
 # - must be a filename (no path separators, no absolute path)
 # - must start with "llm_config"
 # - must end with ".json"
-_FILENAME_PATTERN = re.compile(r"^llm_config(?:\.[a-z0-9][a-z0-9._-]*)?\.json$")
+# - optional suffix after "llm_config." must be at least 3 chars and only [a-z0-9_]
+_FILENAME_PATTERN = re.compile(r"^llm_config(?:\.[a-z0-9_]{3,})?\.json$")
 
 
 def normalize_model_profile(raw_value: Optional[str]) -> ModelProfileEnum:

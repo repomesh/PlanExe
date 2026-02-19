@@ -17,6 +17,16 @@ class TestModelProfile(unittest.TestCase):
     def test_filename_validation(self):
         self.assertTrue(is_valid_llm_config_filename("llm_config.json"))
         self.assertTrue(is_valid_llm_config_filename("llm_config.premium.json"))
+        self.assertTrue(is_valid_llm_config_filename("llm_config.hello_world.json"))
+        self.assertTrue(is_valid_llm_config_filename("llm_config.123.json"))
+        self.assertTrue(is_valid_llm_config_filename("llm_config.1234.json"))
+
+        self.assertFalse(is_valid_llm_config_filename("llm_config.hello-world.json"))
+        self.assertFalse(is_valid_llm_config_filename("llm_config..json"))
+        self.assertFalse(is_valid_llm_config_filename("llm_config...json"))
+        self.assertFalse(is_valid_llm_config_filename("llm_config.1.json"))
+        self.assertFalse(is_valid_llm_config_filename("llm_config.12.json"))
+
         self.assertFalse(is_valid_llm_config_filename("../llm_config.json"))
         self.assertFalse(is_valid_llm_config_filename("/tmp/llm_config.json"))
 

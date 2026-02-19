@@ -377,7 +377,7 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
     profile_markdown = _profile_models_markdown(model_profile)
-    return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, profile_markdown, browser_state, session_state
+    return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", browser_state, session_state
 
 def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state: SessionState):
     try:
@@ -394,7 +394,7 @@ def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, m
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
     profile_markdown = _profile_models_markdown(model_profile)
-    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, profile_markdown, session_state
+    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", session_state
 
 def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_state: SessionState):
     """
@@ -738,7 +738,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                     stop_btn = gr.Button("Stop")
                     retry_btn = gr.Button("Retry")
                     open_dir_btn = gr.Button("Open Output Dir", visible=OPEN_DIR_BUTTON_INITIAL_VISIBILITY)
-                active_config_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
+                active_config_markdown = gr.Markdown("", visible=False)
 
                 output_markdown = gr.Markdown("Output will appear here...")
                 status_markdown = gr.Markdown("Status messages will appear here...")

@@ -390,6 +390,12 @@
             <dl class="profile-meta">
                 <dt>Pricing</dt>
                 <dd>1 credit = ${{ "%.2f"|format((credit_price_cents or 100) / 100.0) }}</dd>
+                <dt>Signed in with</dt>
+                <dd>{{ signed_in_with }}</dd>
+                {% if linked_sign_in_methods %}
+                <dt>Linked sign-ins</dt>
+                <dd>{{ linked_sign_in_methods | join(", ") }}</dd>
+                {% endif %}
                 {% if user.created_at %}
                 <dt>Member since</dt>
                 <dd>{{ user.created_at.strftime("%b %d, %Y") }}</dd>

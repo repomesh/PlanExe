@@ -70,7 +70,7 @@
     <div class="form-signin">
         <h4>Sign in with</h4>
         {% for provider in oauth_providers %}
-            <a class="btn btn-primary btn-block" href="/login/{{ provider }}" style="margin-bottom: 8px;">{{ provider|capitalize }}</a>
+            <a class="btn btn-primary btn-block" href="/login/{{ provider }}" style="margin-bottom: 8px;">{{ oauth_provider_labels.get(provider, provider|capitalize) }}</a>
         {% endfor %}
     </div>
     {% endif %}

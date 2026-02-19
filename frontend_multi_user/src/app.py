@@ -66,6 +66,15 @@ DEMO_FORM_RUN_PROMPT_UUIDS = [
     "e6ddd953-939f-4d15-89ec-fd3988f79123"
 ]
 
+AUTH_PROVIDER_LABELS = {
+    "google": "Google",
+    "github": "GitHub",
+    "discord": "Discord",
+    "password": "Password",
+    "telegram": "Telegram",
+    "open_access": "Open access",
+}
+
 def build_postgres_uri_from_env(env: Dict[str, str]) -> Tuple[str, Dict[str, str]]:
     """Construct a SQLAlchemy URI for Postgres using environment variables."""
     host = env.get("PLANEXE_FRONTEND_MULTIUSER_DB_HOST") or env.get("PLANEXE_POSTGRES_HOST") or "database_postgres"
@@ -630,6 +639,14 @@ class MyFlaskApp:
 
     def _oauth_redirect_url(self, provider: str) -> str:
         return f"{self.public_base_url}/auth/{provider}/callback"
+
+    def _auth_provider_label(self, provider: Optional[str]) -> str:
+        if not provider:
+            return "Unknown"
+        provider_key = str(provider).strip().lower()
+        if not provider_key:
+            return "Unknown"
+        return AUTH_PROVIDER_LABELS.get(provider_key, provider_key.replace("_", " ").title())
 
     def _get_user_from_provider(self, provider: str, token: dict[str, Any]) -> dict[str, Any]:
         if provider == "google":
@@ -1722,6 +1739,7 @@ class MyFlaskApp:
         def _auto_login_open_access():
             """In open access mode, auto-login as admin so @login_required routes work."""
             if self.open_access and not current_user.is_authenticated and not session.get("open_access_logged_out"):
+                session["auth_provider"] = "open_access"
                 login_user(User(self.admin_username, is_admin=True))
 
         @self.app.after_request
@@ -1937,6 +1955,7 @@ class MyFlaskApp:
                 password = request.form.get('password')
                 if username == self.admin_username and password == self.admin_password:
                     session.pop("open_access_logged_out", None)
+                    session["auth_provider"] = "password"
                     user = User(self.admin_username, is_admin=True)
                     login_user(user)
                     return redirect(url_for('index'))
@@ -1944,6 +1963,7 @@ class MyFlaskApp:
             return render_template(
                 'login.html',
                 oauth_providers=self.oauth_providers,
+                oauth_provider_labels=AUTH_PROVIDER_LABELS,
                 telegram_enabled=bool(os.environ.get("PLANEXE_TELEGRAM_BOT_TOKEN")),
                 telegram_login_url=os.environ.get("PLANEXE_TELEGRAM_LOGIN_URL") or None,
             )
@@ -1989,6 +2009,7 @@ class MyFlaskApp:
 
                 user = self._upsert_user_from_oauth(provider, profile)
                 session.pop("open_access_logged_out", None)
+                session["auth_provider"] = provider
                 login_user(User(user.id, is_admin=user.is_admin))
                 new_api_key = self._get_or_create_api_key(user)
                 if new_api_key:
@@ -2000,6 +2021,7 @@ class MyFlaskApp:
                 return render_template('login.html',
                     error=f"Authentication failed. Please try again or contact support.",
                     oauth_providers=self.oauth_providers,
+                    oauth_provider_labels=AUTH_PROVIDER_LABELS,
                     telegram_enabled=bool(os.environ.get("PLANEXE_TELEGRAM_BOT_TOKEN")),
                     telegram_login_url=os.environ.get("PLANEXE_TELEGRAM_LOGIN_URL") or None,
                 ), 401
@@ -2010,6 +2032,7 @@ class MyFlaskApp:
             # In open-access mode, remember explicit logout in this browser session.
             # Otherwise before_request auto-login would sign admin back in immediately.
             session["open_access_logged_out"] = True
+            session.pop("auth_provider", None)
             logout_user()
             return redirect(url_for('index'))
 
@@ -2075,6 +2098,24 @@ class MyFlaskApp:
                     "currency": (row.currency or "usd").upper(),
                     "payment_id": row.provider_payment_id or "",
                 })
+
+            linked_provider_rows = (
+                UserProvider.query
+                .filter_by(user_id=user.id)
+                .order_by(UserProvider.last_login_at.desc())
+                .all()
+            )
+            linked_sign_in_methods: list[str] = []
+            for row in linked_provider_rows:
+                label = self._auth_provider_label(row.provider)
+                if label not in linked_sign_in_methods:
+                    linked_sign_in_methods.append(label)
+
+            auth_provider_session = session.get("auth_provider")
+            signed_in_with = self._auth_provider_label(auth_provider_session)
+            if signed_in_with == "Unknown" and linked_sign_in_methods:
+                signed_in_with = linked_sign_in_methods[0]
+
             return render_template(
                 'account.html',
                 admin_mode=False,
@@ -2084,6 +2125,8 @@ class MyFlaskApp:
                 active_key=active_key,
                 new_api_key=new_api_key,
                 recent_payments=recent_payments,
+                signed_in_with=signed_in_with,
+                linked_sign_in_methods=linked_sign_in_methods,
                 stripe_enabled=bool(os.environ.get("PLANEXE_STRIPE_SECRET_KEY")),
                 telegram_enabled=bool(os.environ.get("PLANEXE_TELEGRAM_BOT_TOKEN")),
             )

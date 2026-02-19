@@ -2826,6 +2826,8 @@ class MyFlaskApp:
             telemetry = self._build_plan_telemetry(task, include_raw=False)
             failure_trace = self._build_plan_failure_trace(task)
             preferred_plan_view_mode = self._get_plan_view_mode_preference()
+            parameters = task.parameters if isinstance(task.parameters, dict) else {}
+            selected_model_profile = normalize_model_profile(parameters.get("model_profile")).value
             return render_template(
                 "plan_iframe.html",
                 run_id=run_id,
@@ -2833,6 +2835,7 @@ class MyFlaskApp:
                 telemetry=telemetry,
                 failure_trace=failure_trace,
                 preferred_plan_view_mode=preferred_plan_view_mode,
+                selected_model_profile=selected_model_profile,
             )
 
         @self.app.route('/plan/download/report')
@@ -2912,6 +2915,12 @@ class MyFlaskApp:
 
             if task.state == TaskState.processing and not bool(task.stop_requested):
                 return jsonify({"error": "Task is currently processing. Stop it first before retrying."}), 409
+
+            raw_profile = request.form.get("model_profile")
+            selected_model_profile = normalize_model_profile(raw_profile).value
+            parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+            parameters["model_profile"] = selected_model_profile
+            task.parameters = parameters
 
             task.state = TaskState.pending
             task.stop_requested = False

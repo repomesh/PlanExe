@@ -107,6 +107,26 @@
     }
     .plan-action-form {
         margin: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .plan-action-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        border: 1px solid var(--color-border);
+        border-radius: calc(var(--radius) + 2px);
+        background: var(--color-bg-soft);
+    }
+    .plan-action-model-profile {
+        padding: 7px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-size: 0.8rem;
     }
     .btn-plan-meta {
         display: inline-flex;
@@ -508,7 +528,15 @@
             <form method="POST" action="{{ url_for('plan_retry') }}" class="plan-action-form" id="retry-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="id" value="{{ task.id }}">
-                <button type="submit" class="btn-plan-meta">Retry</button>
+                <div class="plan-action-group">
+                    <select name="model_profile" class="plan-action-model-profile" title="Choose model profile for retry">
+                        <option value="baseline" {% if selected_model_profile == 'baseline' %}selected{% endif %}>baseline</option>
+                        <option value="premium" {% if selected_model_profile == 'premium' %}selected{% endif %}>premium</option>
+                        <option value="frontier" {% if selected_model_profile == 'frontier' %}selected{% endif %}>frontier</option>
+                        <option value="custom" {% if selected_model_profile == 'custom' %}selected{% endif %}>custom</option>
+                    </select>
+                    <button type="submit" class="btn-plan-meta">Retry</button>
+                </div>
             </form>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
 

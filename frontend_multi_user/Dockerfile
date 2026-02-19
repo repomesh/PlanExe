@@ -13,6 +13,7 @@ WORKDIR /app
 COPY worker_plan/worker_plan_api /app/worker_plan_api
 COPY database_api /app/database_api
 COPY frontend_multi_user /app/frontend_multi_user
+COPY llm_config*.json /app/
 
 # Install dependencies from frontend_multi_user pyproject
 RUN set -eux; \

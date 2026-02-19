@@ -1,16 +1,72 @@
 ---
-title: LLM config (llm_config.json)
+title: LLM config profiles
 ---
 
-# LLM config (llm_config.json)
+# LLM config profiles
 
-This file defines which LLM providers and models PlanExe can use. Each top‑level key is a model id used in the UI and pipeline.
+PlanExe supports **4 model profiles**:
 
-`llm_config.json` lives in the PlanExe repo root and is read at runtime. Environment variables are substituted from `.env`.
+- `baseline`
+- `premium`
+- `frontier`
+- `custom`
+
+Each profile maps to a separate config file:
+
+- `baseline` → `llm_config.json`
+- `premium` → `llm_config.premium.json`
+- `frontier` → `llm_config.frontier.json`
+- `custom` → `llm_config.custom.json` (or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`)
+
+If the selected profile file is missing or invalid, PlanExe safely falls back to `llm_config.json`.
 
 ---
 
-## File structure
+## How profile selection works
+
+### Runtime env var
+
+Set:
+
+- `PLANEXE_MODEL_PROFILE=baseline|premium|frontier|custom`
+
+This is passed end-to-end in worker execution paths (frontend/API/task parameters → worker pipeline).
+
+### Request/task parameter
+
+Task producers (web frontend, MCP) can include:
+
+- `model_profile`
+
+Invalid values are normalized to `baseline`.
+
+---
+
+## Strict filename validation
+
+Config filenames are strictly validated:
+
+- must be a **filename only** (no `/`, `\\`, absolute path)
+- must match: `llm_config*.json`
+
+This prevents path traversal and unsafe file selection.
+
+Legacy override `PLANEXE_LLM_CONFIG_NAME` is still supported for backward compatibility, but profile-based selection is preferred.
+
+---
+
+## Provider-priority ordering per profile
+
+Within each profile config file, priority is defined per model entry:
+
+- lower `priority` value = tried first
+- higher `priority` value = fallback order
+
+`auto` mode uses this profile-specific priority ordering.
+
+---
+
+## File format (same for all profile files)
 
 ```json
 {
@@ -24,8 +80,6 @@ This file defines which LLM providers and models PlanExe can use. Each top‑lev
       "api_key": "${OPENROUTER_API_KEY}",
       "temperature": 0.1,
       "timeout": 60.0,
-      "is_function_calling_model": false,
-      "is_chat_model": true,
       "max_tokens": 8192,
       "max_retries": 5
     }
@@ -35,41 +89,11 @@ This file defines which LLM providers and models PlanExe can use. Each top‑lev
 
 ---
 
-## Top-level fields
+## Backward compatibility
 
-- **comment**: Plain‑text description for humans. Optional.
-- **priority**: Lower number = higher priority when `auto` is selected. Optional.
-- **luigi_workers**: Number of Luigi workers used for this model. Use `1` for local models (Ollama/LM Studio).
-- **class**: Provider class name (e.g., `OpenRouter`, `OpenAI`, `Ollama`, `LMStudio`, `OpenAILike`).
-- **arguments**: Provider‑specific settings passed to the LLM client.
+When no profile is provided, PlanExe defaults to:
 
----
+- `baseline`
+- `llm_config.json`
 
-## Common arguments
-
-These keys are common across most providers:
-
-- **model** / **model_name**: Provider model identifier.
-- **api_key**: API key reference (usually `${ENV_VAR}`).
-- **base_url** / **api_base**: Override the provider base URL.
-- **temperature**: Controls randomness. Lower is more deterministic.
-- **timeout** / **request_timeout**: Max time per request in seconds.
-- **max_tokens** / **max_completion_tokens**: Output token limit (provider specific).
-- **max_retries**: Retry count on transient errors.
-- **is_function_calling_model**: Whether the model supports structured/tool output.
-- **is_chat_model**: Whether the model uses chat format.
-
----
-
-## Choosing values
-
-- Use **luigi_workers = 1** for local models (Ollama / LM Studio).
-- Use **luigi_workers > 1** for cloud models if you want parallel tasks.
-- Keep **timeout** higher for slower models.
-
----
-
-## Notes
-
-- If `llm_config.json` is missing, PlanExe logs a warning and proceeds with defaults.
-- Changes to `llm_config.json` require a container restart (or rebuild if baked into the image).
+So existing deployments continue to work without changes.

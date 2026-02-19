@@ -53,6 +53,7 @@ logger = logging.getLogger(__name__)
 
 from worker_plan_api.planexe_dotenv import DotEnvKeyEnum, PlanExeDotEnv
 from worker_plan_api.planexe_config import PlanExeConfig
+from worker_plan_api.model_profile import ModelProfileEnum, normalize_model_profile
 
 RUN_DIR = "run"
 
@@ -130,6 +131,43 @@ def admin_required(view):
             abort(403)
         return view(*args, **kwargs)
     return wrapper
+
+
+def _profile_model_name_map() -> Dict[str, list[str]]:
+    profile_to_models: Dict[str, list[str]] = {}
+    for profile in ModelProfileEnum:
+        config = PlanExeConfig.load(model_profile_override=profile)
+        config_path = config.llm_config_json_path
+        if config_path is None:
+            profile_to_models[profile.value] = []
+            continue
+        try:
+            with config_path.open("r", encoding="utf-8") as fh:
+                model_map = json.load(fh)
+        except Exception:
+            profile_to_models[profile.value] = []
+            continue
+        if not isinstance(model_map, dict):
+            profile_to_models[profile.value] = []
+            continue
+
+        def sort_key(item: tuple[str, dict]) -> tuple[int, str]:
+            data = item[1] if isinstance(item[1], dict) else {}
+            priority = data.get("priority")
+            if not isinstance(priority, int):
+                priority = 999999
+            return priority, item[0]
+
+        names: list[str] = []
+        for model_id, model_data in sorted(model_map.items(), key=sort_key):
+            model_name = model_id
+            if isinstance(model_data, dict):
+                args = model_data.get("arguments")
+                if isinstance(args, dict) and isinstance(args.get("model"), str):
+                    model_name = args["model"]
+            names.append(model_name)
+        profile_to_models[profile.value] = names
+    return profile_to_models
 
 class MyFlaskApp:
     def __init__(self):
@@ -1944,6 +1982,7 @@ class MyFlaskApp:
                 nonce=nonce,
                 user_id=user_id,
                 example_prompts=example_prompts,
+                model_profile_models_json=json.dumps(_profile_model_name_map()),
             )
 
         @self.app.route('/healthcheck')
@@ -2483,6 +2522,12 @@ class MyFlaskApp:
             if len(parameters) == 0:
                 parameters = None
 
+            # Normalize model profile to a known value with backward-compatible baseline default.
+            if not isinstance(parameters, dict):
+                parameters = {}
+            raw_profile = parameters.get("model_profile")
+            parameters["model_profile"] = normalize_model_profile(raw_profile).value
+
             # Get length of prompt_param in bytes and in characters
             prompt_param_bytes = len(prompt_param.encode('utf-8'))
             prompt_param_characters = len(prompt_param)
@@ -2584,8 +2629,10 @@ class MyFlaskApp:
             parameters.pop('user_id', None)
             parameters.pop('nonce', None)
             parameters.pop('redirect_to_plan', None)
-            if len(parameters) == 0:
-                parameters = None
+
+            # Normalize model profile to a known value with backward-compatible baseline default.
+            raw_profile = parameters.get("model_profile")
+            parameters["model_profile"] = normalize_model_profile(raw_profile).value
 
             prompt_param_bytes = len(prompt_param.encode('utf-8'))
             prompt_param_characters = len(prompt_param)

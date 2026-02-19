@@ -87,6 +87,7 @@ from worker_plan_internal.schedule.export_gantt_csv import ExportGanttCSV
 from worker_plan_internal.schedule.export_gantt_mermaid import ExportGanttMermaid
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName, ShouldStopCallbackParameters, PipelineStopRequested
 from worker_plan_internal.llm_factory import get_llm_names_by_priority, SPECIAL_AUTO_ID, is_valid_llm_name
+from worker_plan_api.model_profile import ModelProfileEnum, normalize_model_profile
 from worker_plan_internal.format_json_for_use_in_query import format_json_for_use_in_query
 from worker_plan_internal.report.report_generator import ReportGenerator
 from worker_plan_internal.luigi_util.obtain_output_files import ObtainOutputFiles
@@ -3834,6 +3835,7 @@ class ExecutePipeline:
     run_id_dir: Path
     speedvsdetail: SpeedVsDetailEnum
     llm_models: list[str]
+    model_profile: ModelProfileEnum = ModelProfileEnum.BASELINE
     full_plan_pipeline_task: Optional[FullPlanPipeline] = field(default=None)
     all_expected_filenames: list[str] = field(default_factory=list)
     luigi_build_return_value: Optional[bool] = field(default=None, init=False)
@@ -3864,7 +3866,7 @@ class ExecutePipeline:
     def resolve_luigi_workers(self) -> int:
         default_workers = 1
         try:
-            llm_config = PlanExeLLMConfig.load()
+            llm_config = PlanExeLLMConfig.load(model_profile=self.model_profile)
         except Exception as exc:
             logger.warning(f"Could not load llm_config.json; defaulting Luigi workers to {default_workers}: {exc}")
             return default_workers
@@ -3892,8 +3894,12 @@ class ExecutePipeline:
         return min(workers_candidates)
     
     @classmethod
-    def resolve_llm_models(cls, specified_llm_model: Optional[str]) -> list[str]:
-        llm_models = get_llm_names_by_priority()
+    def resolve_llm_models(
+        cls,
+        specified_llm_model: Optional[str],
+        model_profile: ModelProfileEnum = ModelProfileEnum.BASELINE,
+    ) -> list[str]:
+        llm_models = get_llm_names_by_priority(model_profile=model_profile)
         if len(llm_models) == 0:
             logger.error("No LLM models found. Please check your llm_config.json file and add 'priority' values.")
             llm_models = [DEFAULT_LLM_MODEL]
@@ -3902,7 +3908,7 @@ class ExecutePipeline:
             llm_model = specified_llm_model
             logger.info(f"Using the specified LLM model: {llm_model!r}")
             if llm_model != SPECIAL_AUTO_ID:
-                if not is_valid_llm_name(llm_model):
+                if not is_valid_llm_name(llm_model, model_profile=model_profile):
                     logger.error(f"Invalid LLM model: {llm_model!r}. Please check your llm_config.json file and add the model.")
                     raise ValueError(f"Invalid LLM model: {llm_model!r}. Please check your llm_config.json file and add the model.")
                 llm_models = [llm_model]
@@ -4120,7 +4126,13 @@ if __name__ == '__main__':
 
     # logger.info("Environment variables Luigi:\n" + get_env_as_string() + "\n\n\n")
 
-    llm_models = ExecutePipeline.resolve_llm_models(pipeline_environment.llm_model)
+    model_profile = normalize_model_profile(pipeline_environment.model_profile)
+    logger.info(f"Model profile: {model_profile.value}")
+
+    llm_models = ExecutePipeline.resolve_llm_models(
+        pipeline_environment.llm_model,
+        model_profile=model_profile,
+    )
 
     if speedvsdetail == SpeedVsDetailEnum.PING_LLM:
         try:
@@ -4138,9 +4150,19 @@ if __name__ == '__main__':
         get_dispatcher().add_event_handler(track_activity)
 
     if True:
-        execute_pipeline = ExecutePipeline(run_id_dir=run_id_dir, speedvsdetail=speedvsdetail, llm_models=llm_models)
+        execute_pipeline = ExecutePipeline(
+            run_id_dir=run_id_dir,
+            speedvsdetail=speedvsdetail,
+            llm_models=llm_models,
+            model_profile=model_profile,
+        )
     else:
-        execute_pipeline = DemoStoppingExecutePipeline(run_id_dir=run_id_dir, speedvsdetail=speedvsdetail, llm_models=llm_models)
+        execute_pipeline = DemoStoppingExecutePipeline(
+            run_id_dir=run_id_dir,
+            speedvsdetail=speedvsdetail,
+            llm_models=llm_models,
+            model_profile=model_profile,
+        )
     
     try:
         execute_pipeline.setup()

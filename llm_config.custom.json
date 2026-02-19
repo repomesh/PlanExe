@@ -1,0 +1,82 @@
+{
+    "openrouter-paid-openai-gpt-oss-120b": {
+        "comment": "Strict-priority primary model. Paid OpenRouter route to OpenAI GPT-OSS-120B. Created Jul 18, 2024. 128,000 context. $0.15/M input tokens. $0.60/M output tokens.",
+        "priority": 11,
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "openai/gpt-oss-120b",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 32000,
+            "max_retries": 5
+        }
+    },
+    "openrouter-paid-google/gemini-2.5-flash-lite-preview-09-2025": {
+        "comment": "last resort fallback. Paid OpenRouter access to Gemini 3 Flash Preview for balanced speed and context.",
+        "priority": 12,
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "google/gemini-2.5-flash-lite-preview-09-2025",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 32000,
+            "max_retries": 5
+        }
+    },
+    "openrouter-paid-minimax-m2.5": {
+        "comment": "Tertiary option. Paid OpenRouter route to MiniMax M2.5 for cost-aware reasoning depth.",
+        "priority": 3,
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "minimax/minimax-m2.5",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 32000,
+            "max_retries": 5
+        }
+    },
+    "openrouter-paid-qwen3-coder-next": {
+        "comment": "Code-focused fallback sharing priority tier 3, targeting Qwen3 Coder Next via OpenRouter.",
+        "priority": 1,
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "qwen/qwen3.5-397b-a17b",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 32000,
+            "max_retries": 5
+        }
+    },
+    "openrouter-paid-nvidia-nemotron-3-nano-30b-a3b": {
+        "comment": "Last-resort fallback. Paid OpenRouter access to NVIDIA Nemotron 3 Nano 30B A3B for extended context needs.",
+        "priority": 5,
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "nvidia/nemotron-3-nano-30b-a3b",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 1,
+            "timeout": 60.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 32000,
+            "max_retries": 5
+        }
+    }
+}

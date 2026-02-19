@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Copy application code and supporting files
 COPY worker_plan/worker_plan_api /app/worker_plan_api
 COPY frontend_single_user /app/frontend_single_user
-COPY llm_config.json /app/
+COPY llm_config*.json /app/
 
 # Default location for generated plans
 RUN mkdir -p /app/run

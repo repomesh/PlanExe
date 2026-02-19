@@ -27,15 +27,15 @@ class TestResolveSpeedVsDetail(unittest.TestCase):
         self.assertEqual(resolve_speed_vs_detail({"speed_vs_detail": "ping_llm"}), "ping_llm")
 
     def test_merge_task_create_config_injects_speed(self):
-        merged = _merge_task_create_config(None, "fast")
-        self.assertEqual(merged, {"speed_vs_detail": "fast"})
+        merged = _merge_task_create_config(None, "fast", "premium")
+        self.assertEqual(merged, {"speed_vs_detail": "fast", "model_profile": "premium"})
 
     def test_merge_task_create_config_preserves_existing(self):
-        merged = _merge_task_create_config({"speed_vs_detail": "all_details_but_slow"}, "fast")
-        self.assertEqual(merged, {"speed_vs_detail": "all_details_but_slow"})
+        merged = _merge_task_create_config({"speed_vs_detail": "all_details_but_slow", "model_profile": "frontier"}, "fast", "premium")
+        self.assertEqual(merged, {"speed_vs_detail": "all_details_but_slow", "model_profile": "frontier"})
 
     def test_merge_task_create_config_ignores_blank(self):
-        merged = _merge_task_create_config({}, "   ")
+        merged = _merge_task_create_config({}, "   ", "   ")
         self.assertIsNone(merged)
 
 
@@ -48,6 +48,15 @@ class TestTaskCreateRequest(unittest.TestCase):
     def test_speed_vs_detail_rejects_invalid(self):
         with self.assertRaises(ValidationError):
             TaskCreateRequest(prompt="demo", speed_vs_detail="slow")
+
+    def test_model_profile_accepts_enum(self):
+        for value in ("baseline", "premium", "frontier", "custom"):
+            req = TaskCreateRequest(prompt="demo", model_profile=value)
+            self.assertEqual(req.model_profile, value)
+
+    def test_model_profile_rejects_invalid(self):
+        with self.assertRaises(ValidationError):
+            TaskCreateRequest(prompt="demo", model_profile="enterprise")
 
 
 if __name__ == "__main__":

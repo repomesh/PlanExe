@@ -14,6 +14,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Optional
+from worker_plan_api.model_profile import ModelProfileEnum
 from urllib.parse import quote_plus
 import uuid
 import io
@@ -141,6 +142,7 @@ try:
     from database_api.model_credit_history import CreditHistory
     from database_api.model_token_metrics import TokenMetrics
     from worker_plan_database.speedvsdetail import resolve_speedvsdetail
+    from worker_plan_database.model_profile import resolve_model_profile
     from worker_plan_database.machai import MachAI
     from flask import Flask
     logger.debug("All modules imported successfully.")
@@ -321,8 +323,20 @@ def update_task_progress_with_retry(task_id: str, progress_percentage: float, pr
 
 
 class ServerExecutePipeline(ExecutePipeline):
-    def __init__(self, task_id: str, run_id_dir: Path, speedvsdetail: SpeedVsDetailEnum, llm_models: list[str]):
-        super().__init__(run_id_dir=run_id_dir, speedvsdetail=speedvsdetail, llm_models=llm_models)
+    def __init__(
+        self,
+        task_id: str,
+        run_id_dir: Path,
+        speedvsdetail: SpeedVsDetailEnum,
+        llm_models: list[str],
+        model_profile: ModelProfileEnum,
+    ):
+        super().__init__(
+            run_id_dir=run_id_dir,
+            speedvsdetail=speedvsdetail,
+            llm_models=llm_models,
+            model_profile=model_profile,
+        )
         self.task_id = task_id
 
     def _handle_task_completion(self, parameters: HandleTaskCompletionParameters) -> None:
@@ -591,19 +605,38 @@ def upload_report_to_worker_plan(run_id: str, report_path: Path) -> None:
             response.text[:500],
         )
 
-def execute_pipeline_for_job(task_id: str, user_id: str, run_id_dir: Path, speedvsdetail: SpeedVsDetailEnum, use_machai_developer_endpoint: bool):
+def execute_pipeline_for_job(
+    task_id: str,
+    user_id: str,
+    run_id_dir: Path,
+    speedvsdetail: SpeedVsDetailEnum,
+    model_profile: ModelProfileEnum,
+    use_machai_developer_endpoint: bool,
+):
     start_time = time.time()
-    logger.info(f"Executing pipeline for task_id: {task_id!r}, run_id_dir: {run_id_dir!r}, speedvsdetail: {speedvsdetail!r}, use_machai_developer_endpoint: {use_machai_developer_endpoint!r}...")
+    logger.info(
+        f"Executing pipeline for task_id: {task_id!r}, run_id_dir: {run_id_dir!r}, "
+        f"speedvsdetail: {speedvsdetail!r}, model_profile: {model_profile.value!r}, "
+        f"use_machai_developer_endpoint: {use_machai_developer_endpoint!r}..."
+    )
 
-    llm_models = ExecutePipeline.resolve_llm_models(None)
-    pipeline_instance = ServerExecutePipeline(task_id=task_id, run_id_dir=run_id_dir, speedvsdetail=speedvsdetail, llm_models=llm_models)
+    llm_models = ExecutePipeline.resolve_llm_models(None, model_profile=model_profile)
+    pipeline_instance = ServerExecutePipeline(
+        task_id=task_id,
+        run_id_dir=run_id_dir,
+        speedvsdetail=speedvsdetail,
+        llm_models=llm_models,
+        model_profile=model_profile,
+    )
     # Keep a Flask app context active while running pipeline tasks so db-backed
     # instrumentation (for example token metrics) can access db.session safely.
     with app.app_context():
         set_current_task_id(task_id)
         set_current_user_id(user_id)
         previous_track_activity_path = track_activity.jsonl_file_path
+        previous_model_profile = os.environ.get("PLANEXE_MODEL_PROFILE")
         try:
+            os.environ["PLANEXE_MODEL_PROFILE"] = model_profile.value
             # Always keep activity tracking in the task run directory, including PING_LLM mode.
             track_activity.jsonl_file_path = run_id_dir / ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value
 
@@ -619,6 +652,10 @@ def execute_pipeline_for_job(task_id: str, user_id: str, run_id_dir: Path, speed
 
                 pipeline_instance.run()
         finally:
+            if previous_model_profile is None:
+                os.environ.pop("PLANEXE_MODEL_PROFILE", None)
+            else:
+                os.environ["PLANEXE_MODEL_PROFILE"] = previous_model_profile
             track_activity.jsonl_file_path = previous_track_activity_path
             set_current_user_id(None)
             set_current_task_id(None)
@@ -650,7 +687,8 @@ def execute_pipeline_for_job(task_id: str, user_id: str, run_id_dir: Path, speed
         "task_id": str(task_id), 
         "user_id": str(user_id), 
         "run_id_dir": str(run_id_dir), 
-        "speedvsdetail": str(speedvsdetail), 
+        "speedvsdetail": str(speedvsdetail),
+        "model_profile": model_profile.value,
         "duration_between_processing_and_completion": str(duration_in_seconds),
         "has_report_file": str(pipeline_instance.has_report_file),
         "has_stop_flag_file": str(pipeline_instance.has_stop_flag_file),
@@ -760,6 +798,7 @@ def process_pending_tasks() -> bool:
     user_id: Optional[str] = None
     timestamp_created: Optional[datetime] = None
     speedvsdetail: SpeedVsDetailEnum = SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW
+    model_profile: ModelProfileEnum = ModelProfileEnum.BASELINE
 
     with app.app_context():
         try:
@@ -790,6 +829,7 @@ def process_pending_tasks() -> bool:
                 prompt = str(task_to_claim.prompt)
                 parameters = task_to_claim.parameters if isinstance(task_to_claim.parameters, dict) else None
                 speedvsdetail = resolve_speedvsdetail(parameters)
+                model_profile = resolve_model_profile(parameters)
                 use_machai_developer_endpoint = bool(task_to_claim.has_parameter_key('developer'))
                 user_id = str(task_to_claim.user_id)
                 timestamp_created = task_to_claim.timestamp_created
@@ -809,7 +849,11 @@ def process_pending_tasks() -> bool:
             return False # Error, sleep longer
 
 
-    logger.info(f"Successfully claimed task: {task_id!r}, user_id: {user_id!r}, timestamp_created: {timestamp_created!r}, use_machai_developer_endpoint: {use_machai_developer_endpoint!r}")
+    logger.info(
+        f"Successfully claimed task: {task_id!r}, user_id: {user_id!r}, "
+        f"timestamp_created: {timestamp_created!r}, model_profile: {model_profile.value!r}, "
+        f"use_machai_developer_endpoint: {use_machai_developer_endpoint!r}"
+    )
 
     with app.app_context():
         WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=task_id)
@@ -840,7 +884,8 @@ def process_pending_tasks() -> bool:
             "task_id": str(task_id), 
             "user_id": str(user_id), 
             "run_id_dir": str(run_id_dir), 
-            "speedvsdetail": str(speedvsdetail), 
+            "speedvsdetail": str(speedvsdetail),
+            "model_profile": model_profile.value,
             "duration_between_pending_and_processing": str(duration_between_pending_and_processing),
             "WORKER_ID": str(WORKER_ID)
         }
@@ -854,7 +899,14 @@ def process_pending_tasks() -> bool:
 
     try:
         # Create run directory and execute pipeline
-        execute_pipeline_for_job(task_id=task_id, user_id=user_id, run_id_dir=run_id_dir, speedvsdetail=speedvsdetail, use_machai_developer_endpoint=use_machai_developer_endpoint)
+        execute_pipeline_for_job(
+            task_id=task_id,
+            user_id=user_id,
+            run_id_dir=run_id_dir,
+            speedvsdetail=speedvsdetail,
+            model_profile=model_profile,
+            use_machai_developer_endpoint=use_machai_developer_endpoint,
+        )
         with app.app_context():
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)
         return True # We just processed a task. There may be more pending tasks, don't sleep that long, so we can process the next task.
@@ -873,7 +925,8 @@ def process_pending_tasks() -> bool:
                 "task_id": str(task_id), 
                 "user_id": str(user_id), 
                 "run_id_dir": str(run_id_dir), 
-                "speedvsdetail": str(speedvsdetail), 
+                "speedvsdetail": str(speedvsdetail),
+                "model_profile": model_profile.value,
                 "duration_between_pending_and_processing": str(duration_between_pending_and_processing),
                 "WORKER_ID": str(WORKER_ID),
                 "machai_error_message": str(machai_error_message),

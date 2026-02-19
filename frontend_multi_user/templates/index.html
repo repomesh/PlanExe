@@ -487,14 +487,6 @@
         width: 16px;
         height: 16px;
     }
-    .char-count {
-        font-size: 0.75rem;
-        color: var(--color-text-secondary);
-        text-align: right;
-        margin-top: 4px;
-        font-family: "SF Mono", "Fira Code", "Consolas", monospace;
-    }
-
     /* ── Admin view ─────────────────────────────────── */
     .admin-notice {
         text-align: center;
@@ -557,7 +549,6 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
-            <div class="char-count" id="char-count">0 characters</div>
             <div class="new-plan-footer">
                 <div class="model-profile-inline model-profile-picker">
                     <input type="hidden" name="model_profile" id="model-profile" value="baseline">
@@ -681,14 +672,6 @@
     // Example prompts loaded from the server
     var examplePrompts = {{ example_prompts | tojson | safe }};
     var textarea = document.getElementById('plan-prompt');
-    var charCount = document.getElementById('char-count');
-
-    // Update character count as the user types
-    function updateCount() {
-        var len = textarea.value.length;
-        charCount.textContent = len + ' character' + (len !== 1 ? 's' : '');
-    }
-    textarea.addEventListener('input', updateCount);
 
     // Example chip click handlers — fill textarea with the example prompt
     document.querySelectorAll('.example-chip').forEach(function(chip) {
@@ -696,7 +679,6 @@
             var idx = parseInt(this.getAttribute('data-index'), 10);
             if (examplePrompts[idx]) {
                 textarea.value = examplePrompts[idx];
-                updateCount();
                 textarea.focus();
             }
         });

@@ -1,6 +1,6 @@
 {
     "openrouter-paid-z-ai-glm-4-7-flash": {
-        "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 19, 2026. 202,752 context. $0.06/M input tokens. $0.40/M output tokens.",
+        "comment": "This is very fast. Created Jan 19, 2026. 202,752 context. $0.06/M input tokens. $0.40/M output tokens.",
         "priority": 6,
         "luigi_workers": 4,
         "class": "OpenRouter",
@@ -14,10 +14,11 @@
             "max_tokens": 32000,
             "max_retries": 5
         },
-        "model_info_url": "https://openrouter.ai/z-ai/glm-4.7-flash"
+        "model_info_url": "https://openrouter.ai/z-ai/glm-4.7-flash",
+        "pricing_kind": "paid"
     },
     "openrouter-paid-stepfun-step-3-5-flash": {
-        "comment": "This is very fast. It's paid, so check the pricing before use. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
+        "comment": "This is very fast. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
         "priority": 21,
         "luigi_workers": 4,
         "class": "OpenRouter",
@@ -31,10 +32,11 @@
             "max_tokens": 32000,
             "max_retries": 5
         },
-        "model_info_url": "https://openrouter.ai/stepfun/step-3.5-flash"
+        "model_info_url": "https://openrouter.ai/stepfun/step-3.5-flash",
+        "pricing_kind": "paid"
     },
     "openrouter-google/gemini-2.5-flash-lite-preview-09-2025": {
-        "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
+        "comment": "This is fast. Created Feb 11, 2026. 204,800 context. $0.30/M input tokens. $2.55/M output tokens.",
         "priority": 1,
         "luigi_workers": 4,
         "class": "OpenRouter",
@@ -48,10 +50,11 @@
             "max_tokens": 32000,
             "max_retries": 5
         },
-        "model_info_url": "https://openrouter.ai/google/gemini-2.5-flash-lite-preview-09-2025"
+        "model_info_url": "https://openrouter.ai/google/gemini-2.5-flash-lite-preview-09-2025",
+        "pricing_kind": "paid"
     },
     "openrouter-paid-qwen-qwen3-5-397b-a17b": {
-        "comment": "This is fast. It's paid, so check the pricing before use. Created Feb 16, 2026. 262,144 context. Pricing varies by context length: starting at $0.15/M input, $1.00/M output; highest tier $0.60/M input, $3.60/M output (when input > 128k tokens).",
+        "comment": "This is fast. Created Feb 16, 2026. 262,144 context. Pricing varies by context length: starting at $0.15/M input, $1.00/M output; highest tier $0.60/M input, $3.60/M output (when input > 128k tokens).",
         "priority": 2,
         "luigi_workers": 4,
         "class": "OpenRouter",
@@ -65,7 +68,8 @@
             "max_tokens": 32000,
             "max_retries": 5
         },
-        "model_info_url": "https://openrouter.ai/qwen/qwen3.5-397b-a17b"
+        "model_info_url": "https://openrouter.ai/qwen/qwen3.5-397b-a17b",
+        "pricing_kind": "paid"
     },
     "openai-paid-gpt-5-mini": {
         "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. Last priority fallback.",
@@ -82,6 +86,7 @@
             "is_chat_model": true,
             "max_tokens": 128000,
             "max_retries": 5
-        }
+        },
+        "pricing_kind": "paid"
     }
 }

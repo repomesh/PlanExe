@@ -562,7 +562,7 @@
             <div class="new-plan-footer">
                 <div class="model-profile-inline model-profile-picker">
                     <input type="hidden" name="model_profile" id="model-profile" value="baseline">
-                    <button type="button" id="model-profile-button" class="model-profile-button" aria-haspopup="listbox" aria-expanded="false">
+                    <button type="button" id="model-profile-button" class="model-profile-button" aria-haspopup="listbox" aria-expanded="false" title="Select model profile">
                         <span class="model-profile-title" id="model-profile-selected-title">Baseline</span>
                         <span class="model-profile-caret" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -591,7 +591,7 @@
                     </div>
                 </div>
                 <div class="footer-spacer"></div>
-                <button type="submit" class="btn-start-plan" id="btn-start-plan" {% if not can_create_plan %}disabled{% endif %}>
+                <button type="submit" class="btn-start-plan" id="btn-start-plan" title="Generate a plan from your prompt" {% if not can_create_plan %}disabled{% endif %}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     {% if not can_create_plan %}
                         Insufficient credits

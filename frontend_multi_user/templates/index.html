@@ -561,9 +561,10 @@
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
             <div class="new-plan-footer">
                 <div class="model-profile-inline model-profile-picker">
-                    <input type="hidden" name="model_profile" id="model-profile" value="baseline">
+                    {% set default_profile_option = model_profile_options[0] %}
+                    <input type="hidden" name="model_profile" id="model-profile" value="{{ default_profile_option.value }}">
                     <button type="button" id="model-profile-button" class="model-profile-button" aria-haspopup="listbox" aria-expanded="false" title="Select model profile">
-                        <span class="model-profile-title" id="model-profile-selected-title">Baseline</span>
+                        <span class="model-profile-title" id="model-profile-selected-title">{{ default_profile_option.title }}</span>
                         <span class="model-profile-caret" aria-hidden="true">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                                 <polyline points="6 9 12 15 18 9"></polyline>
@@ -572,22 +573,12 @@
                     </button>
                     <div id="model-profile-menu" class="model-profile-menu" role="listbox">
                         <div class="model-profile-menu-header">Select model profile</div>
-                        <button type="button" class="model-profile-option" data-value="baseline">
-                            <span class="model-profile-title">Baseline</span>
-                            <span class="model-profile-subtitle">Cheap and fast.</span>
+                        {% for profile_option in model_profile_options %}
+                        <button type="button" class="model-profile-option" data-value="{{ profile_option.value }}">
+                            <span class="model-profile-title">{{ profile_option.title }}</span>
+                            <span class="model-profile-subtitle">{{ profile_option.subtitle }}</span>
                         </button>
-                        <button type="button" class="model-profile-option" data-value="premium">
-                            <span class="model-profile-title">Premium</span>
-                            <span class="model-profile-subtitle">Expensive, slow, high quality.</span>
-                        </button>
-                        <button type="button" class="model-profile-option" data-value="frontier">
-                            <span class="model-profile-title">Frontier</span>
-                            <span class="model-profile-subtitle">Most capable models first.</span>
-                        </button>
-                        <button type="button" class="model-profile-option" data-value="custom">
-                            <span class="model-profile-title">Custom</span>
-                            <span class="model-profile-subtitle">Use your own config file.</span>
-                        </button>
+                        {% endfor %}
                     </div>
                 </div>
                 <div class="footer-spacer"></div>

@@ -133,8 +133,8 @@ def admin_required(view):
     return wrapper
 
 
-def _profile_model_name_map() -> Dict[str, list[str]]:
-    profile_to_models: Dict[str, list[str]] = {}
+def _profile_model_rows_map() -> Dict[str, list[dict[str, str]]]:
+    profile_to_models: Dict[str, list[dict[str, str]]] = {}
     for profile in ModelProfileEnum:
         config = PlanExeConfig.load(model_profile_override=profile)
         config_path = config.llm_config_json_path
@@ -158,16 +158,56 @@ def _profile_model_name_map() -> Dict[str, list[str]]:
                 priority = 999999
             return priority, item[0]
 
-        names: list[str] = []
-        for model_id, model_data in sorted(model_map.items(), key=sort_key):
-            model_name = model_id
+        rows: list[dict[str, str]] = []
+        for model_key, model_data in sorted(model_map.items(), key=sort_key):
+            model_name = ""
+            comment = ""
+            prio = ""
             if isinstance(model_data, dict):
                 args = model_data.get("arguments")
                 if isinstance(args, dict) and isinstance(args.get("model"), str):
                     model_name = args["model"]
-            names.append(model_name)
-        profile_to_models[profile.value] = names
+                if isinstance(model_data.get("comment"), str):
+                    comment = model_data["comment"]
+                if isinstance(model_data.get("prio"), int):
+                    prio = str(model_data["prio"])
+                elif isinstance(model_data.get("priority"), int):
+                    prio = str(model_data["priority"])
+            rows.append(
+                {
+                    "key": model_key,
+                    "prio": prio,
+                    "model": model_name,
+                    "comment": comment,
+                }
+            )
+        profile_to_models[profile.value] = rows
     return profile_to_models
+
+
+def _model_profile_options() -> list[dict[str, str]]:
+    return [
+        {
+            "value": ModelProfileEnum.BASELINE.value,
+            "title": "Baseline",
+            "subtitle": "Cheap and fast.",
+        },
+        {
+            "value": ModelProfileEnum.PREMIUM.value,
+            "title": "Premium",
+            "subtitle": "Expensive, slow, high quality.",
+        },
+        {
+            "value": ModelProfileEnum.FRONTIER.value,
+            "title": "Frontier",
+            "subtitle": "Most capable models first.",
+        },
+        {
+            "value": ModelProfileEnum.CUSTOM.value,
+            "title": "Custom",
+            "subtitle": "Use your own config file.",
+        },
+    ]
 
 class MyFlaskApp:
     def __init__(self):
@@ -1982,14 +2022,28 @@ class MyFlaskApp:
                 nonce=nonce,
                 user_id=user_id,
                 example_prompts=example_prompts,
+                model_profile_options=_model_profile_options(),
             )
 
         @self.app.route('/models')
         @login_required
         def models():
+            model_profile_options = _model_profile_options()
+            option_by_value = {item["value"]: item for item in model_profile_options}
+            profile_to_models = _profile_model_rows_map()
+            profile_sections = [
+                {
+                    "key": profile.value,
+                    "title": option_by_value.get(profile.value, {}).get("title", profile.value),
+                    "subtitle": option_by_value.get(profile.value, {}).get("subtitle", ""),
+                    "filename": PlanExeConfig.load(model_profile_override=profile).llm_config_json_name,
+                    "models": profile_to_models.get(profile.value, []),
+                }
+                for profile in ModelProfileEnum
+            ]
             return render_template(
                 'models.html',
-                model_profile_models_json=json.dumps(_profile_model_name_map()),
+                profile_sections=profile_sections,
             )
 
         @self.app.route('/healthcheck')

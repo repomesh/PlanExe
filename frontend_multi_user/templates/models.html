@@ -1,44 +1,160 @@
 {% extends "base.html" %}
 {% block title %}Models - PlanExe{% endblock %}
 
-{% block content %}
-<section class="content-card">
-    <h1 style="margin-top:0;">Models</h1>
-    <p style="color:#6b7280; margin-bottom:16px;">Inspect models by profile.</p>
-
-    <label for="model-profile" style="display:block; margin-bottom:8px; font-size:0.9rem; color:#6b7280;">Model profile</label>
-    <select id="model-profile" style="margin-bottom:12px; width:100%; max-width:260px; padding:8px; border-radius:8px;">
-        <option value="baseline" selected>baseline</option>
-        <option value="premium">premium</option>
-        <option value="frontier">frontier</option>
-        <option value="custom">custom</option>
-    </select>
-
-    <div id="model-profile-models" style="font-size:0.95rem; color:#374151; line-height:1.5;"></div>
-</section>
-
-<script>
-    var profileToModels = {{ model_profile_models_json | safe }};
-    var profileSelect = document.getElementById('model-profile');
-    var profileModelsDiv = document.getElementById('model-profile-models');
-
-    function renderProfileModels() {
-        if (!profileSelect || !profileModelsDiv) {
-            return;
-        }
-        var profile = profileSelect.value || 'baseline';
-        var models = profileToModels[profile] || [];
-        if (models.length === 0) {
-            profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong> none found';
-            return;
-        }
-        var lines = models.map(function(modelName) {
-            return '<li><code>' + modelName + '</code></li>';
-        }).join('');
-        profileModelsDiv.innerHTML = '<strong>Models in ' + profile + ':</strong><ul style="margin:8px 0 0 18px;">' + lines + '</ul>';
+{% block head %}
+<style>
+    .models-title {
+        margin: 0 0 4px;
+        font-size: 1.35rem;
+        font-weight: 700;
     }
+    .models-subtitle {
+        margin: 0 0 14px;
+        color: var(--color-text-secondary);
+    }
+    .models-toc {
+        margin: 0 0 16px;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .models-toc a {
+        display: inline-block;
+        padding: 6px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: 999px;
+        text-decoration: none;
+        color: var(--color-text);
+        background: var(--color-bg-soft);
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+    .models-toc a:hover {
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+    .models-section {
+        padding-top: 8px;
+        margin-top: 8px;
+        border-top: 1px solid var(--color-border);
+    }
+    .models-section:first-of-type {
+        border-top: 0;
+        margin-top: 0;
+        padding-top: 0;
+    }
+    .models-section-title {
+        margin: 0 0 2px;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+    .models-section-subtitle {
+        margin: 0 0 8px;
+        color: var(--color-text-secondary);
+        font-size: 0.86rem;
+    }
+    .models-label {
+        margin: 0 0 6px;
+        font-size: 0.86rem;
+        color: var(--color-text-secondary);
+    }
+    .models-table-wrap {
+        overflow-x: auto;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+    }
+    .models-table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+        font-size: 0.84rem;
+    }
+    .models-table th {
+        text-align: left;
+        padding: 8px 10px;
+        background: var(--color-bg-soft);
+        border-bottom: 1px solid var(--color-border);
+        color: var(--color-text-secondary);
+        font-size: 0.74rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .models-table td {
+        vertical-align: top;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--color-border);
+        color: var(--color-text);
+        word-break: break-word;
+    }
+    .models-table tr:last-child td {
+        border-bottom: none;
+    }
+    .models-col-key {
+        width: 24%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .models-col-prio {
+        width: 5%;
+        text-align: right;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        white-space: nowrap;
+    }
+    .models-col-model {
+        width: 23%;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    .models-col-comment {
+        width: 45%;
+    }
+</style>
+{% endblock %}
 
-    profileSelect.addEventListener('change', renderProfileModels);
-    renderProfileModels();
-</script>
+{% block content %}
+<section>
+    <h1 class="models-title">Models</h1>
+    <p class="models-subtitle">Inspect models by profile.</p>
+
+    <ul class="models-toc" aria-label="Model profile sections">
+        {% for section in profile_sections %}
+        <li><a href="#profile-{{ section.key }}">{{ section.title }}</a></li>
+        {% endfor %}
+    </ul>
+
+        {% for section in profile_sections %}
+    <section id="profile-{{ section.key }}" class="models-section">
+        <h2 class="models-section-title">{{ section.title }}</h2>
+        <p class="models-section-subtitle">{{ section.subtitle }}</p>
+        <p class="models-label"><code>{{ section.filename }}</code></p>
+        {% if section.models %}
+        <div class="models-table-wrap">
+        <table class="models-table">
+            <thead>
+                <tr>
+                    <th class="models-col-prio">Prio</th>
+                    <th class="models-col-key">Key</th>
+                    <th class="models-col-model">arguments.model</th>
+                    <th class="models-col-comment">Comment</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for model_row in section.models %}
+                <tr>
+                    <td class="models-col-prio">{{ model_row.prio or "-" }}</td>
+                    <td class="models-col-key">{{ model_row.key }}</td>
+                    <td class="models-col-model">{{ model_row.model or "-" }}</td>
+                    <td class="models-col-comment">{{ model_row.comment or "-" }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <p>none found</p>
+        {% endif %}
+    </section>
+    {% endfor %}
+</section>
 {% endblock %}

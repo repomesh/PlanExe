@@ -64,7 +64,11 @@ HEARTBEAT_INTERVAL_IN_SECONDS = 60
 CREDIT_SCALE = Decimal("0.000000001")
 
 # --- Configure Logging Section ---
-log_format_str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+replica_id_for_logging = os.environ.get("RAILWAY_REPLICA_ID", "local")
+log_format_str = (
+    f"%(asctime)s - %(name)s - %(levelname)s - "
+    f"[replica={replica_id_for_logging} worker_id={WORKER_ID}] - %(message)s"
+)
 log_formatter = logging.Formatter(log_format_str)
 log_level_name = os.environ.get("PLANEXE_LOG_LEVEL", "INFO").upper()
 log_level = getattr(logging, log_level_name, None)

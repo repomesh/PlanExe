@@ -54,6 +54,11 @@ logger = logging.getLogger(__name__)
 from worker_plan_api.planexe_dotenv import DotEnvKeyEnum, PlanExeDotEnv
 from worker_plan_api.planexe_config import PlanExeConfig
 from worker_plan_api.model_profile import ModelProfileEnum, normalize_model_profile
+from worker_plan_api.llm_class_filter import (
+    ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES,
+    is_llm_class_allowed,
+    parse_llm_class_whitelist,
+)
 
 RUN_DIR = "run"
 
@@ -134,6 +139,7 @@ def admin_required(view):
 
 
 def _profile_model_rows_map() -> Dict[str, list[dict[str, str]]]:
+    whitelist = parse_llm_class_whitelist(os.environ.get(ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES))
     profile_to_models: Dict[str, list[dict[str, str]]] = {}
     for profile in ModelProfileEnum:
         config = PlanExeConfig.load(model_profile_override=profile)
@@ -160,6 +166,9 @@ def _profile_model_rows_map() -> Dict[str, list[dict[str, str]]]:
 
         rows: list[dict[str, str]] = []
         for model_key, model_data in sorted(model_map.items(), key=sort_key):
+            class_name = model_data.get("class") if isinstance(model_data, dict) else None
+            if not is_llm_class_allowed(class_name, whitelist):
+                continue
             model_name = ""
             comment = ""
             prio = ""

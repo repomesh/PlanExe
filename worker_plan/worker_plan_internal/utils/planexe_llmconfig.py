@@ -10,6 +10,11 @@ import json
 from worker_plan_api.planexe_config import PlanExeConfig
 from worker_plan_api.model_profile import ModelProfileEnum
 from worker_plan_api.planexe_dotenv import PlanExeDotEnv
+from worker_plan_api.llm_class_filter import (
+    ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES,
+    is_llm_class_allowed,
+    parse_llm_class_whitelist,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,6 +41,7 @@ class PlanExeLLMConfig:
         llm_config_json_path = config.llm_config_json_path
         llm_config_dict_raw = cls.load_llm_config(llm_config_json_path)
         llm_config_dict = cls.substitute_env_vars(llm_config_dict_raw, planexe_dotenv.dotenv_dict)
+        llm_config_dict = cls.filter_by_whitelisted_classes(llm_config_dict, planexe_dotenv.dotenv_dict)
 
         return cls(
             llm_config_json_path=llm_config_json_path,
@@ -78,6 +84,38 @@ class PlanExeLLMConfig:
                 return replace_value(item)
 
         return process_item(config)
+
+    @classmethod
+    def filter_by_whitelisted_classes(cls, config: Dict[str, Any], env_vars: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Optionally filter entries by provider class using a comma-separated env var.
+        Example: PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES="OpenRouter,Ollama"
+        """
+        raw_whitelist = env_vars.get(ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES)
+        whitelist = parse_llm_class_whitelist(raw_whitelist)
+        if whitelist is None:
+            return config
+
+        filtered: Dict[str, Any] = {}
+        dropped_keys: list[str] = []
+        for key, value in config.items():
+            class_name = value.get("class") if isinstance(value, dict) else None
+            if is_llm_class_allowed(class_name, whitelist):
+                filtered[key] = value
+            else:
+                dropped_keys.append(key)
+
+        logger.info(
+            "Applied %s=%r. Allowed classes=%s. Kept=%s Dropped=%s",
+            ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES,
+            raw_whitelist,
+            ",".join(sorted(whitelist)),
+            len(filtered),
+            len(dropped_keys),
+        )
+        if dropped_keys:
+            logger.debug("Dropped llm_config entries: %s", ", ".join(sorted(dropped_keys)))
+        return filtered
 
     def __repr__(self):
         return f"PlanExeLLMConfig(llm_config_json_path={self.llm_config_json_path!r}, llm_config_dict.keys()={self.llm_config_dict.keys()!r})"

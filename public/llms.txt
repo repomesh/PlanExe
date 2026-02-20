@@ -1,0 +1,279 @@
+# PlanExe - Multi-Step Plan Orchestration & Execution
+
+## What is PlanExe?
+
+PlanExe is an AI-native planning orchestrator that transforms vague goals into detailed, executable multi-step plans. It breaks down complex tasks into subtasks with clear dependencies, estimates resource requirements, and tracks execution state—all via API, MCP server, or local Docker.
+
+Use PlanExe when you need to:
+- Decompose complex goals into actionable steps
+- Estimate timelines and resource allocation
+- Track execution state and debug failures
+- Generate artifacts (code, configs, docs) based on plans
+- Integrate planning into AI agent workflows
+
+Designed for AI agents in:
+- OpenAI Agents / Responses API
+- Claude Code for multi-step code generation planning
+- Codebuff for workflow decomposition
+- OpenClaw orchestrators for multi-agent task routing
+- LLM-powered automation systems and agentic frameworks
+
+## API Endpoints
+
+### Cloud Production (home.planexe.org)
+
+```
+Base URL: https://home.planexe.org/api/v1
+Authentication: Bearer <API_KEY>
+Get API key: https://home.planexe.org/account/api-keys
+```
+
+**Endpoints:**
+
+- `POST /plans` – Generate a new plan from a goal
+- `GET /plans/{planId}` – Fetch plan state, steps, and execution trace
+- `GET /plans/{planId}/artifacts` – List and download plan artifacts (generated code, configs, etc.)
+- `POST /plans/{planId}/run` – Execute the plan (start step execution)
+- `GET /plans/{planId}/status` – Poll execution status of running plan
+- `GET /openapi.json` – Fetch OpenAPI 3.1 schema for function calling
+- `GET /.well-known/mcp.json` – MCP server manifest
+
+### Local Docker Deployment
+
+```bash
+docker run -p 3000:3000 planexeorg/planexe:latest
+Base URL: http://localhost:3000/api/v1
+Authentication: None (trusted local environment)
+```
+
+To enable local MCP:
+```bash
+docker run -p 3000:3000 -p 3001:3001 -e ENABLE_MCP=true planexeorg/planexe:latest
+```
+
+## MCP Server Integration
+
+### Cloud MCP Endpoint
+
+```
+Transport: HTTP/SSE
+URL: https://mcp.planexe.org/sse
+Authentication: Bearer <API_KEY> (passed as authorization header)
+```
+
+### Local Docker MCP
+
+```
+Transport: HTTP/SSE
+URL: http://localhost:3001/sse
+Authentication: None
+```
+
+## Tools Available
+
+### plan.generate
+Generate a multi-step plan from a goal description.
+
+**Input:**
+- `goal` (string, required): High-level goal (e.g., "Build a REST API for a social network")
+- `context` (string, optional): Background, constraints, or success criteria
+- `constraints` (array of strings, optional): Resource limits or technical requirements
+- `model` (string, optional): Planning model ("gpt-4o", "claude-3-opus", "o1")
+
+**Output:**
+- `planId` (string): Unique plan identifier
+- `steps` (array): List of execution steps with descriptions, dependencies, estimated duration
+- `estimatedDurationMinutes` (integer): Total estimated execution time
+- `artifacts` (array): List of expected output artifacts
+- `createdAt` (ISO 8601 timestamp): Plan creation time
+
+**Example:**
+```json
+{
+  "goal": "Build a Node.js REST API with PostgreSQL and authentication",
+  "context": "The API should support user CRUD operations, JWT auth, and run on AWS Lambda",
+  "constraints": ["Must use TypeScript", "Budget: 40 hours", "Deadline: 2 weeks"]
+}
+```
+
+### plan.poll
+Poll the execution status of a running plan.
+
+**Input:**
+- `planId` (string, required): Plan ID from plan.generate
+
+**Output:**
+- `planId` (string): Plan identifier
+- `status` (enum): "pending" | "running" | "completed" | "failed" | "paused"
+- `progress` (integer): Percent complete (0-100)
+- `completedSteps` (array): List of completed step IDs
+- `failedSteps` (array): List of failed step IDs with error messages
+- `executionTrace` (array): Detailed log of each step's output and timing
+- `updatedAt` (ISO 8601 timestamp): Last status update time
+
+### plan.artifacts
+Retrieve generated artifacts from a completed plan.
+
+**Input:**
+- `planId` (string, required): Plan ID
+- `artifactId` (string, optional): Specific artifact to download (if not provided, lists all)
+
+**Output:**
+- `artifacts` (array of objects):
+  - `id` (string): Artifact identifier
+  - `name` (string): Filename or artifact name
+  - `type` (string): "code" | "config" | "docs" | "other"
+  - `url` (string): HTTPS download URL (valid for 24 hours)
+  - `contentType` (string): MIME type
+  - `sizeBytes` (integer): File size
+
+## Authentication
+
+### Cloud (home.planexe.org)
+
+1. Create account at https://home.planexe.org
+2. Go to Account → API Keys
+3. Generate a new API key
+4. Pass in Authorization header: `Authorization: Bearer sk_live_xxxxxxxx`
+
+### Local Docker
+
+No authentication required. APIs are only accessible on localhost (127.0.0.1 or host network).
+
+## Rate Limits
+
+### Cloud
+
+- **Plan generation:** 100 plans/hour per API key
+- **Status polling:** 1000 polls/hour per API key
+- **Artifact downloads:** 1000 downloads/day per API key
+- **Concurrent plan executions:** 10 per account
+
+### Local Docker
+
+No rate limits. Suitable for high-frequency local orchestration.
+
+## Credit Model (Cloud Only)
+
+PlanExe uses a credit-based pricing model:
+
+| Action | Cost | Notes |
+|--------|------|-------|
+| Plan generation | 10 credits | Per unique plan created |
+| Plan execution | 5 credits/min | While plan is running |
+| Artifact download | 1 credit per 100 MB | Rounded up |
+| MCP tool call | 0 credits | (No MCP-specific charge; API credits apply) |
+
+### Free Tier
+- 100 credits/month
+- Up to 10 plans/month
+- 1 concurrent plan
+
+### Pro Plan
+- $10/month = 1000 credits
+- Unlimited concurrent plans
+- Standard support
+
+### Enterprise
+- Custom volume pricing
+- Priority support
+- SLA guarantees
+- See https://home.planexe.org/pricing
+
+## Documentation & Support
+
+- **Main Docs:** https://docs.planexe.org
+- **GitHub:** https://github.com/PlanExeOrg/PlanExe
+- **Issues:** https://github.com/PlanExeOrg/PlanExe/issues
+- **Discussions:** https://github.com/PlanExeOrg/PlanExe/discussions
+- **API Reference:** https://home.planexe.org/api/v1/openapi.json
+- **Status Page:** https://status.planexe.org
+- **Security:** security@planexe.org
+
+## Integration Examples
+
+### OpenAI Responses API (Function Calling)
+
+```python
+from openai import OpenAI
+
+client = OpenAI(api_key="sk_...")
+
+tools = [{
+    "type": "function",
+    "name": "plan_generate",
+    "description": "Generate a multi-step plan for a goal",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "goal": {"type": "string"},
+            "context": {"type": "string"}
+        },
+        "required": ["goal"]
+    }
+}]
+
+response = client.responses.create(
+    model="gpt-4o",
+    tools=tools,
+    input=[{"role": "user", "content": "Plan building a SaaS app"}]
+)
+```
+
+### OpenAI Responses API (MCP)
+
+```python
+response = client.responses.create(
+    model="gpt-4o",
+    tools=[{
+        "type": "mcp",
+        "server_label": "planexe",
+        "server_url": "https://mcp.planexe.org/sse",
+        "authorization": "Bearer sk_live_xxxxxxxx"
+    }],
+    input=[{"role": "user", "content": "Create a plan for deploying a Kubernetes cluster"}]
+)
+```
+
+### Direct REST API
+
+```bash
+curl -X POST https://home.planexe.org/api/v1/plans \
+  -H "Authorization: Bearer sk_live_xxxxxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "goal": "Build a REST API",
+    "constraints": ["TypeScript", "Express.js"]
+  }'
+
+# Response:
+# {"planId": "plan_abc123", "steps": [...], "estimatedDurationMinutes": 480}
+
+# Poll status:
+curl -H "Authorization: Bearer sk_live_xxxxxxxx" \
+  https://home.planexe.org/api/v1/plans/plan_abc123/status
+```
+
+### Local Docker (No Auth)
+
+```bash
+curl -X POST http://localhost:3000/api/v1/plans \
+  -H "Content-Type: application/json" \
+  -d '{"goal": "Deploy a web app to production"}'
+```
+
+## Compliance & Security
+
+- **Data Retention:** Cloud plans retained for 30 days; local Docker has no retention
+- **Privacy:** API keys are personal; never commit to version control
+- **SOC 2:** Cloud production is SOC 2 Type II compliant
+- **HIPAA:** Available upon request for enterprise customers
+- **Open Source:** Full source at https://github.com/PlanExeOrg/PlanExe
+
+See https://docs.planexe.org/security for full details.
+
+---
+
+**Last Updated:** 2026-02-20
+**Version:** 1.0
+**Maintained by:** PlanExe Team (https://github.com/PlanExeOrg)

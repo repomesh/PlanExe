@@ -20,12 +20,16 @@ Create these environments:
 
 ```
 PLANEXE_POSTGRES_PASSWORD=unique random text, different than staging
+OPENROUTER_API_KEY="SECRET-KEY-HERE"
+PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES=OpenRouter
 ```
 
 ### Shared variables - staging
 
 ```
 PLANEXE_POSTGRES_PASSWORD=unique random text, different than production
+OPENROUTER_API_KEY="SECRET-KEY-HERE"
+PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES=OpenRouter
 ```
 
 ## Using Shared Variables in Services
@@ -36,6 +40,8 @@ In Railway, go to each service → **Variables** and add:
 
 ```
 PLANEXE_POSTGRES_PASSWORD="${{shared.PLANEXE_POSTGRES_PASSWORD}}"
+OPENROUTER_API_KEY="${{shared.OPENROUTER_API_KEY}}"
+PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES="${{shared.PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES}}"
 ```
 
 Services that need this variable:

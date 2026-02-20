@@ -1,7 +1,7 @@
 # Railway Configuration for `worker_plan`
 
 ```
-OPENROUTER_API_KEY="SECRET-KEY-HERE"
+OPENROUTER_API_KEY="${{shared.OPENROUTER_API_KEY}}"
 PLANEXE_CONFIG_PATH="/app"
 PLANEXE_HOST_RUN_DIR="/app/run"
 PLANEXE_RUN_DIR="/app/run"

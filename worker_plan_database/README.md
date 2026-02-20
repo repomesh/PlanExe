@@ -10,6 +10,9 @@ Subclass of the `worker_plan` service that runs the PlanExe pipeline with a Post
 ## Docker usage
 - Build/run single worker: `docker compose up --build worker_plan_database`
 - Run three workers (each with `PLANEXE_WORKER_ID=1/2/3`): `docker compose up -d worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`
+- Worker identity is required. Set `PLANEXE_WORKER_ID`, or on Railway provide both
+  `RAILWAY_REPLICA_REGION` and `RAILWAY_REPLICA_ID` so the worker uses
+  `PLANEXE_WORKER_ID="<region>_<replica-id>"`.
 - Reads `SQLALCHEMY_DATABASE_URI` when provided, otherwise builds one from:
   - `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD`
   - falls back to the `database_postgres` service defaults (`planexe/planexe` on port 5432)

@@ -16,11 +16,11 @@ from pathlib import Path
 from typing import Optional
 from worker_plan_api.model_profile import ModelProfileEnum
 from urllib.parse import quote_plus
-import uuid
 import io
 import zipfile
 import requests
 from sqlalchemy import inspect, text, or_
+from worker_plan_database.worker_identity import resolve_and_set_worker_id
 
 # Load .env file early, before any imports that require environment variables (e.g., machai.py).
 # This allows configuration via .env file instead of shell exports.
@@ -31,7 +31,12 @@ _dotenv_loaded = load_dotenv(_module_dir / ".env")
 if not _dotenv_loaded:
     load_dotenv(_module_dir.parent / ".env")
 
-WORKER_ID = os.environ.get("PLANEXE_WORKER_ID") or str(uuid.uuid4())
+try:
+    WORKER_ID = resolve_and_set_worker_id(os.environ)
+except ValueError as exc:
+    logging.basicConfig(level=logging.ERROR, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.getLogger(__name__).critical(str(exc))
+    sys.exit(1)
 
 # Attempt to configure Luigi VERY EARLY to prevent its default logging setup.
 try:

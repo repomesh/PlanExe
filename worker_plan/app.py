@@ -427,23 +427,39 @@ def llm_ping() -> StreamingResponse:
 
     def event_stream():
         logger.info("Starting llm-ping stream")
+        ping_system_prompt = "You are a healthcheck endpoint. Reply with exactly OK. Do not add any other words."
+        ping_user_prompt = "Reply with exactly OK."
+        ping_targets: list[tuple[ModelProfileEnum, str, str]] = []
         try:
-            llm_names = get_llm_names_by_priority()
+            for profile in ModelProfileEnum:
+                llm_names = get_llm_names_by_priority(model_profile=profile)
+                for llm_name in llm_names:
+                    display_name = f"{profile.value}:{llm_name}"
+                    ping_targets.append((profile, llm_name, display_name))
         except Exception as exc:  # pragma: no cover - runtime probe
             logger.error("llm-ping failed to enumerate llm names: %s", exc)
             yield f"data: {json.dumps({'name': 'worker_plan', 'status': 'error', 'response_time': 0, 'response': str(exc)})}\n\n"
             yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
             return
 
-        for llm_name in llm_names:
-            yield f"data: {json.dumps({'name': llm_name, 'status': 'pinging', 'response_time': 0, 'response': 'Pinging model…'})}\n\n"
+        if len(ping_targets) == 0:
+            yield f"data: {json.dumps({'name': 'worker_plan', 'status': 'error', 'response_time': 0, 'response': 'No models found in whitelisted llm_config profiles.'})}\n\n"
+            yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
+            return
+
+        for model_profile, llm_name, display_name in ping_targets:
+            yield f"data: {json.dumps({'name': display_name, 'status': 'pinging', 'response_time': 0, 'response': 'Pinging model…'})}\n\n"
             try:
                 start_time = time.time()
-                llm = get_llm(llm_name)
+                llm = get_llm(llm_name, model_profile=model_profile)
                 chat_message_list = [
                     ChatMessage(
+                        role=MessageRole.SYSTEM,
+                        content=ping_system_prompt,
+                    ),
+                    ChatMessage(
                         role=MessageRole.USER,
-                        content="Hello, this is a test message. Please respond with 'OK' if you can read this."
+                        content=ping_user_prompt,
                     )
                 ]
                 response = llm.chat(chat_message_list)
@@ -452,17 +468,19 @@ def llm_ping() -> StreamingResponse:
                 response_text = getattr(getattr(response, "message", None), "content", None)
                 if response_text is None:
                     response_text = str(response)
+                response_text = str(response_text).strip()
+                is_exact_ok = response_text == "OK"
 
                 payload = {
-                    "name": llm_name,
-                    "status": "success",
+                    "name": display_name,
+                    "status": "success" if is_exact_ok else "error",
                     "response_time": int((end_time - start_time) * 1000),
-                    "response": response_text
+                    "response": "OK" if is_exact_ok else f"Expected exact 'OK', got: {response_text}"
                 }
             except Exception as exc:  # pragma: no cover - runtime probe
                 logger.error("llm-ping error for %s: %s", llm_name, exc)
                 payload = {
-                    "name": llm_name,
+                    "name": display_name,
                     "status": "error",
                     "response_time": 0,
                     "response": str(exc)

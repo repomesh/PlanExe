@@ -1,4 +1,11 @@
-# Plan-to-Repo Proposal (Revised)
+---
+title: Plan-to-Repo
+date: 2026-02-21
+status: draft
+author: Larry (via Mark Barney)  
+---
+
+# Plan-to-Repo
 
 ## Summary
 

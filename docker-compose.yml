@@ -23,6 +23,7 @@ x-worker_plan_database-base: &worker_plan_database_base
   env_file:
     - .env
   environment: &worker_plan_database_env
+    PLANEXE_WORKER_ID: ${PLANEXE_WORKER_ID:-worker_plan_database}
     PLANEXE_CONFIG_PATH: /app
     PLANEXE_RUN_DIR: /app/run
     # Internal container-to-container connection always uses port 5432.

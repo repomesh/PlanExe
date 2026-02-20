@@ -183,6 +183,14 @@
                     <option value="ping_llm" selected>Ping LLM (single request)</option>
                 </select>
             </div>
+            <div class="select-container">
+                <label for="model-profile-select">Model profile:</label>
+                <select id="model-profile-select">
+                    {% for profile_option in model_profile_options %}
+                    <option value="{{ profile_option.value }}" {% if profile_option.value == "baseline" %}selected{% endif %}>{{ profile_option.title }} - {{ profile_option.subtitle }}</option>
+                    {% endfor %}
+                </select>
+            </div>
             <div class="checkbox-container">
                 <input type="checkbox" id="developer-checkbox" checked>
                 <label for="developer-checkbox">Developer mode when checked. When unchecked it's production mode.</label>
@@ -275,6 +283,7 @@
         document.getElementById('submit-button').addEventListener('click', function() {
             const promptValue = document.getElementById('prompt').value;
             const speedVsDetailValue = document.getElementById('speed-vs-detail-select').value;
+            const modelProfileValue = document.getElementById('model-profile-select').value;
             const developerChecked = document.getElementById('developer-checkbox').checked;
             const methodSelect = document.getElementById('method-select');
             const iframeContainer = document.querySelector('.iframe-container');
@@ -283,7 +292,7 @@
 
             if (methodSelect.value === 'GET') {
                 // GET method: build URL with query parameters
-                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id={{ user_id }}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}&model_profile=baseline`;
+                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id={{ user_id }}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}&model_profile=${encodeURIComponent(modelProfileValue)}`;
                 if (developerChecked) {
                     url += '&developer';
                 }
@@ -294,6 +303,7 @@
                 // POST method: use hidden form
                 const form = document.getElementById('run-form');
                 document.getElementById('form-prompt').value = promptValue;
+                document.getElementById('form-model-profile').value = modelProfileValue;
 
                 // Submit flags only when checked (disable when unchecked so they are not submitted)
                 const developerInput = document.getElementById('form-developer');

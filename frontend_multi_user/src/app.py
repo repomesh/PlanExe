@@ -3104,7 +3104,13 @@ class MyFlaskApp:
                     return "Error: Demo prompt configuration missing.", 500
                 prompts.append(prompt_item.prompt)
 
-            return render_template('demo_run.html', user_id=user_id, prompts=prompts, nonce=nonce)
+            return render_template(
+                'demo_run.html',
+                user_id=user_id,
+                prompts=prompts,
+                nonce=nonce,
+                model_profile_options=_model_profile_options(),
+            )
 
     def run_server(self, debug: bool = False, host: str = "0.0.0.0", port: int = 5000):
         env_debug = os.environ.get("PLANEXE_FRONTEND_MULTIUSER_DEBUG")

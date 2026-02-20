@@ -1,4 +1,4 @@
-# Proposal 53: Agent-First Frontend Discoverability for PlanExe
+# Agent-First Frontend Discoverability for PlanExe
 
 ## Goal
 

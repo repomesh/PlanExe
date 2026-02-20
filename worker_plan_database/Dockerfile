@@ -14,7 +14,7 @@ WORKDIR /app
 COPY worker_plan /app/worker_plan
 COPY worker_plan_database /app/worker_plan_database
 COPY database_api /app/database_api
-COPY llm_config*.json /app/
+COPY llm_config /app/llm_config
 
 # Install the core planexe package plus Flask support and database drivers.
 RUN set -eux; \

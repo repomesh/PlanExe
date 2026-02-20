@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Copy application code and supporting files
 COPY worker_plan /app/worker_plan
-COPY llm_config*.json /app/
+COPY llm_config /app/llm_config
 
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefer-binary /app/worker_plan

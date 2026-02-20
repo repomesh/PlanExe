@@ -1,5 +1,5 @@
 """
-Locate PlanExe's config files, like .env and llm_config.<profile>.json. The .env file is optional when the environment variables are provided by the host.
+Locate PlanExe's config files, like .env and llm_config/<profile>.json. The .env file is optional when the environment variables are provided by the host.
 
 Finds config files by checking the following locations in order:
 1. The directory specified by the PLANEXE_CONFIG_PATH environment variable. It must be an absolute path.
@@ -13,7 +13,7 @@ Usage: with a PLANEXE_CONFIG_PATH environment variable set.
 PROMPT> PLANEXE_CONFIG_PATH='/Users/neoneye/git/PlanExeGroup/PlanExe' python -m worker_plan_internal.utils.planexe_config
 
 IDEA: validate the contents of ".env"
-IDEA: validate the contents of selected llm_config.<profile>.json files
+IDEA: validate the contents of selected llm_config/<profile>.json files
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigNameEnum(str, Enum):
     DOTENV = ".env"
-    LLM_CONFIG_JSON = "llm_config.baseline.json"
+    LLM_CONFIG_JSON = "baseline.json"
 
 class PlanExeConfigError(Exception):
     """Raised when there is an error with the configuration."""
@@ -40,7 +40,7 @@ class PlanExeConfig:
     Attributes:
         planexe_config_path: Optional[Path] - The directory specified by PLANEXE_CONFIG_PATH
         dotenv_path: Optional[Path] - Path to the .env file
-        llm_config_json_path: Optional[Path] - Path to the resolved llm_config.<profile>.json file
+        llm_config_json_path: Optional[Path] - Path to the resolved llm_config/<profile>.json file
     """
     planexe_config_path: Optional[Path]
     dotenv_path: Optional[Path]
@@ -131,26 +131,22 @@ class PlanExeConfig:
         :param is_optional: When True, missing file is logged at INFO instead of WARNING.
         :return: The Path to the file if found, otherwise None.
         """
-        # Step 1: Check if PLANEXE_CONFIG_PATH is set and contains the file
+        is_dotenv = filename == ConfigNameEnum.DOTENV.value
+        root_path = Path(__file__).parent.parent.parent.parent
+        base_paths: list[Path] = []
         if planexe_config_path is not None:
-            config_file_path = planexe_config_path / filename
-            if config_file_path.is_file():
-                logger.debug(f"Found {filename!r} at config_file_path: {config_file_path!r}")
-                return config_file_path
+            base_paths.append(planexe_config_path)
+        base_paths.append(Path.cwd())
+        base_paths.append(root_path)
 
-        # Step 2: Check if file exists in current working directory
-        cwd_file_path = Path.cwd() / filename
-        if cwd_file_path.is_file():
-            logger.debug(f"Found {filename!r} at cwd_file_path: {cwd_file_path!r}")
-            return cwd_file_path
-
-        # Step 3: Check if file exists in PlanExe root directory
-        # This file is at: worker_plan/worker_plan_internal/utils/planexe_config.py
-        # So we need 4 .parent calls to reach the PlanExe root.
-        root_file_path = Path(__file__).parent.parent.parent.parent / filename
-        if root_file_path.is_file():
-            logger.debug(f"Found {filename!r} at root_file_path: {root_file_path!r}")
-            return root_file_path
+        for base_path in base_paths:
+            candidate_paths = [base_path / filename]
+            if not is_dotenv:
+                candidate_paths.insert(0, base_path / "llm_config" / filename)
+            for candidate_path in candidate_paths:
+                if candidate_path.is_file():
+                    logger.debug(f"Found {filename!r} at: {candidate_path!r}")
+                    return candidate_path
 
         if is_optional:
             logger.info(f"Optional file {filename!r} not found in any of the search locations (ENV_VAR, CWD, Project Root).")

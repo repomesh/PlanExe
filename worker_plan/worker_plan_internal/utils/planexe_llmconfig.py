@@ -1,5 +1,5 @@
 """
-Load PlanExe LLM profile configuration from the resolved llm_config.<profile>.json file.
+Load PlanExe LLM profile configuration from the resolved llm_config/<profile>.json file.
 
 PROMPT> python -m worker_plan_internal.utils.planexe_llmconfig
 """

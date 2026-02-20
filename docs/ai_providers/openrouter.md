@@ -29,14 +29,14 @@ cd PlanExe
 OPENROUTER_API_KEY='sk-or-v1-...'
 DEFAULT_LLM='openrouter-paid-gemini-2.0-flash-001'   # or openrouter-paid-openai-gpt-4o-mini
 ```
-   The containers mount `.env` and `llm_config.<profile>.json` automatically.
+   The containers mount `.env` and `llm_config/<profile>.json` automatically.
 4. Start PlanExe:
 ```
 docker compose up worker_plan frontend_single_user
 ```
    - Wait for http://localhost:7860 to come up, submit a prompt, and watch progress with `docker compose logs -f worker_plan`.
    - Outputs are written to `run/<timestamped-output-dir>` on the host (mounted from the containers).
-5. Stop with `Ctrl+C` (or `docker compose down`). If you change `llm_config.<profile>.json`, restart the containers so they reload it: `docker compose restart worker_plan frontend_single_user` (or `docker compose down && docker compose up`). No rebuild is needed for config-only edits.
+5. Stop with `Ctrl+C` (or `docker compose down`). If you change `llm_config/<profile>.json`, restart the containers so they reload it: `docker compose restart worker_plan frontend_single_user` (or `docker compose down && docker compose up`). No rebuild is needed for config-only edits.
 
 ## Configuration
 
@@ -50,7 +50,7 @@ Open the `.env` file in a text editor and insert your OpenRouter API key. Like t
 OPENROUTER_API_KEY='INSERT YOUR KEY HERE'
 ```
 
-If you edit `llm_config.<profile>.json` later, restart the worker/frontend containers to pick up the changes: `docker compose restart worker_plan frontend_single_user` (or stop/start). Rebuilds are only needed when dependencies change.
+If you edit `llm_config/<profile>.json` later, restart the worker/frontend containers to pick up the changes: `docker compose restart worker_plan frontend_single_user` (or stop/start). Rebuilds are only needed when dependencies change.
 
 ## Troubleshooting
 
@@ -64,7 +64,7 @@ docker compose logs -f worker_plan
 
 Report your issue on [Discord](https://planexe.org/discord). Please include info about your system, such as: "I'm on macOS with M1 Max with 64 GB.".
 
-## How to add a new OpenRouter model to `llm_config.<profile>.json`
+## How to add a new OpenRouter model to `llm_config/<profile>.json`
 
 The [OpenRouter/rankings](https://openrouter.ai/rankings) page shows an overview of the most popular models. New models are added frequently
 
@@ -78,7 +78,7 @@ For a model to work with PlanExe, it must meet the following criteria:
 Steps to add a model:
 
 1. Copy the model id from the openrouter website.
-2. Paste the model id into the `llm_config.<profile>.json`.
+2. Paste the model id into the `llm_config/<profile>.json`.
 3. Restart PlanExe to apply the changes.
 
 ---

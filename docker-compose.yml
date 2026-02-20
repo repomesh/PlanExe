@@ -36,10 +36,7 @@ x-worker_plan_database-base: &worker_plan_database_base
     PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL: ${PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL:-https://example.com/iframe_generator_confirmation}
   volumes:
     - ./.env:/app/.env:ro
-    - ./llm_config.baseline.json:/app/llm_config.baseline.json:ro
-    - ./llm_config.premium.json:/app/llm_config.premium.json:ro
-    - ./llm_config.frontier.json:/app/llm_config.frontier.json:ro
-    - ./llm_config.custom.json:/app/llm_config.custom.json:ro
+    - ./llm_config:/app/llm_config:ro
     - ./run:/app/run
   restart: unless-stopped
 
@@ -88,10 +85,7 @@ services:
       - "8000:8000"
     volumes:
       - ./.env:/app/.env:ro
-      - ./llm_config.baseline.json:/app/llm_config.baseline.json:ro
-      - ./llm_config.premium.json:/app/llm_config.premium.json:ro
-      - ./llm_config.frontier.json:/app/llm_config.frontier.json:ro
-      - ./llm_config.custom.json:/app/llm_config.custom.json:ro
+      - ./llm_config:/app/llm_config:ro
       - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck').read()"]
@@ -156,10 +150,7 @@ services:
       - "7860:7860"
     volumes:
       - ./.env:/app/.env:ro
-      - ./llm_config.baseline.json:/app/llm_config.baseline.json:ro
-      - ./llm_config.premium.json:/app/llm_config.premium.json:ro
-      - ./llm_config.frontier.json:/app/llm_config.frontier.json:ro
-      - ./llm_config.custom.json:/app/llm_config.custom.json:ro
+      - ./llm_config:/app/llm_config:ro
       - ./run:/app/run
     restart: unless-stopped
     develop:
@@ -173,17 +164,8 @@ services:
           path: ./worker_plan
           target: /app/worker_plan
         - action: sync
-          path: ./llm_config.baseline.json
-          target: /app/llm_config.baseline.json
-        - action: sync
-          path: ./llm_config.premium.json
-          target: /app/llm_config.premium.json
-        - action: sync
-          path: ./llm_config.frontier.json
-          target: /app/llm_config.frontier.json
-        - action: sync
-          path: ./llm_config.custom.json
-          target: /app/llm_config.custom.json
+          path: ./llm_config
+          target: /app/llm_config
         - action: sync
           path: ./.env
           target: /app/.env
@@ -216,10 +198,7 @@ services:
       - "${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}:5000"
     volumes:
       - ./.env:/app/.env:ro
-      - ./llm_config.baseline.json:/app/llm_config.baseline.json:ro
-      - ./llm_config.premium.json:/app/llm_config.premium.json:ro
-      - ./llm_config.frontier.json:/app/llm_config.frontier.json:ro
-      - ./llm_config.custom.json:/app/llm_config.custom.json:ro
+      - ./llm_config:/app/llm_config:ro
       - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthcheck').read()"]

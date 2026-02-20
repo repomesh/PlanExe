@@ -92,7 +92,7 @@ def obtain_llm_info(model_profile: Optional[ModelProfileEnum | str] = None) -> L
     # This is a special case. It will cycle through the available LLM models, if the first one fails, try the next one.
     llm_config_items.append(LLMConfigItem(id=SPECIAL_AUTO_ID, label=SPECIAL_AUTO_LABEL))
 
-    # The rest are the LLM models specified in the selected llm_config.<profile>.json file.
+    # The rest are the LLM models specified in the selected llm_config/<profile>.json file.
     for config_id, config in planexe_llmconfig.llm_config_dict.items():
         priority = config.get("priority", None)
         if priority:
@@ -121,7 +121,7 @@ def obtain_llm_info(model_profile: Optional[ModelProfileEnum | str] = None) -> L
         if ollama_info.is_running and not is_model_available:
             error_message = (
                 f"Problem with config `\"{config_id}\"`: The model `\"{model}\"` is not available in Ollama. "
-                "Compare model names in the selected `llm_config.<profile>.json` file with the names available in Ollama."
+                "Compare model names in the selected `llm_config/<profile>.json` file with the names available in Ollama."
             )
             error_message_list.append(error_message)
         
@@ -182,10 +182,10 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
 
     if not is_valid_llm_name(llm_name, model_profile=model_profile):
         logger.error(
-            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config.<profile>.json."
+            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config/<profile>.json."
         )
         raise ValueError(
-            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config.<profile>.json."
+            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config/<profile>.json."
         )
 
     config = planexe_llmconfig.llm_config_dict[llm_name]

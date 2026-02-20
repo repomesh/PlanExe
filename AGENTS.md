@@ -25,7 +25,7 @@ Always check the package-level `AGENTS.md` for file-specific rules
   `worker_plan/worker_plan_api/prompt/data/*.jsonl`.
 
 ## Hard rules (agent safety)
-- Do not add real API keys or passwords to `.env`, `.env.*`, or any `llm_config.*.json` file.
+- Do not add real API keys or passwords to `.env`, `.env.*`, or any `llm_config/*.json` file.
 - Treat `track_activity.jsonl` as sensitive (may contain API keys/tokens).
   Never expose it to end users.
   Store `track_activity.jsonl` in `TaskItem.run_track_activity_jsonl` and keep
@@ -45,12 +45,12 @@ Always check the package-level `AGENTS.md` for file-specific rules
   or renaming env vars.
 
 ## Cross-service conventions
-- `.env` and `llm_config.<profile>.json` files are expected in the repo root for Docker setups.
+- `.env` and the `llm_config/` directory are expected in the repo root for Docker setups.
 - Profile file mapping:
-  - `baseline` -> `llm_config.baseline.json`
-  - `premium` -> `llm_config.premium.json`
-  - `frontier` -> `llm_config.frontier.json`
-  - `custom` -> `llm_config.custom.json` (or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`)
+  - `baseline` -> `llm_config/baseline.json`
+  - `premium` -> `llm_config/premium.json`
+  - `frontier` -> `llm_config/frontier.json`
+  - `custom` -> `llm_config/custom.json` (or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`)
 - `PLANEXE_MODEL_PROFILE` selects which profile file is used at runtime.
 - Baseline is the default profile and fallback if another selected profile file is missing.
 - Use `PLANEXE_*` env vars; prefer existing defaults when adding new ones.

@@ -14,7 +14,7 @@ Usage with PLANEXE_CONFIG_PATH:
 PROMPT> PLANEXE_CONFIG_PATH='/Users/neoneye/git/PlanExeGroup/PlanExe' python -m worker_plan_api.planexe_config
 
 IDEA: validate the contents of ".env"
-IDEA: validate the contents of profile config files (llm_config*.json)
+IDEA: validate the contents of profile config files (llm_config/*.json)
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigNameEnum(str, Enum):
     DOTENV = ".env"
-    LLM_CONFIG_JSON_DEFAULT = "llm_config.baseline.json"
+    LLM_CONFIG_JSON_DEFAULT = "baseline.json"
 
 
 class EnvNameEnum(str, Enum):
@@ -182,26 +182,22 @@ class PlanExeConfig:
         :param is_optional: When True, missing file is logged at INFO instead of WARNING.
         :return: The Path to the file if found, otherwise None.
         """
-        # Step 1: Check if PLANEXE_CONFIG_PATH is set and contains the file.
+        is_dotenv = filename == ConfigNameEnum.DOTENV.value
+        root_path = Path(__file__).parent.parent.parent
+        base_paths: list[Path] = []
         if planexe_config_path is not None:
-            config_file_path = planexe_config_path / filename
-            if config_file_path.is_file():
-                logger.debug(f"Found {filename!r} at config_file_path: {config_file_path!r}")
-                return config_file_path
+            base_paths.append(planexe_config_path)
+        base_paths.append(Path.cwd())
+        base_paths.append(root_path)
 
-        # Step 2: Check if file exists in current working directory.
-        cwd_file_path = Path.cwd() / filename
-        if cwd_file_path.is_file():
-            logger.debug(f"Found {filename!r} at cwd_file_path: {cwd_file_path!r}")
-            return cwd_file_path
-
-        # Step 3: Check if file exists in PlanExe root directory.
-        # This file is at: worker_plan/worker_plan_api/planexe_config.py
-        # So we need 3 .parent calls to reach the PlanExe root.
-        root_file_path = Path(__file__).parent.parent.parent / filename
-        if root_file_path.is_file():
-            logger.debug(f"Found {filename!r} at root_file_path: {root_file_path!r}")
-            return root_file_path
+        for base_path in base_paths:
+            candidate_paths = [base_path / filename]
+            if not is_dotenv:
+                candidate_paths.insert(0, base_path / "llm_config" / filename)
+            for candidate_path in candidate_paths:
+                if candidate_path.is_file():
+                    logger.debug(f"Found {filename!r} at: {candidate_path!r}")
+                    return candidate_path
 
         if is_optional:
             logger.info(f"Optional file {filename!r} not found in any of the search locations (ENV_VAR, CWD, Project Root).")

@@ -125,7 +125,7 @@ class TaskCreateInput(BaseModel):
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
-        description="LLM profile mapping to llm_config.<profile>.json (baseline, premium, frontier, custom).",
+        description="LLM profile mapping to llm_config/<profile>.json (baseline, premium, frontier, custom).",
     )
     user_api_key: str | None = Field(
         default=None,

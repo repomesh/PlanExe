@@ -363,7 +363,7 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     speedvsdetail = settings.get("speedvsdetail_radio", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)
     model_profile = settings.get("model_profile_radio", ModelProfileEnum.BASELINE.value)
 
-    # When making changes to the llm_config.<profile>.json, it may happen that the selected model is no longer among the available_model_names.
+    # When making changes to the llm_config/<profile>.json, it may happen that the selected model is no longer among the available_model_names.
     # In that case, set the model to the default_model_value.
     if model not in [item[1] for item in available_model_names]:
         logger.info(f"initialize_browser_settings: model '{model}' is not in available_model_names. Setting to default_model_value: {default_model_value}")
@@ -797,10 +797,10 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
             "\n".join(
                 [
                     "**Profile details**",
-                    "- `baseline` -> `llm_config.baseline.json` (default balanced profile).",
-                    "- `premium` -> `llm_config.premium.json` (higher-cost model ordering).",
-                    "- `frontier` -> `llm_config.frontier.json` (most capable model ordering).",
-                    "- `custom` -> `llm_config.custom.json` or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`.",
+                    "- `baseline` -> `llm_config/baseline.json` (default balanced profile).",
+                    "- `premium` -> `llm_config/premium.json` (higher-cost model ordering).",
+                    "- `frontier` -> `llm_config/frontier.json` (most capable model ordering).",
+                    "- `custom` -> `llm_config/custom.json` or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME` (filename only, e.g. `custom.json`).",
                     "- The exact models come from the selected JSON file priorities.",
                 ]
             )

@@ -22,7 +22,7 @@ This page covers common Docker workflows and troubleshooting.
 - Rebuild the worker image when code or data files change: `docker compose build --no-cache worker_plan`.
 - Run a one-off module inside the worker image (same deps/env as the API):  
   `docker compose run --rm worker_plan python -m worker_plan_internal.fiction.fiction_writer` (swap the module path as needed). If containers are already up, use `docker compose exec worker_plan python -m ...` instead.
-- For host Ollama access, set `base_url` in `llm_config.<profile>.json` to `http://host.docker.internal:11434` (default Ollama port). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` under `worker_plan` if that hostname is missing, or use your bridge IP.
+- For host Ollama access, set `base_url` in `llm_config/<profile>.json` to `http://host.docker.internal:11434` (default Ollama port). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` under `worker_plan` if that hostname is missing, or use your bridge IP.
 - Ensure required env vars (e.g., `DEFAULT_LLM`) are available via `.env` or your shell before running the command.
 
 ## Troubleshooting
@@ -63,7 +63,7 @@ psql -h localhost -p 5433 -U planexe -d planexe
 
 ## Environment notes
 - The worker exports logs to stdout when `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT=true` (set in `docker-compose.yml`).
-- Shared volumes: `./run` is mounted into both services; `.env` and `llm_config.<profile>.json` are mounted read-only. Ensure they exist on the host before starting.***
+- Shared volumes: `./run` is mounted into both services; `.env` and `./llm_config/` are mounted read-only. Ensure they exist on the host before starting.***
 - Database: Postgres runs in `database_postgres` and listens on host `${PLANEXE_POSTGRES_PORT:-5432}` mapped to container `5432`; data is persisted in the named volume `database_postgres_data`.
 - Multiuser UI: binds to container port `5000`, exposed on host `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`.
 - MCP server downloads: set `PLANEXE_MCP_PUBLIC_BASE_URL` so clients receive a reachable `/download/...` URL (defaults to `http://localhost:8001` in compose).

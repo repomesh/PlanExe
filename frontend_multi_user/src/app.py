@@ -2053,7 +2053,7 @@ class MyFlaskApp:
                     "key": profile.value,
                     "title": option_by_value.get(profile.value, {}).get("title", profile.value),
                     "subtitle": option_by_value.get(profile.value, {}).get("subtitle", ""),
-                    "filename": PlanExeConfig.load(model_profile_override=profile).llm_config_json_name,
+                    "filename": f"llm_config/{PlanExeConfig.load(model_profile_override=profile).llm_config_json_name}",
                     "models": profile_to_models.get(profile.value, []),
                 }
                 for profile in ModelProfileEnum

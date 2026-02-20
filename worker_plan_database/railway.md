@@ -13,7 +13,7 @@ PLANEXE_POSTGRES_PASSWORD="${{shared.PLANEXE_POSTGRES_PASSWORD}}"
 PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES="${{shared.PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES}}"
 ```
 
-- Set `OPENROUTER_API_KEY` (and any other model keys referenced by `llm_config.<profile>.json` files) so the pipeline can call the LLM provider.
+- Set `OPENROUTER_API_KEY` (and any other model keys referenced by `llm_config/<profile>.json` files) so the pipeline can call the LLM provider.
 - `PLANEXE_WORKER_ID` a unique id that identifies what worker instance it is.
 - `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_*` are required; the worker exits early if they are missing.
 

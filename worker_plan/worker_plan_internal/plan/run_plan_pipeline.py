@@ -3869,7 +3869,7 @@ class ExecutePipeline:
             llm_config = PlanExeLLMConfig.load(model_profile=self.model_profile)
         except Exception as exc:
             logger.warning(
-                f"Could not load selected llm_config.<profile>.json; defaulting Luigi workers to {default_workers}: {exc}"
+                f"Could not load selected llm_config/<profile>.json; defaulting Luigi workers to {default_workers}: {exc}"
             )
             return default_workers
 
@@ -3904,7 +3904,7 @@ class ExecutePipeline:
         llm_models = get_llm_names_by_priority(model_profile=model_profile)
         if len(llm_models) == 0:
             logger.error(
-                "No LLM models found. Please check your selected llm_config.<profile>.json file and add 'priority' values."
+                "No LLM models found. Please check your selected llm_config/<profile>.json file and add 'priority' values."
             )
             llm_models = [DEFAULT_LLM_MODEL]
 
@@ -3914,10 +3914,10 @@ class ExecutePipeline:
             if llm_model != SPECIAL_AUTO_ID:
                 if not is_valid_llm_name(llm_model, model_profile=model_profile):
                     logger.error(
-                        f"Invalid LLM model: {llm_model!r}. Please check your selected llm_config.<profile>.json file and add the model."
+                        f"Invalid LLM model: {llm_model!r}. Please check your selected llm_config/<profile>.json file and add the model."
                     )
                     raise ValueError(
-                        f"Invalid LLM model: {llm_model!r}. Please check your selected llm_config.<profile>.json file and add the model."
+                        f"Invalid LLM model: {llm_model!r}. Please check your selected llm_config/<profile>.json file and add the model."
                     )
                 llm_models = [llm_model]
 

@@ -22,14 +22,12 @@ class ModelProfileEnum(str, Enum):
 DEFAULT_MODEL_PROFILE = ModelProfileEnum.BASELINE
 ENV_PLANEXE_MODEL_PROFILE = "PLANEXE_MODEL_PROFILE"
 ENV_PLANEXE_LLM_CONFIG_CUSTOM_FILENAME = "PLANEXE_LLM_CONFIG_CUSTOM_FILENAME"
-ENV_PLANEXE_LLM_CONFIG_NAME_LEGACY = "PLANEXE_LLM_CONFIG_NAME"
 
 # Strict filename validation:
 # - must be a filename (no path separators, no absolute path)
-# - must start with "llm_config"
 # - must end with ".json"
-# - optional suffix after "llm_config." must be at least 3 chars and only [a-z0-9_]
-_FILENAME_PATTERN = re.compile(r"^llm_config(?:\.[a-z0-9_]{3,})?\.json$")
+# - stem must be at least 3 chars and only [a-z0-9_]
+_FILENAME_PATTERN = re.compile(r"^[a-z0-9_]{3,}\.json$")
 
 
 def normalize_model_profile(raw_value: Optional[str]) -> ModelProfileEnum:
@@ -69,23 +67,37 @@ def is_valid_llm_config_filename(filename: str) -> bool:
     return bool(_FILENAME_PATTERN.match(candidate))
 
 
+def normalize_llm_config_filename(filename: str) -> Optional[str]:
+    """Validate and normalize LLM config filenames."""
+    if not isinstance(filename, str):
+        return None
+    candidate = filename.strip()
+    if not candidate:
+        return None
+
+    if is_valid_llm_config_filename(candidate):
+        return candidate
+    return None
+
+
 def default_filename_for_profile(model_profile: ModelProfileEnum) -> str:
     if model_profile == ModelProfileEnum.BASELINE:
-        return "llm_config.baseline.json"
+        return "baseline.json"
     if model_profile == ModelProfileEnum.PREMIUM:
-        return "llm_config.premium.json"
+        return "premium.json"
     if model_profile == ModelProfileEnum.FRONTIER:
-        return "llm_config.frontier.json"
+        return "frontier.json"
     # CUSTOM
-    custom_name = os.environ.get(ENV_PLANEXE_LLM_CONFIG_CUSTOM_FILENAME, "llm_config.custom.json")
-    if is_valid_llm_config_filename(custom_name):
-        return custom_name.strip()
+    custom_name = os.environ.get(ENV_PLANEXE_LLM_CONFIG_CUSTOM_FILENAME, "custom.json")
+    normalized_custom_name = normalize_llm_config_filename(custom_name)
+    if normalized_custom_name is not None:
+        return normalized_custom_name
     logger.warning(
-        "Invalid %s=%r. Falling back to llm_config.baseline.json.",
+        "Invalid %s=%r. Falling back to baseline.json.",
         ENV_PLANEXE_LLM_CONFIG_CUSTOM_FILENAME,
         custom_name,
     )
-    return "llm_config.baseline.json"
+    return "baseline.json"
 
 
 def resolve_llm_config_filename(
@@ -96,32 +108,14 @@ def resolve_llm_config_filename(
 
     Precedence:
     1) explicit_filename if provided and valid
-    2) legacy env PLANEXE_LLM_CONFIG_NAME if provided and valid
-    3) profile-based default filename
+    2) profile-based default filename
     """
     selected_profile = model_profile or resolve_model_profile_from_env()
 
     if isinstance(explicit_filename, str) and explicit_filename.strip():
-        explicit_candidate = explicit_filename.strip()
-        if is_valid_llm_config_filename(explicit_candidate):
-            return explicit_candidate
+        normalized_explicit_filename = normalize_llm_config_filename(explicit_filename)
+        if normalized_explicit_filename is not None:
+            return normalized_explicit_filename
         logger.warning("Invalid explicit LLM config filename %r. Ignoring.", explicit_filename)
-
-    legacy_name = os.environ.get(ENV_PLANEXE_LLM_CONFIG_NAME_LEGACY)
-    if isinstance(legacy_name, str) and legacy_name.strip():
-        legacy_candidate = legacy_name.strip()
-        if is_valid_llm_config_filename(legacy_candidate):
-            logger.info(
-                "Using legacy %s=%s. Consider migrating to %s + profile files.",
-                ENV_PLANEXE_LLM_CONFIG_NAME_LEGACY,
-                legacy_candidate,
-                ENV_PLANEXE_MODEL_PROFILE,
-            )
-            return legacy_candidate
-        logger.warning(
-            "Invalid %s=%r. Ignoring legacy override and using profile mapping.",
-            ENV_PLANEXE_LLM_CONFIG_NAME_LEGACY,
-            legacy_name,
-        )
 
     return default_filename_for_profile(selected_profile)

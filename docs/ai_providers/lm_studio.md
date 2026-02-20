@@ -13,16 +13,16 @@ PlanExe processes more text than regular chat. You will need capable hardware to
 ## Quickstart (Docker)
 
 1. Install LM Studio on your host and download a small model inside LM Studio (e.g. `Qwen2.5-7B-Instruct-1M`, ~4.5 GB).
-2. Copy `.env.docker-example` to `.env` (even if you leave keys empty for LM Studio) and use the `lmstudio-...` entry in `llm_config.<profile>.json`, setting `base_url` to `http://host.docker.internal:1234` (Docker Desktop) or your Linux bridge IP.
+2. Copy `.env.docker-example` to `.env` (even if you leave keys empty for LM Studio) and use the `lmstudio-...` entry in `llm_config/<profile>.json`, setting `base_url` to `http://host.docker.internal:1234` (Docker Desktop) or your Linux bridge IP.
 3. Start PlanExe: `docker compose up worker_plan frontend_single_user`. Open http://localhost:7860, submit a prompt, and watch `docker compose logs -f worker_plan` for progress.
 
 ### Host-only (no Docker)
 
-For advanced users: use the host entry (e.g. `"lmstudio-qwen2.5-7b-instruct-1m"`) in `llm_config.<profile>.json` so `base_url` stays on `http://127.0.0.1:1234`. Start your preferred PlanExe runner (e.g. a local Python environment) and ensure the LM Studio server is running before you submit jobs.
+For advanced users: use the host entry (e.g. `"lmstudio-qwen2.5-7b-instruct-1m"`) in `llm_config/<profile>.json` so `base_url` stays on `http://127.0.0.1:1234`. Start your preferred PlanExe runner (e.g. a local Python environment) and ensure the LM Studio server is running before you submit jobs.
 
 ## Configuration
 
-In `llm_config.<profile>.json`, find a config that starts with `lmstudio-` (e.g. `"lmstudio-qwen2.5-7b-instruct-1m"`). In LM Studio, find the model with that exact id and download it. The Qwen model is on [Hugging Face](https://huggingface.co/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF) (~4.5 GB).
+In `llm_config/<profile>.json`, find a config that starts with `lmstudio-` (e.g. `"lmstudio-qwen2.5-7b-instruct-1m"`). In LM Studio, find the model with that exact id and download it. The Qwen model is on [Hugging Face](https://huggingface.co/lmstudio-community/Qwen2.5-7B-Instruct-1M-GGUF) (~4.5 GB).
 
 In LM Studio, go to the **Developer** page (Cmd+2 / Ctrl+2 / Windows+2), start the server, and confirm the UI shows **Status: Running** and **Reachable at: http://127.0.0.1:1234**.
 
@@ -33,7 +33,7 @@ In LM Studio, go to the **Developer** page (Cmd+2 / Ctrl+2 / Windows+2), start t
 
 ### Run LM Studio locally with Docker
 
-Containers cannot reach `127.0.0.1` on your host. Set `base_url` in `llm_config.<profile>.json` to `http://host.docker.internal:1234` (Docker Desktop) or your Docker bridge IP on Linux (often `http://172.17.0.1:1234`). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` under `worker_plan` in `docker-compose.yml` if that hostname is missing.
+Containers cannot reach `127.0.0.1` on your host. Set `base_url` in `llm_config/<profile>.json` to `http://host.docker.internal:1234` (Docker Desktop) or your Docker bridge IP on Linux (often `http://172.17.0.1:1234`). On Linux, add `extra_hosts: ["host.docker.internal:host-gateway"]` under `worker_plan` in `docker-compose.yml` if that hostname is missing.
 
 To find your bridge IP on Linux:
 
@@ -47,7 +47,7 @@ If `docker0` is missing (e.g. with Podman or alternate bridge names), inspect th
 docker network inspect bridge | awk -F'"' '/Gateway/{print $4}'
 ```
 
-Example `llm_config.<profile>.json` entry (add `base_url` when using Docker):
+Example `llm_config/<profile>.json` entry (add `base_url` when using Docker):
 
 ```json
 "lmstudio-qwen2.5-7b-instruct-1m": {
@@ -63,7 +63,7 @@ Example `llm_config.<profile>.json` entry (add `base_url` when using Docker):
 }
 ```
 
-After editing `llm_config.<profile>.json`, rebuild or restart the worker and frontends: `docker compose up worker_plan frontend_single_user` (add `--build` or run `docker compose build worker_plan frontend_single_user` if the image needs the new config).
+After editing `llm_config/<profile>.json`, rebuild or restart the worker and frontends: `docker compose up worker_plan frontend_single_user` (add `--build` or run `docker compose build worker_plan frontend_single_user` if the image needs the new config).
 
 ## Troubleshooting
 

@@ -20,7 +20,7 @@ PlanExe already has multiple "early classification" concepts and quality gates t
 
 - **MCP interface is tools-only** and supports `task_create -> task_status -> task_file_info/task_download`: `mcp_cloud/app.py`, `mcp_local/planexe_mcp_local.py`, and `docs/planexe_mcp_interface.md`.
 
-- **LLM configuration is externalized** (profiles in `llm_config.json`, default via `DEFAULT_LLM` env var; keys from `.env`): `worker_plan/worker_plan_internal/llm_factory.py`, `worker_plan/worker_plan_internal/utils/planexe_llmconfig.py`, `worker_plan/worker_plan_api/planexe_dotenv.py`.
+- **LLM configuration is externalized** (profiles in `llm_config.<profile>.json`, default via `DEFAULT_LLM` env var; keys from `.env`): `worker_plan/worker_plan_internal/llm_factory.py`, `worker_plan/worker_plan_internal/utils/planexe_llmconfig.py`, `worker_plan/worker_plan_api/planexe_dotenv.py`.
 
 ### The gap
 We do **not** currently classify "business plan vs software plan" as a first-class routing decision, even though:
@@ -220,7 +220,7 @@ Phase 2 - LLM tie-breaker (optional)
 
 - Add a structured output model for low-confidence cases only.
 
-- Ensure it's robust across providers in `llm_config.json` (structured output required).
+- Ensure it's robust across providers in `llm_config.<profile>.json` (structured output required).
 
 Phase 3 - Track-aware lever and gate prompting
 

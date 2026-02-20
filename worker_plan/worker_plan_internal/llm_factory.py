@@ -92,7 +92,7 @@ def obtain_llm_info(model_profile: Optional[ModelProfileEnum | str] = None) -> L
     # This is a special case. It will cycle through the available LLM models, if the first one fails, try the next one.
     llm_config_items.append(LLMConfigItem(id=SPECIAL_AUTO_ID, label=SPECIAL_AUTO_LABEL))
 
-    # The rest are the LLM models specified in the llm_config.json file.
+    # The rest are the LLM models specified in the selected llm_config.<profile>.json file.
     for config_id, config in planexe_llmconfig.llm_config_dict.items():
         priority = config.get("priority", None)
         if priority:
@@ -119,7 +119,10 @@ def obtain_llm_info(model_profile: Optional[ModelProfileEnum | str] = None) -> L
             label = f"{label_with_priority} ❌ unavailable"
         
         if ollama_info.is_running and not is_model_available:
-            error_message = f"Problem with config `\"{config_id}\"`: The model `\"{model}\"` is not available in Ollama. Compare model names in `llm_config.json` with the names available in Ollama."
+            error_message = (
+                f"Problem with config `\"{config_id}\"`: The model `\"{model}\"` is not available in Ollama. "
+                "Compare model names in the selected `llm_config.<profile>.json` file with the names available in Ollama."
+            )
             error_message_list.append(error_message)
         
         item = LLMConfigItem(id=config_id, label=label)
@@ -178,8 +181,12 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
         raise ValueError(f"The special {SPECIAL_AUTO_ID!r} is not a LLM model that can be created. Please use a valid LLM name.")
 
     if not is_valid_llm_name(llm_name, model_profile=model_profile):
-        logger.error(f"Cannot create LLM, the llm_name {llm_name!r} is not found in llm_config.json.")
-        raise ValueError(f"Cannot create LLM, the llm_name {llm_name!r} is not found in llm_config.json.")
+        logger.error(
+            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config.<profile>.json."
+        )
+        raise ValueError(
+            f"Cannot create LLM, the llm_name {llm_name!r} is not found in the selected llm_config.<profile>.json."
+        )
 
     config = planexe_llmconfig.llm_config_dict[llm_name]
     class_name = config.get("class")

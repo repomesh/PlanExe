@@ -5,7 +5,7 @@ __all__ = ["OllamaStatus", "LLMConfigItem", "LLMInfo"]
 
 
 class OllamaStatus(str, Enum):
-    no_ollama_models = "no ollama models in the llm_config.json file"
+    no_ollama_models = "no ollama models in the selected llm_config.<profile>.json file"
     ollama_not_running = "ollama is NOT running"
     mixed = "Mixed. Some ollama models are running, but some are NOT running."
     ollama_running = "Ollama is running"

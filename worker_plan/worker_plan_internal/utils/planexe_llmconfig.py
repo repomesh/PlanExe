@@ -1,5 +1,5 @@
 """
-Load PlanExe's llm_config.json file, containing LLM configurations
+Load PlanExe LLM profile configuration from the resolved llm_config.<profile>.json file.
 
 PROMPT> python -m worker_plan_internal.utils.planexe_llmconfig
 """
@@ -56,7 +56,10 @@ class PlanExeLLMConfig:
             with open(llm_config_json_path, "r") as f:
                 return json.load(f)
         except FileNotFoundError:
-            logger.error(f"Warning: llm_config.json not found at {llm_config_json_path}. Using an empty dictionary.")
+            logger.error(
+                "Warning: LLM config file not found at %s. Using an empty dictionary.",
+                llm_config_json_path,
+            )
             return {}
         except json.JSONDecodeError as e:
             raise ValueError(f"Error decoding JSON from {llm_config_json_path}: {e}")

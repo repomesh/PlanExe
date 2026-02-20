@@ -71,7 +71,7 @@ def is_valid_llm_config_filename(filename: str) -> bool:
 
 def default_filename_for_profile(model_profile: ModelProfileEnum) -> str:
     if model_profile == ModelProfileEnum.BASELINE:
-        return "llm_config.json"
+        return "llm_config.baseline.json"
     if model_profile == ModelProfileEnum.PREMIUM:
         return "llm_config.premium.json"
     if model_profile == ModelProfileEnum.FRONTIER:
@@ -81,11 +81,11 @@ def default_filename_for_profile(model_profile: ModelProfileEnum) -> str:
     if is_valid_llm_config_filename(custom_name):
         return custom_name.strip()
     logger.warning(
-        "Invalid %s=%r. Falling back to llm_config.json.",
+        "Invalid %s=%r. Falling back to llm_config.baseline.json.",
         ENV_PLANEXE_LLM_CONFIG_CUSTOM_FILENAME,
         custom_name,
     )
-    return "llm_config.json"
+    return "llm_config.baseline.json"
 
 
 def resolve_llm_config_filename(

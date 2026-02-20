@@ -70,7 +70,7 @@ git clone https://github.com/PlanExeOrg/PlanExe.git
 cd PlanExe
 ```
 
-2. Provide an LLM provider. Copy `.env.docker-example` to `.env` and fill in `OPENROUTER_API_KEY` with your key from [OpenRouter](https://openrouter.ai/). The containers mount `.env` and `llm_config.json`; pick a model profile there. For host-side Ollama, use the `docker-ollama-llama3.1` entry and ensure Ollama is listening on `http://host.docker.internal:11434`.
+2. Provide an LLM provider. Copy `.env.docker-example` to `.env` and fill in `OPENROUTER_API_KEY` with your key from [OpenRouter](https://openrouter.ai/). The containers mount `.env` and `llm_config.<profile>.json`; pick a model profile there. For host-side Ollama, use the `docker-ollama-llama3.1` entry and ensure Ollama is listening on `http://host.docker.internal:11434`.
 
 3. Start the stack (first run builds the images):
 

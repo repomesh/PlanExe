@@ -45,7 +45,7 @@ This proposal introduces a **meta-agent dispatcher** that routes each pipeline s
 
 ### Routing Rules
 
-Store routing configuration in `llm_config.json`:
+Store routing configuration in `llm_config.<profile>.json`:
 
 ```json
 {

@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigNameEnum(str, Enum):
     DOTENV = ".env"
-    LLM_CONFIG_JSON_DEFAULT = "llm_config.json"
+    LLM_CONFIG_JSON_DEFAULT = "llm_config.baseline.json"
 
 
 class EnvNameEnum(str, Enum):

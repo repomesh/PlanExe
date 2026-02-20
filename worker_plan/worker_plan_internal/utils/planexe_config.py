@@ -1,5 +1,5 @@
 """
-Locate PlanExe's config files, like .env and llm_config.json. The .env file is optional when the environment variables are provided by the host.
+Locate PlanExe's config files, like .env and llm_config.<profile>.json. The .env file is optional when the environment variables are provided by the host.
 
 Finds config files by checking the following locations in order:
 1. The directory specified by the PLANEXE_CONFIG_PATH environment variable. It must be an absolute path.
@@ -13,7 +13,7 @@ Usage: with a PLANEXE_CONFIG_PATH environment variable set.
 PROMPT> PLANEXE_CONFIG_PATH='/Users/neoneye/git/PlanExeGroup/PlanExe' python -m worker_plan_internal.utils.planexe_config
 
 IDEA: validate the contents of ".env"
-IDEA: validate the contents of "llm_config.json"
+IDEA: validate the contents of selected llm_config.<profile>.json files
 """
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigNameEnum(str, Enum):
     DOTENV = ".env"
-    LLM_CONFIG_JSON = "llm_config.json"
+    LLM_CONFIG_JSON = "llm_config.baseline.json"
 
 class PlanExeConfigError(Exception):
     """Raised when there is an error with the configuration."""
@@ -40,7 +40,7 @@ class PlanExeConfig:
     Attributes:
         planexe_config_path: Optional[Path] - The directory specified by PLANEXE_CONFIG_PATH
         dotenv_path: Optional[Path] - Path to the .env file
-        llm_config_json_path: Optional[Path] - Path to the llm_config.json file
+        llm_config_json_path: Optional[Path] - Path to the resolved llm_config.<profile>.json file
     """
     planexe_config_path: Optional[Path]
     dotenv_path: Optional[Path]

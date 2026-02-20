@@ -13,12 +13,12 @@ PlanExe supports **4 model profiles**:
 
 Each profile maps to a separate config file:
 
-- `baseline` → `llm_config.json`
+- `baseline` → `llm_config.baseline.json`
 - `premium` → `llm_config.premium.json`
 - `frontier` → `llm_config.frontier.json`
 - `custom` → `llm_config.custom.json` (or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME`)
 
-If the selected profile file is missing or invalid, PlanExe safely falls back to `llm_config.json`.
+If the selected profile file is missing or invalid, PlanExe safely falls back to `llm_config.baseline.json`.
 
 ---
 
@@ -94,6 +94,6 @@ Within each profile config file, priority is defined per model entry:
 When no profile is provided, PlanExe defaults to:
 
 - `baseline`
-- `llm_config.json`
+- `llm_config.baseline.json`
 
 So existing deployments continue to work without changes.

@@ -8,7 +8,7 @@ Subclass of the `worker_plan` service that runs the PlanExe pipeline with a Post
 - Configure MachAI confirmation endpoints with `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_PRODUCTION_URL` and `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL` (both are required; the worker fails fast if missing).
 
 ## Docker usage
-- Build/run single worker: `docker compose up --build worker_plan_database`
+- Build/run single worker: `docker compose --profile manual up --build worker_plan_database`
 - Run three workers (each with `PLANEXE_WORKER_ID=1/2/3`): `docker compose up -d worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`
 - Worker identity is required. Set `PLANEXE_WORKER_ID`, or on Railway provide both
   `RAILWAY_REPLICA_REGION` and `RAILWAY_REPLICA_ID` so the worker uses

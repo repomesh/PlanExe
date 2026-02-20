@@ -108,6 +108,8 @@ services:
   worker_plan_database:
     <<: *worker_plan_database_base
     container_name: worker_plan_database
+    profiles:
+      - manual
 
   worker_plan_database_1:
     <<: *worker_plan_database_base

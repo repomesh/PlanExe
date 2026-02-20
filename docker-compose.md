@@ -3,7 +3,7 @@ Docker Compose for PlanExe
 
 TL;DR
 -----
-- Services: `database_postgres` (DB on `${PLANEXE_POSTGRES_PORT:-5432}`), `frontend_single_user` (UI on 7860), `worker_plan` (API on 8000), `frontend_multi_user` (UI on `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`), plus DB workers (`worker_plan_database` and `worker_plan_database_1/2/3`), and `mcp_cloud` (MCP interface, stdio); `frontend_single_user` waits for the worker to be healthy and `frontend_multi_user` waits for Postgres health.
+- Services: `database_postgres` (DB on `${PLANEXE_POSTGRES_PORT:-5432}`), `frontend_single_user` (UI on 7860), `worker_plan` (API on 8000), `frontend_multi_user` (UI on `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`), plus DB workers (`worker_plan_database_1/2/3` by default; `worker_plan_database` in `manual` profile), and `mcp_cloud` (MCP interface, stdio); `frontend_single_user` waits for the worker to be healthy and `frontend_multi_user` waits for Postgres health.
 - Shared host files: `.env` and `./llm_config/` mounted read-only; `./run` bind-mounted so outputs persist; `.env` is also loaded via `env_file`.
 - Postgres defaults to user/db/password `planexe`; override via env or `.env`; data lives in the `database_postgres_data` volume.
 - Env defaults live in `docker-compose.yml` but can be overridden in `.env` or your shell (URLs, timeouts, run dirs, optional auth and opener URL).
@@ -94,7 +94,7 @@ Service: `worker_plan_database` (DB-backed worker)
 - Entrypoint: `python -m worker_plan_database.app` (runs the long-lived poller loop).
 - Multiple workers: compose defines `worker_plan_database_1/2/3` with `PLANEXE_WORKER_ID` set to `1/2/3`. Start the trio with:
   - `docker compose up -d worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`
-  - (Use `worker_plan_database` alone if you want a single unnumbered worker.)
+  - (Use `worker_plan_database` alone only via profile: `docker compose --profile manual up worker_plan_database`.)
 
 Service: `mcp_cloud` (MCP interface)
 --------------------------------------

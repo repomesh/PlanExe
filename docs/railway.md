@@ -22,6 +22,8 @@ Create these environments:
 PLANEXE_POSTGRES_PASSWORD=unique random text, different than staging
 OPENROUTER_API_KEY="SECRET-KEY-HERE"
 PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES=OpenRouter
+PLANEXE_IFRAME_GENERATOR_CONFIRMATION_PRODUCTION_URL="https://example.com/iframe_confirm_production"
+PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL="https://example.com/iframe_confirm_development"
 ```
 
 ### Shared variables - staging

@@ -48,6 +48,13 @@ PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/mcp](htt
 
 Assuming you have an MCP-compatible client (OpenClaw, Cursor, Codex, LM Studio, Windsurf, Inspector).
 
+The Tool workflow (tools-only, not MCP tasks protocol)
+
+1. `prompt_examples`
+2. `task_create`
+3. `task_status` (poll every 5 minutes until done)
+4. download the result via `task_download` or via `task_file_info`
+
 ### Option A: Remote MCP (fastest path)
 
 #### Prerequisites
@@ -71,34 +78,7 @@ Use this endpoint directly in your MCP client:
 }
 ```
 
-### Option B: Run MCP server locally with Docker
-
-#### Prerequisites
-
-- Docker
-- OpenRouter account
-- Make sure that you can create plans in the web interface, before proceeding to MCP.
-
-Start the full stack:
-
-```bash
-docker compose up --build
-```
-
-Then connect your client to:
-
-- `http://localhost:8001/mcp`
-
-For local docker defaults, auth is disabled in `docker-compose.yml`.
-
-### Tool workflow (tools-only, not MCP tasks protocol)
-
-1. `prompt_examples`
-2. `task_create`
-3. `task_status` (poll until done)
-4. `task_download` (via local proxy) or `task_file_info` + `download_url`
-
-### Local file downloads via proxy (`mcp_local`)
+### Option B: Remote MCP + local downloads via proxy (`mcp_local`)
 
 If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
 
@@ -115,6 +95,53 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
       ],
       "env": {
         "PLANEXE_URL": "https://mcp.planexe.org/mcp",
+        "PLANEXE_MCP_API_KEY": "pex_your_api_key_here",
+        "PLANEXE_PATH": "/absolute/path/for/downloads"
+      }
+    }
+  }
+}
+```
+
+### Option C: Run MCP server locally with Docker
+
+#### Prerequisites
+
+- Docker
+- OpenRouter account
+- Create a PlanExe `.env` file with `OPENROUTER_API_KEY`.
+
+Start the full stack:
+
+```bash
+docker compose up --build
+```
+
+Make sure that you can create plans in the web interface, before proceeding to MCP.
+
+Then connect your client to:
+
+- `http://localhost:8001/mcp`
+
+For local docker defaults, auth is disabled in `docker-compose.yml`.
+
+#### Local file downloads via proxy (`mcp_local`)
+
+If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
+
+```json
+{
+  "mcpServers": {
+    "planexe": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp",
+        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
+      ],
+      "env": {
+        "PLANEXE_URL": "http://localhost:8001/mcp/",
         "PLANEXE_PATH": "/absolute/path/for/downloads"
       }
     }

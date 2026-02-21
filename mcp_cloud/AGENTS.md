@@ -44,6 +44,13 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - `task_file_info` provides download metadata that `mcp_local` uses to download
   artifacts via `/download/{task_id}/...`.
 
+## MCP Registry metadata
+- Registry metadata for this server lives at `mcp_cloud/server.json`.
+- Keep `server.json` aligned with deployed behavior:
+  - `remotes[].url` must point at the production MCP endpoint.
+  - required auth headers must match the server auth policy (`X-API-Key`).
+- Publish with `mcp-publisher` from the `mcp_cloud/` directory so it picks up this file.
+
 ## Testing
 - No automated tests currently. If you change MCP tool behavior or database mappings,
   add a unit test close to the logic when feasible and run `python test.py` from

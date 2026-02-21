@@ -1,4 +1,4 @@
-# Proposal 60: Automated #BuildInPublic Twitter Posting from GitHub Commits
+# Automated #BuildInPublic Twitter Posting from GitHub Commits
 
 **Status:** Draft  
 **Author:** Mark (Egon/VoynichLabs)  

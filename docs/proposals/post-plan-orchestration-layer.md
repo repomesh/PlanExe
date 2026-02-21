@@ -611,3 +611,675 @@ The key insight: **Codebuff's orchestrator is LLM-centric** (agents request tool
 3. Should agents be **sequential by default** or **parallel-first** with explicit dependency ordering?
 4. Do we want **agent composition** (agents can spawn subagents) like Codebuff, or just flat scheduling?
 5. How should we integrate with existing **PlanExe plugins/extensions** if they exist?
+
+---
+
+## Complete Implementation Guide
+
+### Setup & Installation
+
+```bash
+# Clone the repo and install dependencies
+git clone https://github.com/VoynichLabs/PlanExe2026.git
+cd PlanExe2026
+
+# Install Node dependencies
+npm install
+
+# Create the orchestration module directory
+mkdir -p src/orchestration
+
+# Install TypeScript types
+npm install --save-dev @types/node @types/express typescript
+npm install express axios uuid dotenv
+```
+
+### File: `src/orchestration/types.ts`
+
+Complete type definitions for the orchestration layer:
+
+```typescript
+// Core types for orchestration
+export type AgentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'timeout';
+
+export interface EnrichmentAgentDefinition {
+  id: string;
+  displayName: string;
+  description: string;
+  
+  inputSchema: {
+    fields: string[];
+    context: string[];
+  };
+  
+  outputSchema: {
+    enrichmentType: string;
+    fields: Record<string, any>;
+  };
+  
+  dependencies: string[];
+  runCondition?: (plan: PlanArtifact, state: OrchestrationState) => boolean;
+  parallel: boolean;
+  timeout: number;
+  maxRetries: number;
+  
+  model: string;
+  estimatedTokens: number;
+  costPerRun: number;
+}
+
+export interface PlanArtifact {
+  id: string;
+  version: number;
+  plan: any;
+  
+  enrichments: {
+    [agentId: string]: AgentEnrichment;
+  };
+  
+  createdAt: number;
+  lastUpdatedAt: number;
+  orchestrationId: string;
+  
+  status: 'pending' | 'enriching' | 'complete' | 'failed';
+  failureReason?: string;
+}
+
+export interface AgentEnrichment {
+  agentId: string;
+  timestamp: number;
+  status: AgentStatus;
+  
+  data: Record<string, any>;
+  
+  metadata: {
+    inputHash: string;
+    tokensUsed: number;
+    creditsCharged: number;
+    executionTimeMs: number;
+  };
+}
+
+export interface OrchestrationContext {
+  planId: string;
+  planVersion: number;
+  priorEnrichments: Record<string, AgentEnrichment>;
+  agentOutputs: Record<string, any>;
+  
+  fileContextSnapshot: {
+    fileTree: string;
+    changedFiles: string[];
+    gitDiff: string;
+  };
+  
+  userId: string;
+  costBudget: number;
+  creditsRemaining: number;
+  
+  orchestrationId: string;
+  runId: string;
+  stepNumber: number;
+}
+
+export interface OrchestrationState {
+  id: string;
+  planId: string;
+  status: 'pending' | 'running' | 'complete' | 'failed';
+  stepNumber: number;
+  
+  currentAgents: string[];
+  completedAgents: string[];
+  failedAgents: string[];
+  results: AgentEnrichment[];
+  agentOutputs: Record<string, any>;
+  
+  creditsUsed: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface CreditTransaction {
+  orchestrationId: string;
+  agentId: string;
+  stepNumber: number;
+  
+  costs: {
+    llmTokens: number;
+    toolExecutions: number;
+    baseCharge: number;
+  };
+  
+  totalCredits: number;
+  timestamp: number;
+}
+```
+
+### File: `src/orchestration/orchestrator.ts`
+
+Main orchestration loop:
+
+```typescript
+import { v4 as uuidv4 } from 'uuid';
+import {
+  EnrichmentAgentDefinition,
+  PlanArtifact,
+  OrchestrationContext,
+  OrchestrationState,
+  AgentEnrichment,
+  AgentStatus,
+} from './types';
+
+export class EnrichmentOrchestrator {
+  private agents: Map<string, EnrichmentAgentDefinition> = new Map();
+  private state: OrchestrationState;
+  private context: OrchestrationContext;
+
+  constructor(
+    private planArtifact: PlanArtifact,
+    agents: EnrichmentAgentDefinition[],
+    private metering: CreditMeter
+  ) {
+    agents.forEach(agent => this.agents.set(agent.id, agent));
+    
+    this.state = {
+      id: uuidv4(),
+      planId: planArtifact.id,
+      status: 'pending',
+      stepNumber: 0,
+      currentAgents: [],
+      completedAgents: [],
+      failedAgents: [],
+      results: [],
+      agentOutputs: {},
+      creditsUsed: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    
+    this.context = this.buildContext();
+  }
+
+  private buildContext(): OrchestrationContext {
+    return {
+      planId: this.planArtifact.id,
+      planVersion: this.planArtifact.version,
+      priorEnrichments: this.planArtifact.enrichments,
+      agentOutputs: this.state.agentOutputs,
+      fileContextSnapshot: {
+        fileTree: '',
+        changedFiles: [],
+        gitDiff: '',
+      },
+      userId: 'system',
+      costBudget: 1000,
+      creditsRemaining: 1000,
+      orchestrationId: this.state.id,
+      runId: uuidv4(),
+      stepNumber: 0,
+    };
+  }
+
+  async orchestrateEnrichmentSwarm(maxSteps: number = 20): Promise<OrchestrationState> {
+    let stepNumber = 0;
+
+    while (!this.isComplete() && stepNumber < maxSteps) {
+      stepNumber++;
+      this.state.stepNumber = stepNumber;
+
+      console.log(`=== Orchestration Step ${stepNumber} ===`);
+
+      // Select next agents to run
+      const nextAgents = this.selectAgents();
+      if (nextAgents.length === 0) {
+        console.log('No more agents ready to run');
+        break;
+      }
+
+      console.log(`Running agents: ${nextAgents.map(a => a.id).join(', ')}`);
+
+      // Invoke agents sequentially (or parallel if configured)
+      const results = await Promise.all(
+        nextAgents.map(agent => this.invokeAgent(agent))
+      );
+
+      // Process results
+      for (const result of results) {
+        if (result.status === 'completed') {
+          this.state.completedAgents.push(result.agentId);
+        } else if (result.status === 'failed') {
+          this.state.failedAgents.push(result.agentId);
+        }
+
+        // Meter credits
+        const credits = await this.metering.calculateCredits({
+          agentId: result.agentId,
+          tokensUsed: result.metadata.tokensUsed,
+          baseCharge: this.agents.get(result.agentId)?.costPerRun || 0,
+        });
+
+        this.state.creditsUsed += credits;
+        this.context.creditsRemaining -= credits;
+
+        // Store enrichment
+        this.planArtifact.enrichments[result.agentId] = result;
+        this.state.results.push(result);
+      }
+
+      this.state.updatedAt = Date.now();
+    }
+
+    // Mark orchestration complete
+    this.state.status = this.state.failedAgents.length === 0 ? 'complete' : 'failed';
+    this.planArtifact.status = this.state.status === 'complete' ? 'complete' : 'failed';
+    this.planArtifact.lastUpdatedAt = Date.now();
+
+    return this.state;
+  }
+
+  private selectAgents(): EnrichmentAgentDefinition[] {
+    const ready: EnrichmentAgentDefinition[] = [];
+
+    for (const agent of this.agents.values()) {
+      // Skip if already completed or failed
+      if (
+        this.state.completedAgents.includes(agent.id) ||
+        this.state.failedAgents.includes(agent.id)
+      ) {
+        continue;
+      }
+
+      // Check if all dependencies are met
+      const depsMetched = agent.dependencies.every(dep =>
+        this.state.completedAgents.includes(dep)
+      );
+
+      if (!depsMetched) {
+        continue;
+      }
+
+      // Check run condition if provided
+      if (agent.runCondition && !agent.runCondition(this.planArtifact, this.state)) {
+        continue;
+      }
+
+      ready.push(agent);
+    }
+
+    return ready;
+  }
+
+  private async invokeAgent(agent: EnrichmentAgentDefinition): Promise<AgentEnrichment> {
+    const startTime = Date.now();
+
+    try {
+      console.log(`Invoking agent: ${agent.id}`);
+
+      // Call the agent via HTTP or RPC
+      const response = await invokeAgentRPC(agent.id, this.context);
+
+      const executionTimeMs = Date.now() - startTime;
+
+      return {
+        agentId: agent.id,
+        timestamp: Date.now(),
+        status: 'completed',
+        data: response,
+        metadata: {
+          inputHash: hashContext(this.context),
+          tokensUsed: response.tokensUsed || 0,
+          creditsCharged: 0, // Will be calculated
+          executionTimeMs,
+        },
+      };
+    } catch (error) {
+      console.error(`Agent ${agent.id} failed:`, error);
+
+      return {
+        agentId: agent.id,
+        timestamp: Date.now(),
+        status: 'failed',
+        data: { error: String(error) },
+        metadata: {
+          inputHash: hashContext(this.context),
+          tokensUsed: 0,
+          creditsCharged: 0,
+          executionTimeMs: Date.now() - startTime,
+        },
+      };
+    }
+  }
+
+  private isComplete(): boolean {
+    const totalAgents = this.agents.size;
+    const completedOrFailed =
+      this.state.completedAgents.length + this.state.failedAgents.length;
+    return completedOrFailed === totalAgents;
+  }
+
+  getState(): OrchestrationState {
+    return this.state;
+  }
+
+  getPlanArtifact(): PlanArtifact {
+    return this.planArtifact;
+  }
+}
+
+// Helper: invoke agent via RPC
+async function invokeAgentRPC(agentId: string, context: OrchestrationContext): Promise<any> {
+  const response = await fetch(`http://localhost:8080/api/agents/${agentId}/invoke`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(context),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Agent invocation failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+// Helper: hash context for deduplication
+function hashContext(context: OrchestrationContext): string {
+  // Implement a hash of the context
+  return `hash-${Date.now()}`;
+}
+
+// Credit meter
+export class CreditMeter {
+  async calculateCredits(params: {
+    agentId: string;
+    tokensUsed: number;
+    baseCharge: number;
+  }): Promise<number> {
+    // Token-based pricing: e.g., 0.01 credits per token
+    const tokenCost = params.tokensUsed * 0.01;
+    return tokenCost + params.baseCharge;
+  }
+}
+```
+
+### File: `src/orchestration/api.ts`
+
+Express API for orchestration:
+
+```typescript
+import express, { Request, Response } from 'express';
+import { EnrichmentOrchestrator, CreditMeter } from './orchestrator';
+import { PlanArtifact, EnrichmentAgentDefinition, OrchestrationState } from './types';
+
+export const createOrchestrationAPI = (
+  agentRegistry: Map<string, EnrichmentAgentDefinition>
+) => {
+  const router = express.Router();
+
+  // POST /orchestrate - Start a new orchestration run
+  router.post('/orchestrate', async (req: Request, res: Response) => {
+    try {
+      const { planArtifact } = req.body;
+
+      if (!planArtifact || !planArtifact.id) {
+        return res.status(400).json({ error: 'Missing planArtifact' });
+      }
+
+      const agents = Array.from(agentRegistry.values());
+      const metering = new CreditMeter();
+      const orchestrator = new EnrichmentOrchestrator(planArtifact, agents, metering);
+
+      const state = await orchestrator.orchestrateEnrichmentSwarm();
+
+      res.json({
+        orchestrationId: state.id,
+        status: state.status,
+        completedAgents: state.completedAgents,
+        failedAgents: state.failedAgents,
+        creditsUsed: state.creditsUsed,
+        planArtifact: orchestrator.getPlanArtifact(),
+      });
+    } catch (error) {
+      console.error('Orchestration error:', error);
+      res.status(500).json({ error: String(error) });
+    }
+  });
+
+  // GET /orchestrate/:orchestrationId - Get orchestration status
+  router.get('/orchestrate/:orchestrationId', async (req: Request, res: Response) => {
+    // Implementation: fetch from database
+    res.json({ message: 'Get orchestration status' });
+  });
+
+  // GET /agents - List all registered agents
+  router.get('/agents', (req: Request, res: Response) => {
+    const agents = Array.from(agentRegistry.values()).map(a => ({
+      id: a.id,
+      displayName: a.displayName,
+      description: a.description,
+      timeout: a.timeout,
+      costPerRun: a.costPerRun,
+    }));
+
+    res.json({ agents });
+  });
+
+  // POST /agents - Register a new agent
+  router.post('/agents', (req: Request, res: Response) => {
+    const { agent } = req.body;
+
+    if (!agent.id || !agent.displayName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    agentRegistry.set(agent.id, agent);
+    res.status(201).json({ agent });
+  });
+
+  return router;
+};
+```
+
+### File: `src/index.ts`
+
+Main application setup:
+
+```typescript
+import express, { Express } from 'express';
+import { createOrchestrationAPI } from './orchestration/api';
+import { EnrichmentAgentDefinition } from './orchestration/types';
+
+const app: Express = express();
+const PORT = process.env.PORT || 8080;
+
+// Middleware
+app.use(express.json());
+
+// Agent registry (in-memory for now, can be backed by database)
+const agentRegistry: Map<string, EnrichmentAgentDefinition> = new Map([
+  [
+    'security-review',
+    {
+      id: 'security-review',
+      displayName: 'Security Review Agent',
+      description: 'Reviews plan for security implications and risk mitigation strategies',
+      inputSchema: { fields: ['plan'], context: ['architecture', 'requirements'] },
+      outputSchema: { enrichmentType: 'security-findings', fields: { issues: [], recommendations: [] } },
+      dependencies: [],
+      parallel: false,
+      timeout: 120000,
+      maxRetries: 2,
+      model: 'gpt-4',
+      estimatedTokens: 2000,
+      costPerRun: 0.50,
+    },
+  ],
+  [
+    'performance-analysis',
+    {
+      id: 'performance-analysis',
+      displayName: 'Performance Analysis Agent',
+      description: 'Analyzes plan for performance bottlenecks and optimization opportunities',
+      inputSchema: { fields: ['plan'], context: ['architecture', 'metrics'] },
+      outputSchema: { enrichmentType: 'performance-findings', fields: { bottlenecks: [], recommendations: [] } },
+      dependencies: ['security-review'],
+      parallel: false,
+      timeout: 120000,
+      maxRetries: 2,
+      model: 'gpt-4',
+      estimatedTokens: 1500,
+      costPerRun: 0.40,
+    },
+  ],
+]);
+
+// Mount orchestration API
+app.use('/api', createOrchestrationAPI(agentRegistry));
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', uptime: process.uptime() });
+});
+
+// Error handling middleware
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`Orchestration server running on port ${PORT}`);
+});
+```
+
+### File: `docker-compose.yml`
+
+Docker setup for orchestration:
+
+```yaml
+version: '3.8'
+
+services:
+  orchestration:
+    build:
+      context: .
+      dockerfile: Dockerfile.orchestration
+    ports:
+      - "8080:8080"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://planexe:planexe@postgres:5432/orchestration
+      REDIS_URL: redis://redis:6379
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./src:/app/src
+    command: npm run dev
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: planexe
+      POSTGRES_PASSWORD: planexe
+      POSTGRES_DB: orchestration
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+### Setup Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Compile TypeScript
+npx tsc
+
+# Run locally
+npm run dev
+
+# Run with Docker
+docker-compose up -d
+
+# Create database schema
+npx prisma migrate dev
+
+# Seed with initial agents
+node scripts/seed-agents.js
+```
+
+### Environment Configuration
+
+Create `.env`:
+
+```
+NODE_ENV=development
+PORT=8080
+DATABASE_URL=postgres://planexe:planexe@localhost:5432/orchestration
+REDIS_URL=redis://localhost:6379
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### Running an Orchestration
+
+```bash
+# Start the server
+npm run dev
+
+# In another terminal, trigger an orchestration
+curl -X POST http://localhost:8080/api/orchestrate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "planArtifact": {
+      "id": "plan-123",
+      "version": 1,
+      "plan": { "title": "My Plan", "description": "..." },
+      "enrichments": {},
+      "createdAt": '$(date +%s)'000',
+      "lastUpdatedAt": '$(date +%s)'000',
+      "orchestrationId": null,
+      "status": "pending"
+    }
+  }'
+```
+
+### Expected Output
+
+```json
+{
+  "orchestrationId": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "complete",
+  "completedAgents": ["security-review", "performance-analysis"],
+  "failedAgents": [],
+  "creditsUsed": 0.90,
+  "planArtifact": {
+    "id": "plan-123",
+    "version": 2,
+    "enrichments": {
+      "security-review": {
+        "agentId": "security-review",
+        "timestamp": 1708462300000,
+        "status": "completed",
+        "data": { "issues": [...], "recommendations": [...] },
+        "metadata": { "tokensUsed": 2100, "creditsCharged": 0.50, "executionTimeMs": 3500 }
+      }
+    },
+    "status": "complete"
+  }
+}
+```

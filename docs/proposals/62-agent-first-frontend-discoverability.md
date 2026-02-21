@@ -14,6 +14,48 @@ PlanExe is a powerful planning orchestrator, but AI agents cannot easily:
 
 This limits PlanExe's reach to agents and orchestrators that require manual integration or discovery via documentation.
 
+## Implementation Status Snapshot (2026-02-21)
+
+This section records what is currently implemented in the repository and what still needs work.
+
+### In Place
+
+- Canonical discovery file exists at `public/llms.txt` (single source of truth).
+- `mcp_cloud` serves:
+  - `GET /llms.txt` (canonical)
+  - `GET /llm.txt` (legacy alias redirect)
+- `frontend_multi_user` serves:
+  - `GET /llms.txt` (from `public/llms.txt`)
+  - `GET /llm.txt` (legacy alias redirect)
+- Docker packaging copies `public/llms.txt` into both `mcp_cloud` and `frontend_multi_user` images.
+- Near-duplicate files under `mcp_cloud/` were removed to avoid drift.
+- `public/llms.txt` now reflects current production guidance:
+  - MCP endpoint is `/mcp` (not `/sse`)
+  - MCP auth uses `X-API-Key`
+  - Tool names match current MCP tools (`prompt_examples`, `task_create`, `task_status`, `task_stop`, `task_file_info`)
+  - Pricing/cost docs point to `https://docs.planexe.org/costs_and_models/`
+  - Support contact includes Discord: `https://planexe.org/discord`
+- Current positioning is documented:
+  - `home.planexe.org` is human-facing (account/billing/docs links)
+  - `mcp.planexe.org` is the AI-facing API surface
+  - PlanExe supports self-hosted/offline scenarios with local model runtimes.
+
+### Missing or Not Yet Verified
+
+- Production verification for:
+  - `https://home.planexe.org/llms.txt`
+  - `https://mcp.planexe.org/llms.txt`
+- Recommendation 2 (`/openapi.json` on home domain): currently not aligned with the stated architecture that `home.planexe.org` is human-facing only.
+- Recommendation 3 (`/.well-known/mcp.json`): not implemented in `mcp_cloud` currently.
+- Recommendation 4 (`robots.txt` updates): no `public/robots.txt` found in this repository.
+- Recommendation 5 (JSON-LD/meta tags): not verified here.
+- Recommendation 6 (README agent section): not verified here.
+
+### Proposal Text That Is Now Outdated
+
+- OpenAPI examples in this proposal remain illustrative and should not be interpreted as current production host routing.
+- Any numeric pricing/rate-limit examples in this document are placeholders unless explicitly verified against live product policy docs.
+
 ## Recommendations
 
 ### 1. `llms.txt` – LLM Agent Discovery
@@ -28,85 +70,54 @@ This limits PlanExe's reach to agents and orchestrators that require manual inte
 - Credit model and pricing
 - Rate limits and quotas
 
-**Content (sample):**
+**Content (sample, aligned with current state):**
 
-```
-# PlanExe - Multi-Step Plan Orchestration & Execution
+```text
+# PlanExe - AI Project Planning for Agents
 
-## What is PlanExe?
+PlanExe turns broad goals into structured strategic-plan drafts and downloadable artifacts.
 
-PlanExe is an AI-native planning orchestrator that transforms vague goals into detailed, executable multi-step plans. It breaks down complex tasks into subtasks, assigns resource requirements, estimates timelines, and tracks execution state—all via API or MCP.
+## Service Endpoints
 
-Designed for:
-- AI agents needing structured planning
-- Codebuff and Claude Code for code generation planning
-- OpenClaw orchestrators for multi-step task decomposition
-- LLM-powered automation systems
+- Human-facing site: https://home.planexe.org
+- AI-facing MCP: https://mcp.planexe.org/mcp
+- Agent discovery files:
+  - https://home.planexe.org/llms.txt
+  - https://mcp.planexe.org/llms.txt
+  - https://mcp.planexe.org/llm.txt (legacy alias redirect)
 
-## API Endpoints
+## MCP Tools
 
-### Cloud (home.planexe.org)
+- prompt_examples
+- task_create
+- task_status
+- task_stop
+- task_file_info
 
-- **POST /api/v1/plans** – Create a new plan (requires API key)
-- **GET /api/v1/plans/{planId}** – Fetch plan state and execution trace
-- **GET /api/v1/plans/{planId}/artifacts** – Download generated artifacts
-- **POST /api/v1/plans/{planId}/run** – Execute the plan
-- **GET /api/v1/plans/{planId}/status** – Poll execution status
+Recommended flow:
+1) prompt_examples
+2) task_create
+3) task_status (poll every 5 minutes)
+4) task_file_info
 
-Base URL: https://home.planexe.org/api/v1
-Auth: Bearer <API_KEY> (obtain at https://home.planexe.org/account/api-keys)
+## Authentication
 
-### Local Docker
+1) Create account at https://home.planexe.org
+2) Generate API key in Account -> API Keys
+3) Send header: X-API-Key: <API_KEY>
 
-```bash
-docker run -p 3000:3000 planexeorg/planexe:latest
-Base URL: http://localhost:3000/api/v1
-Auth: None (trusted local environment)
-```
+## Cost and runtime notes
 
-## MCP Server
-
-PlanExe exposes a Model Context Protocol server for direct integration with OpenAI's Responses API and other MCP-aware agents.
-
-**Cloud MCP endpoint:** https://mcp.planexe.org/sse
-**Local Docker MCP:** http://localhost:3001/sse (after enabling MCP mode)
-
-## Tools Available
-
-### plan.generate
-Generates a multi-step plan from a goal description.
-- Input: goal (string), context (optional), constraints (optional)
-- Output: planId, steps, artifacts, estimate
-
-### plan.poll
-Polls the execution status of a running plan.
-- Input: planId
-- Output: status, completedSteps, failedSteps, trace
-
-### plan.artifacts
-Lists and downloads generated artifacts from a completed plan.
-- Input: planId, artifactId (optional)
-- Output: artifacts array with download URLs
-
-## Credit Model
-
-- Plan generation: 10 credits
-- Execution per minute: 5 credits
-- Artifact download: 1 credit per 100MB
-- Free tier: 100 credits/month
-- See https://home.planexe.org/pricing for details
-
-## Rate Limits
-
-- 100 plans/hour (cloud)
-- 1000 artifact downloads/day
-- No rate limits on local Docker
+- Default runs are typically ~10-20 minutes.
+- Higher-quality runs can take significantly longer and cost more.
+- Cost depends on model choice and token usage.
+- Pricing and billing policy: https://docs.planexe.org/costs_and_models/
 
 ## Support
 
 - Docs: https://docs.planexe.org
-- GitHub: https://github.com/PlanExeOrg/PlanExe
-- Issues: https://github.com/PlanExeOrg/PlanExe/issues
+- GitHub issues: https://github.com/PlanExeOrg/PlanExe/issues
+- Discord: https://planexe.org/discord
 ```
 
 **Implementation:**
@@ -121,7 +132,7 @@ Lists and downloads generated artifacts from a completed plan.
 
 ### 2. OpenAPI / LLM-Optimized Tool Schema
 
-**What:** Expose `/openapi.json` describing PlanExe's API in OpenAPI 3.1 format, with LLM-optimized descriptions.
+**What:** Expose machine-readable schemas for PlanExe's AI-facing interfaces (MCP-first), and optionally OpenAPI for any public REST surfaces.
 
 **Why:** OpenAI's function-calling guide and Responses API expect structured function schemas. LLMs perform better with:
 - Clear, detailed descriptions (not just docstring summaries)
@@ -145,8 +156,8 @@ Lists and downloads generated artifacts from a completed plan.
   },
   "servers": [
     {
-      "url": "https://home.planexe.org/api/v1",
-      "description": "Cloud production"
+      "url": "https://api.planexe.example/v1",
+      "description": "Example public REST host (if exposed)"
     },
     {
       "url": "http://localhost:3000/api/v1",
@@ -250,10 +261,10 @@ Lists and downloads generated artifacts from a completed plan.
 ```
 
 **Implementation:**
-- Generate from code (e.g., via `@nestjs/swagger` or OpenAPI decorator libraries)
-- Serve at `home.planexe.org/openapi.json`
-- Include examples for common use cases (code generation, workflow decomposition)
-- Validate against OpenAPI 3.1 spec
+- Keep `/mcp/tools` accurate and stable as the primary machine-readable contract.
+- If maintaining OpenAPI, generate from code and publish from docs or the relevant API host.
+- Include examples for common use cases (planning quality vs speed, artifact retrieval).
+- Validate against OpenAPI 3.1 when OpenAPI is published.
 
 **Reference:** OpenAI function-calling guide emphasizes that detailed descriptions help models understand when and how to use tools. The Responses API docs recommend OpenAPI 3.1 as the source of truth for function schemas.
 
@@ -272,90 +283,43 @@ Lists and downloads generated artifacts from a completed plan.
   "version": "1.0",
   "mcp_server": {
     "name": "PlanExe",
-    "description": "Multi-step plan generation and execution orchestrator",
+    "description": "Strategic plan generation via MCP tools",
     "tools": [
-      {
-        "name": "plan.generate",
-        "description": "Generate a multi-step plan from a goal. Use when decomposing complex tasks.",
-        "input_schema": {
-          "$schema": "https://json-schema.org/draft/2020-12/schema",
-          "type": "object",
-          "properties": {
-            "goal": {
-              "type": "string",
-              "description": "The goal to plan for"
-            },
-            "context": {
-              "type": "string",
-              "description": "Optional context and constraints"
-            }
-          },
-          "required": ["goal"],
-          "additionalProperties": false
-        },
-        "output_schema": {
-          "type": "object",
-          "properties": {
-            "planId": { "type": "string" },
-            "steps": { "type": "array" },
-            "estimatedDuration": { "type": "string" }
-          }
-        }
-      },
-      {
-        "name": "plan.poll",
-        "description": "Poll the execution status of a running plan",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "planId": { "type": "string" }
-          },
-          "required": ["planId"],
-          "additionalProperties": false
-        }
-      },
-      {
-        "name": "plan.artifacts",
-        "description": "Retrieve generated artifacts from a completed plan",
-        "input_schema": {
-          "type": "object",
-          "properties": {
-            "planId": { "type": "string" }
-          },
-          "required": ["planId"],
-          "additionalProperties": false
-        }
-      }
+      {"name": "prompt_examples"},
+      {"name": "task_create"},
+      {"name": "task_status"},
+      {"name": "task_stop"},
+      {"name": "task_file_info"}
     ]
   },
   "auth": {
     "cloud": {
-      "type": "bearer_token",
-      "description": "API key from https://home.planexe.org/account/api-keys",
-      "header": "Authorization"
+      "type": "api_key",
+      "header": "X-API-Key",
+      "obtain_key_at": "https://home.planexe.org/account/api-keys"
     },
-    "local_docker": {
-      "type": "none",
-      "description": "No auth required for localhost Docker"
+    "local": {
+      "type": "configurable"
     }
   },
-  "rate_limits": {
-    "plans_per_hour": 100,
-    "artifact_downloads_per_day": 1000,
-    "cost_per_plan_generation": 10,
-    "cost_unit": "credits"
-  },
   "endpoints": {
-    "cloud": "https://mcp.planexe.org/sse",
-    "local": "http://localhost:3001/sse"
+    "cloud": "https://mcp.planexe.org/mcp",
+    "cloud_trailing_slash": "https://mcp.planexe.org/mcp/",
+    "local_default": "http://localhost:8001/mcp"
+  },
+  "discovery": {
+    "llms": [
+      "https://home.planexe.org/llms.txt",
+      "https://mcp.planexe.org/llms.txt"
+    ]
   }
 }
 ```
 
 **Implementation:**
-- Serve at `home.planexe.org/.well-known/mcp.json`
-- Keep in sync with OpenAPI schema
-- Document in contributing guide for maintainers
+- Serve on the AI-facing host (e.g., `mcp.planexe.org/.well-known/mcp.json`).
+- Keep in sync with `/mcp/tools` and `public/llms.txt`.
+- Document ownership/update process in maintainers' docs.
 
 **Reference:** OpenClaw architecture shows how Gateway/MCP servers expose their capabilities via manifest endpoints. The MCP spec defines `/.well-known/mcp.json` as the discovery entry point.
 
@@ -486,16 +450,22 @@ This section is optimized for AI agents (OpenAI Agents, Claude Code, Codebuff, O
 
 **Cloud (Hosted):**
 ```bash
-curl -X POST https://home.planexe.org/api/v1/plans \
-  -H "Authorization: Bearer YOUR_API_KEY" \
+curl -X POST https://mcp.planexe.org/mcp/tools/call \
+  -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"goal": "Build a REST API"}'
+  -d '{
+    "tool": "task_create",
+    "arguments": {
+      "prompt": "Create a plan for launching a B2B SaaS product",
+      "speed_vs_detail": "fast"
+    }
+  }'
 ```
 
 **Local Docker:**
 ```bash
-docker run -p 3000:3000 planexeorg/planexe:latest
-# No auth required. API at http://localhost:3000/api/v1
+docker compose up mcp_cloud
+# MCP endpoint at http://localhost:8001/mcp
 ```
 
 **MCP (OpenAI Responses API):**
@@ -508,8 +478,8 @@ response = client.responses.create(
     tools=[{
         "type": "mcp",
         "server_label": "planexe",
-        "server_url": "https://mcp.planexe.org/sse",
-        "authorization": "Bearer YOUR_API_KEY",
+        "server_url": "https://mcp.planexe.org/mcp",
+        "headers": {"X-API-Key": "YOUR_API_KEY"},
     }],
     input="Generate a plan for deploying a microservices app"
 )
@@ -520,20 +490,21 @@ print(response.output_text)
 
 | Tool | Input | Output | Use Case |
 |------|-------|--------|----------|
-| `plan.generate` | goal, context, constraints | planId, steps, estimate | Decompose complex tasks |
-| `plan.poll` | planId | status, completedSteps, trace | Check execution progress |
-| `plan.artifacts` | planId | artifacts array | Download generated outputs |
+| `prompt_examples` | none | prompt samples | Bootstrap high-quality prompts |
+| `task_create` | prompt, speed_vs_detail | task_id | Start plan generation |
+| `task_status` | task_id | state, progress | Poll long-running execution |
+| `task_file_info` | task_id, artifact | download metadata/url | Retrieve output files |
+| `task_stop` | task_id | stop result | Cancel a running task |
 
 ### OpenAPI & Schemas
 
-- OpenAPI 3.1 schema: `GET /openapi.json`
-- MCP manifest: `GET /.well-known/mcp.json`
 - Agent discovery: `GET /llms.txt`
+- MCP tool discovery: `GET /mcp/tools`
 
 ### Authentication
 
-**Cloud:** Bearer token (get at https://home.planexe.org/account/api-keys)
-**Local Docker:** None (trusted environment)
+**Cloud:** `X-API-Key` (create key at https://home.planexe.org/account/api-keys)
+**Local Docker:** Often none for local development, configurable by deployment.
 
 ### Rate Limits
 
@@ -543,11 +514,7 @@ print(response.output_text)
 
 ### Pricing (Cloud)
 
-- Plan generation: 10 credits
-- Execution per minute: 5 credits
-- Free tier: 100 credits/month
-
-See https://home.planexe.org/pricing for details.
+See https://docs.planexe.org/costs_and_models/ for current billing and model-cost guidance.
 ```
 
 **Implementation:**
@@ -561,43 +528,32 @@ See https://home.planexe.org/pricing for details.
 
 ## Implementation Priority
 
-1. **llms.txt** (Phase 1 – Week 1)
-   - Easiest to implement (static file)
-   - Highest impact on agent discoverability
-   - No code changes required
+1. **Keep llms.txt accurate and versioned** (Ongoing)
+   - Treat `public/llms.txt` as canonical and update whenever endpoints/tool names/auth change.
+   - Verify hosted endpoints regularly (`home` + `mcp`).
 
-2. **robots.txt update** (Phase 1 – Week 1)
+2. **robots.txt update** (Next)
    - Quick addition
    - Enables AI crawler indexing
 
-3. **OpenAPI schema** (Phase 2 – Week 2)
-   - Requires API documentation review
-   - High value for function-calling integration
-   - Can be generated from code if using OpenAPI-native framework
+3. **MCP well-known/discovery metadata** (Next)
+   - Add consistent machine-readable MCP manifest and keep it synced with tools.
 
-4. **MCP Well-Known endpoint** (Phase 2 – Week 2)
-   - Keep in sync with OpenAPI schema
-   - Enables MCP orchestrators
+4. **README agent section** (Near term)
+   - Publish concise MCP-first integration guidance in repo root docs.
 
-5. **Structured data + meta tags** (Phase 3 – Week 3)
+5. **Structured data + meta tags** (Later)
    - Low complexity
    - Improves AI-augmented search discoverability
-
-6. **README agent section** (Phase 3 – Week 3)
-   - Document existing capabilities
-   - No code required
 
 ---
 
 ## How Agents Will Use This
 
-1. **Discovery Phase:** Agent scans `llms.txt` or `/.well-known/mcp.json` → learns about PlanExe
-2. **Schema Phase:** Agent fetches `/openapi.json` or MCP tool definitions → understands function signatures
-3. **Integration Phase:**
-   - Function calling: Agent calls `POST /api/v1/plans` with structured schema
-   - MCP: Agent connects to `https://mcp.planexe.org/sse` via Responses API
-   - Direct: Agent uses cURL or SDK to invoke REST endpoints
-4. **Execution Phase:** Agent polls `/api/v1/plans/{planId}` for status → downloads artifacts
+1. **Discovery Phase:** Agent scans `/llms.txt` and learns MCP endpoint + auth model.
+2. **Tool Phase:** Agent calls `/mcp/tools` to inspect tool signatures.
+3. **Execution Phase:** Agent runs `task_create`, polls `task_status` (every ~5 minutes), and fetches artifacts via `task_file_info`.
+4. **Iteration Phase:** Agent refines prompts and reruns to improve output quality/cost tradeoff.
 
 ---
 

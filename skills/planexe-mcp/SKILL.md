@@ -83,36 +83,151 @@ PLANEXE_API_KEY=your_api_key
 
 ## Invoking PlanExe Tools
 
-Once configured, you can invoke PlanExe tools within your OpenClaw workflows:
+The PlanExe MCP exposes five core tools via the `/mcp` endpoint:
 
-### Example: Create a Plan
+### Tool 1: `prompt_examples`
 
-```openclaw
-planexe.create_plan(
-  title="Project Launch",
-  description="Q2 product launch planning",
-  deadline="2026-06-30"
-)
+Get example prompts to understand what PlanExe can do.
+
+**No parameters required:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "prompt_examples",
+    "arguments": {}
+  }
+}
 ```
 
-### Example: Analyze an Existing Plan
+**Returns:** List of example prompts for planning tasks.
 
-```openclaw
-planexe.analyze_plan(
-  plan_id="plan_123abc"
-)
+---
+
+### Tool 2: `task_create`
+
+Create a new planning task. This is the main entry point for generating plans.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_create",
+    "arguments": {
+      "prompt": "Create a project launch plan for Q2 2026",
+      "speed_vs_detail": "all",
+      "model_profile": "premium",
+      "user_api_key": "your_optional_api_key"
+    }
+  }
+}
 ```
 
-### Example: Run Plan Simulation
+**Parameter Guide:**
+- `prompt` (required): Your planning request in natural language
+- `speed_vs_detail` (required): One of `"ping"`, `"fast"`, or `"all"`
+  - `"ping"`: Quick outline (~2-5 min)
+  - `"fast"`: Standard plan (~10-15 min)
+  - `"all"`: Comprehensive analysis (~20-30+ min)
+- `model_profile` (required): One of `"baseline"`, `"premium"`, `"frontier"`, or `"custom"`
+- `user_api_key` (optional): Your PlanExe API key (if not set in environment)
 
-```openclaw
-planexe.simulate_plan(
-  plan_id="plan_123abc",
-  iterations=100
-)
+**Returns:** `task_id` for polling status and retrieving results.
+
+---
+
+### Tool 3: `task_status`
+
+Poll the status of a running planning task.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_status",
+    "arguments": {
+      "task_id": "task_abc123def456"
+    }
+  }
+}
 ```
 
-Refer to the complete [PlanExe API documentation](https://planexe.org/docs) for all available tools and parameters.
+**Usage:** Planning tasks take 15-20+ minutes. Poll every 5+ minutes to check progress.
+
+**Returns:** Current status (`queued`, `running`, `completed`, `failed`), progress percentage, and estimated time remaining.
+
+---
+
+### Tool 4: `task_stop`
+
+Stop a running planning task.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_stop",
+    "arguments": {
+      "task_id": "task_abc123def456"
+    }
+  }
+}
+```
+
+**Returns:** Confirmation that the task has been stopped.
+
+---
+
+### Tool 5: `task_file_info`
+
+Retrieve download information for completed plan artifacts.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_file_info",
+    "arguments": {
+      "task_id": "task_abc123def456",
+      "artifact": "report"
+    }
+  }
+}
+```
+
+**Artifact Options:**
+- `"report"`: Markdown/PDF plan document
+- `"zip"`: Complete deliverables package
+
+**Returns:** `download_url` for accessing the artifact.
+
+---
+
+## Typical Workflow
+
+1. Call `prompt_examples` to understand available planning scenarios
+2. Formulate your planning prompt
+3. Get user approval for the request
+4. Call `task_create` with your prompt and parameters → receives `task_id`
+5. Poll `task_status` every 5+ minutes until status is `completed` or `failed`
+6. Call `task_file_info` with completed `task_id` to get download link
+7. Download and use the generated plan
+
+Refer to the [PlanExe API documentation](https://planexe.org/docs) for extended examples and advanced use cases.
 
 ## Configuration Reference
 

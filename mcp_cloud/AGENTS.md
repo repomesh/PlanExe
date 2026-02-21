@@ -30,6 +30,12 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Event cursors use format `cursor_{event_id}` for incremental polling.
 - **Run as task**: We expose MCP **tools** only (task_create, task_status, task_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
 
+## Authentication Policy
+- PlanExe MCP cloud authentication is API-key header based.
+- Canonical client header is `X-API-Key: pex_...`.
+- OAuth is not supported for the MCP API. Do not document, imply, or advertise OAuth support.
+- In docs and user-facing error/help text, instruct clients to use `X-API-Key` custom headers.
+
 ## mcp_local integration
 - `mcp_local` runs on the user's machine and forwards tool calls to this server over HTTP.
 - It targets either:

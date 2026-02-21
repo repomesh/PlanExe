@@ -416,6 +416,12 @@ At minimum:
 - logs may include model prompts/responses → treat logs as sensitive artifacts
 - allow a config option to redact prompt content in event streaming
 
+### 10.4 Authentication mode
+
+- MCP authentication is API-key header based.
+- Clients should send `X-API-Key: pex_...` on MCP requests.
+- OAuth is not supported for the MCP API.
+
 ---
 
 ## 11. Performance Requirements

@@ -35,8 +35,9 @@ docker compose up --build mcp_cloud
 
 mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`). Authentication is controlled by `PLANEXE_MCP_REQUIRE_AUTH`:
 - `false`: no API key needed (local docker default).
-- `true`: provide a valid `X-API-Key` or `Authorization: Bearer <key>`.
+- `true`: provide a valid `X-API-Key`.
 Accepted keys are (1) UserApiKey from home.planexe.org (`pex_...`), or (2) `PLANEXE_MCP_API_KEY` if set (for dev or shared secret).
+OAuth is not supported for the MCP API.
 
 ### Connecting via HTTP/URL
 
@@ -66,21 +67,6 @@ After starting with Docker, configure your MCP client (e.g., LM Studio) to conne
       "url": "https://your-app.up.railway.app/mcp",
       "headers": {
         "X-API-Key": "your-api-key-here"
-      }
-    }
-  }
-}
-```
-
-**Alternative header format** (also supported):
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "url": "https://your-app.up.railway.app/mcp",
-      "headers": {
-        "API_KEY": "your-api-key-here"
       }
     }
   }
@@ -176,9 +162,8 @@ Steps:
 
 ### Production (with API key authentication)
 
-When auth is enabled, the inspector must send the key
-with every request. The inspector proxy forwards the `Authorization` header to
-the remote server.
+When auth is enabled, the inspector must send the key with every request.
+Do not use the inspector OAuth flow for PlanExe MCP.
 
 ```bash
 npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.planexe.org/mcp/
@@ -187,14 +172,11 @@ npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.pl
 Steps:
 1. In the inspector UI, expand **"Authentication"** in the left sidebar
 2. Select **Custom Headers**
-3. Add a header. Either:
-   - **X-API-Key** → your API key (e.g. `pex_...`)
-   - or **Authorization** → `Bearer pex_...` (include the word `Bearer` and a space)
+3. Add header **X-API-Key** with your API key value (e.g. `pex_...`)
 4. Click **"Connect"**
 5. Click **"Tools"** then **"List Tools"** to verify
 
-The inspector forwards these headers to the remote server, which accepts
-`Authorization: Bearer <key>`, `X-API-Key`, or `API_KEY`.
+The inspector forwards this custom header to the remote server.
 
 **CORS errors:** If you see "CORS preflight response did not succeed" or "status
 code: 400" in the browser console when connecting to a deployed MCP server:

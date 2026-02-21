@@ -81,6 +81,7 @@ Cloud:
 2. Go to Account -> API Keys
 3. Generate a new API key
 4. Use as custom header X-API-Key: <API_KEY>
+5. OAuth is not supported for the MCP API. Use custom headers only.
 
 Local/self-hosted deployments:
 - Often configured without auth for local development.

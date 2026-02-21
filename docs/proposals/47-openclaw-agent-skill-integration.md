@@ -55,30 +55,30 @@ OpenClaw Agent
   "description": "Gives the agent the ability to plan, budget, and track complex projects via the PlanExe Cloud.",
   "permissions": ["network_access"],
   "tools": [
-    "create_plan",
-    "check_plan_status",
-    "get_next_action_item",
-    "report_result"
+    "task_create",
+    "task_status",
+    "task_stop",
+    "task_file_info"
   ]
 }
 ```
 
 ## Skill Capabilities (Tools)
 
-### `create_plan(goal: str, constraints: list)`
+### `task_create(prompt: str, speed_vs_detail: str, model_profile: str, user_api_key: str)`
 
-- Input: goal + constraints
-- Output: `plan_id` + plan summary
+- Input: prompt + execution preferences
+- Output: `task_id` + creation timestamp
 
-### `get_next_action_item(plan_id: str)`
+### `task_status(task_id: str)`
 
-- Input: plan ID
-- Output: atomic next task
+- Input: task ID
+- Output: current state, progress, timing, files
 
-### `report_result(plan_id: str, task_id: str, output: str)`
+### `task_file_info(task_id: str, artifact: str)`
 
-- Input: task output
-- Output: plan updated, progress logged
+- Input: task ID + artifact type (report or zip)
+- Output: download URL + metadata
 
 ## Agent-to-Agent Protocol
 
@@ -116,10 +116,10 @@ OpenClaw Agent
 ### Phase A — Skill Packaging and Contracts (1–2 weeks)
 
 1. Define skill manifest and tool contracts:
-   - `create_plan`
-   - `check_plan_status`
-   - `get_next_action_item`
-   - `report_result`
+   - `task_create`
+   - `task_status`
+   - `task_stop`
+   - `task_file_info`
 
 2. Add JSON schema validation for tool inputs/outputs.
 3. Version the skill API separately from PlanExe core API.

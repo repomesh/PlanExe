@@ -18,7 +18,7 @@ from typing import Annotated, Any, Awaitable, Callable, Literal, Optional, Seque
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ContentBlock, TextContent
@@ -636,7 +636,7 @@ def root() -> dict[str, Any]:
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
             "download": f"/download/{{task_id}}/{REPORT_FILENAME}",
-            "llm_txt": "/llm.txt",
+            "llms_txt": "/llms.txt",
         },
         "documentation": "See /docs for OpenAPI documentation",
         "authentication": (
@@ -648,19 +648,33 @@ def root() -> dict[str, Any]:
     }
 
 
-@app.get("/llm.txt")
-def llm_txt():
+def _llms_txt_path() -> str:
     """
-    Serve llm.txt for AI agent discoverability.
-    
+    Resolve canonical llms metadata file path.
+    """
+    repo_root = os.path.dirname(os.path.dirname(__file__))
+    path = os.path.join(repo_root, "public", "llms.txt")
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="llms.txt not found")
+    return path
+
+
+@app.get("/llms.txt")
+def llms_txt():
+    """
+    Serve llms.txt for AI agent discoverability.
+
     This endpoint provides information about PlanExe for autonomous AI agents
     looking for project planning and execution tools. Designed for agent-first
     organizations and AI workforce deployments.
     """
-    llm_txt_path = os.path.join(os.path.dirname(__file__), "llm.txt")
-    if not os.path.exists(llm_txt_path):
-        raise HTTPException(status_code=404, detail="llm.txt not found")
-    return FileResponse(llm_txt_path, media_type="text/plain; charset=utf-8")
+    return FileResponse(_llms_txt_path(), media_type="text/plain; charset=utf-8")
+
+
+@app.get("/llm.txt")
+def llm_txt() -> RedirectResponse:
+    """Legacy alias that redirects to canonical /llms.txt."""
+    return RedirectResponse(url="/llms.txt", status_code=308)
 
 
 if __name__ == "__main__":

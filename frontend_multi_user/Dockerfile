@@ -14,6 +14,7 @@ COPY worker_plan/worker_plan_api /app/worker_plan_api
 COPY database_api /app/database_api
 COPY frontend_multi_user /app/frontend_multi_user
 COPY llm_config /app/llm_config
+COPY public/llms.txt /app/public/llms.txt
 
 # Install dependencies from frontend_multi_user pyproject
 RUN set -eux; \

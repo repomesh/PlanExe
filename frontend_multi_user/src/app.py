@@ -2077,6 +2077,17 @@ class MyFlaskApp:
                 status_code = 500
             return jsonify(response_payload), status_code
 
+        @self.app.route('/llms.txt')
+        def llms_txt():
+            llms_path = self.planexe_project_root / "public" / "llms.txt"
+            if not llms_path.exists():
+                abort(404)
+            return send_file(llms_path, mimetype="text/plain; charset=utf-8")
+
+        @self.app.route('/llm.txt')
+        def llm_txt_alias():
+            return redirect('/llms.txt', code=308)
+
         @self.app.route('/login', methods=['GET', 'POST'])
         def login():
             if request.method == 'POST':

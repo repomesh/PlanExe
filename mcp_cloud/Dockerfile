@@ -14,6 +14,7 @@ WORKDIR /app
 COPY database_api /app/database_api
 COPY worker_plan/worker_plan_api /app/worker_plan_api
 COPY mcp_cloud /app/mcp_cloud
+COPY public/llms.txt /app/public/llms.txt
 
 # Install dependencies
 RUN set -eux; \

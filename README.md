@@ -44,7 +44,7 @@ New to PlanExe? Follow the [Getting Started](https://docs.planexe.org/getting_st
 
 ## Model Context Protocol (MCP)
 
-PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/mcp](https://mcp.planexe.org/mcp).
+PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/](https://mcp.planexe.org/)
 
 Assuming you have an MCP-compatible client (OpenClaw, Cursor, Codex, LM Studio, Windsurf, Inspector).
 

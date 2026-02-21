@@ -1,10 +1,10 @@
 # PlanExe MCP Cloud - Experimental, likely to be changed a lot!
 
-Model Context Protocol (MCP) interface for PlanExe. Implements the MCP specification defined in `docs/mcp/planexe_mcp_interface.md`.
+Model Context Protocol (MCP) interface for PlanExe. Implements the MCP specification defined in [docs/mcp/planexe_mcp_interface.md](https://docs.planexe.org/mcp/planexe_mcp_interface/).
 
 ## Overview
 
-mcp_cloud provides a standardized MCP interface for PlanExe's plan generation workflows. It connects to `worker_plan_database` via the shared Postgres database (`database_api` models).
+mcp_cloud provides a standardized MCP interface for PlanExe's plan generation workflows. It connects to `worker_plan_database_{n}` via the shared Postgres database (`database_api` models).
 
 ## Features
 
@@ -30,8 +30,11 @@ MCP has two ways to run long-running work: **tools** (what we use) and the **tas
 Build and run mcp_cloud with HTTP endpoints:
 
 ```bash
-docker compose up --build mcp_cloud
+docker compose up
 ```
+
+Important: `mcp_cloud` enqueues tasks and `worker_plan_database_{n}` executes them.  
+If no `worker_plan_database*` service is running, `task_create` returns a task id but the task will not progress.
 
 mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`). Authentication is controlled by `PLANEXE_MCP_REQUIRE_AUTH`:
 - `false`: no API key needed (local docker default).
@@ -43,13 +46,13 @@ OAuth is not supported for the MCP API.
 
 After starting with Docker, configure your MCP client (e.g., LM Studio) to connect via HTTP:
 
-**Local Docker (development):**
+**Remote MCP:**
 
 ```json
 {
   "mcpServers": {
     "planexe": {
-      "url": "http://localhost:8001/mcp",
+      "url": "https://mcp.planexe.org/mcp",
       "headers": {
         "X-API-Key": "your-api-key-here"
       }
@@ -58,22 +61,19 @@ After starting with Docker, configure your MCP client (e.g., LM Studio) to conne
 }
 ```
 
-**Railway/Cloud deployment:**
+Use a UserApiKey from [home.planexe.org](https://home.planexe.org/), or set `PLANEXE_MCP_API_KEY` to a shared secret for local/dev use.
+
+**Running MCP in docker on localhost:**
 
 ```json
 {
   "mcpServers": {
     "planexe": {
-      "url": "https://your-app.up.railway.app/mcp",
-      "headers": {
-        "X-API-Key": "your-api-key-here"
-      }
+      "url": "http://localhost:8001/mcp"
     }
   }
 }
 ```
-
-Use a UserApiKey from home.planexe.org, or set `PLANEXE_MCP_API_KEY` to a shared secret for local/dev use.
 
 ### Available HTTP Endpoints
 

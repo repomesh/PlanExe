@@ -42,6 +42,97 @@ PlanExe removes 70–90 % of the labor for the planning scaffold on any topic, b
 
 New to PlanExe? Follow the [Getting Started](https://docs.planexe.org/getting_started/) guide.
 
+## Model Context Protocol (MCP)
+
+PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/mcp](https://mcp.planexe.org/mcp).
+
+Assuming you have an MCP-compatible client (OpenClaw, Cursor, Codex, LM Studio, Windsurf, Inspector).
+
+### Option A: Remote MCP (fastest path)
+
+#### Prerequisites
+
+- An account at [https://home.planexe.org](https://home.planexe.org).
+- Sufficient funds to create plans.
+- A PlanExe API key (`pex_...`) from your account
+
+Use this endpoint directly in your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "planexe": {
+      "url": "https://mcp.planexe.org/mcp",
+      "headers": {
+        "X-API-Key": "pex_your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+### Option B: Run MCP server locally with Docker
+
+#### Prerequisites
+
+- Docker
+- OpenRouter account
+- Make sure that you can create plans in the web interface, before proceeding to MCP.
+
+Start the full stack:
+
+```bash
+docker compose up --build
+```
+
+Then connect your client to:
+
+- `http://localhost:8001/mcp`
+
+For local docker defaults, auth is disabled in `docker-compose.yml`.
+
+### Tool workflow (tools-only, not MCP tasks protocol)
+
+1. `prompt_examples`
+2. `task_create`
+3. `task_status` (poll until done)
+4. `task_download` (via local proxy) or `task_file_info` + `download_url`
+
+### Local file downloads via proxy (`mcp_local`)
+
+If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
+
+```json
+{
+  "mcpServers": {
+    "planexe": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "mcp",
+        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
+      ],
+      "env": {
+        "PLANEXE_URL": "https://mcp.planexe.org/mcp",
+        "PLANEXE_PATH": "/absolute/path/for/downloads"
+      }
+    }
+  }
+}
+```
+
+### MCP docs
+
+- Setup overview: [https://docs.planexe.org/mcp/mcp_setup/](https://docs.planexe.org/mcp/mcp_setup/)
+- Tool details and flow: [https://docs.planexe.org/mcp/mcp_details/](https://docs.planexe.org/mcp/mcp_details/)
+- MCP Inspector guide: [https://docs.planexe.org/mcp/inspector/](https://docs.planexe.org/mcp/inspector/)
+- Cursor setup: [https://docs.planexe.org/mcp/cursor/](https://docs.planexe.org/mcp/cursor/)
+- Codex setup: [https://docs.planexe.org/mcp/codex/](https://docs.planexe.org/mcp/codex/)
+- PlanExe MCP interface: [https://docs.planexe.org/mcp/planexe_mcp_interface/](https://docs.planexe.org/mcp/planexe_mcp_interface/)
+- MCP Registry publishing metadata (`server.json`): `mcp_cloud/server.json`
+- `llms.txt`: [https://mcp.planexe.org/llms.txt](https://mcp.planexe.org/llms.txt)
+
 <details>
 <summary><strong> Try it out now (Click to expand)</strong></summary>
 <br>

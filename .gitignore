@@ -4,3 +4,5 @@ build/
 *.egg-info/
 run/
 __pycache__/
+.mcpregistry_github_token
+.mcpregistry_registry_token

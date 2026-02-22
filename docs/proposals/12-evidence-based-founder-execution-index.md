@@ -52,7 +52,7 @@ In short: as AI can read and evaluate entire reports, the advantage of slide dec
 
 Example of a PlanExe report that an AI can evaluate end-to-end:
 
-- https://planexe.org/20260114_cbc_validation_report.html
+- https://docs.planexe.org/examples/20260114_cbc_validation_report.html (TBD - verify URL)
 
 This is the kind of artifact the FEI is designed to ingest and audit. If the numbers are fabricated or hallucinated, the FEI should penalize confidence and surface the missing verification.
 

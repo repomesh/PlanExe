@@ -35,7 +35,9 @@ PlanExe ranks generated plans using a two‑phase LLM evaluation to avoid gaming
 
 - Corpus source: PlanExe‑web `_data/examples.yml`
 
-## Endpoints
+## Endpoints (Proposed Local Feature)
+
+**NOTE:** These endpoints are proposed for local/self-hosted PlanExe deployments. They are not part of the public MCP interface. Implementation TBD.
 
 - `POST /api/rank` → rank plan, update Elo
 
@@ -510,7 +512,7 @@ X-API-Key: <your_api_secret>
   },
   "budget_cents": 1500000000,
   "title": "Electric VTOL Development Program",
-  "url": "https://planexe.com/plans/abc123"
+  "url": "https://home.planexe.org/plans/abc123"
 }
 ```
 

@@ -210,6 +210,9 @@ def fetch_llm_info_with_retry(max_attempts: int = 15, delay_seconds: float = 2.0
     Try to fetch LLM info with retries so the UI doesn't crash if the worker
     isn't ready yet (e.g., cold start or delayed boot).
     """
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be >= 1")
+
     for attempt in range(1, max_attempts + 1):
         try:
             return worker_client.get_llm_info()
@@ -224,6 +227,8 @@ def fetch_llm_info_with_retry(max_attempts: int = 15, delay_seconds: float = 2.0
             if attempt == max_attempts:
                 raise
             time.sleep(delay_seconds)
+
+    raise RuntimeError("Unable to fetch LLM info after retry loop")
 
 llm_info: LLMInfo = fetch_llm_info_with_retry()
 logger.info(f"LLMInfo.ollama_status: {llm_info.ollama_status.value}")

@@ -55,7 +55,7 @@ Create a verifiable claim system where PlanExe acts as a reputation oracle:
     {
       "name": "Master Architect",
       "description": "Won 5+ Bids in 'Construction'",
-      "icon_url": "https://planexe.org/badges/architect_gold.svg",
+      "icon_url": "https://home.planexe.org/badges/architect_gold.svg",
       "issued_at": "2026-02-11"
     }
   ],

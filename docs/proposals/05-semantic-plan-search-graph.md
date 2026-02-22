@@ -118,6 +118,8 @@ def index_plan(plan_id, title, prompt, summary):
 
 ### Search API
 
+**NOTE:** This API is a proposed local feature, not part of the public MCP interface. Implementation details TBD.
+
 ```http
 GET /api/plans/search
 Query Parameters:
@@ -189,6 +191,7 @@ def generate_plan_with_examples(prompt):
 ### 3. Plan Recommendations
 ```jsx
 // After user completes a plan
+// NOTE: Endpoint `/api/plans/{planId}/similar` is a proposed feature (TBD implementation)
 function RelatedPlans({ currentPlanId }) {
   const { data } = useSWR(`/api/plans/${currentPlanId}/similar?limit=5`);
   
@@ -252,7 +255,7 @@ def trending_domains(days=30):
 
 ### Week 3: Search API
 
-- Build `/api/plans/search` endpoint
+- Build semantic search endpoint (TBD - local feature, not part of MCP)
 
 - Add filtering (domain, min_similarity)
 

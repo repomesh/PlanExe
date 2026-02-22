@@ -34,7 +34,7 @@ This section records what is currently implemented in the repository and what st
   - MCP auth uses `X-API-Key`
   - Tool names match current MCP tools (`prompt_examples`, `task_create`, `task_status`, `task_stop`, `task_file_info`)
   - Pricing/cost docs point to `https://docs.planexe.org/costs_and_models/`
-  - Support contact includes Discord: `https://planexe.org/discord`
+  - Support contact includes Discord: `https://home.planexe.org/discord`
 - Current positioning is documented:
   - `home.planexe.org` is human-facing (account/billing/docs links)
   - `mcp.planexe.org` is the AI-facing API surface
@@ -117,7 +117,7 @@ Recommended flow:
 
 - Docs: https://docs.planexe.org
 - GitHub issues: https://github.com/PlanExeOrg/PlanExe/issues
-- Discord: https://planexe.org/discord
+- Discord: https://home.planexe.org/discord
 ```
 
 **Implementation:**
@@ -131,6 +131,8 @@ Recommended flow:
 ---
 
 ### 2. OpenAPI / LLM-Optimized Tool Schema
+
+**STATUS: NOT YET IMPLEMENTED** — This recommendation is aspirational. The `/openapi.json` endpoint does not currently exist on either domain.
 
 **What:** Expose machine-readable schemas for PlanExe's AI-facing interfaces (MCP-first), and optionally OpenAPI for any public REST surfaces.
 
@@ -271,6 +273,8 @@ Recommended flow:
 ---
 
 ### 3. MCP Well-Known Endpoint (`.well-known/mcp.json`)
+
+**STATUS: NOT YET IMPLEMENTED** — This endpoint does not currently exist at `mcp.planexe.org/.well-known/mcp.json`. This is a future enhancement.
 
 **What:** Add `/.well-known/mcp.json` describing PlanExe as an MCP server, compatible with OpenAI's MCP connector and orchestrators.
 

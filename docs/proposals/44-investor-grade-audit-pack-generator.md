@@ -124,7 +124,7 @@ Create a new audit pack.
 ```json
 {
   "pack_id": "pack_456",
-  "download_url": "https://home.planexe.org/api/audit/download/pack_456.pdf",
+  "download_url": "https://planexe.org/api/audit/download/pack_456.pdf",
   "expires_at": "2026-02-18T16:00:00Z"
 }
 ```

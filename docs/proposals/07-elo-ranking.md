@@ -512,7 +512,7 @@ X-API-Key: <your_api_secret>
   },
   "budget_cents": 1500000000,
   "title": "Electric VTOL Development Program",
-  "url": "https://home.planexe.org/plans/abc123"
+  "url": "https://planexe.com/plans/abc123"
 }
 ```
 

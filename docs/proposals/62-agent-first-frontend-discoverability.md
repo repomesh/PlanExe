@@ -34,7 +34,7 @@ This section records what is currently implemented in the repository and what st
   - MCP auth uses `X-API-Key`
   - Tool names match current MCP tools (`prompt_examples`, `task_create`, `task_status`, `task_stop`, `task_file_info`)
   - Pricing/cost docs point to `https://docs.planexe.org/costs_and_models/`
-  - Support contact includes Discord: `https://home.planexe.org/discord`
+  - Support contact includes Discord: `https://planexe.org/discord`
 - Current positioning is documented:
   - `home.planexe.org` is human-facing (account/billing/docs links)
   - `mcp.planexe.org` is the AI-facing API surface
@@ -117,7 +117,7 @@ Recommended flow:
 
 - Docs: https://docs.planexe.org
 - GitHub issues: https://github.com/PlanExeOrg/PlanExe/issues
-- Discord: https://home.planexe.org/discord
+- Discord: https://planexe.org/discord
 ```
 
 **Implementation:**

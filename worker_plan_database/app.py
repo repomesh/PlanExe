@@ -13,7 +13,7 @@ import sys
 import time
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any, cast
 import uuid
 from worker_plan_api.model_profile import ModelProfileEnum
 from urllib.parse import quote_plus
@@ -22,6 +22,11 @@ import zipfile
 import requests
 from sqlalchemy import inspect, text, or_
 from worker_plan_database.worker_identity import resolve_and_set_worker_id
+
+
+def _new_model(model_cls: Any, **kwargs: Any) -> Any:
+    """Instantiate ORM models through Any to accommodate dynamic Flask-SQLAlchemy typing."""
+    return cast(Any, model_cls)(**kwargs)
 
 # Load .env file early, before any imports that require environment variables (e.g., machai.py).
 # This allows configuration via .env file instead of shell exports.
@@ -272,7 +277,8 @@ def worker_process_started() -> None:
         event_context["issue with worker_id"] = "ERROR: PLANEXE_WORKER_ID != WORKER_ID. This is an inconsistency. The process may have been started without a PLANEXE_WORKER_ID environment variable."
 
     with app.app_context():
-        event = EventItem(
+        event = _new_model(
+            EventItem,
             event_type=EventType.GENERIC_EVENT,
             message="Worker started",
             context=event_context
@@ -306,6 +312,7 @@ def update_task_state_with_retry(task_id: str, new_state: TaskState, max_retries
             else:
                 logger.error("Max retries reached for task state update")
                 return False
+    return False
 
 def update_task_progress_with_retry(task_id: str, progress_percentage: float, progress_message: str, max_retries: int = 3, retry_delay: int = 5) -> bool:
     """Helper function to update task progress with retry logic for database operations."""
@@ -330,6 +337,7 @@ def update_task_progress_with_retry(task_id: str, progress_percentage: float, pr
             else:
                 logger.error("Max retries reached for task progress update")
                 return False
+    return False
 
 
 class ServerExecutePipeline(ExecutePipeline):
@@ -554,7 +562,8 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
         if user is not None and charged_credits > 0:
             current_balance = Decimal(str(user.credits_balance or 0)).quantize(CREDIT_SCALE)
             user.credits_balance = (current_balance - charged_credits).quantize(CREDIT_SCALE)
-            ledger = CreditHistory(
+            ledger = _new_model(
+                CreditHistory,
                 user_id=user.id,
                 delta=-charged_credits,
                 reason="plan_created_with_usage_cost" if success else "plan_failed_usage_cost",
@@ -731,7 +740,7 @@ def execute_pipeline_for_job(
     event_context["stop_requested"] = str(stop_requested)
 
     if pipeline_instance.has_report_file:
-        machai_error_message = None
+        machai_error_message = ""
     elif pipeline_instance.has_stop_flag_file:
         if stop_requested:
             machai_error_message = 'Stopped by user.'
@@ -754,7 +763,8 @@ def execute_pipeline_for_job(
                 "billing_charged_credits": str(billing_result["charged_credits"]),
                 "billing_charge_applied": str(billing_result["charged"]),
             })
-            event = EventItem(
+            event = _new_model(
+                EventItem,
                 event_type=EventType.TASK_COMPLETED,
                 message=f"Processing -> Completed",
                 context=event_context
@@ -764,7 +774,7 @@ def execute_pipeline_for_job(
         else:
             update_task_state_with_retry(task_id, TaskState.failed)
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
-            event_context["machai_error_message"] = machai_error_message
+            event_context["machai_error_message"] = machai_error_message or ""
             event_context.update({
                 "billing_usage_cost_usd": str(billing_result["usage_cost_usd"]),
                 "billing_success_fee_usd": str(billing_result["success_fee_usd"]),
@@ -772,7 +782,8 @@ def execute_pipeline_for_job(
                 "billing_charged_credits": str(billing_result["charged_credits"]),
                 "billing_charge_applied": str(billing_result["charged"]),
             })
-            event = EventItem(
+            event = _new_model(
+                EventItem,
                 event_type=EventType.TASK_FAILED,
                 message=f"Processing -> Failed",
                 context=event_context
@@ -869,7 +880,11 @@ def process_pending_tasks() -> bool:
         WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=task_id)
         
     # Measure how long it took to pick up the task
-    timestamp = timestamp_created
+    if timestamp_created is None:
+        logger.warning("Task %s has no timestamp_created; using current time for duration estimate.", task_id)
+        timestamp = datetime.now(UTC)
+    else:
+        timestamp = timestamp_created
     if timestamp.tzinfo is None:
         timestamp = timestamp.replace(tzinfo=UTC)
     duration_between_pending_and_processing = (datetime.now(UTC) - timestamp).total_seconds()
@@ -899,7 +914,8 @@ def process_pending_tasks() -> bool:
             "duration_between_pending_and_processing": str(duration_between_pending_and_processing),
             "WORKER_ID": str(WORKER_ID)
         }
-        event = EventItem(
+        event = _new_model(
+            EventItem,
             event_type=EventType.TASK_PROCESSING,
             message=f"Pending -> Processing",
             context=event_context
@@ -946,7 +962,8 @@ def process_pending_tasks() -> bool:
                 "billing_charged_credits": str(billing_result["charged_credits"]),
                 "billing_charge_applied": str(billing_result["charged"]),
             }
-            event = EventItem(
+            event = _new_model(
+                EventItem,
                 event_type=EventType.TASK_FAILED,
                 message=f"Processing -> Failed",
                 context=event_context

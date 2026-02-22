@@ -28,7 +28,7 @@ from worker_plan_api.filenames import ExtraFilenameEnum  # noqa: E402
 APP_MODULE_PATH = FRONTEND_SRC / "app.py"
 APP_IMPORT_ERROR = None
 APP_AVAILABLE = False
-MyFlaskApp: type[Any] = object
+MyFlaskApp: Any = object
 TaskState: Any = SimpleNamespace(processing="processing", completed="completed")
 frontend_app_module = None
 try:

@@ -18,7 +18,7 @@ import secrets
 import hashlib
 import tempfile
 from urllib.parse import quote_plus, urlparse
-from typing import ClassVar, Dict, Optional, Tuple, Any
+from typing import ClassVar, Dict, Optional, Tuple, Any, cast
 from types import SimpleNamespace
 from pathlib import Path
 from flask import Flask, render_template, Response, request, jsonify, send_file, redirect, url_for, session, abort
@@ -81,6 +81,11 @@ AUTH_PROVIDER_LABELS = {
     "open_access": "Open access",
 }
 
+
+def _new_model(model_cls: Any, **kwargs: Any) -> Any:
+    """Instantiate ORM models through Any to accommodate dynamic Flask-SQLAlchemy typing."""
+    return cast(Any, model_cls)(**kwargs)
+
 def build_postgres_uri_from_env(env: Dict[str, str]) -> Tuple[str, Dict[str, str]]:
     """Construct a SQLAlchemy URI for Postgres using environment variables."""
     host = env.get("PLANEXE_FRONTEND_MULTIUSER_DB_HOST") or env.get("PLANEXE_POSTGRES_HOST") or "database_postgres"
@@ -99,7 +104,7 @@ class User(UserMixin):
 
 class MyAdminIndexView(AdminIndexView):
     @expose('/')
-    def index(self):
+    def index(self) -> Any:
         if not current_user.is_authenticated:
             return redirect(url_for('login'))
         if not current_user.is_admin:
@@ -533,7 +538,7 @@ class MyFlaskApp:
         # Setup Flask-Login
         self.login_manager = LoginManager()
         self.login_manager.init_app(self.app)
-        self.login_manager.login_view = 'login'
+        self.login_manager.login_view = cast(Any, 'login')
         
         @self.login_manager.user_loader
         def load_user(user_id):
@@ -588,10 +593,11 @@ class MyFlaskApp:
         }
             
         with self.app.app_context():
-            event = EventItem(
+            event = _new_model(
+                EventItem,
                 event_type=EventType.GENERIC_EVENT,
                 message="Flask app started",
-                context=event_context
+                context=event_context,
             )
             self.db.session.add(event)
             self.db.session.commit()
@@ -822,7 +828,8 @@ class MyFlaskApp:
                 self.db.session.commit()
                 return user
 
-        user = UserAccount(
+        user = _new_model(
+            UserAccount,
             email=profile.get("email"),
             name=profile.get("name") or profile.get("username") or profile.get("login"),
             given_name=profile.get("given_name"),
@@ -834,7 +841,8 @@ class MyFlaskApp:
         self.db.session.add(user)
         self.db.session.commit()
 
-        provider_row = UserProvider(
+        provider_row = _new_model(
+            UserProvider,
             user_id=user.id,
             provider=provider,
             provider_user_id=provider_user_id,
@@ -866,7 +874,8 @@ class MyFlaskApp:
         raw_key = f"pex_{secrets.token_urlsafe(24)}"
         key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
         key_prefix = raw_key[:10]
-        api_key = UserApiKey(
+        api_key = _new_model(
+            UserApiKey,
             user_id=user.id,
             key_hash=key_hash,
             key_prefix=key_prefix,
@@ -879,7 +888,8 @@ class MyFlaskApp:
         current_balance = self._to_credit_decimal(user.credits_balance)
         next_balance = current_balance + self._to_credit_decimal(delta)
         user.credits_balance = max(Decimal("0"), next_balance).quantize(CREDIT_SCALE)
-        ledger = CreditHistory(
+        ledger = _new_model(
+            CreditHistory,
             user_id=user.id,
             delta=self._to_credit_decimal(delta),
             reason=reason,
@@ -916,7 +926,8 @@ class MyFlaskApp:
             if existing:
                 return "duplicate_payment"
             credit_amount = self._to_credit_decimal(credits)
-            payment = PaymentRecord(
+            payment = _new_model(
+                PaymentRecord,
                 user_id=user.id,
                 provider=provider,
                 provider_payment_id=provider_payment_id,
@@ -940,7 +951,8 @@ class MyFlaskApp:
     def _record_event(self, event_type: EventType, message: str, context: Optional[dict[str, Any]] = None) -> None:
         """Best-effort event logging for operational visibility."""
         try:
-            event = EventItem(
+            event = _new_model(
+                EventItem,
                 event_type=event_type,
                 message=message,
                 context=context,
@@ -1150,7 +1162,8 @@ class MyFlaskApp:
                 admin_pref_id = uuid.uuid5(uuid.NAMESPACE_URL, f"planexe-admin-pref:{self.admin_username}")
                 user = self.db.session.get(UserAccount, admin_pref_id)
                 if user is None:
-                    user = UserAccount(
+                    user = _new_model(
+                        UserAccount,
                         id=admin_pref_id,
                         is_admin=True,
                         name="Admin",
@@ -2353,7 +2366,10 @@ class MyFlaskApp:
                     "checkout_payment_status": session_obj.get("payment_status"),
                 },
             )
-            return redirect(session_obj.url)
+            session_url = session_obj.url
+            if not isinstance(session_url, str) or not session_url:
+                return jsonify({"error": "stripe checkout missing redirect url"}), 502
+            return redirect(session_url)
 
         @self.app.route('/billing/stripe/webhook', methods=['POST'])
         def stripe_webhook():
@@ -2608,7 +2624,7 @@ class MyFlaskApp:
             prompt_param = request_form_or_args.get('prompt', '')
             user_id_param = request_form_or_args.get('user_id', '')
             nonce_param = request_form_or_args.get('nonce', '')
-            parameters = {key: value for key, value in request_form_or_args.items()}
+            parameters: dict[str, Any] | None = {key: value for key, value in request_form_or_args.items()}
 
             # Remove the parameters that have already been extracted from the parameters dictionary
             parameters.pop('prompt', None)
@@ -2673,7 +2689,8 @@ class MyFlaskApp:
                         if (user.credits_balance or 0) <= 0:
                             return jsonify({"error": "No credits available"}), 402
 
-                task = TaskItem(
+                task = _new_model(
+                    TaskItem,
                     state=TaskState.pending,
                     prompt=prompt_param,
                     progress_percentage=0.0,
@@ -2696,7 +2713,8 @@ class MyFlaskApp:
                     "parameters": parameters,
                     "method": request.method
                 }
-                event = EventItem(
+                event = _new_model(
+                    EventItem,
                     event_type=EventType.TASK_PENDING,
                     message=f"Enqueued task via /run endpoint",
                     context=event_context
@@ -2718,7 +2736,7 @@ class MyFlaskApp:
             request_content_type: str = request.headers.get('Content-Type', '')
 
             prompt_param = request.form.get('prompt', '')
-            parameters = {key: value for key, value in request.form.items()}
+            parameters: dict[str, Any] = {key: value for key, value in request.form.items()}
             parameters.pop('csrf_token', None)
             parameters.pop('prompt', None)
             parameters.pop('user_id', None)
@@ -2763,7 +2781,8 @@ class MyFlaskApp:
                     if self._to_credit_decimal(user.credits_balance) < Decimal("2"):
                         return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
 
-                task = TaskItem(
+                task = _new_model(
+                    TaskItem,
                     state=TaskState.pending,
                     prompt=prompt_param,
                     progress_percentage=0.0,
@@ -2787,7 +2806,8 @@ class MyFlaskApp:
                     "parameters": parameters,
                     "method": request.method
                 }
-                event = EventItem(
+                event = _new_model(
+                    EventItem,
                     event_type=EventType.TASK_PENDING,
                     message="Enqueued task via /create_plan endpoint",
                     context=event_context

@@ -25,7 +25,7 @@ from worker_plan_api.filenames import ExtraFilenameEnum  # noqa: E402
 APP_MODULE_PATH = FRONTEND_SRC / "app.py"
 APP_IMPORT_ERROR = None
 APP_AVAILABLE = False
-MyFlaskApp: type[Any] = object
+MyFlaskApp: Any = object
 try:
     APP_SPEC = importlib.util.spec_from_file_location("frontend_multi_user_app", APP_MODULE_PATH)
     if APP_SPEC is None or APP_SPEC.loader is None:

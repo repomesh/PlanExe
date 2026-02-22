@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  tests:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+          cache-dependency-path: |
+            worker_plan/pyproject.toml
+            mcp_cloud/requirements.txt
+            worker_plan_database/requirements.txt
+            frontend_multi_user/pyproject.toml
+
+      - name: Create test venv
+        run: python -m venv worker_plan/.venv
+
+      - name: Install dependencies
+        run: |
+          worker_plan/.venv/bin/python -m pip install --upgrade pip
+          worker_plan/.venv/bin/pip install -e worker_plan
+          worker_plan/.venv/bin/pip install -r mcp_cloud/requirements.txt
+          worker_plan/.venv/bin/pip install -r worker_plan_database/requirements.txt
+          worker_plan/.venv/bin/pip install -e frontend_multi_user
+
+      - name: Run test suite
+        run: worker_plan/.venv/bin/python test.py
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Install ruff
+        run: python -m pip install --upgrade pip ruff
+
+      - name: Run high-signal lint checks
+        run: ruff check --select=E9,F63,F7,F82 .
+
+  typecheck:
+    name: typecheck
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pyright
+        run: npm install -g pyright
+
+      - name: Run pyright (non-blocking while baseline is established)
+        run: |
+          pyright -p frontend_multi_user/pyrightconfig.json
+          pyright -p frontend_single_user/pyrightconfig.json
+          pyright -p worker_plan_database/pyrightconfig.json
+          pyright -p open_dir_server/pyrightconfig.json

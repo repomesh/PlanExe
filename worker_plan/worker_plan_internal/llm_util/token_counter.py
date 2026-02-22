@@ -274,12 +274,9 @@ def _extract_usage_like_fields(response: dict) -> dict:
 
 
 def _build_usage_snapshot(usage: dict, provider: Optional[str], model: Optional[str]) -> dict:
-    snapshot = usage.copy() if isinstance(usage, dict) else {}
-    if provider:
-        snapshot["provider"] = provider
-    if model:
-        snapshot["model"] = model
-    return snapshot
+    # Keep raw_usage_data usage-focused. Provider/model are captured in dedicated fields.
+    _ = provider, model
+    return usage.copy() if isinstance(usage, dict) else {}
 
 
 def _extract_provider_and_model(payload: dict) -> tuple[Optional[str], Optional[str]]:

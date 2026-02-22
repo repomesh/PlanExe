@@ -58,4 +58,12 @@ Ran 117 tests in 0.059s
 OK
 ```
 
+`test.py` runs in the project venv and now enforces cross-service dependencies for MCP tests.
+If modules like `mcp` are missing, it will try to install from:
+`mcp_cloud/requirements.txt`.
+If auto-install fails (for example due network restrictions), install manually in the active venv:
+```bash
+python -m pip install -r mcp_cloud/requirements.txt
+```
+
 ### Now PlanExe have been installed.

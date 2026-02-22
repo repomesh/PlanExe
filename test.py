@@ -5,8 +5,10 @@ PROMPT> python test.py
 Behavior:
 - If not already running with the worker_plan venv (preferred) or frontend_single_user venv, re-executes itself with the first one found so project deps are available.
 - Keeps cwd at repo root and adds worker_plan to PYTHONPATH so worker_plan_internal/worker_plan_api imports resolve without extra setup.
+- Ensures cross-service test dependencies from `mcp_cloud/requirements.txt` are installed in the active test venv.
 - Then discovers and runs all test_*.py under the repo once.
 """
+import importlib.util
 import os
 import subprocess
 import sys
@@ -38,8 +40,60 @@ if os.environ.get(_RERUN_ENV) != "1":
         existing = env.get("PYTHONPATH")
         env["PYTHONPATH"] = os.pathsep.join(extra_paths + ([existing] if existing else []))
         print(f"Re-running tests with venv interpreter: {target_python}", file=sys.stderr)
-        subprocess.check_call([str(target_python), __file__], env=env, cwd=str(PROJECT_ROOT))
-        sys.exit(0)
+        completed = subprocess.run([str(target_python), __file__], env=env, cwd=str(PROJECT_ROOT), check=False)
+        sys.exit(completed.returncode)
+
+REQUIRED_TEST_MODULES = ("pydantic", "mcp", "flask_sqlalchemy")
+MCP_REQUIREMENTS = PROJECT_ROOT / "mcp_cloud" / "requirements.txt"
+
+
+def _missing_modules(modules: tuple[str, ...]) -> list[str]:
+    return [name for name in modules if importlib.util.find_spec(name) is None]
+
+
+def _ensure_cross_service_dependencies() -> None:
+    missing = _missing_modules(REQUIRED_TEST_MODULES)
+    if not missing:
+        return
+
+    if not MCP_REQUIREMENTS.is_file():
+        sys.stderr.write(
+            "Missing test dependencies and requirements file not found.\n"
+            f"Missing modules: {', '.join(missing)}\n"
+            f"Expected requirements file: {MCP_REQUIREMENTS}\n"
+        )
+        sys.exit(1)
+
+    print(
+        f"Installing missing cross-service test dependencies: {', '.join(missing)}",
+        file=sys.stderr,
+    )
+    try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "-r", str(MCP_REQUIREMENTS)],
+            cwd=str(PROJECT_ROOT),
+        )
+    except subprocess.CalledProcessError as exc:
+        sys.stderr.write(
+            "Failed to install cross-service test dependencies.\n"
+            f"Missing modules: {', '.join(missing)}\n"
+            "Install them manually in the test venv, then rerun:\n"
+            f"  {sys.executable} -m pip install -r {MCP_REQUIREMENTS}\n"
+        )
+        sys.exit(exc.returncode or 1)
+
+    still_missing = _missing_modules(REQUIRED_TEST_MODULES)
+    if still_missing:
+        sys.stderr.write(
+            "Cross-service test dependencies are still missing after installation.\n"
+            f"Missing modules: {', '.join(still_missing)}\n"
+            "Install them manually in the test venv, then rerun:\n"
+            f"  {sys.executable} -m pip install -r {MCP_REQUIREMENTS}\n"
+        )
+        sys.exit(1)
+
+
+_ensure_cross_service_dependencies()
 
 logging.basicConfig(
     level=logging.DEBUG,

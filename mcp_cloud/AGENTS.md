@@ -30,6 +30,12 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Event cursors use format `cursor_{event_id}` for incremental polling.
 - **Run as task**: We expose MCP **tools** only (task_create, task_status, task_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
 
+## Authentication Policy
+- PlanExe MCP cloud authentication is API-key header based.
+- Canonical client header is `X-API-Key: pex_...`.
+- OAuth is not supported for the MCP API. Do not document, imply, or advertise OAuth support.
+- In docs and user-facing error/help text, instruct clients to use `X-API-Key` custom headers.
+
 ## mcp_local integration
 - `mcp_local` runs on the user's machine and forwards tool calls to this server over HTTP.
 - It targets either:
@@ -37,6 +43,13 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - the streamable MCP JSON-RPC endpoint (`/mcp`).
 - `task_file_info` provides download metadata that `mcp_local` uses to download
   artifacts via `/download/{task_id}/...`.
+
+## MCP Registry metadata
+- Registry metadata for this server lives at `mcp_cloud/server.json`.
+- Keep `server.json` aligned with deployed behavior:
+  - `remotes[].url` must point at the production MCP endpoint.
+  - required auth headers must match the server auth policy (`X-API-Key`).
+- Publish with `mcp-publisher` from the `mcp_cloud/` directory so it picks up this file.
 
 ## Testing
 - No automated tests currently. If you change MCP tool behavior or database mappings,

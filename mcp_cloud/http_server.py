@@ -136,7 +136,7 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
         return JSONResponse(
             status_code=401,
             content={
-                "detail": "Missing API key. Use Authorization: Bearer <key> or X-API-Key."
+                "detail": "Missing API key. Use X-API-Key."
             },
         )
 
@@ -640,8 +640,7 @@ def root() -> dict[str, Any]:
         },
         "documentation": "See /docs for OpenAPI documentation",
         "authentication": (
-            "Required: X-API-Key or Authorization: Bearer <key> (UserApiKey from home.planexe.org, "
-            "or PLANEXE_MCP_API_KEY)"
+            "Required: X-API-Key (Obtain an api key at home.planexe.org)"
             if AUTH_REQUIRED
             else "Disabled (PLANEXE_MCP_REQUIRE_AUTH=false)"
         ),

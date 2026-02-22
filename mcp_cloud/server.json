@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.PlanExeOrg/planexe",
+  "title": "PlanExe",
+  "description": "MCP server for generating rough-draft project plans from natural-language prompts.",
+  "repository": {
+    "url": "https://github.com/PlanExeOrg/PlanExe",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "websiteUrl": "https://mcp.planexe.org/",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.planexe.org/mcp",
+      "headers": [
+        {
+          "name": "X-API-Key",
+          "description": "PlanExe API key (UserApiKey from home.planexe.org, usually prefixed pex_).",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

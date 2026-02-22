@@ -54,7 +54,8 @@ OpenClaw Agent
   "version": "1.0.0",
   "description": "Gives the agent the ability to plan, budget, and track complex projects via the PlanExe Cloud.",
   "permissions": ["network_access"],
-  "tools": [
+  "mcp_tools": [
+    "prompt_examples",
     "task_create",
     "task_status",
     "task_stop",
@@ -63,29 +64,55 @@ OpenClaw Agent
 }
 ```
 
-## Skill Capabilities (Tools)
+## Skill Capabilities (MCP Tools)
 
-### `task_create(prompt: str, speed_vs_detail: str, model_profile: str, user_api_key: str)`
+The PlanExe MCP exposes the following real tools via `https://mcp.planexe.org/mcp`:
 
-- Input: prompt + execution preferences
-- Output: `task_id` + creation timestamp
+### `prompt_examples()` — Get example prompts
 
-### `task_status(task_id: str)`
+- Input: none
+- Output: List of example planning prompts
+- Used in: Skill initialization and user guidance
 
-- Input: task ID
-- Output: current state, progress, timing, files
+### `task_create(prompt, speed_vs_detail, model_profile, user_api_key?)` — Start a planning task
 
-### `task_file_info(task_id: str, artifact: str)`
+- Input:
+  - `prompt` (string): Natural language planning request
+  - `speed_vs_detail` (enum): `"ping"` | `"fast"` | `"all"`
+  - `model_profile` (enum): `"baseline"` | `"premium"` | `"frontier"` | `"custom"`
+  - `user_api_key` (optional string): Override environment API key
+- Output: `task_id` for polling and result retrieval
+- Used in: Step 1 of planning workflow
 
-- Input: task ID + artifact type (report or zip)
-- Output: download URL + metadata
+### `task_status(task_id)` — Poll planning progress
+
+- Input: `task_id` (string)
+- Output: status (queued|running|completed|failed), progress %, estimated time remaining
+- Used in: Polling loop every 5+ minutes (plans take 15-20+ min)
+
+### `task_stop(task_id)` — Cancel a running task
+
+- Input: `task_id` (string)
+- Output: Confirmation of cancellation
+- Used in: Early termination / user interruption
+
+### `task_file_info(task_id, artifact)` — Get download link for results
+
+- Input:
+  - `task_id` (string)
+  - `artifact` (enum): `"report"` | `"zip"`
+- Output: `download_url`
+- Used in: Retrieving completed plans after task finishes
 
 ## Agent-to-Agent Protocol
 
 - **EdgeBot** detects a local issue (low water).
 - **EdgeBot** requests a plan from **CloudBot**.
-- **CloudBot** generates the plan and sends `plan_id`.
-- **EdgeBot** executes local steps and reports back.
+- **CloudBot** calls `task_create()` via PlanExe MCP and receives `task_id`.
+- **CloudBot** polls `task_status(task_id)` every 5+ minutes.
+- **CloudBot** calls `task_file_info(task_id, "report")` to get download URL when complete.
+- **EdgeBot** executes local steps from the plan and reports back.
+- **CloudBot** can call `task_stop(task_id)` if execution is cancelled.
 
 ## Integration Points
 
@@ -115,11 +142,12 @@ OpenClaw Agent
 
 ### Phase A — Skill Packaging and Contracts (1–2 weeks)
 
-1. Define skill manifest and tool contracts:
-   - `task_create`
-   - `task_status`
-   - `task_stop`
-   - `task_file_info`
+1. Define skill manifest and MCP tool bindings:
+   - `prompt_examples` — Provide example planning prompts
+   - `task_create` — Initiate planning task with goal and parameters
+   - `task_status` — Poll task progress (required for async workflows)
+   - `task_stop` — Cancel long-running tasks
+   - `task_file_info` — Retrieve generated plan artifacts
 
 2. Add JSON schema validation for tool inputs/outputs.
 3. Version the skill API separately from PlanExe core API.

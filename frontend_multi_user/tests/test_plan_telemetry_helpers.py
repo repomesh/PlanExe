@@ -7,6 +7,7 @@ import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest import mock
 
 
@@ -26,8 +27,9 @@ from worker_plan_api.filenames import ExtraFilenameEnum  # noqa: E402
 
 APP_MODULE_PATH = FRONTEND_SRC / "app.py"
 APP_IMPORT_ERROR = None
-MyFlaskApp = None
-TaskState = None
+APP_AVAILABLE = False
+MyFlaskApp: type[Any] = object
+TaskState: Any = SimpleNamespace(processing="processing", completed="completed")
 frontend_app_module = None
 try:
     APP_SPEC = importlib.util.spec_from_file_location("frontend_multi_user_app", APP_MODULE_PATH)
@@ -37,11 +39,12 @@ try:
     APP_SPEC.loader.exec_module(frontend_app_module)
     MyFlaskApp = frontend_app_module.MyFlaskApp
     TaskState = frontend_app_module.TaskState
+    APP_AVAILABLE = True
 except ModuleNotFoundError as exc:
     APP_IMPORT_ERROR = exc
 
 
-@unittest.skipIf(MyFlaskApp is None, f"frontend_multi_user app dependencies unavailable: {APP_IMPORT_ERROR}")
+@unittest.skipIf(not APP_AVAILABLE, f"frontend_multi_user app dependencies unavailable: {APP_IMPORT_ERROR}")
 class TestPlanTelemetryHelpers(unittest.TestCase):
     class _DummyColumn:
         def asc(self):

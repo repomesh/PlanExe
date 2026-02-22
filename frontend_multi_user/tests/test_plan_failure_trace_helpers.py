@@ -5,6 +5,7 @@ import sys
 import unittest
 import zipfile
 from pathlib import Path
+from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -23,7 +24,8 @@ from worker_plan_api.filenames import ExtraFilenameEnum  # noqa: E402
 
 APP_MODULE_PATH = FRONTEND_SRC / "app.py"
 APP_IMPORT_ERROR = None
-MyFlaskApp = None
+APP_AVAILABLE = False
+MyFlaskApp: type[Any] = object
 try:
     APP_SPEC = importlib.util.spec_from_file_location("frontend_multi_user_app", APP_MODULE_PATH)
     if APP_SPEC is None or APP_SPEC.loader is None:
@@ -31,11 +33,12 @@ try:
     frontend_app_module = importlib.util.module_from_spec(APP_SPEC)
     APP_SPEC.loader.exec_module(frontend_app_module)
     MyFlaskApp = frontend_app_module.MyFlaskApp
+    APP_AVAILABLE = True
 except ModuleNotFoundError as exc:
     APP_IMPORT_ERROR = exc
 
 
-@unittest.skipIf(MyFlaskApp is None, f"frontend_multi_user app dependencies unavailable: {APP_IMPORT_ERROR}")
+@unittest.skipIf(not APP_AVAILABLE, f"frontend_multi_user app dependencies unavailable: {APP_IMPORT_ERROR}")
 class TestPlanFailureTraceHelpers(unittest.TestCase):
     def setUp(self) -> None:
         self.app_obj = MyFlaskApp.__new__(MyFlaskApp)

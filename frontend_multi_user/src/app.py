@@ -1168,12 +1168,18 @@ class MyFlaskApp:
             return mode
         return "view"
 
+    @staticmethod
+    def _coerce_json_dict(value: Any) -> dict[str, Any]:
+        if not isinstance(value, dict):
+            return {}
+        return {str(key): item for key, item in value.items()}
+
     def _get_plan_view_mode_preference(self) -> str:
         user = self._get_current_user_account()
         if user is None:
             return "view"
-        config = user.frontend_multi_user_config if isinstance(user.frontend_multi_user_config, dict) else {}
-        plan_page = config.get("plan_page") if isinstance(config.get("plan_page"), dict) else {}
+        config = self._coerce_json_dict(user.frontend_multi_user_config)
+        plan_page = self._coerce_json_dict(config.get("plan_page"))
         return self._normalize_plan_view_mode(plan_page.get("selected_segment"))
 
     def _set_plan_view_mode_preference(self, mode: str) -> None:
@@ -1183,9 +1189,9 @@ class MyFlaskApp:
         normalized_mode = self._normalize_plan_view_mode(mode)
         # JSON columns are not mutation-tracked by default; build fresh dicts so
         # SQLAlchemy sees a new value and persists the update reliably.
-        existing_config = user.frontend_multi_user_config if isinstance(user.frontend_multi_user_config, dict) else {}
+        existing_config = self._coerce_json_dict(user.frontend_multi_user_config)
         config = dict(existing_config)
-        existing_plan_page = config.get("plan_page") if isinstance(config.get("plan_page"), dict) else {}
+        existing_plan_page = self._coerce_json_dict(config.get("plan_page"))
         plan_page = dict(existing_plan_page)
         plan_page["selected_segment"] = normalized_mode
         config["plan_page"] = plan_page
@@ -1547,7 +1553,7 @@ class MyFlaskApp:
 
         return failure_trace
 
-    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool]]:
+    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool, bool]]:
         state = task.state if isinstance(task.state, TaskState) else None
         if include_raw or state not in (TaskState.completed, TaskState.failed):
             return None
@@ -1969,7 +1975,7 @@ class MyFlaskApp:
         @self.app.route('/')
         def index():
             user = None
-            recent_tasks: list[TaskItem] = []
+            recent_tasks: list[SimpleNamespace] = []
             total_tasks_count = 0
             is_admin = False
             nonce = None

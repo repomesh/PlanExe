@@ -14,6 +14,7 @@ import time
 import logging
 from pathlib import Path
 from typing import Optional
+import uuid
 from worker_plan_api.model_profile import ModelProfileEnum
 from urllib.parse import quote_plus
 import io

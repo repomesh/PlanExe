@@ -11,6 +11,45 @@ def _tool_desc(tool_defs, name: str) -> str:
     raise AssertionError(f"Tool not found: {name}")
 
 
+def _tool_def(tool_defs, name: str):
+    for definition in tool_defs:
+        if definition.name == name:
+            return definition
+    raise AssertionError(f"Tool not found: {name}")
+
+
+class TestAllToolsHaveOutputSchema(unittest.TestCase):
+    """Every tool must declare an output_schema so callers know the response shape."""
+
+    def test_cloud_all_tools_have_output_schema(self):
+        for definition in cloud_app.TOOL_DEFINITIONS:
+            with self.subTest(tool=definition.name):
+                self.assertIsNotNone(
+                    definition.output_schema,
+                    f"Cloud tool {definition.name!r} is missing output_schema",
+                )
+
+    def test_local_all_tools_have_output_schema(self):
+        for definition in local_app.TOOL_DEFINITIONS:
+            with self.subTest(tool=definition.name):
+                self.assertIsNotNone(
+                    definition.output_schema,
+                    f"Local tool {definition.name!r} is missing output_schema",
+                )
+
+
+class TestTaskCreateInputSchemaHasUserApiKey(unittest.TestCase):
+    """user_api_key must be in the visible task_create input schema."""
+
+    def test_cloud_task_create_schema_has_user_api_key(self):
+        props = cloud_app.TASK_CREATE_INPUT_SCHEMA.get("properties", {})
+        self.assertIn("user_api_key", props)
+
+    def test_local_task_create_schema_has_user_api_key(self):
+        props = local_app.TASK_CREATE_INPUT_SCHEMA.get("properties", {})
+        self.assertIn("user_api_key", props)
+
+
 class TestCloudToolSurfaceConsistency(unittest.TestCase):
     def test_cloud_exposes_model_profiles_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}

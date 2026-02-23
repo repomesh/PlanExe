@@ -9,7 +9,7 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - Supported tools: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_download`.
 - `task_download` calls the remote `task_file_info` tool to obtain a download URL,
   then downloads the artifact to `PLANEXE_PATH` on the local machine.
-- `task_create` visible input schema includes `prompt` and optional `model_profile`.
+- `task_create` visible input schema includes `prompt`, optional `model_profile`, and optional `user_api_key`.
 - Use `model_profiles` to help agents select `task_create.model_profile` without relying on internal file knowledge.
 - Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
 - Keep concurrency wording explicit: each `task_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.

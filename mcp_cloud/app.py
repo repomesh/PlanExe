@@ -1044,6 +1044,7 @@ TOOL_DEFINITIONS = [
             "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
             "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
+            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
             "Each task_create call creates a new task_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "

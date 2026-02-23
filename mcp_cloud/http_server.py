@@ -396,7 +396,7 @@ fastmcp_server = FastMCP(
         "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
         "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
         "Step 3 — Only then call task_create with the approved prompt. "
-        "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+        "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
         "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
     ),
     host=HTTP_HOST,

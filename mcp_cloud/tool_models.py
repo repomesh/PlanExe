@@ -52,7 +52,7 @@ class TaskFileInfoInput(BaseModel):
 class TaskCreateOutput(BaseModel):
     task_id: str = Field(
         ...,
-        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_download/task_file_info."
+        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_file_info."
     )
     created_at: str
 

@@ -118,7 +118,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
     "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
-    "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
     "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
 )
 
@@ -858,7 +858,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Returns task_id (UUID); use it for task_status, task_stop, task_download, and task_file_info. "
+            "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
             "Optional runtime overrides such as speed_vs_detail are intentionally hidden from the visible tool schema "
             "and can be provided via tool-specific metadata by developers."

@@ -466,7 +466,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download (or task_file_info when calling mcp_cloud directly)."
+            "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -493,9 +493,8 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="task_download",
         description=(
-            "Download the plan output and save it locally (calls task_file_info, then fetches and saves to PLANEXE_PATH). "
-            "Choose the HTML report (default) or a zip of all generated files. "
-            "Prefer this over task_file_info when you want the file on disk."
+            "Download the plan output and save it locally to PLANEXE_PATH. "
+            "Choose the HTML report (default) or a zip of all generated files."
         ),
         input_schema=TASK_DOWNLOAD_INPUT_SCHEMA,
         output_schema=TASK_DOWNLOAD_OUTPUT_SCHEMA,
@@ -511,7 +510,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
-    "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
     "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
 )
 

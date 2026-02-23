@@ -165,10 +165,7 @@ class TaskFileInfoReadyOutput(BaseModel):
     download_size: int = Field(..., description="Artifact size in bytes.")
     download_url: str | None = Field(
         default=None,
-        description=(
-            "Absolute artifact download URL when server base URL is known "
-            "(PLANEXE_MCP_PUBLIC_BASE_URL or request host)."
-        ),
+        description="Absolute URL where the requested artifact can be downloaded.",
     )
 
 
@@ -178,10 +175,7 @@ class TaskFileInfoOutput(BaseModel):
     download_size: int | None = Field(default=None, description="Artifact size in bytes.")
     download_url: str | None = Field(
         default=None,
-        description=(
-            "Absolute artifact download URL when server base URL is known. "
-            "May be omitted in some deployments."
-        ),
+        description="Absolute URL where the requested artifact can be downloaded.",
     )
     error: ErrorDetail | None = None
 

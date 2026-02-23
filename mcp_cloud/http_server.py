@@ -563,7 +563,6 @@ async def call_tool(
     Call an MCP tool by name with arguments.
 
     This endpoint wraps the stdio-based MCP tool handlers for HTTP access.
-    Download URLs use the request host when PLANEXE_MCP_PUBLIC_BASE_URL is not set (set in middleware).
     """
     arguments = dict(payload.arguments or {})
     if payload.tool == "task_create":

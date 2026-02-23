@@ -134,8 +134,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
     "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
-    "task_file_info download_url is absolute when PLANEXE_MCP_PUBLIC_BASE_URL is configured or request host is available. "
-    "If download_url is missing, configure PLANEXE_MCP_PUBLIC_BASE_URL on the server. "
+    "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
@@ -1080,7 +1079,7 @@ TOOL_DEFINITIONS = [
             "Returns file metadata (content_type, download_url, download_size) for the report or zip. "
             "If your client exposes task_download (e.g. mcp_local), use that to save the file locally; "
             "otherwise use this tool to get download_url and fetch the file yourself. "
-            "download_url is generated from PLANEXE_MCP_PUBLIC_BASE_URL (or request host when available). "
+            "download_url is an absolute URL where the requested artifact can be downloaded. "
             "Returns {} while artifact is not ready. Terminal tool-level error payloads use codes generation_failed or content_unavailable."
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,

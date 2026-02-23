@@ -433,10 +433,7 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 
 **task_file_info URL behavior (mcp_cloud)**
 
-- `download_url` is generated from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.
-- Otherwise, cloud HTTP mode uses request host/scheme when available.
-- If no public base URL can be determined (for example some stdio-only flows), `download_url` may be absent.
-- In deployments behind proxies/CDNs, set `PLANEXE_MCP_PUBLIC_BASE_URL` so clients receive a reachable URL.
+- `download_url` is an absolute URL where the requested artifact can be downloaded.
 
 ---
 

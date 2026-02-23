@@ -476,7 +476,9 @@ TOOL_DEFINITIONS = [
         description=(
             "Returns status and progress of the plan currently being created. "
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
-            "and frequent polling is unnecessary."
+            "and frequent polling is unnecessary. "
+            "State contract: running/stopping => keep polling; completed => download is ready; "
+            "failed => terminal error; stopped => stop acknowledged (terminal)."
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
         output_schema=TASK_STATUS_OUTPUT_SCHEMA,
@@ -511,6 +513,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
+    "task_status state contract: running/stopping => keep polling; completed => download is ready; failed => terminal error; stopped => stop acknowledged (terminal). "
     "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
 )
 

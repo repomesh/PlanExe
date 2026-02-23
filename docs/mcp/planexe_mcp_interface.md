@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create.
+- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete (`running`/`stopping` = keep polling, `completed` = download now, `failed`/`stopped` = terminal). To stop, call task_stop with the task_id from task_create.
 - **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
 
 ### 1.3 Scope of this document
@@ -311,6 +311,18 @@ Returns run status and progress. Used for progress bars and UI states. **Polling
 **Input**
 
 - task_id: UUID returned by task_create. Use it to reference the plan being created.
+
+**Caller contract (state meanings)**
+
+- `running`: work is still in progress. Keep polling.
+- `stopping`: stop requested and in progress. Keep polling.
+- `completed`: terminal success. Download artifacts now.
+- `failed`: terminal error. Do not keep polling for completion.
+- `stopped`: terminal stop acknowledged by the system/user request.
+
+**Terminal states**
+
+- `completed`, `failed`, `stopped`
 
 **Response**
 

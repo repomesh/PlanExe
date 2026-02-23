@@ -397,6 +397,7 @@ fastmcp_server = FastMCP(
         "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
         "Step 3 — Only then call task_create with the approved prompt. "
         "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+        "task_status state contract: running/stopping => keep polling; completed => download is ready; failed => terminal error; stopped => stop acknowledged (terminal). "
         "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
     ),
     host=HTTP_HOST,

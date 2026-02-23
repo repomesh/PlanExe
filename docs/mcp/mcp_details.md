@@ -120,6 +120,14 @@ Example call:
 {"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
 ```
 
+State contract:
+
+- `running`: keep polling.
+- `stopping`: stop requested and in progress, keep polling.
+- `completed`: terminal success, proceed to download.
+- `failed`: terminal error.
+- `stopped`: terminal stop acknowledged.
+
 ### task_stop
 
 Request an active task to stop.

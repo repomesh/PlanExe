@@ -72,7 +72,14 @@ class TaskStatusSuccess(BaseModel):
         ...,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"]
+    state: Literal["stopped", "running", "completed", "failed", "stopping"] = Field(
+        ...,
+        description=(
+            "Caller contract: running/stopping => keep polling; "
+            "completed => download is ready; failed => terminal error; "
+            "stopped => stop acknowledged (terminal)."
+        ),
+    )
     progress_percentage: float
     timing: TaskStatusTiming
     files: list[TaskStatusFile]
@@ -83,7 +90,14 @@ class TaskStatusOutput(BaseModel):
         default=None,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"] | None = None
+    state: Literal["stopped", "running", "completed", "failed", "stopping"] | None = Field(
+        default=None,
+        description=(
+            "Caller contract: running/stopping => keep polling; "
+            "completed => download is ready; failed => terminal error; "
+            "stopped => stop acknowledged (terminal)."
+        ),
+    )
     progress_percentage: float | None = None
     timing: TaskStatusTiming | None = None
     files: list[TaskStatusFile] | None = None
@@ -91,7 +105,10 @@ class TaskStatusOutput(BaseModel):
 
 
 class TaskStopOutput(BaseModel):
-    state: Literal["stopped"] | None = None
+    state: Literal["stopped"] | None = Field(
+        default=None,
+        description="Stop acknowledged. stopped is terminal for this run.",
+    )
     error: ErrorDetail | None = None
 
 

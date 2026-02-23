@@ -26,6 +26,20 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("task_file_info", description)
         self.assertNotIn("task_download", description)
 
+    def test_cloud_instructions_include_task_status_state_contract(self):
+        instructions = cloud_app.PLANEXE_SERVER_INSTRUCTIONS
+        self.assertIn("running/stopping", instructions)
+        self.assertIn("completed", instructions)
+        self.assertIn("failed", instructions)
+        self.assertIn("stopped", instructions)
+
+    def test_cloud_task_status_description_includes_state_contract(self):
+        description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "task_status")
+        self.assertIn("running/stopping", description)
+        self.assertIn("completed", description)
+        self.assertIn("failed", description)
+        self.assertIn("stopped", description)
+
 
 class TestLocalToolSurfaceConsistency(unittest.TestCase):
     def test_local_exposes_task_download_not_task_file_info(self):
@@ -41,6 +55,20 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_create")
         self.assertIn("task_download", description)
         self.assertNotIn("task_file_info", description)
+
+    def test_local_instructions_include_task_status_state_contract(self):
+        instructions = local_app.PLANEXE_SERVER_INSTRUCTIONS
+        self.assertIn("running/stopping", instructions)
+        self.assertIn("completed", instructions)
+        self.assertIn("failed", instructions)
+        self.assertIn("stopped", instructions)
+
+    def test_local_task_status_description_includes_state_contract(self):
+        description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_status")
+        self.assertIn("running/stopping", description)
+        self.assertIn("completed", description)
+        self.assertIn("failed", description)
+        self.assertIn("stopped", description)
 
 
 if __name__ == "__main__":

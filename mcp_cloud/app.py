@@ -133,7 +133,8 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
-    "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
+    "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
     "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
     "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
@@ -1072,7 +1073,10 @@ TOOL_DEFINITIONS = [
         name="task_stop",
         description=(
             "Request the plan generation to stop. Pass the task_id (the UUID returned by task_create). "
-            "Call task_stop with that task_id."
+            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
+            "A stopped task will eventually transition to the failed state. "
+            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
+            "Unknown task_id returns error code TASK_NOT_FOUND."
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,

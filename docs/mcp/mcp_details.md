@@ -41,9 +41,55 @@ Example call:
 {"prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes..."}
 ```
 
-Optional argument:
+Optional visible argument:
+```text
+model_profile: "baseline" | "premium" | "frontier" | "custom"
 ```
+
+Developer-only hidden metadata (not part of visible tool schema shown to agents):
+```text
 speed_vs_detail: "ping" | "fast" | "all"
+```
+
+Example with visible `model_profile`:
+```json
+{"prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes...", "model_profile": "premium"}
+```
+
+Example with hidden metadata override. The `ping` only checks if the LLMs are connected and doesn't trigger a full plan to be created:
+```json
+{
+  "prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes...",
+  "metadata": {
+    "task_create": {
+      "speed_vs_detail": "ping"
+    }
+  }
+}
+```
+
+Example with hidden metadata override. The `fast` triggers a plan to be created, where the entire Luigi pipeline gets exercised, but skipping ever detail that is possible:
+```json
+{
+  "prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes...",
+  "metadata": {
+    "task_create": {
+      "speed_vs_detail": "fast"
+    }
+  }
+}
+```
+
+Example with hidden metadata override. The `all` is the default setting. Creates a plan with **ALL** details:
+```json
+{
+  "prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes...",
+  "metadata": {
+    "task_create": {
+      "speed_vs_detail": "all"
+    }
+  }
+}
 ```
 
 ### task_status

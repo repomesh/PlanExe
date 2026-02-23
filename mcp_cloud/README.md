@@ -14,7 +14,7 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 
 ## Run as task (MCP tasks protocol)
 
-MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `task_create`, `task_status`, `task_stop`, `task_download`. The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `task_create`, `task_status`, `task_stop`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
 
 ## Client Choice Guide
 
@@ -90,7 +90,7 @@ Some MCP clients (e.g. OpenClaw/mcporter) connect by doing a **GET** to the serv
 **You do not need SSE for tools.** MCP over HTTP can use plain JSON:
 
 - **List tools:** `GET http://<host>:8001/mcp/tools` → returns `{"tools": [...]}` (JSON).
-- **Call a tool:** `POST http://<host>:8001/mcp/tools/call` with body `{"tool": "task_create", "arguments": {"prompt": "…", "speed_vs_detail": "ping"}}` → returns JSON.
+- **Call a tool:** `POST http://<host>:8001/mcp/tools/call` with body `{"tool": "task_create", "arguments": {"prompt": "…"}, "metadata": {"task_create": {"speed_vs_detail": "ping"}}}` → returns JSON.
 
 If your client only supports Streamable HTTP and fails on `/mcp`, you have two options:
 

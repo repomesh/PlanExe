@@ -70,10 +70,10 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_download. This document specifies those tools.
+- **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_download or task_file_info. This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. The intended flow is: Step 1 — call prompt_examples; Step 2 — formulate a good prompt (user approval); Step 3 — call task_create; then poll task_status and call task_download when complete.
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. The intended flow is: Step 1 — call prompt_examples; Step 2 — formulate a good prompt (user approval); Step 3 — call task_create; then poll task_status and call task_download or task_file_info when complete.
 
 ---
 
@@ -180,7 +180,7 @@ All tool names below are normative.
 
 ### 6.2 task_create
 
-**Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2).** Start creating a new plan with the approved prompt. speed_vs_detail modes: 'all' runs the full pipeline with all details (slower, higher token usage/cost). 'fast' runs the full pipeline with minimal work per step (faster, fewer details), useful to verify the pipeline is working. 'ping' runs the pipeline entrypoint and makes a single LLM call to verify the worker_plan_database is processing tasks and can reach the LLM.
+**Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2).** Start creating a new plan with the approved prompt.
 
 **Request**
 
@@ -191,11 +191,12 @@ All tool names below are normative.
   "type": "object",
   "properties": {
     "prompt": { "type": "string" },
-    "speed_vs_detail": {
+    "model_profile": {
       "type": "string",
-      "enum": ["ping", "fast", "all"],
-      "default": "ping"
-    }
+      "enum": ["baseline", "premium", "frontier", "custom"],
+      "default": "baseline"
+    },
+    "user_api_key": { "type": "string" }
   },
   "required": ["prompt"]
 }
@@ -206,8 +207,32 @@ All tool names below are normative.
 ```json
 {
   "prompt": "string",
-  "speed_vs_detail": "ping",
+  "model_profile": "baseline",
   "user_api_key": "pex_..."
+}
+```
+
+**Tool-specific metadata (developer-only, hidden from model-visible schema)**
+
+Use tool-specific metadata when you need runtime overrides that should not be visible in the tool interface shown to AI agents.
+
+`speed_vs_detail` is read from metadata, not from the visible input schema.
+
+- `speed_vs_detail` accepted values:
+  - `ping`: single LLM call to verify the pipeline/LLM path.
+  - `fast`: reduced-detail run through the full pipeline.
+  - `all`: full-detail run through the full pipeline.
+
+**Metadata example**
+
+```json
+{
+  "prompt": "string",
+  "metadata": {
+    "task_create": {
+      "speed_vs_detail": "ping"
+    }
+  }
 }
 ```
 
@@ -224,6 +249,7 @@ Short one-liners (e.g., "Construct a bridge") tend to produce poor output becaus
 
 **Optional**
 
+- model_profile: LLM profile (`baseline` | `premium` | `frontier` | `custom`).
 - user_api_key: user API key for credits and attribution (if your deployment requires it).
 
 Clients can call the MCP tool **prompt_examples** to retrieve example prompts. Use these as examples for task_create; they can also call task_create with any prompt—short prompts produce less detailed plans.
@@ -243,7 +269,7 @@ For the full catalog file:
 
 **Important**
 
-- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_download.
+- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_download/task_file_info.
 
 **Behavior**
 

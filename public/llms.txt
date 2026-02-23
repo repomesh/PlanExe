@@ -59,7 +59,9 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - task_file_info
 
 Key tool inputs/outputs:
-- task_create inputs: prompt (required), speed_vs_detail (ping | fast | all).
+- task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
+- task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
+- task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
 - task_file_info output: downloadable report/zip metadata and URLs.
 
@@ -130,9 +132,14 @@ curl -X POST https://mcp.planexe.org/mcp/tools/call \
     "tool": "task_create",
     "arguments": {
       "prompt": "20-year, €40 billion infrastructure initiative to construct a pillar-supported transoceanic submerged tunnel connecting Spain and Morocco. This project will deploy a system of submerged, buoyant concrete tunnels engineered for high-speed rail traffic, which will be securely anchored at a controlled depth of 100 meters below sea level.",
-      "speed_vs_detail": "all"
+      "model_profile": "baseline"
+    },
+    "metadata": {
+      "task_create": {
+        "speed_vs_detail": "all"
+      }
     }
   }'
 ```
 
-Last updated: 2026-02-21
+Last updated: 2026-02-23

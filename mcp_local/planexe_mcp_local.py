@@ -29,16 +29,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_MCP_URL = "https://your-railway-app.up.railway.app/mcp"
 REPORT_FILENAME = "030-report.html"
 ZIP_FILENAME = "run.zip"
-SpeedVsDetailInput = Literal[
-    "ping",
-    "fast",
-    "all",
+ModelProfileInput = Literal[
+    "baseline",
+    "premium",
+    "frontier",
+    "custom",
 ]
 
 
 class TaskCreateRequest(BaseModel):
     prompt: str
-    speed_vs_detail: Optional[SpeedVsDetailInput] = None
+    model_profile: Optional[ModelProfileInput] = None
 
 
 class TaskStatusRequest(BaseModel):
@@ -324,11 +325,11 @@ TASK_CREATE_INPUT_SCHEMA = {
                 "Use prompt_examples to get example prompts; use these as examples for task_create. Short prompts produce less detailed plans."
             ),
         },
-        "speed_vs_detail": {
+        "model_profile": {
             "type": "string",
-            "enum": ["ping", "fast", "all"],
-            "default": "ping",
-            "description": "How much work to run. 'ping': single LLM call to check the pipeline is reachable (check logs if it fails). 'fast': minimal run (approx 5-10 min) through all pipeline steps, skipping where possible—use to verify the pipeline works. 'all': full plan with full detail (approx 10-20 min).",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+            "default": "baseline",
+            "description": "LLM profile mapping to llm_config/<profile>.json.",
         },
     },
     "required": ["prompt"],
@@ -462,7 +463,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Runs in the background (10–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
+            "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download (or task_file_info when calling mcp_cloud directly)."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -552,11 +553,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → task_id + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "speed_vs_detail": "fast"}
+        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}}
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - speed_vs_detail: Optional mode ("ping" | "fast" | "all").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
+        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -564,9 +566,33 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         - isError: True when the remote tool call fails.
     """
     req = TaskCreateRequest(**arguments)
+    payload: dict[str, Any] = {"prompt": req.prompt}
+    if req.model_profile:
+        payload["model_profile"] = req.model_profile
+
+    metadata = arguments.get("metadata")
+    if isinstance(metadata, dict):
+        payload["metadata"] = metadata
+
+    # Backward compatibility: if callers still pass top-level speed args,
+    # forward them as hidden metadata so cloud can resolve the execution mode.
+    legacy_speed_vs_detail = arguments.get("speed_vs_detail")
+    legacy_speed = arguments.get("speed")
+    if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
+        if not isinstance(payload.get("metadata"), dict):
+            payload["metadata"] = {}
+        task_create_metadata = payload["metadata"].get("task_create")
+        if not isinstance(task_create_metadata, dict):
+            task_create_metadata = {}
+            payload["metadata"]["task_create"] = task_create_metadata
+        if isinstance(legacy_speed_vs_detail, str):
+            task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
+        if isinstance(legacy_speed, str):
+            task_create_metadata.setdefault("speed", legacy_speed)
+
     payload, error = _call_remote_tool(
         "task_create",
-        {"prompt": req.prompt, "speed_vs_detail": req.speed_vs_detail} if req.speed_vs_detail else {"prompt": req.prompt},
+        payload,
     )
     if error:
         return _wrap_response({"error": error}, is_error=True)

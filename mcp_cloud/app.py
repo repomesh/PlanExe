@@ -139,16 +139,6 @@ SPEED_VS_DETAIL_VALUES = (
     "fast_but_skip_details",
     "all_details_but_slow",
 )
-SPEED_VS_DETAIL_INPUT_VALUES = (
-    "ping",
-    "fast",
-    "all",
-)
-SpeedVsDetailInput = Literal[
-    "ping",
-    "fast",
-    "all",
-]
 ModelProfileInput = Literal[
     "baseline",
     "premium",
@@ -163,7 +153,6 @@ SPEED_VS_DETAIL_ALIASES = {
 
 class TaskCreateRequest(BaseModel):
     prompt: str
-    speed_vs_detail: Optional[SpeedVsDetailInput] = None
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
@@ -634,6 +623,37 @@ def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
         return value
     return SPEED_VS_DETAIL_DEFAULT
 
+
+def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Extract task_create runtime overrides from hidden metadata containers.
+
+    Supported hidden containers:
+    - arguments.tool_metadata
+    - arguments.metadata
+    - arguments._meta
+
+    If a container includes nested namespaces, these are checked first:
+    - task_create
+    - planexe_task_create
+    - planexe
+    """
+    merged: dict[str, Any] = {}
+    metadata_candidates: list[dict[str, Any]] = []
+
+    for key in ("tool_metadata", "metadata", "_meta"):
+        candidate = arguments.get(key)
+        if isinstance(candidate, dict):
+            metadata_candidates.append(candidate)
+
+    for candidate in metadata_candidates:
+        merged.update(candidate)
+        for nested_key in ("task_create", "planexe_task_create", "planexe"):
+            nested = candidate.get(nested_key)
+            if isinstance(nested, dict):
+                merged.update(nested)
+
+    return merged
+
 def _merge_task_create_config(
     config: Optional[dict[str, Any]],
     speed_vs_detail: Optional[str],
@@ -834,14 +854,10 @@ TOOL_DEFINITIONS = [
         description=(
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Returns task_id (UUID); use it for task_status, task_stop, and task_download. "
+            "Returns task_id (UUID); use it for task_status, task_stop, task_download, and task_file_info. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
-            "speed_vs_detail modes: "
-            "'all' runs the full pipeline with all details (slower, higher token usage/cost). "
-            "'fast' runs the full pipeline with minimal work per step (faster, fewer details), "
-            "useful to verify the pipeline is working. "
-            "'ping' runs the pipeline entrypoint and makes a single LLM call to verify the "
-            "worker_plan_database is processing tasks and can reach the LLM."
+            "Optional runtime overrides such as speed_vs_detail are intentionally hidden from the visible tool schema "
+            "and can be provided via tool-specific metadata by developers."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -917,12 +933,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "speed_vs_detail": "fast"} → faster run
+        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}} → faster run
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - speed_vs_detail: Optional mode ("ping" | "fast" | "all").
         - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
+        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -930,8 +946,26 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         - isError: False on success.
     """
     req = TaskCreateRequest(**arguments)
+    metadata_overrides = _extract_task_create_metadata_overrides(arguments)
+    metadata_model_profile = metadata_overrides.get("model_profile")
+    model_profile = req.model_profile
+    if model_profile is None and isinstance(metadata_model_profile, str):
+        model_profile = metadata_model_profile
 
-    merged_config = _merge_task_create_config(None, req.speed_vs_detail, req.model_profile)
+    speed_vs_detail = metadata_overrides.get("speed_vs_detail")
+    if not isinstance(speed_vs_detail, str):
+        speed_alias = metadata_overrides.get("speed")
+        if isinstance(speed_alias, str):
+            speed_vs_detail = speed_alias
+        else:
+            # Backward-compatible hidden override when callers still send legacy top-level args.
+            legacy_speed = arguments.get("speed_vs_detail")
+            if isinstance(legacy_speed, str):
+                speed_vs_detail = legacy_speed
+            elif isinstance(arguments.get("speed"), str):
+                speed_vs_detail = arguments.get("speed")
+
+    merged_config = _merge_task_create_config(None, speed_vs_detail, model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:
@@ -952,12 +986,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     if user_context and float(user_context.get("credits_balance", 0.0)) <= 0.0:
-            response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(response))],
-                structuredContent=response,
-                isError=True,
-            )
+        response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
 
     response = await asyncio.to_thread(
         _create_task_sync,

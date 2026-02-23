@@ -25,6 +25,12 @@ This is the shortest path to a working PlanExe MCP integration.
 3. `task_status`
 4. `task_download`
 
+For `task_create`:
+
+- Visible arguments: `prompt` (required), `model_profile` (optional).
+- Hidden developer metadata: `speed_vs_detail` (`ping` | `fast` | `all`).
+- Reference: [PlanExe MCP interface](planexe_mcp_interface.md#62-task_create)
+
 ---
 
 ## 3. Success criteria

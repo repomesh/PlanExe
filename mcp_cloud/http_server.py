@@ -236,6 +236,7 @@ async def _enforce_body_size(request: Request) -> Optional[JSONResponse]:
 class MCPToolCallRequest(BaseModel):
     tool: str
     arguments: dict[str, Any]
+    metadata: Optional[dict[str, Any]] = None
 
 
 class MCPToolCallResponse(BaseModel):
@@ -315,19 +316,12 @@ def _normalize_tool_result(result: Any) -> tuple[list[dict[str, Any]], Optional[
     return content, error
 
 
-SpeedVsDetailInput = Literal["ping", "fast", "all"]
 ModelProfileInput = Literal["baseline", "premium", "frontier", "custom"]
 ResultArtifactInput = Literal["report", "zip"]
 
 
 async def task_create(
     prompt: str,
-    speed_vs_detail: Annotated[
-        SpeedVsDetailInput,
-        Field(
-            description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
-        ),
-    ] = "ping",
     model_profile: Annotated[
         ModelProfileInput,
         Field(description="LLM profile: baseline, premium, frontier, custom."),
@@ -337,7 +331,6 @@ async def task_create(
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
         "prompt": prompt,
-        "speed_vs_detail": speed_vs_detail,
         "model_profile": model_profile,
     }
     if authenticated_user_api_key:
@@ -560,6 +553,30 @@ async def call_tool(
         authenticated_user_api_key = _get_authenticated_user_api_key()
         if authenticated_user_api_key and not arguments.get("user_api_key"):
             arguments["user_api_key"] = authenticated_user_api_key
+        if isinstance(payload.metadata, dict):
+            arguments["metadata"] = dict(payload.metadata)
+
+        # Backward compatibility: move legacy speed args into hidden metadata.
+        legacy_speed_vs_detail = arguments.pop("speed_vs_detail", None)
+        legacy_speed = arguments.pop("speed", None)
+        if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
+            metadata = arguments.get("metadata")
+            if not isinstance(metadata, dict):
+                metadata = {}
+                arguments["metadata"] = metadata
+            task_create_metadata = metadata.get("task_create")
+            if not isinstance(task_create_metadata, dict):
+                task_create_metadata = {}
+                metadata["task_create"] = task_create_metadata
+            if isinstance(legacy_speed_vs_detail, str):
+                task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
+            if isinstance(legacy_speed, str):
+                task_create_metadata.setdefault("speed", legacy_speed)
+
+        result = await handle_task_create(arguments)
+        content, error = _normalize_tool_result(result)
+        return MCPToolCallResponse(content=content, error=error)
+
     return await call_tool_via_registry(fastmcp_server, payload.tool, arguments)
 
 

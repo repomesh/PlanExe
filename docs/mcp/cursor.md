@@ -51,7 +51,7 @@ My interaction with Cursor for creating a plan is like this:
 2. I want you to come up with a good prompt
 3. I want something ala winter olympics in Italy 2026
 4. Slightly different idea. I want Denmark to switch from DKK to EUR. Use the persona of a person representing Denmark's ministers.
-5. go ahead create plan with all details
+5. go ahead create the plan
 6. *wait for 18 minutes until the plan has been created*
 7. download the plan
 

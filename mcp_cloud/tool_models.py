@@ -52,7 +52,7 @@ class TaskFileInfoInput(BaseModel):
 class TaskCreateOutput(BaseModel):
     task_id: str = Field(
         ...,
-        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_download."
+        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_download/task_file_info."
     )
     created_at: str
 
@@ -118,10 +118,6 @@ class TaskCreateInput(BaseModel):
             "Use prompt_examples to get example prompts; use these as examples for task_create. "
             "Short prompts produce less detailed plans."
         ),
-    )
-    speed_vs_detail: Literal["ping", "fast", "all"] = Field(
-        default="ping",
-        description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",

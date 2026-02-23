@@ -50,6 +50,15 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn(">20 minutes", description)
         self.assertIn("PlanExeOrg/PlanExe/issues", description)
 
+    def test_cloud_instructions_include_model_profiles_unavailable_guidance(self):
+        instructions = cloud_app.PLANEXE_SERVER_INSTRUCTIONS
+        self.assertIn("MODEL_PROFILES_UNAVAILABLE", instructions)
+
+    def test_cloud_prompt_schema_includes_prompt_shape_guidance(self):
+        prompt_schema = cloud_app.TASK_CREATE_INPUT_SCHEMA["properties"]["prompt"]["description"]
+        self.assertIn("300-800 words", prompt_schema)
+        self.assertIn("objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria", prompt_schema)
+
 
 class TestLocalToolSurfaceConsistency(unittest.TestCase):
     def test_local_exposes_model_profiles_tool(self):
@@ -89,6 +98,10 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("pending for >5 minutes", description)
         self.assertIn(">20 minutes", description)
         self.assertIn("PlanExeOrg/PlanExe/issues", description)
+
+    def test_local_instructions_include_model_profiles_unavailable_guidance(self):
+        instructions = local_app.PLANEXE_SERVER_INSTRUCTIONS
+        self.assertIn("MODEL_PROFILES_UNAVAILABLE", instructions)
 
 
 if __name__ == "__main__":

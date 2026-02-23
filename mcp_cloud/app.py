@@ -136,7 +136,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
     "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
-    "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
+    "Tool errors use {error:{code,message}}. task_file_info returns an empty object {} while the artifact is not ready; check readiness by testing whether download_url is present. "
     "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
@@ -1084,11 +1084,14 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="task_file_info",
         description=(
-            "Returns file metadata (content_type, download_url, download_size) for the report or zip. "
-            "If your client exposes task_download (e.g. mcp_local), use that to save the file locally; "
-            "otherwise use this tool to get download_url and fetch the file yourself. "
-            "download_url is an absolute URL where the requested artifact can be downloaded. "
-            "Returns {} while artifact is not ready. Terminal tool-level error payloads use codes generation_failed or content_unavailable."
+            "Returns file metadata (content_type, download_url, download_size) for the report or zip artifact. "
+            "Use artifact='report' (default) for the final HTML deliverable; use artifact='zip' for underlying data files (md, json, csv). "
+            "While the task is still pending or processing, returns an empty object {} (no fields). "
+            "Check readiness by testing whether download_url is present in the response. "
+            "Once ready, present download_url to the user or fetch and save the file locally. "
+            "If your client exposes task_download (e.g. mcp_local), prefer that to save the file locally. "
+            "Terminal error codes: generation_failed (plan failed), content_unavailable (artifact missing). "
+            "Unknown task_id returns error code TASK_NOT_FOUND."
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,

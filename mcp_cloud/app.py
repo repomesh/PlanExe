@@ -130,6 +130,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Required interaction order: call prompt_examples first. "
     "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
     "Then perform a non-tool step: draft a strong prompt (typically ~300-800 words) and get user approval. "
+    "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
@@ -1019,6 +1020,7 @@ TOOL_DEFINITIONS = [
             "Call this first. Returns example prompts that define what a good prompt looks like. "
             "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
             "Next is a non-tool step: formulate a detailed prompt (typically ~300-800 words; use examples as a baseline, similar structure) and get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
             "Then call task_create. "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
@@ -1209,6 +1211,7 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
         "samples": samples,
         "message": (
             "Next: complete the non-tool step by drafting a detailed prompt (typically ~300-800 words) using these as a baseline (similar structure), then get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
             "Only after approval, call task_create. "
             "Do not use PlanExe for tiny one-shot requests (e.g., rewrite this email, summarize this document). "
             "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."

@@ -4,6 +4,7 @@ from datetime import datetime, UTC
 from database_api.planexe_db_singleton import db
 from sqlalchemy_utils import UUIDType
 from sqlalchemy import JSON
+from sqlalchemy.orm import column_property
 
 class TaskState(enum.Enum):
     pending = 1
@@ -69,6 +70,11 @@ class TaskItem(db.Model):
 
     # Artifact schema/version marker (legacy snapshots are NULL/1, split-storage snapshots are 2+).
     run_artifact_layout_version = db.Column(db.Integer, nullable=True, default=None)
+
+    # Lightweight admin/UI helpers; avoids loading large payload columns just to render links.
+    has_generated_report_html = column_property(generated_report_html.isnot(None))
+    has_run_zip_snapshot = column_property(run_zip_snapshot.isnot(None))
+    has_run_track_activity_jsonl = column_property(run_track_activity_jsonl.isnot(None))
 
     def __repr__(self):
         return f"{self.id}: {self.timestamp_created}, {self.state}, {self.prompt!r}, parameters: {self.parameters!r}"

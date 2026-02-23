@@ -13,6 +13,7 @@ from flask_admin.actions import action
 from markupsafe import Markup
 from flask import url_for, abort, redirect, Response
 from flask_login import current_user
+from sqlalchemy.orm import defer
 
 class AdminOnlyModelView(ModelView):
     """Restrict admin views to authenticated admin users only."""
@@ -135,22 +136,29 @@ class TaskItemView(AdminOnlyModelView):
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,
         'view_plan': lambda v, c, m, p: Markup(
             f'<a href="/viewplan?run_id={m.id}" target="_blank">View</a>'
-        ) if m.generated_report_html else '—',
+        ) if m.has_generated_report_html else '—',
         'generated_report_html': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_report", task_id=str(m.id))}">Download ({len(m.generated_report_html.encode("utf-8")) / 1024:.1f} KB)</a>'
-        ) if m.generated_report_html else '—',
+            f'<a href="{url_for("download_task_report", task_id=str(m.id))}">Download</a>'
+        ) if m.has_generated_report_html else '—',
         'run_zip_snapshot': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_run_zip", task_id=str(m.id))}">Download ({len(m.run_zip_snapshot) / 1024:.1f} KB)</a>'
-        ) if m.run_zip_snapshot else '—',
+            f'<a href="{url_for("download_task_run_zip", task_id=str(m.id))}">Download</a>'
+        ) if m.has_run_zip_snapshot else '—',
         'run_activity_overview_json': lambda v, c, m, p: (
             json.dumps(m.run_activity_overview_json, ensure_ascii=False)[:120] + '...'
             if m.run_activity_overview_json and len(json.dumps(m.run_activity_overview_json, ensure_ascii=False)) > 120
             else (json.dumps(m.run_activity_overview_json, ensure_ascii=False) if m.run_activity_overview_json else '—')
         ),
         'run_track_activity': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_track_activity", task_id=str(m.id))}">Download ({((m.run_track_activity_bytes if m.run_track_activity_bytes is not None else len(m.run_track_activity_jsonl.encode("utf-8"))) / 1024):.1f} KB)</a>'
-        ) if m.run_track_activity_jsonl else '—',
+            f'<a href="{url_for("download_task_track_activity", task_id=str(m.id))}">Download</a>'
+        ) if m.has_run_track_activity_jsonl else '—',
     }
+
+    def get_query(self):
+        return super().get_query().options(
+            defer(self.model.generated_report_html),
+            defer(self.model.run_zip_snapshot),
+            defer(self.model.run_track_activity_jsonl),
+        )
 
 class NonceItemView(AdminOnlyModelView):
     """Custom ModelView for NonceItem"""

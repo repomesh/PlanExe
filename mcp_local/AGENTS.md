@@ -46,7 +46,7 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 
 ## Env vars
 - `PLANEXE_URL`: Base URL for mcp_cloud (e.g., `http://localhost:8001/mcp`).
-- `PLANEXE_MCP_API_KEY`: API key forwarded to remote as `Authorization: Bearer ...`.
+- `PLANEXE_MCP_API_KEY`: API key forwarded to remote as custom header `X-API-Key`.
 - `PLANEXE_PATH`: Local directory where downloads are saved.
   - Must be a directory.
   - Defaults to current working directory when unset.

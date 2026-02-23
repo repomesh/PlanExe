@@ -95,7 +95,7 @@ def _build_headers() -> dict[str, str]:
     }
     api_key = _get_env("PLANEXE_MCP_API_KEY")
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        headers["X-API-Key"] = api_key
     return headers
 
 

@@ -135,7 +135,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
     "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
-    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. task_file_info returns an empty object {} while the artifact is not ready; check readiness by testing whether download_url is present. "
     "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
@@ -1239,8 +1239,8 @@ async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
             "error": {
                 "code": "MODEL_PROFILES_UNAVAILABLE",
                 "message": (
-                    "No models are currently available in any model_profile. "
-                    "Ensure profile config files are present and contain at least one enabled model, then retry model_profiles."
+                    "No models are currently configured. "
+                    "Inform the user that the server administrator needs to set up model profiles before plans can be created."
                 ),
             }
         }

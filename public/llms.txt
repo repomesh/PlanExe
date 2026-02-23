@@ -99,6 +99,11 @@ Recommended interaction order:
 6. Use task_file_info to get download URLs.
 7. Use task_stop if the run must be cancelled.
 
+Concurrency semantics:
+- Each task_create call creates a new task_id.
+- Server does not enforce a global per-client concurrency cap.
+- Client should track task_ids and usually start with 1 active task, then 2 if needed.
+
 Note:
 - task_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
 - In mcp_local, downloads save to PLANEXE_PATH (or current working directory if PLANEXE_PATH is unset).

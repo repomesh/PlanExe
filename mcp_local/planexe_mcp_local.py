@@ -552,6 +552,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
+            "Each task_create call creates a new task_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR. "
             "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
@@ -607,6 +608,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
     "Then perform a non-tool step: draft a strong prompt and get user approval. "
     "Only after approval, call task_create. "
+    "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_download when complete. To stop, call task_stop with the task_id from task_create. "
     "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "

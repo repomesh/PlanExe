@@ -326,6 +326,7 @@ For the full catalog file:
 
 - Must be idempotent only if client supplies an optional client_request_id (optional extension).
 - Task config is immutable after creation in v1.
+- By default, repeated `task_create` calls produce new tasks (new `task_id`s).
 
 ---
 
@@ -469,6 +470,12 @@ Recommended practice for MCP clients:
 - Start with 1 active task.
 - If needed, increase to 2 tasks in parallel.
 - Going beyond 4 parallel tasks is usually hard to track; avoid unless necessary.
+
+Additional semantics:
+
+- Every `task_create` call creates a new independent task with a new `task_id`.
+- The server does not deduplicate “same prompt” requests into a single shared task.
+- Keep your own task registry/client state if you run multiple tasks concurrently.
 
 ---
 

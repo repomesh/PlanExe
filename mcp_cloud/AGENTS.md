@@ -35,6 +35,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Expose `model_profiles` as the discovery tool for profile selection.
 - `model_profiles` must report profile guidance and currently available models after class whitelist filtering.
 - Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
+- Keep concurrency wording explicit: each `task_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
 - Visible input schema is intentionally limited to:
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)

@@ -57,6 +57,8 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 5. `task_status` (poll every 5 minutes until done)
 6. download the result via `task_download` or via `task_file_info`
 
+Concurrency note: each `task_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
+
 ### Option A: Remote MCP (fastest path)
 
 #### Prerequisites

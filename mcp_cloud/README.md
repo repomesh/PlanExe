@@ -141,6 +141,11 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
 
+Concurrency semantics:
+- Each `task_create` call creates a new `task_id`.
+- Server does not enforce a global one-task-at-a-time cap per client.
+- Client should track task ids explicitly when running tasks in parallel.
+
 Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
 - Common codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.

@@ -405,6 +405,7 @@ fastmcp_server = FastMCP(
         "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
         "Then perform a non-tool step: draft a strong prompt and get user approval. "
         "Only after approval, call task_create. "
+        "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
         "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
         "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
         "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "

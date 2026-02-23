@@ -262,6 +262,15 @@ Common local proxy error codes:
 Special case:
 - `task_file_info` may return `{}` while the artifact is not ready yet (not an error).
 
+## Concurrency semantics (practical)
+
+- Each `task_create` call creates a new task with a new `task_id`.
+- The server does not enforce a global “one active task per client” cap.
+- Parallelism is a client orchestration concern:
+  - start with 1 task
+  - scale to 2 in parallel if needed
+  - avoid more than 4 unless you have strong task-tracking UX
+
 ## Typical Flow
 
 ### 1. Get example prompts

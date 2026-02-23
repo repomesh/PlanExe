@@ -1047,9 +1047,7 @@ TOOL_DEFINITIONS = [
             "Each task_create call creates a new task_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
-            "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS. "
-            "Optional runtime overrides such as speed_vs_detail are intentionally hidden from the visible tool schema "
-            "and can be provided via tool-specific metadata by developers."
+            "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,

@@ -158,8 +158,8 @@ ZIP_FILENAME = "run.zip"
 ZIP_CONTENT_TYPE = "application/zip"
 ZIP_SNAPSHOT_MAX_BYTES = 100_000_000
 
-SPEED_VS_DETAIL_DEFAULT = "ping_llm"
-SPEED_VS_DETAIL_DEFAULT_ALIAS = "ping"
+SPEED_VS_DETAIL_DEFAULT = "all_details_but_slow"
+SPEED_VS_DETAIL_DEFAULT_ALIAS = "all"
 SPEED_VS_DETAIL_VALUES = (
     "ping_llm",
     "fast_but_skip_details",

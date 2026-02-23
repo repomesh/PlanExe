@@ -123,14 +123,21 @@ with app.app_context():
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (
-    "PlanExe generates rough-draft project plans from a natural-language prompt. "
+    "PlanExe generates strategic project-plan drafts from a natural-language prompt. "
+    "Output is a self-contained interactive HTML report (~700KB) with 20+ sections including "
+    "executive summary, interactive Gantt charts, risk analysis, SWOT, governance, investor pitch, "
+    "team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections "
+    "(premortem, self-audit checklist, premise attacks) that stress-test whether the plan holds up. "
+    "The output is a draft to refine, not final ground truth — but it surfaces hard questions the prompter may not have considered. "
     "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: call prompt_examples first. "
     "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
-    "Then perform a non-tool step: draft a strong prompt (typically ~300-800 words) and get user approval. "
+    "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
+    "typically ~300-800 words, and get user approval. "
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+    "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
@@ -142,7 +149,8 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
-    "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
+    "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
+    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report."
 )
 
 mcp_cloud = Server("planexe-mcp-cloud", instructions=PLANEXE_SERVER_INSTRUCTIONS)
@@ -1022,6 +1030,9 @@ TOOL_DEFINITIONS = [
             "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
             "Next is a non-tool step: formulate a detailed prompt (typically ~300-800 words; use examples as a baseline, similar structure) and get user approval. "
             "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
             "Then call task_create. "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
@@ -1042,7 +1053,13 @@ TOOL_DEFINITIONS = [
         name="task_create",
         description=(
             "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
-            "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
+            "PlanExe turns the approved prompt into a strategic project-plan draft (20+ sections) in ~10-20 min. "
+            "Sections include: executive summary, interactive Gantt charts, investor pitch, project plan with SMART criteria, "
+            "strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, "
+            "SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, "
+            "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
+            "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
+            "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
             "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
             "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
             "Each task_create call creates a new task_id (no server-side dedup). "
@@ -1057,8 +1074,8 @@ TOOL_DEFINITIONS = [
         name="task_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15-20+ minutes "
-            "and frequent polling is unnecessary. "
+            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
+            "(baseline profile) and may take longer on higher-quality profiles. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
@@ -1086,7 +1103,9 @@ TOOL_DEFINITIONS = [
         name="task_file_info",
         description=(
             "Returns file metadata (content_type, download_url, download_size) for the report or zip artifact. "
-            "Use artifact='report' (default) for the final HTML deliverable; use artifact='zip' for underlying data files (md, json, csv). "
+            "Use artifact='report' (default) for the interactive HTML report (~700KB, self-contained with embedded JS "
+            "for collapsible sections and interactive Gantt charts — open in a browser). "
+            "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
             "While the task is still pending or processing, returns an empty object {} (no fields). "
             "Check readiness by testing whether download_url is present in the response. "
             "Once ready, present download_url to the user or fetch and save the file locally. "
@@ -1220,6 +1239,9 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
         "message": (
             "Next: complete the non-tool step by drafting a detailed prompt (typically ~300-800 words) using these as a baseline (similar structure), then get user approval. "
             "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
             "Only after approval, call task_create. "
             "Do not use PlanExe for tiny one-shot requests (e.g., rewrite this email, summarize this document). "
             "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."

@@ -432,7 +432,7 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PlanExe – AI Project Planning",
-    description="MCP server that generates rough-draft project plans from a natural-language prompt",
+    description="MCP server that generates strategic project-plan drafts from a natural-language prompt",
     version="1.0.0",
     lifespan=_lifespan,
 )

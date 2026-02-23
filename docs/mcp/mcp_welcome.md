@@ -4,7 +4,7 @@ title: Welcome to PlanExe MCP
 
 # Welcome to PlanExe MCP
 
-PlanExe MCP lets [AI agents](https://en.wikipedia.org/wiki/AI_agent) (and the tools you build) create [strategic plans](https://en.wikipedia.org/wiki/Strategic_planning) from a plain-English prompt. You send a goal; PlanExe produces a draft plan. The MCP user then chooses whether to download the **HTML report** or a **zip** of intermediary files (JSON, MD, CSV) used to build that report.
+PlanExe MCP lets [AI agents](https://en.wikipedia.org/wiki/AI_agent) (and the tools you build) create [strategic project-plan drafts](https://en.wikipedia.org/wiki/Strategic_planning) from a plain-English prompt. You send a goal; PlanExe produces a draft plan with 20+ sections — including adversarial analysis that stress-tests whether the plan holds up. The MCP user then chooses whether to download the **HTML report** or a **zip** of intermediary files (JSON, MD, CSV) used to build that report.
 
 No MCP experience is required to get started.
 
@@ -20,7 +20,7 @@ No MCP experience is required to get started.
 ## What you can do
 
 - **Get example prompts** — See what good prompts look like (detailed, typically ~300-800 words). It is the **caller’s responsibility** to take inspiration from these examples and ensure the prompt sent to PlanExe is of similar or better quality. A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The agent can refine a vague idea into a high-quality prompt and show it to the user for approval before creating the plan.
-- **Create a plan** — Send a prompt; PlanExe starts creating the plan (takes about 15–20 minutes). If the input prompt is of low quality, the output plan will be crap too. Visible `task_create` options include `model_profile`.
+- **Create a plan** — Send a prompt; PlanExe starts creating the plan (typically takes 10–20 minutes on baseline profile). If the input prompt is of low quality, the output plan will be crap too. Visible `task_create` options include `model_profile`.
 - **Check progress** — Ask for status and see how far the plan has gotten.
 - **Download the report** — When the plan is ready, the user specifies whether to download the HTML report or the zip of intermediary files (JSON, MD, CSV).
 
@@ -32,8 +32,8 @@ Developer note: `speed_vs_detail` is intentionally hidden from the visible `task
 
 The MCP user chooses which artifact to download:
 
-- **HTML report** (around 40 pages) — executive summary, Gantt chart, risks, next steps, and more. Opens in a browser.
-- **Zip** — intermediary files (JSON, MD, CSV) used to build the HTML report, for deeper inspection.
+- **HTML report** (~700KB, self-contained) — 20+ sections including executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks). Opens in a browser with collapsible sections and interactive charts.
+- **Zip** — intermediary pipeline files (JSON, MD, CSV) that fed the HTML report, for deeper inspection.
 
 ---
 

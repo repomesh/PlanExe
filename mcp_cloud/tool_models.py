@@ -211,6 +211,8 @@ class TaskCreateInput(BaseModel):
             "For best results, provide a detailed prompt (typically ~300-800 words). "
             "Good prompt shape: objective, scope, constraints, timeline, stakeholders, "
             "budget/resources, and success criteria. "
+            "Write as flowing prose, not structured markdown. Include banned approaches, "
+            "governance preferences, and phasing inline. "
             "Short prompts produce less detailed plans. "
             "Do not use task_create for tiny one-shot outputs (e.g., a 5-point checklist); use direct LLM responses for those."
         ),

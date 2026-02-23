@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Optional before task_create: call model_profiles to inspect profile guidance and available models under current whitelist settings. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call task_stop with the task_id from task_create.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models under current whitelist settings. Then complete a non-tool step: formulate a good prompt (use examples as a baseline; similar structure) and get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` or `task_file_info` when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
 - **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
 
 ### 1.3 Scope of this document
@@ -73,7 +73,7 @@ The MCP specification defines two different mechanisms:
 - **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_download or task_file_info. This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. The intended flow is: Step 1 — call prompt_examples; optional before task_create — call model_profiles; Step 2 — formulate a good prompt (user approval); Step 3 — call task_create; then poll task_status and call task_download or task_file_info when complete.
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: call `prompt_examples`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `task_create`; poll `task_status`; then call `task_download` or `task_file_info`.
 
 ---
 
@@ -156,7 +156,7 @@ All tool names below are normative.
 
 ### 6.1 prompt_examples
 
-**Step 1 — Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: Step 1 — call this tool to fetch examples. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. If you call task_create before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
+**Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: call this tool; optionally call `model_profiles`; then complete a non-tool step (draft and approve prompt); only then call `task_create`. If you call `task_create` before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
 
 **Request:** no parameters (empty object).
 
@@ -213,7 +213,7 @@ Use the returned `profile` values directly in `task_create.model_profile`.
 
 ### 6.2 task_create
 
-**Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2).** Start creating a new plan with the approved prompt.
+**Call only after prompt_examples and after the non-tool drafting/approval step.** Start creating a new plan with the approved prompt.
 
 **Request**
 

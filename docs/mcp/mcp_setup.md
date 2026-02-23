@@ -12,9 +12,9 @@ This is the shortest path to a working PlanExe MCP integration.
 
 1. Ask for prompt examples.
 2. Inspect `model_profile` options and available models.
-3. Expand the user idea into a high‑quality prompt.
+3. Expand the user idea into a high‑quality prompt (non-tool step) and get user approval.
 4. Create the plan task.
-5. Poll for status.
+5. Poll for status (about every 5 minutes).
 6. Download the report (HTML or zip).
 
 ---

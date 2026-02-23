@@ -10,6 +10,7 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 - The primary MCP server runs in the cloud (see `mcp_cloud`).
 - The local MCP proxy (`mcp_local`) forwards calls to the server and adds a local download helper.
 - Tool responses return JSON in both `content.text` and `structuredContent`.
+- Workflow note: drafting and user approval of the prompt is a non-tool step between setup tools and `task_create`.
 
 ## Tool Catalog, `mcp_cloud`
 
@@ -289,7 +290,11 @@ Tool call:
 {}
 ```
 
-### 3. Create a plan
+### 3. Draft and approve the prompt (non-tool step)
+
+At this step, the agent writes a high-quality prompt draft, shows it to the user, and waits for approval.
+
+### 4. Create a plan
 
 The user reviews the prompt and either asks for further changes or confirms it’s good to go. When the user confirms, the agent calls `task_create` with that prompt.
 
@@ -298,7 +303,7 @@ Tool call:
 {"prompt": "..."}
 ```
 
-### 4. Get status
+### 5. Get status
 
 Prompt:
 ```
@@ -310,7 +315,7 @@ Tool call:
 {"task_id": "<task_id_from_task_create>"}
 ```
 
-### 5. Download the report
+### 6. Download the report
 
 Prompt:
 ```

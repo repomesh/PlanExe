@@ -15,6 +15,7 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 ## Run as task (MCP tasks protocol)
 
 MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+Workflow clarity: prompt drafting + user approval is a non-tool step between setup tools and `task_create`.
 
 ## Client Choice Guide
 

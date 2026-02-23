@@ -34,6 +34,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 ## task_create contract
 - Expose `model_profiles` as the discovery tool for profile selection.
 - `model_profiles` must report profile guidance and currently available models after class whitelist filtering.
+- Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
 - Visible input schema is intentionally limited to:
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)

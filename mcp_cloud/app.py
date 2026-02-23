@@ -127,11 +127,11 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
-    "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
+    "Required interaction order: call prompt_examples first. "
     "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
-    "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
-    "Step 3 — Only then call task_create with the approved prompt. "
-    "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "Then perform a non-tool step: draft a strong prompt and get user approval. "
+    "Only after approval, call task_create. "
+    "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
     "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
     "task_file_info download_url is absolute when PLANEXE_MCP_PUBLIC_BASE_URL is configured or request host is available. "
     "If download_url is missing, configure PLANEXE_MCP_PUBLIC_BASE_URL on the server. "
@@ -1031,9 +1031,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="prompt_examples",
         description=(
-            "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
+            "Call this first. Returns example prompts that define what a good prompt looks like. "
             "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
-            "Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
+            "Next is a non-tool step: formulate a prompt (use examples as a baseline, similar structure) and get user approval. "
+            "Then call task_create. "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
@@ -1051,7 +1052,7 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="task_create",
         description=(
-            "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
+            "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
             "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
             "If you are unsure which model_profile to choose, call model_profiles first. "
@@ -1220,8 +1221,8 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     payload = {
         "samples": samples,
         "message": (
-            "Step 1 done. Next: Step 2 — Formulate a good prompt using these as a baseline (similar structure). Get user approval. "
-            "Step 3 — Only then call task_create with the approved prompt. "
+            "Next: complete the non-tool step by drafting a good prompt using these as a baseline (similar structure), then get user approval. "
+            "Only after approval, call task_create. "
             "Do not use PlanExe for tiny one-shot requests (e.g., rewrite this email, summarize this document). "
             "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."
         ),

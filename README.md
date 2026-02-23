@@ -52,9 +52,10 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 
 1. `prompt_examples`
 2. `model_profiles` (optional, helps choose `model_profile`)
-3. `task_create`
-4. `task_status` (poll every 5 minutes until done)
-5. download the result via `task_download` or via `task_file_info`
+3. non-tool step: draft/approve prompt
+4. `task_create`
+5. `task_status` (poll every 5 minutes until done)
+6. download the result via `task_download` or via `task_file_info`
 
 ### Option A: Remote MCP (fastest path)
 

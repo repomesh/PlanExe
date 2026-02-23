@@ -93,7 +93,7 @@ Minimal error-handling contract:
 Recommended interaction order:
 1. Call prompt_examples.
 2. Optionally call model_profiles to choose model_profile based on current availability.
-3. Prepare and approve a strong prompt.
+3. Non-tool step: prepare and approve a strong prompt.
 4. Call task_create.
 5. Poll task_status until complete (repeat every 5 minutes).
 6. Use task_file_info to get download URLs.

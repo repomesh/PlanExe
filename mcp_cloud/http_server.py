@@ -47,6 +47,7 @@ if not _dotenv_loaded:
     )
 
 from mcp_cloud.app import (
+    PLANEXE_SERVER_INSTRUCTIONS,
     REPORT_CONTENT_TYPE,
     REPORT_FILENAME,
     TOOL_DEFINITIONS,
@@ -396,23 +397,7 @@ def _register_tools(server: FastMCP) -> None:
 
 fastmcp_server = FastMCP(
     name="planexe-mcp-server",
-    instructions=(
-        "PlanExe generates rough-draft project plans from a natural-language prompt. "
-        "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
-        "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
-        "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
-        "Required interaction order: call prompt_examples first. "
-        "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
-        "Then perform a non-tool step: draft a strong prompt and get user approval. "
-        "Only after approval, call task_create. "
-        "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
-        "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
-        "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
-        "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
-        "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
-        "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
-        "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
-    ),
+    instructions=PLANEXE_SERVER_INSTRUCTIONS,
     host=HTTP_HOST,
     port=HTTP_PORT,
     streamable_http_path="/",

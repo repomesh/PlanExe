@@ -532,7 +532,8 @@ TOOL_DEFINITIONS = [
         name="model_profiles",
         description=(
             "Optional helper before task_create. Returns model_profile options with plain-language guidance "
-            "and currently available models in each profile."
+            "and currently available models in each profile. "
+            "If no models are available, returns error code MODEL_PROFILES_UNAVAILABLE."
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
@@ -601,6 +602,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_download when complete. To stop, call task_stop with the task_id from task_create. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
     "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "

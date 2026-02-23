@@ -322,7 +322,9 @@ TASK_CREATE_INPUT_SCHEMA = {
             "type": "string",
             "description": (
                 "What the plan should cover. Good prompts are often 300–800 words. "
-                "Use prompt_examples to get example prompts; use these as examples for task_create. Short prompts produce less detailed plans."
+                "Use prompt_examples to get example prompts; use these as examples for task_create. "
+                "Short prompts produce less detailed plans. "
+                "Do not use task_create for tiny one-shot outputs (e.g., a 5-point checklist)."
             ),
         },
         "model_profile": {
@@ -453,7 +455,8 @@ TOOL_DEFINITIONS = [
         name="prompt_examples",
         description=(
             "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
-            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3)."
+            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
+            "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
@@ -482,7 +485,7 @@ TOOL_DEFINITIONS = [
         name="task_stop",
         description=(
             "Request the plan generation to stop. Pass the task_id (the UUID returned by task_create). "
-            "This is a normal MCP tool call: call task_stop with that task_id."
+            "Call task_stop with that task_id."
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
@@ -502,6 +505,9 @@ TOOL_DEFINITIONS = [
 # Shown in MCP initialize response (e.g. Inspector) so clients know what PlanExe is.
 PLANEXE_SERVER_INSTRUCTIONS = (
     "PlanExe generates rough-draft project plans from a natural-language prompt. "
+    "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
+    "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
+    "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "

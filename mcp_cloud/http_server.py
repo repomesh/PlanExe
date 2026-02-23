@@ -390,6 +390,9 @@ fastmcp_server = FastMCP(
     name="planexe-mcp-server",
     instructions=(
         "PlanExe generates rough-draft project plans from a natural-language prompt. "
+        "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
+        "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
+        "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
         "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
         "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
         "Step 3 — Only then call task_create with the approved prompt. "

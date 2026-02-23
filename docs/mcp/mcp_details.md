@@ -68,7 +68,7 @@ Example with hidden metadata override. The `ping` only checks if the LLMs are co
 }
 ```
 
-Example with hidden metadata override. The `fast` triggers a plan to be created, where the entire Luigi pipeline gets exercised, but skipping ever detail that is possible:
+Example with hidden metadata override. The `fast` triggers a plan to be created, where the entire Luigi pipeline gets exercised, while skipping as much detail as possible:
 ```json
 {
   "prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes...",
@@ -91,6 +91,20 @@ Example with hidden metadata override. The `all` is the default setting. Creates
   }
 }
 ```
+
+Counterexamples (do NOT use PlanExe for these):
+
+- "Give me a 5-point checklist for X."
+- "Summarize this paragraph in 6 bullets."
+- "Rewrite this email."
+- "Identify the risks of this project."
+- "Make a SWOT for this document."
+
+What to do instead:
+
+- For one-shot outputs, use a normal LLM response directly.
+- For PlanExe, send a substantial multi-phase project prompt with scope, constraints, timeline, budget, stakeholders, and success criteria.
+- PlanExe always runs a fixed end-to-end pipeline; it does not support selecting only internal pipeline subsets.
 
 ### task_status
 

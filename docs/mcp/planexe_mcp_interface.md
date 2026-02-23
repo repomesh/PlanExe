@@ -247,6 +247,24 @@ The `prompt` parameter should be a detailed description of what the plan should 
 
 Short one-liners (e.g., "Construct a bridge") tend to produce poor output because they lack context for the planning pipeline. Important details are location, budget, time frame.
 
+**Counterexamples: when NOT to use PlanExe**
+
+Use a normal single LLM response (not PlanExe) for one-shot micro-tasks. PlanExe runs a heavy multi-step planning pipeline and is best for substantial project planning.
+
+- Bad (do not send to task_create): "Give me a 5-point checklist for launching a coffee shop."
+- Better non-PlanExe action: ask the LLM directly for a checklist.
+- Better PlanExe prompt: "Create a 12-month strategic launch plan for a coffee shop in Austin with budget caps, lease milestones, hiring plan, permits, supply chain, marketing channels, risk register, governance, and success KPIs."
+
+- Bad (do not send to task_create): "Summarize this text in 6 bullets."
+- Better non-PlanExe action: use direct summarization in the chat model.
+
+- Bad (invalid assumption): "Run only the risk-register part of PlanExe."
+- Rule: PlanExe pipeline execution is fixed end-to-end. Callers cannot choose internal step subsets.
+- Better PlanExe prompt: request a full plan where risk analysis is one required deliverable.
+
+- Bad (do not send to task_create): "Rewrite this email to sound professional."
+- Better non-PlanExe action: use direct rewriting in the chat model.
+
 **Optional**
 
 - model_profile: LLM profile (`baseline` | `premium` | `frontier` | `custom`).
@@ -322,7 +340,7 @@ Returns run status and progress. Used for progress bars and UI states. **Polling
 
 ### 6.4 task_stop
 
-Requests the plan generation to stop. Pass the **task_id** (the UUID returned by task_create). This is a normal MCP tool call: call task_stop with that task_id.
+Requests the plan generation to stop. Pass the **task_id** (the UUID returned by task_create). Call `task_stop` with that task_id.
 
 **Request**
 

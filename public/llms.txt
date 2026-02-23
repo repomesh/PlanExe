@@ -7,6 +7,16 @@ Use PlanExe when you need to:
 - Estimate timelines and identify dependencies and risks.
 - Generate plan artifacts for review and iteration.
 
+Do NOT use PlanExe when you only need a one-shot answer:
+- "Give me a 5-point checklist for X" -> use a normal LLM response.
+- "Summarize this paragraph in 6 bullets" -> use a normal LLM response.
+- "Rewrite this email" -> use a normal LLM response.
+
+Important pipeline constraint:
+- PlanExe always runs a fixed end-to-end planning pipeline.
+- You cannot request only specific internal pipeline parts (for example "run only risk section" or "create only the Gantt").
+- If you need only one small output artifact, use a normal LLM response instead.
+
 ## What PlanExe Produces
 
 - A long-running planning task (often ~10-20 minutes, depending on model and configuration).

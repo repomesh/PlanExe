@@ -40,6 +40,7 @@ ModelProfileInput = Literal[
 class TaskCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
+    user_api_key: Optional[str] = None
 
 
 class TaskStatusRequest(BaseModel):
@@ -339,6 +340,11 @@ TASK_CREATE_INPUT_SCHEMA = {
                 "frontier (most capable), custom (user-defined). Call model_profiles for runtime availability."
             ),
         },
+        "user_api_key": {
+            "type": ["string", "null"],
+            "default": None,
+            "description": "Optional user API key for credits and attribution.",
+        },
     },
     "required": ["prompt"],
 }
@@ -542,11 +548,13 @@ TOOL_DEFINITIONS = [
         name="task_create",
         description=(
             "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
-            "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
+            "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15-20 min. "
+            "Returns task_id (UUID); use it for task_status, task_stop, and task_download. "
+            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
             "Each task_create call creates a new task_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
-            "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR. "
-            "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
+            "If your deployment uses credits, include user_api_key to charge the correct account. "
+            "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -555,9 +563,11 @@ TOOL_DEFINITIONS = [
         name="task_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
+            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15-20+ minutes "
             "and frequent polling is unnecessary. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "progress_percentage is 0-100 (integer-like float); 100 when completed. "
+            "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
             "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails). "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "
@@ -570,7 +580,10 @@ TOOL_DEFINITIONS = [
         name="task_stop",
         description=(
             "Request the plan generation to stop. Pass the task_id (the UUID returned by task_create). "
-            "Call task_stop with that task_id."
+            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
+            "A stopped task will eventually transition to the failed state. "
+            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
+            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails)."
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
@@ -579,7 +592,7 @@ TOOL_DEFINITIONS = [
         name="task_download",
         description=(
             "Download the plan output and save it locally to PLANEXE_PATH. "
-            "Choose the HTML report (default) or a zip of all generated files. "
+            "Use artifact='report' (default) for the final HTML deliverable; use artifact='zip' for underlying data files (md, json, csv). "
             "If PLANEXE_PATH is unset, files are saved to the current working directory. "
             "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur. "
             "Common local error codes: DOWNLOAD_FAILED, REMOTE_ERROR."
@@ -601,8 +614,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
-    "Then poll task_status (about every 5 minutes); use task_download when complete. To stop, call task_stop with the task_id from task_create. "
-    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
+    "Then poll task_status (about every 5 minutes); use task_download when complete. "
+    "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
@@ -672,6 +686,8 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     payload: dict[str, Any] = {"prompt": req.prompt}
     if req.model_profile:
         payload["model_profile"] = req.model_profile
+    if req.user_api_key:
+        payload["user_api_key"] = req.user_api_key
 
     metadata = arguments.get("metadata")
     if isinstance(metadata, dict):

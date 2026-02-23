@@ -14,17 +14,13 @@ class TestModelProfilesTool(unittest.TestCase):
     def test_model_profiles_returns_structured_content(self):
         payload = {
             "default_profile": "baseline",
-            "whitelist_active": True,
-            "whitelisted_classes": ["openrouter"],
             "profiles": [
                 {
                     "profile": "baseline",
                     "title": "Baseline",
                     "summary": "Cheap and fast; recommended default for most runs.",
-                    "config_filename": "baseline.json",
                     "available": True,
                     "model_count": 1,
-                    "filtered_out_count": 0,
                     "models": [
                         {
                             "key": "openrouter-gpt-oss-20b",

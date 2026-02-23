@@ -50,16 +50,11 @@ class ModelProfileInfo(BaseModel):
     )
     title: str = Field(..., description="Human-friendly profile label.")
     summary: str = Field(..., description="Short profile guidance for callers.")
-    config_filename: str = Field(..., description="Filename resolved for this profile.")
     available: bool = Field(..., description="True when the profile config file was found and parsed.")
-    model_count: int = Field(..., description="Number of models available after whitelist filtering.")
-    filtered_out_count: int = Field(
-        ...,
-        description="How many config entries were filtered out by class whitelist.",
-    )
+    model_count: int = Field(..., description="Number of models currently available in this profile.")
     models: list[ModelProfileModelEntry] = Field(
         ...,
-        description="Models available to this profile after whitelist filtering.",
+        description="Models currently available to this profile.",
     )
 
 
@@ -67,14 +62,6 @@ class ModelProfilesOutput(BaseModel):
     default_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         ...,
         description="Default model profile used when task_create.model_profile is omitted/invalid.",
-    )
-    whitelist_active: bool = Field(
-        ...,
-        description="True when PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES is set.",
-    )
-    whitelisted_classes: list[str] = Field(
-        ...,
-        description="Normalized whitelist class names currently applied.",
     )
     profiles: list[ModelProfileInfo] = Field(
         ...,

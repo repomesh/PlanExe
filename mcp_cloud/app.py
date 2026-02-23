@@ -128,7 +128,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: call prompt_examples first. "
-    "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
     "Then perform a non-tool step: draft a strong prompt and get user approval. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
@@ -735,14 +735,12 @@ def _sort_llm_config_entries(items: list[tuple[str, Any]]) -> list[tuple[str, An
 def _extract_model_profile_entries(
     model_map: dict[str, Any],
     whitelist: Optional[set[str]],
-) -> tuple[list[dict[str, Any]], int]:
+) -> list[dict[str, Any]]:
     models: list[dict[str, Any]] = []
-    filtered_out_count = 0
 
     for model_key, model_data in _sort_llm_config_entries(list(model_map.items())):
         class_name = model_data.get("class") if isinstance(model_data, dict) else None
         if not is_llm_class_allowed(class_name, whitelist):
-            filtered_out_count += 1
             continue
 
         model_name = None
@@ -768,7 +766,7 @@ def _extract_model_profile_entries(
             }
         )
 
-    return models, filtered_out_count
+    return models
 
 
 def _profile_models_payload(
@@ -783,10 +781,8 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "config_filename": config_filename,
             "available": False,
             "model_count": 0,
-            "filtered_out_count": 0,
             "models": [],
         }
 
@@ -804,10 +800,8 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "config_filename": config_filename,
             "available": False,
             "model_count": 0,
-            "filtered_out_count": 0,
             "models": [],
         }
 
@@ -816,22 +810,18 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "config_filename": config_filename,
             "available": False,
             "model_count": 0,
-            "filtered_out_count": 0,
             "models": [],
         }
 
-    models, filtered_out_count = _extract_model_profile_entries(model_map, whitelist)
+    models = _extract_model_profile_entries(model_map, whitelist)
     return {
         "profile": profile.value,
         "title": MODEL_PROFILE_TITLES[profile.value],
         "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-        "config_filename": config_filename,
         "available": True,
         "model_count": len(models),
-        "filtered_out_count": filtered_out_count,
         "models": models,
     }
 
@@ -844,16 +834,13 @@ def _get_model_profiles_sync() -> dict[str, Any]:
         _profile_models_payload(profile, whitelist)
         for profile in ModelProfileEnum
     ]
-    whitelist_values = sorted(whitelist) if whitelist is not None else []
 
     return {
         "default_profile": default_profile,
-        "whitelist_active": whitelist is not None,
-        "whitelisted_classes": whitelist_values,
         "profiles": profiles,
         "message": (
             "Use one of these profile values in task_create.model_profile. "
-            "Model lists reflect current PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES filtering."
+            "Model lists show what is currently available in each profile."
         ),
     }
 
@@ -1045,7 +1032,7 @@ TOOL_DEFINITIONS = [
         name="model_profiles",
         description=(
             "Optional helper before task_create. Returns model_profile options with plain-language guidance "
-            "and currently available models after PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES filtering."
+            "and currently available models in each profile."
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
@@ -1237,7 +1224,7 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
-    """Return model profile options and available models after whitelist filtering."""
+    """Return model profile options and currently available models in each profile."""
     _ = ModelProfilesRequest(**(arguments or {}))
     payload = await asyncio.to_thread(_get_model_profiles_sync)
     return CallToolResult(

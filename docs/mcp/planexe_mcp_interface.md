@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models under current whitelist settings. Then complete a non-tool step: formulate a good prompt (use examples as a baseline; similar structure) and get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` or `task_file_info` when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a good prompt (use examples as a baseline; similar structure) and get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` or `task_file_info` when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
 - **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
 
 ### 1.3 Scope of this document
@@ -182,17 +182,13 @@ Optional helper tool to discover valid `model_profile` choices and currently ava
 ```json
 {
   "default_profile": "baseline",
-  "whitelist_active": true,
-  "whitelisted_classes": ["openrouter"],
   "profiles": [
     {
       "profile": "baseline",
       "title": "Baseline",
       "summary": "Cheap and fast; recommended default for most runs.",
-      "config_filename": "baseline.json",
       "available": true,
       "model_count": 5,
-      "filtered_out_count": 2,
       "models": [
         {
           "key": "openrouter-gpt-oss-20b",

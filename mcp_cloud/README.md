@@ -130,7 +130,7 @@ mcp_cloud uses the same database configuration as other PlanExe services:
 See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 
 - `prompt_examples` - Return example prompts. Use these as examples for task_create.
-- `model_profiles` - List profile options and currently available models after whitelist filtering.
+- `model_profiles` - List profile options and currently available models in each profile.
 - `task_create` - Create a new task (returns task_id as UUID; may require user_api_key for credits)
 - `task_status` - Get task status and progress
 - `task_stop` - Stop an active task

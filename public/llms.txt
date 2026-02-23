@@ -71,7 +71,7 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 
 Key tool inputs/outputs:
 - task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
-- model_profiles output: profile guidance + currently available models after whitelist filtering.
+- model_profiles output: profile guidance + currently available models in each profile.
 - task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
 - task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.

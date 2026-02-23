@@ -47,16 +47,12 @@ Example call:
 
 Response includes:
 - `default_profile`
-- `whitelist_active`
-- `whitelisted_classes`
 - `profiles[]` with:
   - `profile`
   - `title`
   - `summary`
-  - `config_filename`
   - `available`
   - `model_count`
-  - `filtered_out_count`
   - `models[]` (`key`, `provider_class`, `model`, `priority`)
 
 ### task_create

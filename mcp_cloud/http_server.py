@@ -402,7 +402,7 @@ fastmcp_server = FastMCP(
         "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
         "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
         "Required interaction order: call prompt_examples first. "
-        "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
+        "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
         "Then perform a non-tool step: draft a strong prompt and get user approval. "
         "Only after approval, call task_create. "
         "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "

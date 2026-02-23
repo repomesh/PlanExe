@@ -9,7 +9,7 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 ## Tools
 
 `prompt_examples` - Return example prompts. Use these as examples for task_create. You can also call `task_create` with any prompt—short prompts produce less detailed plans.
-`model_profiles` - Show model_profile options and currently available models after whitelist filtering.
+`model_profiles` - Show model_profile options and currently available models in each profile.
 `task_create` - Initiate creation of a plan.
 `task_status` - Get status and progress about the creation of a plan.
 `task_stop` - Abort creation of a plan.

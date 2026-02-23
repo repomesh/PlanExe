@@ -409,11 +409,6 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
             "type": "string",
             "enum": ["baseline", "premium", "frontier", "custom"],
         },
-        "whitelist_active": {"type": "boolean"},
-        "whitelisted_classes": {
-            "type": "array",
-            "items": {"type": "string"},
-        },
         "profiles": {
             "type": "array",
             "items": {
@@ -425,10 +420,8 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
                     },
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
-                    "config_filename": {"type": "string"},
                     "available": {"type": "boolean"},
                     "model_count": {"type": "integer"},
-                    "filtered_out_count": {"type": "integer"},
                     "models": {
                         "type": "array",
                         "items": {
@@ -447,10 +440,8 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
                     "profile",
                     "title",
                     "summary",
-                    "config_filename",
                     "available",
                     "model_count",
-                    "filtered_out_count",
                     "models",
                 ],
             },
@@ -459,8 +450,6 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
     },
     "required": [
         "default_profile",
-        "whitelist_active",
-        "whitelisted_classes",
         "profiles",
         "message",
     ],
@@ -542,7 +531,7 @@ TOOL_DEFINITIONS = [
         name="model_profiles",
         description=(
             "Optional helper before task_create. Returns model_profile options with plain-language guidance "
-            "and currently available models after whitelist filtering."
+            "and currently available models in each profile."
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
@@ -605,7 +594,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: call prompt_examples first. "
-    "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
     "Then perform a non-tool step: draft a strong prompt and get user approval. "
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "

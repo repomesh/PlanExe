@@ -140,6 +140,11 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
 
+Minimal error contract:
+- Tool errors use `{"error":{"code","message","details?"}}`.
+- Common codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- `task_file_info` may return `{}` while output is not ready (not an error payload).
+
 Note: `task_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `task_download`, use it to save the report or zip locally; otherwise use `task_file_info` to get `download_url` and fetch the file yourself.
 
 **Tip**: Call `prompt_examples` to get example prompts to use with task_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.

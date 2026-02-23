@@ -20,6 +20,12 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
 
+Minimal error contract:
+- Tool errors use `{"error":{"code","message","details?"}}`.
+- Common proxied cloud codes include: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Local proxy specific codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
+- `task_file_info` (called under the hood by task_download) may return `{}` while output is not ready.
+
 **Tip**: Call `prompt_examples` to get example prompts to use with task_create. The full catalog lives at `worker_plan/worker_plan_api/prompt/data/simple_plan_prompts.jsonl`.
 
 `task_download` is a synthetic tool provided by the local proxy. It calls the

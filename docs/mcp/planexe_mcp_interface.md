@@ -474,36 +474,65 @@ Recommended practice for MCP clients:
 
 ## 9. Error Model
 
-Errors MUST return:
+### 9.1 Error object shape
 
-- code: stable machine-readable
-- message: human-readable
-- details: optional
+Tool errors return:
 
-**Example:**
+- `error.code`: stable machine-readable string
+- `error.message`: human-readable message
+- `error.details`: optional object
+
+Example:
 
 ```json
 {
   "error": {
-    "code": "RUN_ALREADY_ACTIVE",
-    "message": "A run is currently active for this task.",
-    "details": { "run_id": "run_0001" }
+    "code": "TASK_NOT_FOUND",
+    "message": "Task not found: <task_id>"
   }
 }
 ```
 
-### 9.1 Required error codes
+### 9.2 isError behavior
 
-- TASK_NOT_FOUND
-- RUN_NOT_FOUND
-- RUN_ALREADY_ACTIVE
-- RUN_NOT_ACTIVE
-- INVALID_TARGET
-- INVALID_ARTIFACT_URI
-- CONFLICT
-- PERMISSION_DENIED
-- RUNNING_READONLY
-- INTERNAL_ERROR
+- `task_create`, `task_status`, `task_stop`: unknown/invalid requests return `isError=true` with `error`.
+- `task_file_info`: uses mixed behavior:
+  - returns `{}` (not an error) while artifacts are not ready.
+  - may return `{"error": ...}` with `isError=false` for terminal artifact-level problems.
+  - returns `isError=true` for unknown task id (`TASK_NOT_FOUND`).
+- `mcp_local` may return proxy/transport failures as `REMOTE_ERROR` and local download write failures as `DOWNLOAD_FAILED`.
+
+### 9.3 Minimal code contract (current)
+
+Cloud/core tool codes:
+
+- `INVALID_TOOL`: unknown MCP tool name.
+- `INTERNAL_ERROR`: uncaught server error.
+- `TASK_NOT_FOUND`: task id not found.
+- `INVALID_USER_API_KEY`: provided user_api_key is invalid.
+- `USER_API_KEY_REQUIRED`: deployment requires user_api_key for task_create.
+- `INSUFFICIENT_CREDITS`: caller account has no credits for task_create.
+- `generation_failed`: task_file_info report path when task ended in failed.
+- `content_unavailable`: task_file_info cannot read requested artifact bytes.
+
+Local proxy specific codes:
+
+- `REMOTE_ERROR`: mcp_local could not call mcp_cloud (network/HTTP/protocol layer failure).
+- `DOWNLOAD_FAILED`: mcp_local could not write/download artifact to local filesystem.
+
+### 9.4 Caller handling guidance
+
+- Retry with backoff:
+  - `INTERNAL_ERROR`
+  - `REMOTE_ERROR`
+  - `content_unavailable` (short retry window)
+- Do not retry unchanged request:
+  - `INVALID_USER_API_KEY`
+  - `USER_API_KEY_REQUIRED`
+  - `INSUFFICIENT_CREDITS`
+  - `INVALID_TOOL`
+- For `TASK_NOT_FOUND`: verify task_id source and stop polling that id.
+- For `generation_failed`: treat as terminal failure and surface task progress_message to user.
 
 ---
 

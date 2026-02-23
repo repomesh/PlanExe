@@ -311,6 +311,7 @@ ERROR_SCHEMA = {
     "properties": {
         "code": {"type": "string"},
         "message": {"type": "string"},
+        "details": {"type": ["object", "null"]},
     },
     "required": ["code", "message"],
 }
@@ -551,6 +552,7 @@ TOOL_DEFINITIONS = [
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
             "If you are unsure which model_profile to choose, call model_profiles first. "
+            "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR. "
             "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
@@ -563,6 +565,7 @@ TOOL_DEFINITIONS = [
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
             "and frequent polling is unnecessary. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails). "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
@@ -585,7 +588,8 @@ TOOL_DEFINITIONS = [
             "Download the plan output and save it locally to PLANEXE_PATH. "
             "Choose the HTML report (default) or a zip of all generated files. "
             "If PLANEXE_PATH is unset, files are saved to the current working directory. "
-            "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur."
+            "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur. "
+            "Common local error codes: DOWNLOAD_FAILED, REMOTE_ERROR."
         ),
         input_schema=TASK_DOWNLOAD_INPUT_SCHEMA,
         output_schema=TASK_DOWNLOAD_OUTPUT_SCHEMA,
@@ -603,6 +607,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
+    "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "

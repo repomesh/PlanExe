@@ -84,6 +84,12 @@ task_status caller contract:
 - completed: terminal success; download is ready.
 - failed: terminal error.
 
+Minimal error-handling contract:
+- Errors use `{"error":{"code","message","details?"}}`.
+- Common cloud/core codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
+- `task_file_info` may return `{}` while artifact output is not ready yet.
+
 Recommended interaction order:
 1. Call prompt_examples.
 2. Optionally call model_profiles to choose model_profile based on current availability.

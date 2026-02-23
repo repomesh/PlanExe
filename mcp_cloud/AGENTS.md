@@ -51,6 +51,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - The server communicates over stdio (standard input/output) following the MCP protocol.
 - Tools are registered via `@mcp_cloud.list_tools()` and handled via `@mcp_cloud.call_tool()`.
 - All tool responses must be JSON-serializable and follow the error model in the spec.
+- Keep tool error codes/docs aligned with actual runtime payloads (for example `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `generation_failed`, `content_unavailable`, `INTERNAL_ERROR`).
 - Event cursors use format `cursor_{event_id}` for incremental polling.
 - **Run as task**: We expose MCP **tools** only (task_create, task_status, task_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
 

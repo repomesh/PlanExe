@@ -132,6 +132,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
     "task_file_info download_url is absolute when PLANEXE_MCP_PUBLIC_BASE_URL is configured or request host is available. "
     "If download_url is missing, configure PLANEXE_MCP_PUBLIC_BASE_URL on the server. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
@@ -1055,6 +1056,7 @@ TOOL_DEFINITIONS = [
             "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
+            "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS. "
             "Optional runtime overrides such as speed_vs_detail are intentionally hidden from the visible tool schema "
             "and can be provided via tool-specific metadata by developers."
         ),
@@ -1068,6 +1070,7 @@ TOOL_DEFINITIONS = [
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
             "and frequent polling is unnecessary. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "Unknown task_id returns error code TASK_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
@@ -1090,7 +1093,8 @@ TOOL_DEFINITIONS = [
             "Returns file metadata (content_type, download_url, download_size) for the report or zip. "
             "If your client exposes task_download (e.g. mcp_local), use that to save the file locally; "
             "otherwise use this tool to get download_url and fetch the file yourself. "
-            "download_url is generated from PLANEXE_MCP_PUBLIC_BASE_URL (or request host when available)."
+            "download_url is generated from PLANEXE_MCP_PUBLIC_BASE_URL (or request host when available). "
+            "Returns {} while artifact is not ready. Terminal tool-level error payloads use codes generation_failed or content_unavailable."
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,

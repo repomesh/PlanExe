@@ -40,6 +40,7 @@ For `task_create`:
 - You can fetch example prompts.
 - You can create a plan task.
 - You can download the report artifact.
+- Your client can parse `error.code` and `error.message` and handle `{}` from `task_file_info` as "not ready yet".
 
 ---
 

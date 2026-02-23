@@ -83,6 +83,14 @@ class TestTaskStatusTool(unittest.TestCase):
 
         self.assertEqual(result.structuredContent["state"], "processing")
 
+    def test_task_status_returns_task_not_found_error(self):
+        task_id = str(uuid.uuid4())
+        with patch("mcp_cloud.app._get_task_status_snapshot_sync", return_value=None):
+            result = asyncio.run(handle_task_status({"task_id": task_id}))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "TASK_NOT_FOUND")
+
 
 if __name__ == "__main__":
     unittest.main()

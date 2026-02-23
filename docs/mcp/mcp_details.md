@@ -238,6 +238,29 @@ Example call:
 - Filename is prefixed with task id (for example `<task_id>-030-report.html`).
 - Response includes `saved_path` with the exact local file location.
 
+## Minimal error-handling contract
+
+Error payload shape:
+```json
+{"error": {"code": "SOME_CODE", "message": "Human readable message", "details": {}}}
+```
+
+Common cloud/core error codes:
+- `TASK_NOT_FOUND`
+- `INVALID_USER_API_KEY`
+- `USER_API_KEY_REQUIRED`
+- `INSUFFICIENT_CREDITS`
+- `INTERNAL_ERROR`
+- `generation_failed`
+- `content_unavailable`
+
+Common local proxy error codes:
+- `REMOTE_ERROR`
+- `DOWNLOAD_FAILED`
+
+Special case:
+- `task_file_info` may return `{}` while the artifact is not ready yet (not an error).
+
 ## Typical Flow
 
 ### 1. Get example prompts

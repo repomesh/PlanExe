@@ -39,6 +39,7 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
   - HTTP wrapper (`/mcp/tools/call`)
   - Streamable MCP JSON-RPC (`/mcp`)
 - Ensure all tool responses include structured content when an output schema is defined.
+- Keep local proxy error semantics documented and stable (`REMOTE_ERROR`, `DOWNLOAD_FAILED`) and pass through cloud error payloads unchanged when possible.
 - Tool-surface split must remain explicit:
   - local exposes `task_download`.
   - cloud exposes `task_file_info`.

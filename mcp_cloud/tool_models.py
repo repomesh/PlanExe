@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ErrorDetail(BaseModel):
     code: str
     message: str
+    details: dict[str, Any] | None = None
 
 
 class PromptExamplesOutput(BaseModel):

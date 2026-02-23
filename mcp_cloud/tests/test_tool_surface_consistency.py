@@ -32,6 +32,9 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("completed", instructions)
         self.assertIn("failed", instructions)
         self.assertIn("stopped", instructions)
+        self.assertIn("pending for longer than 5 minutes", instructions)
+        self.assertIn("longer than 20 minutes", instructions)
+        self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
     def test_cloud_task_status_description_includes_state_contract(self):
         description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "task_status")
@@ -39,6 +42,9 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("completed", description)
         self.assertIn("failed", description)
         self.assertIn("stopped", description)
+        self.assertIn("pending for >5 minutes", description)
+        self.assertIn(">20 minutes", description)
+        self.assertIn("PlanExeOrg/PlanExe/issues", description)
 
 
 class TestLocalToolSurfaceConsistency(unittest.TestCase):
@@ -62,6 +68,9 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("completed", instructions)
         self.assertIn("failed", instructions)
         self.assertIn("stopped", instructions)
+        self.assertIn("pending for longer than 5 minutes", instructions)
+        self.assertIn("longer than 20 minutes", instructions)
+        self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
     def test_local_task_status_description_includes_state_contract(self):
         description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_status")
@@ -69,6 +78,9 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("completed", description)
         self.assertIn("failed", description)
         self.assertIn("stopped", description)
+        self.assertIn("pending for >5 minutes", description)
+        self.assertIn(">20 minutes", description)
+        self.assertIn("PlanExeOrg/PlanExe/issues", description)
 
 
 if __name__ == "__main__":

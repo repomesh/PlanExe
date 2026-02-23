@@ -398,6 +398,9 @@ fastmcp_server = FastMCP(
         "Step 3 — Only then call task_create with the approved prompt. "
         "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
         "task_status state contract: running/stopping => keep polling; completed => download is ready; failed => terminal error; stopped => stop acknowledged (terminal). "
+        "Troubleshooting: if task_status stays in TaskState.pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+        "If task_status is in TaskState.processing/running and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
+        "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
         "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
     ),
     host=HTTP_HOST,

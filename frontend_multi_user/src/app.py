@@ -37,7 +37,7 @@ from worker_plan_api.plan_file import PlanFile
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
 from worker_plan_api.prompt_catalog import PromptCatalog
 from sqlalchemy import text, inspect, func
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, DataError
 from database_api.model_taskitem import TaskItem, TaskState
 from database_api.model_event import EventType, EventItem
 from database_api.model_worker import WorkerItem
@@ -1152,6 +1152,31 @@ class MyFlaskApp:
         n = seconds
         return f"{n} sec" if n == 1 else f"{n} secs"
 
+    def _load_prompt_preview_safe(self, task_id: Any, max_chars: int = 240) -> str:
+        """Load a prompt preview for one task, tolerating corrupted UTF-8 rows."""
+        try:
+            preview = (
+                self.db.session.query(func.substr(TaskItem.prompt, 1, max_chars))
+                .filter(TaskItem.id == task_id)
+                .scalar()
+            )
+            text = (preview or "").strip()
+            if text:
+                return text
+        except DataError:
+            self.db.session.rollback()
+            logger.warning(
+                "Detected invalid UTF-8 in task_item.prompt for task_id=%s; using placeholder preview.",
+                task_id,
+                exc_info=True,
+            )
+            return "[Prompt unavailable due to encoding issue]"
+        except Exception:
+            self.db.session.rollback()
+            logger.debug("Unable to load prompt preview for task_id=%s", task_id, exc_info=True)
+
+        return "[Prompt unavailable]"
+
     def _get_current_user_account(self) -> Optional[UserAccount]:
         if not current_user.is_authenticated:
             return None
@@ -2016,25 +2041,50 @@ class MyFlaskApp:
                     if user_id:
                         # Generate a nonce so the user can start a plan from the dashboard
                         nonce = 'DASH_' + str(uuid.uuid4())
-                        recent_task_rows = (
-                            self.db.session.query(
-                                TaskItem.id,
-                                TaskItem.state,
-                                func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                        try:
+                            recent_task_rows = (
+                                self.db.session.query(
+                                    TaskItem.id,
+                                    TaskItem.state,
+                                    func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                                )
+                                .filter(TaskItem.user_id == str(user_id))
+                                .order_by(TaskItem.timestamp_created.desc())
+                                .limit(10)
+                                .all()
                             )
-                            .filter(TaskItem.user_id == str(user_id))
-                            .order_by(TaskItem.timestamp_created.desc())
-                            .limit(10)
-                            .all()
-                        )
-                        recent_tasks = [
-                            SimpleNamespace(
-                                id=str(task.id),
-                                state=task.state if isinstance(task.state, TaskState) else None,
-                                prompt=(task.prompt_preview or "").strip(),
+                        except DataError:
+                            self.db.session.rollback()
+                            logger.warning(
+                                "Detected invalid UTF-8 in task_item.prompt for user_id=%s while loading dashboard; "
+                                "falling back without prompt previews.",
+                                user_id,
+                                exc_info=True,
                             )
-                            for task in recent_task_rows
-                        ]
+                            recent_task_rows = (
+                                self.db.session.query(
+                                    TaskItem.id,
+                                    TaskItem.state,
+                                )
+                                .filter(TaskItem.user_id == str(user_id))
+                                .order_by(TaskItem.timestamp_created.desc())
+                                .limit(10)
+                                .all()
+                            )
+                        recent_tasks = []
+                        for task in recent_task_rows:
+                            prompt_preview = getattr(task, "prompt_preview", None)
+                            if prompt_preview is None:
+                                prompt_text = self._load_prompt_preview_safe(task.id)
+                            else:
+                                prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
+                            recent_tasks.append(
+                                SimpleNamespace(
+                                    id=str(task.id),
+                                    state=task.state if isinstance(task.state, TaskState) else None,
+                                    prompt=prompt_text,
+                                )
+                            )
                         total_tasks_count = (
                             TaskItem.query
                             .filter_by(user_id=str(user_id))
@@ -2897,27 +2947,51 @@ class MyFlaskApp:
 
             if not run_id:
                 user_id = str(current_user.id)
-                tasks = (
-                    self.db.session.query(
-                        TaskItem.id,
-                        TaskItem.timestamp_created,
-                        TaskItem.state,
-                        func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                try:
+                    tasks = (
+                        self.db.session.query(
+                            TaskItem.id,
+                            TaskItem.timestamp_created,
+                            TaskItem.state,
+                            func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                        )
+                        .filter(TaskItem.user_id == user_id)
+                        .order_by(TaskItem.timestamp_created.desc())
+                        .all()
                     )
-                    .filter(TaskItem.user_id == user_id)
-                    .order_by(TaskItem.timestamp_created.desc())
-                    .all()
-                )
+                except DataError:
+                    self.db.session.rollback()
+                    logger.warning(
+                        "Detected invalid UTF-8 in task_item.prompt for user_id=%s while loading /plan; "
+                        "falling back without prompt previews.",
+                        user_id,
+                        exc_info=True,
+                    )
+                    tasks = (
+                        self.db.session.query(
+                            TaskItem.id,
+                            TaskItem.timestamp_created,
+                            TaskItem.state,
+                        )
+                        .filter(TaskItem.user_id == user_id)
+                        .order_by(TaskItem.timestamp_created.desc())
+                        .all()
+                    )
                 rows = []
                 for task in tasks:
                     ts = task.timestamp_created
                     created_compact = ts.strftime("%y%m%d-%H%M") if isinstance(ts, datetime) else "-"
+                    prompt_preview = getattr(task, "prompt_preview", None)
+                    if prompt_preview is None:
+                        prompt_text = self._load_prompt_preview_safe(task.id)
+                    else:
+                        prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
                     rows.append({
                         "id": str(task.id),
                         "created_compact": created_compact,
                         "created_relative": self._format_relative_time(ts),
                         "status": task.state.name if isinstance(task.state, TaskState) else "pending",
-                        "prompt": (task.prompt_preview or "").strip(),
+                        "prompt": prompt_text,
                     })
                 return render_template("plan_list.html", plan_rows=rows)
 

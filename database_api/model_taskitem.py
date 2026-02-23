@@ -5,6 +5,31 @@ from database_api.planexe_db_singleton import db
 from sqlalchemy_utils import UUIDType
 from sqlalchemy import JSON
 from sqlalchemy.orm import column_property
+from sqlalchemy import event
+
+
+def _sanitize_utf8_text(value):
+    """Normalize values into valid UTF-8-safe text for persistence."""
+    if value is None:
+        return None
+
+    if isinstance(value, str):
+        text = value
+    elif isinstance(value, (bytes, bytearray, memoryview)):
+        text = bytes(value).decode("utf-8", errors="replace")
+    else:
+        text = str(value)
+
+    # Postgres text does not support embedded NULL bytes.
+    if "\x00" in text:
+        text = text.replace("\x00", "")
+
+    # Replace unpaired surrogates or other non-encodable code points.
+    try:
+        text.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        text = text.encode("utf-8", errors="replace").decode("utf-8")
+    return text
 
 class TaskState(enum.Enum):
     pending = 1
@@ -113,3 +138,10 @@ class TaskItem(db.Model):
             }
         )
         return [task1, task2, task3]
+
+
+@event.listens_for(TaskItem, "before_insert")
+@event.listens_for(TaskItem, "before_update")
+def _sanitize_taskitem_fields(_mapper, _connection, target):
+    # Enforce valid UTF-8-safe prompt text regardless of writer path.
+    target.prompt = _sanitize_utf8_text(target.prompt)

@@ -305,7 +305,7 @@ def _create_task_sync(
         task = TaskItem(
             prompt=prompt,
             state=TaskState.pending,
-            user_id=metadata.get("user_id", "mcp_user") if metadata else "mcp_user",
+            user_id=metadata.get("user_id", "admin") if metadata else "admin",
             parameters=parameters,
         )
         db.session.add(task)

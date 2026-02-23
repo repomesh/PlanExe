@@ -174,6 +174,7 @@ All tool names below are normative.
 ### 6.1.1 model_profiles
 
 Optional helper tool to discover valid `model_profile` choices and currently available models without relying on internal config knowledge.
+Profiles with zero available models are omitted from the returned `profiles` array.
 
 **Request:** no parameters (empty object).
 
@@ -186,8 +187,7 @@ Optional helper tool to discover valid `model_profile` choices and currently ava
     {
       "profile": "baseline",
       "title": "Baseline",
-      "summary": "Cheap and fast; recommended default for most runs.",
-      "available": true,
+      "summary": "Cheap and fast; recommended default when creating a plan.",
       "model_count": 5,
       "models": [
         {

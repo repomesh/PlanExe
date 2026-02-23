@@ -50,7 +50,6 @@ class ModelProfileInfo(BaseModel):
     )
     title: str = Field(..., description="Human-friendly profile label.")
     summary: str = Field(..., description="Short profile guidance for callers.")
-    available: bool = Field(..., description="True when the profile config file was found and parsed.")
     model_count: int = Field(..., description="Number of models currently available in this profile.")
     models: list[ModelProfileModelEntry] = Field(
         ...,

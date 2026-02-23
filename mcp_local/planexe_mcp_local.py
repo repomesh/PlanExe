@@ -420,7 +420,6 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
                     },
                     "title": {"type": "string"},
                     "summary": {"type": "string"},
-                    "available": {"type": "boolean"},
                     "model_count": {"type": "integer"},
                     "models": {
                         "type": "array",
@@ -440,7 +439,6 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
                     "profile",
                     "title",
                     "summary",
-                    "available",
                     "model_count",
                     "models",
                 ],

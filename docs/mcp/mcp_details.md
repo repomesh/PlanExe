@@ -34,6 +34,7 @@ Response includes `samples` (array of prompt strings, each 300–800 words) and 
 
 Returns profile guidance and model availability for `task_create.model_profile`.
 This helps agents pick a profile without knowing internal `llm_config/*.json` details.
+Profiles with zero models are omitted from the `profiles` list.
 
 Example prompt:
 ```
@@ -51,7 +52,6 @@ Response includes:
   - `profile`
   - `title`
   - `summary`
-  - `available`
   - `model_count`
   - `models[]` (`key`, `provider_class`, `model`, `priority`)
 

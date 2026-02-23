@@ -18,8 +18,7 @@ class TestModelProfilesTool(unittest.TestCase):
                 {
                     "profile": "baseline",
                     "title": "Baseline",
-                    "summary": "Cheap and fast; recommended default for most runs.",
-                    "available": True,
+                    "summary": "Cheap and fast; recommended default when creating a plan.",
                     "model_count": 1,
                     "models": [
                         {
@@ -40,6 +39,7 @@ class TestModelProfilesTool(unittest.TestCase):
         self.assertFalse(result.isError)
         self.assertEqual(result.structuredContent["default_profile"], "baseline")
         self.assertEqual(result.structuredContent["profiles"][0]["profile"], "baseline")
+        self.assertNotIn("available", result.structuredContent["profiles"][0])
 
 
 if __name__ == "__main__":

@@ -181,7 +181,7 @@ MODEL_PROFILE_TITLES = {
     ModelProfileEnum.CUSTOM.value: "Custom",
 }
 MODEL_PROFILE_SUMMARIES = {
-    ModelProfileEnum.BASELINE.value: "Cheap and fast; recommended default for most runs.",
+    ModelProfileEnum.BASELINE.value: "Cheap and fast; recommended default when creating a plan.",
     ModelProfileEnum.PREMIUM.value: "Higher-cost profile tuned for stronger output quality.",
     ModelProfileEnum.FRONTIER.value: "Most capable models first; usually slowest/most expensive.",
     ModelProfileEnum.CUSTOM.value: "User-managed profile file for custom model ordering.",
@@ -781,7 +781,6 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "available": False,
             "model_count": 0,
             "models": [],
         }
@@ -800,7 +799,6 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "available": False,
             "model_count": 0,
             "models": [],
         }
@@ -810,7 +808,6 @@ def _profile_models_payload(
             "profile": profile.value,
             "title": MODEL_PROFILE_TITLES[profile.value],
             "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-            "available": False,
             "model_count": 0,
             "models": [],
         }
@@ -820,7 +817,6 @@ def _profile_models_payload(
         "profile": profile.value,
         "title": MODEL_PROFILE_TITLES[profile.value],
         "summary": MODEL_PROFILE_SUMMARIES[profile.value],
-        "available": True,
         "model_count": len(models),
         "models": models,
     }
@@ -830,10 +826,11 @@ def _get_model_profiles_sync() -> dict[str, Any]:
     raw_whitelist = os.environ.get(ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES)
     whitelist = parse_llm_class_whitelist(raw_whitelist)
     default_profile = resolve_model_profile_from_env().value
-    profiles = [
+    profiles_all = [
         _profile_models_payload(profile, whitelist)
         for profile in ModelProfileEnum
     ]
+    profiles = [profile for profile in profiles_all if int(profile.get("model_count") or 0) > 0]
 
     return {
         "default_profile": default_profile,

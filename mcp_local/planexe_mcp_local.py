@@ -331,7 +331,10 @@ TASK_CREATE_INPUT_SCHEMA = {
             "type": "string",
             "enum": ["baseline", "premium", "frontier", "custom"],
             "default": "baseline",
-            "description": "LLM profile mapping to llm_config/<profile>.json.",
+            "description": (
+                "Model profile selection: baseline (cheap/fast), premium (higher quality), "
+                "frontier (most capable), custom (user-defined). Call model_profiles for runtime availability."
+            ),
         },
     },
     "required": ["prompt"],
@@ -392,6 +395,74 @@ PROMPT_EXAMPLES_OUTPUT_SCHEMA = {
         "message": {"type": "string"},
     },
     "required": ["samples", "message"],
+}
+MODEL_PROFILES_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+}
+MODEL_PROFILES_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "default_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+        },
+        "whitelist_active": {"type": "boolean"},
+        "whitelisted_classes": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "profiles": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "profile": {
+                        "type": "string",
+                        "enum": ["baseline", "premium", "frontier", "custom"],
+                    },
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "config_filename": {"type": "string"},
+                    "available": {"type": "boolean"},
+                    "model_count": {"type": "integer"},
+                    "filtered_out_count": {"type": "integer"},
+                    "models": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {"type": "string"},
+                                "provider_class": {"type": ["string", "null"]},
+                                "model": {"type": ["string", "null"]},
+                                "priority": {"type": ["integer", "null"]},
+                            },
+                            "required": ["key"],
+                        },
+                    },
+                },
+                "required": [
+                    "profile",
+                    "title",
+                    "summary",
+                    "config_filename",
+                    "available",
+                    "model_count",
+                    "filtered_out_count",
+                    "models",
+                ],
+            },
+        },
+        "message": {"type": "string"},
+    },
+    "required": [
+        "default_profile",
+        "whitelist_active",
+        "whitelisted_classes",
+        "profiles",
+        "message",
+    ],
 }
 
 TASK_CREATE_OUTPUT_SCHEMA = {
@@ -458,17 +529,28 @@ TOOL_DEFINITIONS = [
         name="prompt_examples",
         description=(
             "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
-            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
+            "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
+            "Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
     ),
     ToolDefinition(
+        name="model_profiles",
+        description=(
+            "Optional helper before task_create. Returns model_profile options with plain-language guidance "
+            "and currently available models after whitelist filtering."
+        ),
+        input_schema=MODEL_PROFILES_INPUT_SCHEMA,
+        output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+    ),
+    ToolDefinition(
         name="task_create",
         description=(
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
+            "If you are unsure which model_profile to choose, call model_profiles first. "
             "Runs in the background (15–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
@@ -517,6 +599,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
@@ -576,7 +659,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
         - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
@@ -621,6 +704,14 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     """Return curated prompts from mcp_cloud so LLMs can see example detail."""
     payload, error = _call_remote_tool("prompt_examples", arguments or {})
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
+async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
+    """Return model_profile options and available models from mcp_cloud."""
+    payload, error = _call_remote_tool("model_profiles", arguments or {})
     if error:
         return _wrap_response({"error": error}, is_error=True)
     return _wrap_response(payload)
@@ -740,6 +831,7 @@ TOOL_HANDLERS = {
     "task_stop": handle_task_stop,
     "task_download": handle_task_download,
     "prompt_examples": handle_prompt_examples,
+    "model_profiles": handle_model_profiles,
 }
 
 

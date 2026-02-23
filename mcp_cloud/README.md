@@ -14,7 +14,7 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 
 ## Run as task (MCP tasks protocol)
 
-MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `task_create`, `task_status`, `task_stop`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
 
 ## Client Choice Guide
 
@@ -129,6 +129,7 @@ mcp_cloud uses the same database configuration as other PlanExe services:
 See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 
 - `prompt_examples` - Return example prompts. Use these as examples for task_create.
+- `model_profiles` - List profile options and currently available models after whitelist filtering.
 - `task_create` - Create a new task (returns task_id as UUID; may require user_api_key for credits)
 - `task_status` - Get task status and progress
 - `task_stop` - Stop an active task
@@ -141,7 +142,7 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 
 Note: `task_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `task_download`, use it to save the report or zip locally; otherwise use `task_file_info` to get `download_url` and fetch the file yourself.
 
-**Tip**: Call `prompt_examples` to get example prompts to use with task_create. The catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
+**Tip**: Call `prompt_examples` to get example prompts to use with task_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
 
 Download flow: call `task_file_info` to obtain the `download_url`, then fetch the
 report via `GET /download/{task_id}/030-report.html` (API key required if configured).

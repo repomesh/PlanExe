@@ -51,9 +51,10 @@ Assuming you have an MCP-compatible client (OpenClaw, Cursor, Codex, LM Studio, 
 The Tool workflow (tools-only, not MCP tasks protocol)
 
 1. `prompt_examples`
-2. `task_create`
-3. `task_status` (poll every 5 minutes until done)
-4. download the result via `task_download` or via `task_file_info`
+2. `model_profiles` (optional, helps choose `model_profile`)
+3. `task_create`
+4. `task_status` (poll every 5 minutes until done)
+5. download the result via `task_download` or via `task_file_info`
 
 ### Option A: Remote MCP (fastest path)
 

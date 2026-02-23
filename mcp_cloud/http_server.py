@@ -25,6 +25,7 @@ from mcp.types import CallToolResult, ContentBlock, TextContent
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
+    ModelProfilesOutput,
     TaskCreateOutput,
     TaskFileInfoOutput,
     TaskStatusOutput,
@@ -55,6 +56,7 @@ from mcp_cloud.app import (
     fetch_artifact_from_worker_plan,
     fetch_user_downloadable_zip,
     handle_task_create,
+    handle_model_profiles,
     handle_task_status,
     handle_task_stop,
     handle_task_file_info,
@@ -324,7 +326,7 @@ async def task_create(
     prompt: str,
     model_profile: Annotated[
         ModelProfileInput,
-        Field(description="LLM profile: baseline, premium, frontier, custom."),
+        Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, TaskCreateOutput]:
     """Create a new PlanExe task. Use prompt_examples first for example prompts."""
@@ -367,6 +369,11 @@ async def prompt_examples() -> CallToolResult:
     return await handle_prompt_examples({})
 
 
+async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
+    """Return model_profile options with currently available models."""
+    return await handle_model_profiles({})
+
+
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
         "task_create": task_create,
@@ -374,6 +381,7 @@ def _register_tools(server: FastMCP) -> None:
         "task_stop": task_stop,
         "task_file_info": task_file_info,
         "prompt_examples": prompt_examples,
+        "model_profiles": model_profiles,
     }
     for tool in TOOL_DEFINITIONS:
         handler = handler_map.get(tool.name)
@@ -394,6 +402,7 @@ fastmcp_server = FastMCP(
         "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
         "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
         "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
+        "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
         "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
         "Step 3 — Only then call task_create with the approved prompt. "
         "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "

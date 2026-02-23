@@ -11,19 +11,21 @@ This is the shortest path to a working PlanExe MCP integration.
 ## 1. Understand the flow
 
 1. Ask for prompt examples.
-2. Expand the user idea into a high‑quality prompt.
-3. Create the plan task.
-4. Poll for status.
-5. Download the report (HTML or zip).
+2. Inspect `model_profile` options and available models.
+3. Expand the user idea into a high‑quality prompt.
+4. Create the plan task.
+5. Poll for status.
+6. Download the report (HTML or zip).
 
 ---
 
 ## 2. Minimal tool usage
 
 1. `prompt_examples`
-2. `task_create`
-3. `task_status`
-4. `task_download`
+2. `model_profiles`
+3. `task_create`
+4. `task_status`
+5. `task_download`
 
 For `task_create`:
 

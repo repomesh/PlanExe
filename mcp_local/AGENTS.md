@@ -6,10 +6,11 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 ## Interaction model
 - The local proxy exposes MCP tools over stdio and forwards requests to mcp_cloud
   using `PLANEXE_URL` (defaults to the hosted `/mcp` endpoint).
-- Supported tools: `task_create`, `task_status`, `task_stop`, `task_download`, `prompt_examples`.
+- Supported tools: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_download`.
 - `task_download` calls the remote `task_file_info` tool to obtain a download URL,
   then downloads the artifact to `PLANEXE_PATH` on the local machine.
 - `task_create` visible input schema includes `prompt` and optional `model_profile`.
+- Use `model_profiles` to help agents select `task_create.model_profile` without relying on internal file knowledge.
 - Runtime override `speed_vs_detail` is metadata-only (hidden from visible schema);
   when callers still pass legacy top-level `speed_vs_detail`/`speed`, forward those
   into `metadata.task_create` for backward compatibility.

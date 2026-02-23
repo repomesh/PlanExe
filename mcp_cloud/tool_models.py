@@ -24,6 +24,64 @@ class PromptExamplesInput(BaseModel):
     pass
 
 
+class ModelProfilesInput(BaseModel):
+    """No input parameters."""
+    pass
+
+
+class ModelProfileModelEntry(BaseModel):
+    key: str = Field(..., description="Model key from llm_config/<profile>.json.")
+    provider_class: str | None = Field(
+        default=None,
+        description="Provider class (for example OpenRouter, OpenAI, Ollama).",
+    )
+    model: str | None = Field(default=None, description="Provider model identifier when present.")
+    priority: int | None = Field(
+        default=None,
+        description="Priority from config (lower number means earlier in selection order).",
+    )
+
+
+class ModelProfileInfo(BaseModel):
+    profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        ...,
+        description="Model profile value accepted by task_create.model_profile.",
+    )
+    title: str = Field(..., description="Human-friendly profile label.")
+    summary: str = Field(..., description="Short profile guidance for callers.")
+    config_filename: str = Field(..., description="Filename resolved for this profile.")
+    available: bool = Field(..., description="True when the profile config file was found and parsed.")
+    model_count: int = Field(..., description="Number of models available after whitelist filtering.")
+    filtered_out_count: int = Field(
+        ...,
+        description="How many config entries were filtered out by class whitelist.",
+    )
+    models: list[ModelProfileModelEntry] = Field(
+        ...,
+        description="Models available to this profile after whitelist filtering.",
+    )
+
+
+class ModelProfilesOutput(BaseModel):
+    default_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        ...,
+        description="Default model profile used when task_create.model_profile is omitted/invalid.",
+    )
+    whitelist_active: bool = Field(
+        ...,
+        description="True when PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES is set.",
+    )
+    whitelisted_classes: list[str] = Field(
+        ...,
+        description="Normalized whitelist class names currently applied.",
+    )
+    profiles: list[ModelProfileInfo] = Field(
+        ...,
+        description="Available profile options and their model inventory.",
+    )
+    message: str = Field(..., description="Caller guidance for selecting task_create.model_profile.")
+
+
 class TaskStatusInput(BaseModel):
     task_id: str = Field(
         ...,
@@ -153,7 +211,10 @@ class TaskCreateInput(BaseModel):
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
-        description="LLM profile mapping to llm_config/<profile>.json (baseline, premium, frontier, custom).",
+        description=(
+            "Model profile selection: baseline (cheap/fast), premium (higher quality), "
+            "frontier (most capable), custom (user-defined). Call model_profiles for runtime availability."
+        ),
     )
     user_api_key: str | None = Field(
         default=None,

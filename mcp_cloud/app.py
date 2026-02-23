@@ -15,7 +15,6 @@ import os
 import tempfile
 import uuid
 import zipfile
-import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +28,18 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, Tool, TextContent
 from pydantic import BaseModel
-from worker_plan_api.model_profile import normalize_model_profile
+from worker_plan_api.model_profile import (
+    ModelProfileEnum,
+    default_filename_for_profile,
+    normalize_model_profile,
+    resolve_model_profile_from_env,
+)
+from worker_plan_api.planexe_config import PlanExeConfig
+from worker_plan_api.llm_class_filter import (
+    ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES,
+    is_llm_class_allowed,
+    parse_llm_class_whitelist,
+)
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 _dotenv_loaded, _dotenv_paths = load_planexe_dotenv(Path(__file__).parent)
@@ -52,6 +62,8 @@ from database_api.model_user_account import UserAccount
 from database_api.model_user_api_key import UserApiKey
 from flask import Flask, has_app_context
 from mcp_cloud.tool_models import (
+    ModelProfilesInput,
+    ModelProfilesOutput,
     PromptExamplesInput,
     PromptExamplesOutput,
     TaskCreateInput,
@@ -116,6 +128,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models under current whitelist settings. "
     "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
@@ -159,6 +172,18 @@ SPEED_VS_DETAIL_ALIASES = {
     "fast": "fast_but_skip_details",
     "all": "all_details_but_slow",
 }
+MODEL_PROFILE_TITLES = {
+    ModelProfileEnum.BASELINE.value: "Baseline",
+    ModelProfileEnum.PREMIUM.value: "Premium",
+    ModelProfileEnum.FRONTIER.value: "Frontier",
+    ModelProfileEnum.CUSTOM.value: "Custom",
+}
+MODEL_PROFILE_SUMMARIES = {
+    ModelProfileEnum.BASELINE.value: "Cheap and fast; recommended default for most runs.",
+    ModelProfileEnum.PREMIUM.value: "Higher-cost profile tuned for stronger output quality.",
+    ModelProfileEnum.FRONTIER.value: "Most capable models first; usually slowest/most expensive.",
+    ModelProfileEnum.CUSTOM.value: "User-managed profile file for custom model ordering.",
+}
 
 class TaskCreateRequest(BaseModel):
     prompt: str
@@ -174,6 +199,11 @@ class TaskStopRequest(BaseModel):
 class TaskFileInfoRequest(BaseModel):
     task_id: str
     artifact: Optional[str] = None
+
+
+class ModelProfilesRequest(BaseModel):
+    """No input parameters."""
+    pass
 
 # Helper functions
 def find_task_by_task_id(task_id: str) -> Optional[TaskItem]:
@@ -684,6 +714,147 @@ def _merge_task_create_config(
             merged["model_profile"] = candidate_profile
     return merged or None
 
+
+def _sort_llm_config_entries(items: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
+    def sort_key(item: tuple[str, Any]) -> tuple[int, str]:
+        key, model_data = item
+        priority = None
+        if isinstance(model_data, dict):
+            maybe_priority = model_data.get("priority")
+            if isinstance(maybe_priority, int):
+                priority = maybe_priority
+        if priority is None:
+            priority = 999999
+        return priority, key
+
+    return sorted(items, key=sort_key)
+
+
+def _extract_model_profile_entries(
+    model_map: dict[str, Any],
+    whitelist: Optional[set[str]],
+) -> tuple[list[dict[str, Any]], int]:
+    models: list[dict[str, Any]] = []
+    filtered_out_count = 0
+
+    for model_key, model_data in _sort_llm_config_entries(list(model_map.items())):
+        class_name = model_data.get("class") if isinstance(model_data, dict) else None
+        if not is_llm_class_allowed(class_name, whitelist):
+            filtered_out_count += 1
+            continue
+
+        model_name = None
+        priority = None
+        if isinstance(model_data, dict):
+            arguments = model_data.get("arguments")
+            if isinstance(arguments, dict):
+                maybe_model = arguments.get("model")
+                if isinstance(maybe_model, str):
+                    model_name = maybe_model
+            maybe_priority = model_data.get("priority")
+            if isinstance(maybe_priority, int):
+                priority = maybe_priority
+            elif isinstance(model_data.get("prio"), int):
+                priority = model_data["prio"]
+
+        models.append(
+            {
+                "key": model_key,
+                "provider_class": class_name if isinstance(class_name, str) else None,
+                "model": model_name,
+                "priority": priority,
+            }
+        )
+
+    return models, filtered_out_count
+
+
+def _profile_models_payload(
+    profile: ModelProfileEnum,
+    whitelist: Optional[set[str]],
+) -> dict[str, Any]:
+    config_filename = default_filename_for_profile(profile)
+    planexe_config_path = PlanExeConfig.resolve_planexe_config_path()
+    config_path = PlanExeConfig.find_file_in_search_order(config_filename, planexe_config_path)
+    if config_path is None:
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "config_filename": config_filename,
+            "available": False,
+            "model_count": 0,
+            "filtered_out_count": 0,
+            "models": [],
+        }
+
+    try:
+        with config_path.open("r", encoding="utf-8") as fh:
+            model_map = json.load(fh)
+    except Exception as exc:
+        logger.warning(
+            "Unable to read profile config %s for model profile %s: %s",
+            config_filename,
+            profile.value,
+            exc,
+        )
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "config_filename": config_filename,
+            "available": False,
+            "model_count": 0,
+            "filtered_out_count": 0,
+            "models": [],
+        }
+
+    if not isinstance(model_map, dict):
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "config_filename": config_filename,
+            "available": False,
+            "model_count": 0,
+            "filtered_out_count": 0,
+            "models": [],
+        }
+
+    models, filtered_out_count = _extract_model_profile_entries(model_map, whitelist)
+    return {
+        "profile": profile.value,
+        "title": MODEL_PROFILE_TITLES[profile.value],
+        "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+        "config_filename": config_filename,
+        "available": True,
+        "model_count": len(models),
+        "filtered_out_count": filtered_out_count,
+        "models": models,
+    }
+
+
+def _get_model_profiles_sync() -> dict[str, Any]:
+    raw_whitelist = os.environ.get(ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES)
+    whitelist = parse_llm_class_whitelist(raw_whitelist)
+    default_profile = resolve_model_profile_from_env().value
+    profiles = [
+        _profile_models_payload(profile, whitelist)
+        for profile in ModelProfileEnum
+    ]
+    whitelist_values = sorted(whitelist) if whitelist is not None else []
+
+    return {
+        "default_profile": default_profile,
+        "whitelist_active": whitelist is not None,
+        "whitelisted_classes": whitelist_values,
+        "profiles": profiles,
+        "message": (
+            "Use one of these profile values in task_create.model_profile. "
+            "Model lists reflect current PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES filtering."
+        ),
+    }
+
 # Context var set by HTTP server so download URLs use the request's host when
 # PLANEXE_MCP_PUBLIC_BASE_URL is not set (avoids localhost for remote clients).
 _download_base_url_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
@@ -845,6 +1016,8 @@ TASK_FILE_INFO_INPUT_SCHEMA = TaskFileInfoInput.model_json_schema()
 
 PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
 PROMPT_EXAMPLES_OUTPUT_SCHEMA = PromptExamplesOutput.model_json_schema()
+MODEL_PROFILES_INPUT_SCHEMA = ModelProfilesInput.model_json_schema()
+MODEL_PROFILES_OUTPUT_SCHEMA = ModelProfilesOutput.model_json_schema()
 
 @dataclass(frozen=True)
 class ToolDefinition:
@@ -858,11 +1031,21 @@ TOOL_DEFINITIONS = [
         name="prompt_examples",
         description=(
             "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
-            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
+            "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
+            "Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3). "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
+    ),
+    ToolDefinition(
+        name="model_profiles",
+        description=(
+            "Optional helper before task_create. Returns model_profile options with plain-language guidance "
+            "and currently available models after PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES filtering."
+        ),
+        input_schema=MODEL_PROFILES_INPUT_SCHEMA,
+        output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
     ),
     ToolDefinition(
         name="task_create",
@@ -870,6 +1053,7 @@ TOOL_DEFINITIONS = [
             "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
             "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
             "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
+            "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
             "Optional runtime overrides such as speed_vs_detail are intentionally hidden from the visible tool schema "
             "and can be provided via tool-specific metadata by developers."
@@ -957,7 +1141,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
         - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
@@ -1038,6 +1222,17 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
             "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."
         ),
     }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+        isError=False,
+    )
+
+
+async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
+    """Return model profile options and available models after whitelist filtering."""
+    _ = ModelProfilesRequest(**(arguments or {}))
+    payload = await asyncio.to_thread(_get_model_profiles_sync)
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(payload))],
         structuredContent=payload,
@@ -1292,6 +1487,7 @@ TOOL_HANDLERS = {
     "task_stop": handle_task_stop,
     "task_file_info": handle_task_file_info,
     "prompt_examples": handle_prompt_examples,
+    "model_profiles": handle_model_profiles,
 }
 
 async def main():

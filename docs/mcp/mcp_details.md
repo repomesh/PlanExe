@@ -29,6 +29,35 @@ Example call:
 
 Response includes `samples` (array of prompt strings, each 300–800 words) and `message`.
 
+### model_profiles
+
+Returns profile guidance and model availability for `task_create.model_profile`.
+This helps agents pick a profile without knowing internal `llm_config/*.json` details.
+
+Example prompt:
+```
+List available model profiles and models.
+```
+
+Example call:
+```json
+{}
+```
+
+Response includes:
+- `default_profile`
+- `whitelist_active`
+- `whitelisted_classes`
+- `profiles[]` with:
+  - `profile`
+  - `title`
+  - `summary`
+  - `config_filename`
+  - `available`
+  - `model_count`
+  - `filtered_out_count`
+  - `models[]` (`key`, `provider_class`, `model`, `priority`)
+
 ### task_create
 
 Create a new plan task.
@@ -225,7 +254,19 @@ Tool call:
 {}
 ```
 
-### 2. Create a plan
+### 2. Inspect model profiles (optional but recommended)
+
+Prompt:
+```
+Show model profile options and available models.
+```
+
+Tool call:
+```json
+{}
+```
+
+### 3. Create a plan
 
 The user reviews the prompt and either asks for further changes or confirms it’s good to go. When the user confirms, the agent calls `task_create` with that prompt.
 
@@ -234,7 +275,7 @@ Tool call:
 {"prompt": "..."}
 ```
 
-### 3. Get status
+### 4. Get status
 
 Prompt:
 ```
@@ -246,7 +287,7 @@ Tool call:
 {"task_id": "<task_id_from_task_create>"}
 ```
 
-### 4. Download the report
+### 5. Download the report
 
 Prompt:
 ```

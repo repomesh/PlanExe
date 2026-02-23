@@ -12,6 +12,10 @@ def _tool_desc(tool_defs, name: str) -> str:
 
 
 class TestCloudToolSurfaceConsistency(unittest.TestCase):
+    def test_cloud_exposes_model_profiles_tool(self):
+        cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
+        self.assertIn("model_profiles", cloud_tool_names)
+
     def test_cloud_exposes_task_file_info_not_task_download(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("task_file_info", cloud_tool_names)
@@ -48,6 +52,10 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
 
 
 class TestLocalToolSurfaceConsistency(unittest.TestCase):
+    def test_local_exposes_model_profiles_tool(self):
+        local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
+        self.assertIn("model_profiles", local_tool_names)
+
     def test_local_exposes_task_download_not_task_file_info(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
         self.assertIn("task_download", local_tool_names)

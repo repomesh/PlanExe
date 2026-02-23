@@ -63,6 +63,7 @@ MCP Inspector setup guide:
 
 The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - prompt_examples
+- model_profiles
 - task_create
 - task_status
 - task_stop
@@ -70,6 +71,7 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 
 Key tool inputs/outputs:
 - task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
+- model_profiles output: profile guidance + currently available models after whitelist filtering.
 - task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
 - task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
@@ -84,11 +86,12 @@ task_status caller contract:
 
 Recommended interaction order:
 1. Call prompt_examples.
-2. Prepare and approve a strong prompt.
-3. Call task_create.
-4. Poll task_status until complete (repeat every 5 minutes).
-5. Use task_file_info to get download URLs.
-6. Use task_stop if the run must be cancelled.
+2. Optionally call model_profiles to choose model_profile based on current availability.
+3. Prepare and approve a strong prompt.
+4. Call task_create.
+5. Poll task_status until complete (repeat every 5 minutes).
+6. Use task_file_info to get download URLs.
+7. Use task_stop if the run must be cancelled.
 
 Note:
 - task_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.

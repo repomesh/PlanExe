@@ -126,9 +126,19 @@ class TaskStatusSuccess(BaseModel):
             "completed => download is ready; failed => terminal error."
         ),
     )
-    progress_percentage: float
+    progress_percentage: float = Field(
+        ...,
+        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+    )
     timing: TaskStatusTiming
-    files: list[TaskStatusFile]
+    files: list[TaskStatusFile] = Field(
+        ...,
+        description=(
+            "Intermediate output files produced so far. "
+            "Use updated_at timestamps to detect stalls. "
+            "These files are included in the zip artifact when the task completes."
+        ),
+    )
 
 
 class TaskStatusOutput(BaseModel):
@@ -143,9 +153,19 @@ class TaskStatusOutput(BaseModel):
             "completed => download is ready; failed => terminal error."
         ),
     )
-    progress_percentage: float | None = None
+    progress_percentage: float | None = Field(
+        default=None,
+        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+    )
     timing: TaskStatusTiming | None = None
-    files: list[TaskStatusFile] | None = None
+    files: list[TaskStatusFile] | None = Field(
+        default=None,
+        description=(
+            "Intermediate output files produced so far. "
+            "Use updated_at timestamps to detect stalls. "
+            "These files are included in the zip artifact when the task completes."
+        ),
+    )
     error: ErrorDetail | None = None
 
 

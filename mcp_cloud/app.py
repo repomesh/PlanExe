@@ -1057,9 +1057,11 @@ TOOL_DEFINITIONS = [
         name="task_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
+            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15-20+ minutes "
             "and frequent polling is unnecessary. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "progress_percentage is 0-100 (integer-like float); 100 when completed. "
+            "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
             "Unknown task_id returns error code TASK_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "

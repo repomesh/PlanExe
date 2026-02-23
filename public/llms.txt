@@ -71,6 +71,7 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 
 Key tool inputs/outputs:
 - task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
+- task_create prompt quality: for best results, provide a detailed prompt (typically ~300-800 words).
 - model_profiles output: profile guidance + currently available models in each profile.
 - model_profiles returns `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
 - task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
@@ -94,7 +95,7 @@ Minimal error-handling contract:
 Recommended interaction order:
 1. Call prompt_examples.
 2. Optionally call model_profiles to choose model_profile based on current availability.
-3. Non-tool step: prepare and approve a strong prompt.
+3. Non-tool step: prepare and approve a strong prompt (typically ~300-800 words).
 4. Call task_create.
 5. Poll task_status until complete (repeat every 5 minutes).
 6. Use task_file_info to get download URLs.

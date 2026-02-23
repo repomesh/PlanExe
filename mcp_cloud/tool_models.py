@@ -14,7 +14,8 @@ class PromptExamplesOutput(BaseModel):
         ...,
         description=(
             "Example prompts that define the baseline for what a good prompt looks like. "
-            "Take inspiration from these when writing your own prompt for task_create."
+            "Take inspiration from these when writing your own prompt for task_create "
+            "(typically ~300-800 words)."
         ),
     )
     message: str
@@ -186,6 +187,7 @@ class TaskCreateInput(BaseModel):
         description=(
             "What the plan should cover (goal, context, constraints). "
             "Use prompt_examples to get example prompts; use these as examples for task_create. "
+            "For best results, provide a detailed prompt (typically ~300-800 words). "
             "Short prompts produce less detailed plans. "
             "Do not use task_create for tiny one-shot outputs (e.g., a 5-point checklist); use direct LLM responses for those."
         ),

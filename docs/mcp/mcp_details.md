@@ -35,6 +35,7 @@ Response includes `samples` (array of prompt strings, each 300–800 words) and 
 Returns profile guidance and model availability for `task_create.model_profile`.
 This helps agents pick a profile without knowing internal `llm_config/*.json` details.
 Profiles with zero models are omitted from the `profiles` list.
+If no models are available in any profile, `model_profiles` returns `isError=true` with `error.code = MODEL_PROFILES_UNAVAILABLE`.
 
 Example prompt:
 ```
@@ -248,6 +249,7 @@ Common cloud/core error codes:
 - `USER_API_KEY_REQUIRED`
 - `INSUFFICIENT_CREDITS`
 - `INTERNAL_ERROR`
+- `MODEL_PROFILES_UNAVAILABLE`
 - `generation_failed`
 - `content_unavailable`
 

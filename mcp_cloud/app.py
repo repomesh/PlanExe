@@ -133,6 +133,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, fix model profile configuration and retry. "
     "Tool errors use {error:{code,message}}. task_file_info returns {} while output is not ready. "
     "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
@@ -1028,7 +1029,8 @@ TOOL_DEFINITIONS = [
         name="model_profiles",
         description=(
             "Optional helper before task_create. Returns model_profile options with plain-language guidance "
-            "and currently available models in each profile."
+            "and currently available models in each profile. "
+            "If no models are available, returns error code MODEL_PROFILES_UNAVAILABLE."
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
@@ -1223,6 +1225,22 @@ async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
     """Return model profile options and currently available models in each profile."""
     _ = ModelProfilesRequest(**(arguments or {}))
     payload = await asyncio.to_thread(_get_model_profiles_sync)
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, list) or len(profiles) == 0:
+        response = {
+            "error": {
+                "code": "MODEL_PROFILES_UNAVAILABLE",
+                "message": (
+                    "No models are currently available in any model_profile. "
+                    "Ensure profile config files are present and contain at least one enabled model, then retry model_profiles."
+                ),
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(payload))],
         structuredContent=payload,

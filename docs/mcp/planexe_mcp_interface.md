@@ -175,6 +175,7 @@ All tool names below are normative.
 
 Optional helper tool to discover valid `model_profile` choices and currently available models without relying on internal config knowledge.
 Profiles with zero available models are omitted from the returned `profiles` array.
+If no models are available in any profile, the tool returns `isError=true` with `error.code = MODEL_PROFILES_UNAVAILABLE`.
 
 **Request:** no parameters (empty object).
 
@@ -512,6 +513,7 @@ Cloud/core tool codes:
 - `INVALID_USER_API_KEY`: provided user_api_key is invalid.
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for task_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for task_create.
+- `MODEL_PROFILES_UNAVAILABLE`: model_profiles found zero available models across all profiles.
 - `generation_failed`: task_file_info report path when task ended in failed.
 - `content_unavailable`: task_file_info cannot read requested artifact bytes.
 

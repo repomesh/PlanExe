@@ -72,6 +72,7 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 Key tool inputs/outputs:
 - task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
 - model_profiles output: profile guidance + currently available models in each profile.
+- model_profiles returns `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
 - task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
 - task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
@@ -86,7 +87,7 @@ task_status caller contract:
 
 Minimal error-handling contract:
 - Errors use `{"error":{"code","message","details?"}}`.
-- Common cloud/core codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Common cloud/core codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
 - Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `task_file_info` may return `{}` while artifact output is not ready yet.
 

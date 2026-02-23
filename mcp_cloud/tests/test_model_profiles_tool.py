@@ -41,6 +41,19 @@ class TestModelProfilesTool(unittest.TestCase):
         self.assertEqual(result.structuredContent["profiles"][0]["profile"], "baseline")
         self.assertNotIn("available", result.structuredContent["profiles"][0])
 
+    def test_model_profiles_returns_error_when_none_available(self):
+        payload = {
+            "default_profile": "baseline",
+            "profiles": [],
+            "message": "Use one of these profile values in task_create.model_profile.",
+        }
+
+        with patch("mcp_cloud.app._get_model_profiles_sync", return_value=payload):
+            result = asyncio.run(handle_model_profiles({}))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "MODEL_PROFILES_UNAVAILABLE")
+
 
 if __name__ == "__main__":
     unittest.main()

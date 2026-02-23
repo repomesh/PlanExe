@@ -28,20 +28,20 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
 
     def test_cloud_instructions_include_task_status_state_contract(self):
         instructions = cloud_app.PLANEXE_SERVER_INSTRUCTIONS
-        self.assertIn("running/stopping", instructions)
+        self.assertIn("pending/processing", instructions)
         self.assertIn("completed", instructions)
         self.assertIn("failed", instructions)
-        self.assertIn("stopped", instructions)
+        self.assertNotIn("running/stopping", instructions)
         self.assertIn("pending for longer than 5 minutes", instructions)
         self.assertIn("longer than 20 minutes", instructions)
         self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
     def test_cloud_task_status_description_includes_state_contract(self):
         description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "task_status")
-        self.assertIn("running/stopping", description)
+        self.assertIn("pending/processing", description)
         self.assertIn("completed", description)
         self.assertIn("failed", description)
-        self.assertIn("stopped", description)
+        self.assertNotIn("running/stopping", description)
         self.assertIn("pending for >5 minutes", description)
         self.assertIn(">20 minutes", description)
         self.assertIn("PlanExeOrg/PlanExe/issues", description)
@@ -64,20 +64,20 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
 
     def test_local_instructions_include_task_status_state_contract(self):
         instructions = local_app.PLANEXE_SERVER_INSTRUCTIONS
-        self.assertIn("running/stopping", instructions)
+        self.assertIn("pending/processing", instructions)
         self.assertIn("completed", instructions)
         self.assertIn("failed", instructions)
-        self.assertIn("stopped", instructions)
+        self.assertNotIn("running/stopping", instructions)
         self.assertIn("pending for longer than 5 minutes", instructions)
         self.assertIn("longer than 20 minutes", instructions)
         self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
     def test_local_task_status_description_includes_state_contract(self):
         description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_status")
-        self.assertIn("running/stopping", description)
+        self.assertIn("pending/processing", description)
         self.assertIn("completed", description)
         self.assertIn("failed", description)
-        self.assertIn("stopped", description)
+        self.assertNotIn("running/stopping", description)
         self.assertIn("pending for >5 minutes", description)
         self.assertIn(">20 minutes", description)
         self.assertIn("PlanExeOrg/PlanExe/issues", description)

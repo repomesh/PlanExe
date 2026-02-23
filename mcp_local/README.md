@@ -15,10 +15,9 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 `task_download` - Download the plan, either html report or a zip with everything, and save it to disk.
 
 `task_status` caller contract:
-- `running` / `stopping`: keep polling.
+- `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
-- `stopped`: terminal stop acknowledged.
 
 **Tip**: Call `prompt_examples` to get example prompts to use with task_create. The full catalog lives at `worker_plan/worker_plan_api/prompt/data/simple_plan_prompts.jsonl`.
 

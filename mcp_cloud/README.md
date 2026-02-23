@@ -135,10 +135,9 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 - `task_file_info` - Get file metadata for report or zip
 
 `task_status` caller contract:
-- `running` / `stopping`: keep polling.
+- `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
-- `stopped`: terminal stop acknowledged.
 
 Note: `task_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `task_download`, use it to save the report or zip locally; otherwise use `task_file_info` to get `download_url` and fetch the file yourself.
 

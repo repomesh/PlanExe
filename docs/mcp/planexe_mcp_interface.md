@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete (`running`/`stopping` = keep polling, `completed` = download now, `failed`/`stopped` = terminal). To stop, call task_stop with the task_id from task_create.
+- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call task_stop with the task_id from task_create.
 - **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
 
 ### 1.3 Scope of this document
@@ -92,13 +92,13 @@ A long-lived container for a PlanExe project run.
 - config: immutable run configuration (models, runtime limits, Luigi params)
 - created_at, updated_at
 
-#### Run
+#### Execution
 
-A single execution attempt inside a task (e.g., after a resume).
+A single execution attempt inside a task.
 
 **Key properties**
 
-- state: running | stopped | completed | failed
+- state: pending | processing | completed | failed
 - progress_percentage: computed progress percentage (float)
 - started_at, ended_at
 
@@ -128,32 +128,25 @@ A typed message emitted during execution for UI/agent consumption.
 
 ## 5. State Machine
 
-### 5.1 Task states
+### 5.1 TaskItem.state values
 
-Tasks may exist independent of active runs.
+The public MCP `state` field is aligned with `TaskItem.state`:
 
-- created: task initialized, no run started
-- active: at least one run exists, may be running or stopped
-- archived: optional; immutable, no new runs allowed
-
-### 5.2 Run states
-
-- running
-- stopping (optional transitional state)
-- stopped (user stopped, resumable)
+- pending (queued, waiting for a worker)
+- processing (picked up by a worker)
 - completed
-- failed (resumable depending on failure type)
+- failed
 
-### 5.3 Allowed transitions
+### 5.2 Allowed transitions
 
-- running → stopped via task_stop
-- running → completed via normal success
-- running → failed via error
+- pending → processing when picked up by a worker
+- processing → completed via normal success
+- processing → failed via error
 
-**Invalid**
+### 5.3 Invalid transitions
 
-- completed → running (new run must be triggered by creating a new task)
-- running → running (no concurrent runs in v1)
+- completed → processing (new run must be triggered by creating a new task)
+- processing → processing is not a state transition on the same task; create separate tasks for parallel work.
 
 ---
 
@@ -298,7 +291,7 @@ For the full catalog file:
 
 ### 6.3 task_status
 
-Returns run status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation takes 15–20+ minutes and frequent polling is unnecessary.
+Returns task status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation takes 15–20+ minutes and frequent polling is unnecessary.
 
 **Request**
 
@@ -314,22 +307,21 @@ Returns run status and progress. Used for progress bars and UI states. **Polling
 
 **Caller contract (state meanings)**
 
-- `running`: work is still in progress. Keep polling.
-- `stopping`: stop requested and in progress. Keep polling.
+- `pending`: queued and waiting for a worker. Keep polling.
+- `processing`: picked up by a worker and in progress. Keep polling.
 - `completed`: terminal success. Download artifacts now.
 - `failed`: terminal error. Do not keep polling for completion.
-- `stopped`: terminal stop acknowledged by the system/user request.
 
 **Terminal states**
 
-- `completed`, `failed`, `stopped`
+- `completed`, `failed`
 
 **Response**
 
 ```json
 {
   "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
-  "state": "running",
+  "state": "processing",
   "progress_percentage": 62.0,
   "timing": {
     "started_at": "2026-01-14T12:35:10Z",
@@ -364,13 +356,14 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 
 **Input**
 
-- task_id: UUID returned by task_create. Use this same UUID when calling task_stop to request the run to stop.
+- task_id: UUID returned by task_create. Use this same UUID when calling task_stop to request the task to stop.
 
 **Response**
 
 ```json
 {
-  "state": "stopped"
+  "state": "processing",
+  "stop_requested": true
 }
 ```
 
@@ -410,11 +403,16 @@ Targets map to Luigi "final tasks".
 
 ## 8. Concurrency & Locking
 
-### 8.1 Single active run per task
+### 8.1 Client-side concurrency guidance
 
-In v1, tasks MUST enforce:
+The server does not enforce a global limit on how many tasks a client can create.
+Concurrency is a client-side coordination concern.
 
-- at most one run in running state.
+Recommended practice for MCP clients:
+
+- Start with 1 active task.
+- If needed, increase to 2 tasks in parallel.
+- Going beyond 4 parallel tasks is usually hard to track; avoid unless necessary.
 
 ---
 

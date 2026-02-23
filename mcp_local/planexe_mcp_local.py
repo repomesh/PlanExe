@@ -477,10 +477,9 @@ TOOL_DEFINITIONS = [
             "Returns status and progress of the plan currently being created. "
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
             "and frequent polling is unnecessary. "
-            "State contract: running/stopping => keep polling; completed => download is ready; "
-            "failed => terminal error; stopped => stop acknowledged (terminal). "
-            "Troubleshooting: TaskState.pending for >5 minutes likely means queued but not picked up by a worker. "
-            "TaskState.processing/running with no file-output changes for >20 minutes likely means failed/stalled. "
+            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
+            "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
@@ -516,9 +515,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
-    "task_status state contract: running/stopping => keep polling; completed => download is ready; failed => terminal error; stopped => stop acknowledged (terminal). "
-    "Troubleshooting: if task_status stays in TaskState.pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
-    "If task_status is in TaskState.processing/running and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
+    "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "If task_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
 )
@@ -643,7 +642,7 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request mcp_cloud to stop a running task.
+    """Request mcp_cloud to stop an active task.
 
     Examples:
         - {"task_id": "uuid"} → stop request acknowledged
@@ -653,7 +652,7 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: {"state": "stopped"} or error.
+        - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error.
         - isError: True when the remote tool call fails.
     """
     req = TaskStopRequest(**arguments)

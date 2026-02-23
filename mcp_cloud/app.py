@@ -119,9 +119,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
-    "task_status state contract: running/stopping => keep polling; completed => download is ready; failed => terminal error; stopped => stop acknowledged (terminal). "
-    "Troubleshooting: if task_status stays in TaskState.pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
-    "If task_status is in TaskState.processing/running and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
+    "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
 )
@@ -306,18 +306,23 @@ def _get_task_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
             "timestamp_created": task.timestamp_created,
         }
 
-def _request_task_stop_sync(task_id: str) -> bool:
+def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
         task = find_task_by_task_id(task_id)
         if task is None:
-            return False
+            return None
+        stop_requested = False
         if task.state in (TaskState.pending, TaskState.processing):
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
             task.progress_message = "Stop requested by user."
             db.session.commit()
             logger.info("Stop requested for task %s; stop flag set on task %s.", task_id, task.id)
-        return True
+            stop_requested = True
+        return {
+            "state": get_task_state_mapping(task.state),
+            "stop_requested": stop_requested,
+        }
 
 def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
@@ -609,14 +614,14 @@ def compute_sha256(content: str | bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 def get_task_state_mapping(task_state: TaskState) -> str:
-    """Map TaskState to MCP run state."""
+    """Map TaskState to MCP task state."""
     mapping = {
-        TaskState.pending: "stopped",
-        TaskState.processing: "running",
+        TaskState.pending: "pending",
+        TaskState.processing: "processing",
         TaskState.completed: "completed",
         TaskState.failed: "failed",
     }
-    return mapping.get(task_state, "stopped")
+    return mapping.get(task_state, "pending")
 
 def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
     value: Optional[str] = None
@@ -876,10 +881,9 @@ TOOL_DEFINITIONS = [
             "Returns status and progress of the plan currently being created. "
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
             "and frequent polling is unnecessary. "
-            "State contract: running/stopping => keep polling; completed => download is ready; "
-            "failed => terminal error; stopped => stop acknowledged (terminal). "
-            "Troubleshooting: TaskState.pending for >5 minutes likely means queued but not picked up by a worker. "
-            "TaskState.processing/running with no file-output changes for >20 minutes likely means failed/stalled. "
+            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
+            "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
@@ -1039,7 +1043,7 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
-    """Fetch the current run status, progress, and recent files for a task.
+    """Fetch the current task status, progress, and recent files for a task.
 
     Examples:
         - {"task_id": "uuid"} → state/progress/timing + recent files
@@ -1073,8 +1077,6 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
 
     task_state = task_snapshot["state"]
     state = get_task_state_mapping(task_state)
-    if task_state == TaskState.processing and task_snapshot["stop_requested"]:
-        state = "stopping"
     if task_state == TaskState.completed:
         progress_percentage = 100.0
 
@@ -1122,7 +1124,7 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request the active run for a task to stop.
+    """Request an active task to stop.
 
     Examples:
         - {"task_id": "uuid"} → stop request accepted
@@ -1132,14 +1134,14 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: {"state": "stopped"} or error payload.
+        - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error payload.
         - isError: True only when task_id is unknown.
     """
     req = TaskStopRequest(**arguments)
     task_id = req.task_id
 
-    found = await asyncio.to_thread(_request_task_stop_sync, task_id)
-    if not found:
+    stop_result = await asyncio.to_thread(_request_task_stop_sync, task_id)
+    if stop_result is None:
         response = {
             "error": {
                 "code": "TASK_NOT_FOUND",
@@ -1152,9 +1154,7 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
-    response = {
-        "state": "stopped",
-    }
+    response = stop_result
 
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],

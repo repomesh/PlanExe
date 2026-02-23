@@ -72,12 +72,11 @@ class TaskStatusSuccess(BaseModel):
         ...,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"] = Field(
+    state: Literal["pending", "processing", "completed", "failed"] = Field(
         ...,
         description=(
-            "Caller contract: running/stopping => keep polling; "
-            "completed => download is ready; failed => terminal error; "
-            "stopped => stop acknowledged (terminal)."
+            "Caller contract: pending/processing => keep polling; "
+            "completed => download is ready; failed => terminal error."
         ),
     )
     progress_percentage: float
@@ -90,12 +89,11 @@ class TaskStatusOutput(BaseModel):
         default=None,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
         default=None,
         description=(
-            "Caller contract: running/stopping => keep polling; "
-            "completed => download is ready; failed => terminal error; "
-            "stopped => stop acknowledged (terminal)."
+            "Caller contract: pending/processing => keep polling; "
+            "completed => download is ready; failed => terminal error."
         ),
     )
     progress_percentage: float | None = None
@@ -105,9 +103,13 @@ class TaskStatusOutput(BaseModel):
 
 
 class TaskStopOutput(BaseModel):
-    state: Literal["stopped"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
         default=None,
-        description="Stop acknowledged. stopped is terminal for this run.",
+        description="Current task state after stop request.",
+    )
+    stop_requested: bool | None = Field(
+        default=None,
+        description="True when stop request flag was set for a pending/processing task.",
     )
     error: ErrorDetail | None = None
 

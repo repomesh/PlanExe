@@ -63,6 +63,26 @@ class TestTaskStatusTool(unittest.TestCase):
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0]["path"], "001-2-plan.txt")
 
+    def test_task_status_uses_processing_state_name(self):
+        task_id = str(uuid.uuid4())
+        task_snapshot = {
+            "id": task_id,
+            "state": TaskState.processing,
+            "stop_requested": True,
+            "progress_percentage": 10.0,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.app._get_task_status_snapshot_sync",
+            return_value=task_snapshot,
+        ), patch(
+            "mcp_cloud.app.fetch_file_list_from_worker_plan",
+            new=AsyncMock(return_value=[]),
+        ):
+            result = asyncio.run(handle_task_status({"task_id": task_id}))
+
+        self.assertEqual(result.structuredContent["state"], "processing")
+
 
 if __name__ == "__main__":
     unittest.main()

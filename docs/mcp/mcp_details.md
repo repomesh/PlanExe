@@ -122,11 +122,10 @@ Example call:
 
 State contract:
 
-- `running`: keep polling.
-- `stopping`: stop requested and in progress, keep polling.
+- `pending`: queued and waiting for a worker, keep polling.
+- `processing`: picked up by a worker, keep polling.
 - `completed`: terminal success, proceed to download.
 - `failed`: terminal error.
-- `stopped`: terminal stop acknowledged.
 
 ### task_stop
 

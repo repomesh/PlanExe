@@ -76,11 +76,10 @@ Key tool inputs/outputs:
 - task_file_info output: downloadable report/zip metadata and URLs.
 
 task_status caller contract:
-- running: keep polling.
-- stopping: keep polling.
+- pending: keep polling.
+- processing: keep polling.
 - completed: terminal success; download is ready.
 - failed: terminal error.
-- stopped: terminal stop acknowledged.
 
 Recommended interaction order:
 1. Call prompt_examples.

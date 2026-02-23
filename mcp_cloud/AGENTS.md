@@ -16,12 +16,34 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - Task management maps to `TaskItem` records (each task = one TaskItem).
   - Events are queried from `EventItem` database records.
 - Use the TaskItem UUID as the MCP `task_id`.
+- Public task state contract:
+  - `task_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
+  - These values correspond 1:1 with `database_api.model_taskitem.TaskState`.
+  - Do not use legacy public names like `running`, `stopping`, or `stopped` for `task_status`.
+  - Do not expose internal symbol/class names (for example `TaskState.pending`, `TaskItem.state`) in model-facing tool descriptions; use plain public state strings.
 - Download contract:
   - `track_activity.jsonl` is internal-only (`TaskItem.run_track_activity_jsonl`).
   - Downloadable zip artifacts must never include `track_activity.jsonl`.
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
+- `task_stop` contract:
+  - `task_stop` does not create a separate lifecycle state.
+  - Return current public `state` plus `stop_requested` to acknowledge stop-flag request.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.
+
+## task_create contract
+- Visible input schema is intentionally limited to:
+  - `prompt`
+  - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
+  - `user_api_key` (optional)
+- Keep `speed_vs_detail` out of model-visible input schema.
+- Runtime override for `speed_vs_detail` is metadata-only (tool-specific metadata),
+  read from hidden containers (`tool_metadata`, `metadata`, `_meta`) and nested
+  namespaces (`task_create`, `planexe_task_create`, `planexe`).
+- Preserve compatibility aliases for metadata speed values:
+  - `ping` -> `ping_llm`
+  - `fast` -> `fast_but_skip_details`
+  - `all` -> `all_details_but_slow`
 
 ## MCP Protocol
 - The server communicates over stdio (standard input/output) following the MCP protocol.
@@ -41,8 +63,17 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - It targets either:
   - the HTTP wrapper endpoint (`/mcp/tools/call`), or
   - the streamable MCP JSON-RPC endpoint (`/mcp`).
+- Tool-surface split must stay explicit:
+  - `mcp_cloud` exposes `task_file_info` (not `task_download`).
+  - `mcp_local` exposes `task_download` and implements it via cloud `task_file_info`.
 - `task_file_info` provides download metadata that `mcp_local` uses to download
   artifacts via `/download/{task_id}/...`.
+
+## Troubleshooting guidance (caller-facing text)
+- Keep guidance aligned across server instructions and tool descriptions:
+  - `pending` for longer than 5 minutes usually means queued but not picked up by worker.
+  - `processing` with no output-file changes for longer than 20 minutes usually means stalled/failed execution.
+  - In both cases, direct users to report issues at `https://github.com/PlanExeOrg/PlanExe/issues`.
 
 ## MCP Registry metadata
 - Registry metadata for this server lives at `mcp_cloud/server.json`.
@@ -52,6 +83,9 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Publish with `mcp-publisher` from the `mcp_cloud/` directory so it picks up this file.
 
 ## Testing
-- No automated tests currently. If you change MCP tool behavior or database mappings,
-  add a unit test close to the logic when feasible and run `python test.py` from
-  repo root.
+- Automated tests exist under `mcp_cloud/tests/`.
+- If you change MCP tool behavior, state mapping, or tool surface, update/add unit
+  tests close to the changed logic.
+- Run focused tests from repo root, for example:
+  - `python -m unittest mcp_cloud.tests.test_tool_surface_consistency`
+  - `python -m unittest mcp_cloud.tests.test_task_status_tool`

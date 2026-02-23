@@ -9,6 +9,28 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - Supported tools: `task_create`, `task_status`, `task_stop`, `task_download`, `prompt_examples`.
 - `task_download` calls the remote `task_file_info` tool to obtain a download URL,
   then downloads the artifact to `PLANEXE_PATH` on the local machine.
+- `task_create` visible input schema includes `prompt` and optional `model_profile`.
+- Runtime override `speed_vs_detail` is metadata-only (hidden from visible schema);
+  when callers still pass legacy top-level `speed_vs_detail`/`speed`, forward those
+  into `metadata.task_create` for backward compatibility.
+
+## Public state contract
+- `task_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
+- Caller contract:
+  - `pending`/`processing`: keep polling.
+  - `completed`: download is ready.
+  - `failed`: terminal error.
+- Do not use legacy public names such as `running`, `stopping`, or `stopped`.
+- Do not expose internal implementation symbols (for example `TaskState.pending`) in
+  model-facing text; use plain public strings.
+- Troubleshooting guidance to keep aligned with cloud docs/instructions:
+  - `pending` for longer than 5 minutes likely means queued but not picked up by worker.
+  - `processing` with no output-file changes for longer than 20 minutes likely means stalled/failed execution.
+  - Report both cases at `https://github.com/PlanExeOrg/PlanExe/issues`.
+
+## task_stop semantics
+- `task_stop` is a stop request/acknowledgement, not a separate lifecycle state.
+- Return payload should include current public `state` plus `stop_requested`.
 
 ## Constraints
 - Do not add dependencies outside the existing runtime (stdlib + `mcp`).
@@ -16,9 +38,15 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
   - HTTP wrapper (`/mcp/tools/call`)
   - Streamable MCP JSON-RPC (`/mcp`)
 - Ensure all tool responses include structured content when an output schema is defined.
+- Tool-surface split must remain explicit:
+  - local exposes `task_download`.
+  - cloud exposes `task_file_info`.
+  - do not expose `task_file_info` as a local tool name.
 - **Run as task**: Do not advertise the MCP **tasks** protocol (tasks/get, tasks/result, tasks/cancel, tasks/list) or add tool-level "Run as task" support. PlanExe’s interface is tool-based only (task_create → task_status → task_download). The MCP tasks protocol is a different, client-driven feature; Cursor and the Python MCP SDK do not support it properly, so we keep tools-only for compatibility.
 
 ## Env vars
 - `PLANEXE_URL`: Base URL for mcp_cloud (e.g., `http://localhost:8001/mcp`).
-- `PLANEXE_MCP_API_KEY`: API key passed as `Authorization: Bearer ...` if provided.
+- `PLANEXE_MCP_API_KEY`: API key forwarded to remote as `Authorization: Bearer ...`.
 - `PLANEXE_PATH`: Local directory where downloads are saved.
+  - Must be a directory.
+  - Defaults to current working directory when unset.

@@ -440,11 +440,14 @@ TASK_STOP_OUTPUT_SCHEMA = {
 TASK_DOWNLOAD_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "content_type": {"type": "string"},
-        "sha256": {"type": "string"},
-        "download_size": {"type": "integer"},
-        "download_url": {"type": "string"},
-        "saved_path": {"type": "string"},
+        "content_type": {"type": "string", "description": "Artifact content type."},
+        "sha256": {"type": "string", "description": "SHA-256 hash of artifact bytes."},
+        "download_size": {"type": "integer", "description": "Artifact size in bytes."},
+        "download_url": {"type": "string", "description": "Remote URL used for download."},
+        "saved_path": {
+            "type": "string",
+            "description": "Local file path written by task_download.",
+        },
         "error": ERROR_SCHEMA,
     },
     "additionalProperties": False,
@@ -498,7 +501,9 @@ TOOL_DEFINITIONS = [
         name="task_download",
         description=(
             "Download the plan output and save it locally to PLANEXE_PATH. "
-            "Choose the HTML report (default) or a zip of all generated files."
+            "Choose the HTML report (default) or a zip of all generated files. "
+            "If PLANEXE_PATH is unset, files are saved to the current working directory. "
+            "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur."
         ),
         input_schema=TASK_DOWNLOAD_INPUT_SCHEMA,
         output_schema=TASK_DOWNLOAD_OUTPUT_SCHEMA,
@@ -515,6 +520,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_download when complete. To stop, call task_stop with the task_id from task_create. "
+    "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "

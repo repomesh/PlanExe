@@ -385,6 +385,22 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 - task_id: UUID returned by task_create. Use it to download the created plan.
 - artifact: "report" or "zip" (default "report").
 
+**task_download local path behavior (mcp_local)**
+
+- Save directory is `PLANEXE_PATH`.
+- If `PLANEXE_PATH` is unset, save to current working directory.
+- If `PLANEXE_PATH` points to a file (not a directory), return an error.
+- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip`.
+- If a filename already exists, append `-1`, `-2`, ... before extension.
+- Successful responses include `saved_path`.
+
+**task_file_info URL behavior (mcp_cloud)**
+
+- `download_url` is generated from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.
+- Otherwise, cloud HTTP mode uses request host/scheme when available.
+- If no public base URL can be determined (for example some stdio-only flows), `download_url` may be absent.
+- In deployments behind proxies/CDNs, set `PLANEXE_MCP_PUBLIC_BASE_URL` so clients receive a reachable URL.
+
 ---
 
 ## 7. Targets

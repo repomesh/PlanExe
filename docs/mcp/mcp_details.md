@@ -202,6 +202,13 @@ Example call:
 {"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
 ```
 
+`PLANEXE_PATH` behavior for `task_download`:
+- Save directory is `PLANEXE_PATH`, or current working directory if unset.
+- Non-existing directories are created automatically.
+- If `PLANEXE_PATH` points to a file, download fails.
+- Filename is prefixed with task id (for example `<task_id>-030-report.html`).
+- Response includes `saved_path` with the exact local file location.
+
 ## Typical Flow
 
 ### 1. Get example prompts

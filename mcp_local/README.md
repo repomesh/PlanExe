@@ -25,6 +25,13 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 remote MCP tool `task_file_info` to obtain a download URL, then downloads the
 file locally into `PLANEXE_PATH`.
 
+`PLANEXE_PATH` behavior:
+- If unset, downloads are saved to the current working directory.
+- If the path does not exist, it is created.
+- If the path points to a file (not a directory), download fails.
+- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip` (with `-1`, `-2`, ... suffixes on collisions).
+- `task_download` returns `saved_path` with the final file location.
+
 ## Run as task (MCP tasks protocol)
 
 Some MCP clients (e.g. the MCP Inspector) show a **"Run as task"** option for tools. That refers to the MCP **tasks** protocol: a separate mechanism where the client runs a tool in the background using RPC methods like `tasks/run`, `tasks/get`, `tasks/result`, and `tasks/cancel`, instead of a single blocking tool call.

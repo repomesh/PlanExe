@@ -74,6 +74,7 @@ Key tool inputs/outputs:
 - task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
 - task_file_info output: downloadable report/zip metadata and URLs.
+- mcp_local task_download output: includes local saved_path where artifact was written.
 
 task_status caller contract:
 - pending: keep polling.
@@ -91,6 +92,8 @@ Recommended interaction order:
 
 Note:
 - task_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
+- In mcp_local, downloads save to PLANEXE_PATH (or current working directory if PLANEXE_PATH is unset).
+- In mcp_cloud, task_file_info download_url depends on deployment URL settings; configure PLANEXE_MCP_PUBLIC_BASE_URL for stable absolute URLs.
 
 ## Authentication
 

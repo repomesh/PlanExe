@@ -105,7 +105,7 @@ If your client only supports Streamable HTTP and fails on `/mcp`, you have two o
 - `PLANEXE_MCP_API_KEY`: Optional shared secret for auth. When auth is enabled, clients can use this key instead of a UserApiKey. For production with user accounts, keys from home.planexe.org (UserApiKey) are validated against the database.
 - `PLANEXE_MCP_HTTP_HOST`: HTTP server host (default: `127.0.0.1`). Use `0.0.0.0` to bind all interfaces (containers/cloud).
 - `PLANEXE_MCP_HTTP_PORT`: HTTP server port (default: `8001`). Railway will override with `PORT` env var.
-- `PLANEXE_MCP_PUBLIC_BASE_URL`: Public base URL for report/zip download links in `task_file_info` (e.g. `http://192.168.1.40:8001`). When unset, the HTTP server uses the request’s host (scheme + authority), so clients connecting at `http://192.168.1.40:8001/mcp/` get download URLs like `http://192.168.1.40:8001/download/...` instead of localhost. If clients still see localhost in download URLs (e.g. behind a proxy), uncomment and set this in the repo’s `.env.docker-example` or `.env.developer-example` (copy to `.env` and fill in your public URL).
+- `PLANEXE_MCP_PUBLIC_BASE_URL`: Public base URL for report/zip download links in `task_file_info` (e.g. `http://192.168.1.40:8001`). When set, `download_url` is built from this value. When unset, the HTTP server uses the request’s host (scheme + authority), so clients connecting at `http://192.168.1.40:8001/mcp/` get download URLs like `http://192.168.1.40:8001/download/...` instead of localhost. If clients still see localhost in download URLs (e.g. behind a proxy), set this env var explicitly in `.env`.
 - `PORT`: Railway-provided port (takes precedence over `PLANEXE_MCP_HTTP_PORT`)
 - `PLANEXE_MCP_CORS_ORIGINS`: Comma-separated list of allowed origins. When unset, uses `*` (all origins) so browser-based tools like the MCP Inspector can connect. If you set it (e.g. for a specific frontend), include `http://localhost:6274` and `http://127.0.0.1:6274` for the Inspector.
 - `PLANEXE_MCP_MAX_BODY_BYTES`: Max request size for `POST /mcp/tools/call` (default: `1048576`).
@@ -145,6 +145,7 @@ Note: `task_download` is a synthetic tool provided by `mcp_local`, not by this s
 
 Download flow: call `task_file_info` to obtain the `download_url`, then fetch the
 report via `GET /download/{task_id}/030-report.html` (API key required if configured).
+If `download_url` is missing, configure `PLANEXE_MCP_PUBLIC_BASE_URL` so the server can emit a reachable absolute URL.
 
 ## Debugging with the MCP Inspector
 

@@ -119,6 +119,8 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
     "Step 3 — Only then call task_create with the approved prompt. "
     "Then poll task_status; use task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
+    "task_file_info download_url is absolute when PLANEXE_MCP_PUBLIC_BASE_URL is configured or request host is available. "
+    "If download_url is missing, configure PLANEXE_MCP_PUBLIC_BASE_URL on the server. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
@@ -903,7 +905,8 @@ TOOL_DEFINITIONS = [
         description=(
             "Returns file metadata (content_type, download_url, download_size) for the report or zip. "
             "If your client exposes task_download (e.g. mcp_local), use that to save the file locally; "
-            "otherwise use this tool to get download_url and fetch the file yourself."
+            "otherwise use this tool to get download_url and fetch the file yourself. "
+            "download_url is generated from PLANEXE_MCP_PUBLIC_BASE_URL (or request host when available)."
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,

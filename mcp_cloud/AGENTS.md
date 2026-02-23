@@ -58,6 +58,11 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - OAuth is not supported for the MCP API. Do not document, imply, or advertise OAuth support.
 - In docs and user-facing error/help text, instruct clients to use `X-API-Key` custom headers.
 
+## Download URL environment behavior
+- `task_file_info.download_url` should be built from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.
+- If `PLANEXE_MCP_PUBLIC_BASE_URL` is unset in HTTP mode, use request host/scheme.
+- If no public base URL is available, `download_url` may be absent; document this and guide operators to set `PLANEXE_MCP_PUBLIC_BASE_URL`.
+
 ## mcp_local integration
 - `mcp_local` runs on the user's machine and forwards tool calls to this server over HTTP.
 - It targets either:

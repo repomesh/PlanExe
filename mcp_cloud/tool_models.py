@@ -115,17 +115,29 @@ class TaskStopOutput(BaseModel):
 
 
 class TaskFileInfoReadyOutput(BaseModel):
-    content_type: str
-    sha256: str
-    download_size: int
-    download_url: str | None = None
+    content_type: str = Field(..., description="Artifact content type.")
+    sha256: str = Field(..., description="SHA-256 hash of artifact bytes.")
+    download_size: int = Field(..., description="Artifact size in bytes.")
+    download_url: str | None = Field(
+        default=None,
+        description=(
+            "Absolute artifact download URL when server base URL is known "
+            "(PLANEXE_MCP_PUBLIC_BASE_URL or request host)."
+        ),
+    )
 
 
 class TaskFileInfoOutput(BaseModel):
-    content_type: str | None = None
-    sha256: str | None = None
-    download_size: int | None = None
-    download_url: str | None = None
+    content_type: str | None = Field(default=None, description="Artifact content type.")
+    sha256: str | None = Field(default=None, description="SHA-256 hash of artifact bytes.")
+    download_size: int | None = Field(default=None, description="Artifact size in bytes.")
+    download_url: str | None = Field(
+        default=None,
+        description=(
+            "Absolute artifact download URL when server base URL is known. "
+            "May be omitted in some deployments."
+        ),
+    )
     error: ErrorDetail | None = None
 
 

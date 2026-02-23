@@ -49,4 +49,6 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - `PLANEXE_MCP_API_KEY`: API key forwarded to remote as custom header `X-API-Key`.
 - `PLANEXE_PATH`: Local directory where downloads are saved.
   - Must be a directory.
+  - Created automatically when missing.
   - Defaults to current working directory when unset.
+  - Saved filename pattern: `<task_id>-<artifact_basename>` with numeric suffixes on collisions.

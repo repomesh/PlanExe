@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a good prompt (use examples as a baseline; similar structure) and get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` or `task_file_info` when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt (typically ~300-800 words) using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` or `task_file_info` when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
 - **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
 
 ### 1.3 Scope of this document
@@ -156,7 +156,7 @@ All tool names below are normative.
 
 ### 6.1 prompt_examples
 
-**Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: call this tool; optionally call `model_profiles`; then complete a non-tool step (draft and approve prompt); only then call `task_create`. If you call `task_create` before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
+**Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: call this tool; optionally call `model_profiles`; then complete a non-tool step (draft and approve a detailed prompt, typically ~300-800 words); only then call `task_create`. If you call `task_create` before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
 
 **Request:** no parameters (empty object).
 
@@ -268,12 +268,15 @@ Use tool-specific metadata when you need runtime overrides that should not be vi
 
 **Prompt quality**
 
-The `prompt` parameter should be a detailed description of what the plan should cover. Good prompts are typically 300–800 words and include:
+The `prompt` parameter should be a detailed description of what the plan should cover. Good prompts are typically 300-800 words and include:
 
-- Clear context: background, constraints, and goals
-- Specific requirements: budget, timeline, location, or technical constraints
-- Success criteria: what "done" looks like
-- Banned words or approaches (if any)
+- Objective
+- Scope
+- Constraints
+- Timeline
+- Stakeholders
+- Budget/resources
+- Success criteria
 
 Short one-liners (e.g., "Construct a bridge") tend to produce poor output because they lack context for the planning pipeline. Important details are location, budget, time frame.
 

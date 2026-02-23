@@ -12,10 +12,11 @@ This is the shortest path to a working PlanExe MCP integration.
 
 1. Ask for prompt examples.
 2. Inspect `model_profile` options and available models.
-3. Expand the user idea into a high‑quality prompt (non-tool step) and get user approval.
+3. Expand the user idea into a high-quality prompt (typically ~300-800 words) and get user approval.
+   Use this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 4. Create the plan task.
 5. Poll for status (about every 5 minutes).
-6. Download the report (HTML or zip).
+6. Download artifacts via `task_file_info` (cloud) or `task_download` (mcp_local helper).
 
 ---
 
@@ -25,7 +26,10 @@ This is the shortest path to a working PlanExe MCP integration.
 2. `model_profiles`
 3. `task_create`
 4. `task_status`
-5. `task_download`
+5. `task_file_info`
+
+Optional local helper:
+- `task_download` (provided by `mcp_local`, not `mcp_cloud`)
 
 For `task_create`:
 
@@ -39,7 +43,7 @@ For `task_create`:
 
 - You can fetch example prompts.
 - You can create a plan task.
-- You can download the report artifact.
+- You can fetch artifact metadata/URLs with `task_file_info` (and optionally save locally via `task_download` when using `mcp_local`).
 - Your client can parse `error.code` and `error.message` and handle `{}` from `task_file_info` as "not ready yet".
 - If running parallel work, your client tracks multiple `task_id`s explicitly (server-side global cap is not enforced).
 

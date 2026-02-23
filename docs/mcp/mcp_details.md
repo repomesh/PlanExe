@@ -16,7 +16,7 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 
 ### prompt_examples
 
-Returns around five example prompts that show what good prompts look like. Each sample is typically 300–800 words: detailed context, requirements, and success criteria. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300–800 words). The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `task_create`. Shorter or vaguer prompts produce lower-quality plans.
+Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `task_create`. Shorter or vaguer prompts produce lower-quality plans.
 
 Example prompt:
 ```
@@ -28,7 +28,7 @@ Example call:
 {}
 ```
 
-Response includes `samples` (array of prompt strings, each 300–800 words) and `message`.
+Response includes `samples` (array of prompt strings, each ~300-800 words) and `message`.
 
 ### model_profiles
 
@@ -273,7 +273,7 @@ Special case:
 
 ### 1. Get example prompts
 
-The user often starts with a vague idea. The AI calls `prompt_examples` first to see what good prompts look like (around five samples, 300–800 words each), then expands the user’s idea into a high-quality prompt and shows it to the user.
+The user often starts with a vague idea. The AI calls `prompt_examples` first to see what good prompts look like (around five samples, typically 300-800 words each), then expands the user’s idea into a high-quality prompt using this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 
 Prompt:
 ```
@@ -299,7 +299,7 @@ Tool call:
 
 ### 3. Draft and approve the prompt (non-tool step)
 
-At this step, the agent writes a high-quality prompt draft, shows it to the user, and waits for approval.
+At this step, the agent writes a high-quality prompt draft (typically 300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria), shows it to the user, and waits for approval.
 
 ### 4. Create a plan
 

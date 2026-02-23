@@ -68,6 +68,7 @@ When connected follow these steps:
 Now there should be a list with tool names and descriptions:
 ```
 prompt_examples
+model_profiles
 task_create
 task_status
 task_stop
@@ -81,8 +82,9 @@ Follow these steps:
 ![screenshot of mcp inspector invoke tool](inspector_step5_mcp_planexe_org.webp)
 
 1. In the `Tools` panel; Click on the `prompt_examples` tool.
-2. In the `prompt_examples` right sidepanel; Click on `Run Tool`. 
-3. The MCP server should respond with a list of list of example prompts.
+2. In the `prompt_examples` right sidepanel; Click on `Run Tool`.
+3. The MCP server should respond with a list of example prompts.
+4. Optionally run `model_profiles` to inspect available `model_profile` choices before `task_create`.
 
 ## Approach 2. MCP server inside docker
 

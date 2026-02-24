@@ -2,11 +2,13 @@
 title: Deploy PlanExe on Railway
 ---
 
-# PlanExe on Railway - Experimental
+# PlanExe on Railway
 
-As of 2026-Jan-04, I'm experimenting with Railway. Currently the `frontend_multi_user` UI is an ugly MVP. I recommend going with the `frontend_single_user`, that doesn't use database.
+This is what PlanExe looks like when it's deployed on Railway:
+- Website: [home.planexe.org](https://home.planexe.org/)
+- MCP interface: [mcp.planexe.org](https://mcp.planexe.org/)
 
-In this project, the files named `railway.md` or `railway.toml`, are related to how things are configured in my Railway setup.
+You can deploy PlanExe yourself on Railway. It's not straightforward to get working. I recommend first getting docker working on localhost, when that works, then move on to Railway. There are many files related to railway, these are named `railway.md` or `railway.toml`, and describes how things are configured in my Railway setup.
 
 ## Project Settings
 

@@ -76,6 +76,10 @@ HTTP_PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_MCP_HTTP_PORT"
 MAX_BODY_BYTES = int(os.environ.get("PLANEXE_MCP_MAX_BODY_BYTES", "1048576"))
 RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_RATE_WINDOW_SECONDS", "60"))
+GLAMA_MAINTAINER_EMAIL = os.environ.get(
+    "PLANEXE_MCP_GLAMA_MAINTAINER_EMAIL",
+    "neoneye@gmail.com",
+).strip()
 
 
 def _parse_bool_env(name: str, default: bool) -> bool:
@@ -667,6 +671,7 @@ def root() -> dict[str, Any]:
             "tools": "/mcp/tools",
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
+            "glama_connector": "/.well-known/glama.json",
             "download": f"/download/{{task_id}}/{REPORT_FILENAME}",
             "llms_txt": "/llms.txt",
         },
@@ -688,6 +693,15 @@ def _llms_txt_path() -> str:
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="llms.txt not found")
     return path
+
+
+@app.get("/.well-known/glama.json")
+def glama_connector_metadata() -> dict[str, Any]:
+    """Serve Glama connector ownership metadata."""
+    return {
+        "$schema": "https://glama.ai/mcp/schemas/connector.json",
+        "maintainers": [{"email": GLAMA_MAINTAINER_EMAIL}],
+    }
 
 
 @app.get("/llms.txt")

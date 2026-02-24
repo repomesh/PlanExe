@@ -64,6 +64,70 @@ class TestTaskRetryInputSchemaDefaults(unittest.TestCase):
         self.assertEqual(model_profile.get("default"), "baseline")
 
 
+class TestPromptExamplesAnnotations(unittest.TestCase):
+    def test_cloud_prompt_examples_annotations(self):
+        definition = _tool_def(cloud_app.TOOL_DEFINITIONS, "prompt_examples")
+        annotations = definition.annotations or {}
+        self.assertTrue(annotations.get("readOnlyHint"))
+        self.assertFalse(annotations.get("destructiveHint"))
+        self.assertTrue(annotations.get("idempotentHint"))
+        self.assertFalse(annotations.get("openWorldHint"))
+
+    def test_local_prompt_examples_annotations(self):
+        definition = _tool_def(local_app.TOOL_DEFINITIONS, "prompt_examples")
+        annotations = definition.annotations or {}
+        self.assertTrue(annotations.get("readOnlyHint"))
+        self.assertFalse(annotations.get("destructiveHint"))
+        self.assertTrue(annotations.get("idempotentHint"))
+        self.assertFalse(annotations.get("openWorldHint"))
+
+
+class TestModelProfilesAnnotations(unittest.TestCase):
+    def test_cloud_model_profiles_annotations(self):
+        definition = _tool_def(cloud_app.TOOL_DEFINITIONS, "model_profiles")
+        annotations = definition.annotations or {}
+        self.assertTrue(annotations.get("readOnlyHint"))
+        self.assertFalse(annotations.get("destructiveHint"))
+        self.assertTrue(annotations.get("idempotentHint"))
+        self.assertFalse(annotations.get("openWorldHint"))
+
+    def test_local_model_profiles_annotations(self):
+        definition = _tool_def(local_app.TOOL_DEFINITIONS, "model_profiles")
+        annotations = definition.annotations or {}
+        self.assertTrue(annotations.get("readOnlyHint"))
+        self.assertFalse(annotations.get("destructiveHint"))
+        self.assertTrue(annotations.get("idempotentHint"))
+        self.assertFalse(annotations.get("openWorldHint"))
+
+
+class TestRemainingToolAnnotations(unittest.TestCase):
+    def test_cloud_remaining_tool_annotations(self):
+        expected = {
+            "task_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "task_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
+            "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "task_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+        }
+        for tool_name, expected_annotations in expected.items():
+            with self.subTest(tool=tool_name):
+                definition = _tool_def(cloud_app.TOOL_DEFINITIONS, tool_name)
+                self.assertEqual(definition.annotations, expected_annotations)
+
+    def test_local_remaining_tool_annotations(self):
+        expected = {
+            "task_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "task_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
+            "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "task_download": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+        }
+        for tool_name, expected_annotations in expected.items():
+            with self.subTest(tool=tool_name):
+                definition = _tool_def(local_app.TOOL_DEFINITIONS, tool_name)
+                self.assertEqual(definition.annotations, expected_annotations)
+
+
 class TestCloudToolSurfaceConsistency(unittest.TestCase):
     def test_cloud_exposes_model_profiles_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}

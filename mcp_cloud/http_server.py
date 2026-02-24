@@ -21,7 +21,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult, ContentBlock, TextContent
+from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
@@ -405,6 +405,7 @@ def _register_tools(server: FastMCP) -> None:
         server.tool(
             name=tool.name,
             description=tool.description,
+            annotations=ToolAnnotations(**tool.annotations) if tool.annotations else None,
         )(handler)
 
 

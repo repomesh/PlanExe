@@ -20,7 +20,7 @@ from urllib.request import Request, urlopen
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import CallToolResult, TextContent, Tool
+from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations
 from pydantic import BaseModel
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -310,6 +310,7 @@ class ToolDefinition:
     description: str
     input_schema: dict[str, Any]
     output_schema: Optional[dict[str, Any]] = None
+    annotations: Optional[dict[str, Any]] = None
 
 
 ERROR_SCHEMA = {
@@ -575,6 +576,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="model_profiles",
@@ -585,6 +592,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="task_create",
@@ -606,6 +619,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
     ),
     ToolDefinition(
         name="task_status",
@@ -623,6 +642,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
         output_schema=TASK_STATUS_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="task_stop",
@@ -635,6 +660,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="task_retry",
@@ -646,6 +677,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_RETRY_INPUT_SCHEMA,
         output_schema=TASK_RETRY_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
     ),
     ToolDefinition(
         name="task_download",
@@ -660,6 +697,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_DOWNLOAD_INPUT_SCHEMA,
         output_schema=TASK_DOWNLOAD_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
     ),
 ]
 
@@ -707,6 +750,7 @@ async def handle_list_tools() -> list[Tool]:
             description=definition.description,
             inputSchema=definition.input_schema,
             outputSchema=definition.output_schema,
+            annotations=ToolAnnotations(**definition.annotations) if definition.annotations else None,
         )
         for definition in TOOL_DEFINITIONS
     ]

@@ -39,3 +39,36 @@ class TestTaskItemModel(unittest.TestCase):
             self.assertTrue(hasattr(fetched, "run_activity_overview_json"))
             self.assertTrue(hasattr(fetched, "run_artifact_layout_version"))
             self.assertFalse(bool(fetched.stop_requested))
+
+    def test_prompt_invalid_bytes_are_sanitized(self):
+        with self.app.app_context():
+            bad_bytes = b"Hello \xe2\x80 world"
+            task = TaskItem(
+                state=TaskState.pending,
+                prompt=bad_bytes,
+                user_id="test_user",
+            )
+            db.session.add(task)
+            db.session.commit()
+
+            fetched = db.session.get(TaskItem, task.id)
+            self.assertIsInstance(fetched.prompt, str)
+            # Must be encodable after sanitization.
+            fetched.prompt.encode("utf-8")
+            self.assertIn("Hello", fetched.prompt)
+            self.assertIn("world", fetched.prompt)
+
+    def test_prompt_surrogates_are_sanitized(self):
+        with self.app.app_context():
+            task = TaskItem(
+                state=TaskState.pending,
+                prompt="prefix \ud800 suffix",
+                user_id="test_user",
+            )
+            db.session.add(task)
+            db.session.commit()
+
+            fetched = db.session.get(TaskItem, task.id)
+            self.assertIsInstance(fetched.prompt, str)
+            fetched.prompt.encode("utf-8")
+            self.assertFalse(any(0xD800 <= ord(ch) <= 0xDFFF for ch in fetched.prompt))

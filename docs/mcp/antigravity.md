@@ -18,15 +18,13 @@ My interaction history:
 4. I didn't meant outbreak, I meant vulcanic
 5. your prompt is a bit shorter than the example prompts
 6. go ahead create the plan
-7. stop that plan you are creating.
-8. now create the plan again, this time with ALL details. Last time you had FAST selected that would leave out most details.
-9. check status
+7. check status
+8. status
+9. status
 10. status
-11. status
-12. status
-13. download the report
-14. summarize the report
-15. does it correspond to your expectations?
+11. download the report
+12. summarize the report
+13. does it correspond to your expectations?
 
 I had to manually ask about `check status` to get details how the plan creation was going. It's not something that Antigravity can do.
 

@@ -4,19 +4,19 @@
 
 ### 1.1 What is PlanExe
 
-PlanExe is a service that generates **rough-draft project plans** from a natural-language prompt. You describe a large goal (e.g. open a clinic, launch a product, build a moon base)—the kind of project that in reality takes months or years. PlanExe produces a structured draft: steps, documents, and deliverables. The plan is not executable in its current form; it is a draft to refine and act on. Creating a plan is a long-running task (100+ LLM inference calls): create a task with a prompt, poll status, then download the HTML report and zip when done.
+PlanExe is a service that generates **strategic project-plan drafts** from a natural-language prompt. You describe a large goal (e.g. open a clinic, launch a product, build a moon base)—the kind of project that in reality takes months or years. PlanExe produces a structured draft with 20+ sections: steps, documents, and deliverables. The plan is not executable in its current form; it is a draft to refine and act on. Creating a plan is a long-running task (100+ LLM inference calls): create a task with a prompt, poll status, then download the HTML report and zip when done.
 
 ### 1.2 What kind of plan does it create
 
-The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifacts including a Gantt chart, risk analysis, and other project management deliverables. The main output is a large HTML file (approx 700KB) containing many sections. There is also a zip file containing all intermediary files (md, json, csv). Plan quality depends on prompt quality; use the prompt_examples tool to see the baseline before calling task_create.
+The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifacts including a Gantt chart, risk analysis, and other project management deliverables. The main output is a self-contained interactive HTML report (~700KB) with collapsible sections, interactive Gantt charts, and embedded JavaScript. The report contains 20+ sections including executive summary, investor pitch, project plan with SMART criteria, strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, plan review, Q&A, premortem with failure scenarios, self-audit checklist, and adversarial premise attacks. There is also a zip file containing all intermediary pipeline files (md, json, csv) that fed the report. Plan quality depends on prompt quality; use the prompt_examples tool to see the baseline before calling task_create.
 
 #### 1.2.1 Agent-facing summary (for server instructions / tool descriptions)
 
 Implementors should expose the following to agents so they understand what PlanExe does:
 
-- **What:** PlanExe turns a plain-English goal into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. The plan is a draft to refine, not an executable or final document.
-- **Required interaction order:** Step 1 — Call prompt_examples to fetch example prompts. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create.
-- **Output:** Large HTML report (~700KB) and optional zip of intermediate files (md, json, csv).
+- **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` (mcp_local helper) or `task_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
+- **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
 
@@ -70,10 +70,10 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_download. This document specifies those tools.
+- **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_file_info (and optionally task_download via mcp_local). This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. The intended flow is: Step 1 — call prompt_examples; Step 2 — formulate a good prompt (user approval); Step 3 — call task_create; then poll task_status and call task_download when complete.
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: call `prompt_examples`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `task_create`; poll `task_status`; then call `task_file_info` (or `task_download` via mcp_local).
 
 ---
 
@@ -92,13 +92,13 @@ A long-lived container for a PlanExe project run.
 - config: immutable run configuration (models, runtime limits, Luigi params)
 - created_at, updated_at
 
-#### Run
+#### Execution
 
-A single execution attempt inside a task (e.g., after a resume).
+A single execution attempt inside a task.
 
 **Key properties**
 
-- state: running | stopped | completed | failed
+- state: pending | processing | completed | failed
 - progress_percentage: computed progress percentage (float)
 - started_at, ended_at
 
@@ -128,32 +128,25 @@ A typed message emitted during execution for UI/agent consumption.
 
 ## 5. State Machine
 
-### 5.1 Task states
+### 5.1 TaskItem.state values
 
-Tasks may exist independent of active runs.
+The public MCP `state` field is aligned with `TaskItem.state`:
 
-- created: task initialized, no run started
-- active: at least one run exists, may be running or stopped
-- archived: optional; immutable, no new runs allowed
-
-### 5.2 Run states
-
-- running
-- stopping (optional transitional state)
-- stopped (user stopped, resumable)
+- pending (queued, waiting for a worker)
+- processing (picked up by a worker)
 - completed
-- failed (resumable depending on failure type)
+- failed
 
-### 5.3 Allowed transitions
+### 5.2 Allowed transitions
 
-- running → stopped via task_stop
-- running → completed via normal success
-- running → failed via error
+- pending → processing when picked up by a worker
+- processing → completed via normal success
+- processing → failed via error
 
-**Invalid**
+### 5.3 Invalid transitions
 
-- completed → running (new run must be triggered by creating a new task)
-- running → running (no concurrent runs in v1)
+- completed → processing (new run must be triggered by creating a new task)
+- processing → processing is not a state transition on the same task; create separate tasks for parallel work.
 
 ---
 
@@ -163,7 +156,9 @@ All tool names below are normative.
 
 ### 6.1 prompt_examples
 
-**Step 1 — Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: Step 1 — call this tool to fetch examples. Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). Step 3 — Only then call task_create with the approved prompt. If you call task_create before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
+**Call this first.** Returns example prompts that define the baseline for what a good prompt looks like. Do not call task_create yet. Correct flow: call this tool; optionally call `model_profiles`; then complete a non-tool step (draft and approve a detailed prompt, typically ~300-800 words); only then call `task_create`. If you call `task_create` before formulating and approving a prompt, the resulting plan will be lower quality than it could be.
+
+Write the prompt as flowing prose, not structured markdown with headers or bullet lists. Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance structure inline. Typical length: 300–800 words. The examples demonstrate this prose style — match their tone and density.
 
 **Request:** no parameters (empty object).
 
@@ -178,9 +173,46 @@ All tool names below are normative.
 
 ---
 
+### 6.1.1 model_profiles
+
+Optional helper tool to discover valid `model_profile` choices and currently available models without relying on internal config knowledge.
+Profiles with zero available models are omitted from the returned `profiles` array.
+If no models are available in any profile, the tool returns `isError=true` with `error.code = MODEL_PROFILES_UNAVAILABLE`.
+
+**Request:** no parameters (empty object).
+
+**Response (shape)**
+
+```json
+{
+  "default_profile": "baseline",
+  "profiles": [
+    {
+      "profile": "baseline",
+      "title": "Baseline",
+      "summary": "Cheap and fast; recommended default when creating a plan.",
+      "model_count": 5,
+      "models": [
+        {
+          "key": "openrouter-gpt-oss-20b",
+          "provider_class": "OpenRouter",
+          "model": "openai/gpt-oss-20b",
+          "priority": 0
+        }
+      ]
+    }
+  ],
+  "message": "..."
+}
+```
+
+Use the returned `profile` values directly in `task_create.model_profile`.
+
+---
+
 ### 6.2 task_create
 
-**Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2).** Start creating a new plan with the approved prompt. speed_vs_detail modes: 'all' runs the full pipeline with all details (slower, higher token usage/cost). 'fast' runs the full pipeline with minimal work per step (faster, fewer details), useful to verify the pipeline is working. 'ping' runs the pipeline entrypoint and makes a single LLM call to verify the worker_plan_database is processing tasks and can reach the LLM.
+**Call only after prompt_examples and after the non-tool drafting/approval step.** Start creating a new plan with the approved prompt.
 
 **Request**
 
@@ -191,11 +223,12 @@ All tool names below are normative.
   "type": "object",
   "properties": {
     "prompt": { "type": "string" },
-    "speed_vs_detail": {
+    "model_profile": {
       "type": "string",
-      "enum": ["ping", "fast", "all"],
-      "default": "ping"
-    }
+      "enum": ["baseline", "premium", "frontier", "custom"],
+      "default": "baseline"
+    },
+    "user_api_key": { "type": "string" }
   },
   "required": ["prompt"]
 }
@@ -206,24 +239,70 @@ All tool names below are normative.
 ```json
 {
   "prompt": "string",
-  "speed_vs_detail": "ping",
+  "model_profile": "baseline",
   "user_api_key": "pex_..."
+}
+```
+
+**Tool-specific metadata (developer-only, hidden from model-visible schema)**
+
+Use tool-specific metadata when you need runtime overrides that should not be visible in the tool interface shown to AI agents.
+
+`speed_vs_detail` is read from metadata, not from the visible input schema.
+
+- `speed_vs_detail` accepted values:
+  - `ping`: single LLM call to verify the pipeline/LLM path.
+  - `fast`: reduced-detail run through the full pipeline.
+  - `all`: full-detail run through the full pipeline.
+
+**Metadata example**
+
+```json
+{
+  "prompt": "string",
+  "metadata": {
+    "task_create": {
+      "speed_vs_detail": "ping"
+    }
+  }
 }
 ```
 
 **Prompt quality**
 
-The `prompt` parameter should be a detailed description of what the plan should cover. Good prompts are typically 300–800 words and include:
+The `prompt` parameter should be a detailed description of what the plan should cover. Good prompts are typically 300-800 words and include:
 
-- Clear context: background, constraints, and goals
-- Specific requirements: budget, timeline, location, or technical constraints
-- Success criteria: what "done" looks like
-- Banned words or approaches (if any)
+- Objective
+- Scope
+- Constraints
+- Timeline
+- Stakeholders
+- Budget/resources
+- Success criteria
 
-Short one-liners (e.g., "Construct a bridge") tend to produce poor output because they lack context for the planning pipeline. Important details are location, budget, time frame.
+Write as flowing prose, not structured markdown. Include banned approaches, governance preferences, and phasing inline. Short one-liners (e.g., "Construct a bridge") tend to produce poor output because they lack context for the planning pipeline. Important details are location, budget, time frame.
+
+**Counterexamples: when NOT to use PlanExe**
+
+Use a normal single LLM response (not PlanExe) for one-shot micro-tasks. PlanExe runs a heavy multi-step planning pipeline and is best for substantial project planning.
+
+- Bad (do not send to task_create): "Give me a 5-point checklist for launching a coffee shop."
+- Better non-PlanExe action: ask the LLM directly for a checklist.
+- Better PlanExe prompt: "Create a 12-month strategic launch plan for a coffee shop in Austin with budget caps, lease milestones, hiring plan, permits, supply chain, marketing channels, risk register, governance, and success KPIs."
+
+- Bad (do not send to task_create): "Summarize this text in 6 bullets."
+- Better non-PlanExe action: use direct summarization in the chat model.
+
+- Bad (invalid assumption): "Run only the risk-register part of PlanExe."
+- Rule: PlanExe pipeline execution is fixed end-to-end. Callers cannot choose internal step subsets.
+- Better PlanExe prompt: request a full plan where risk analysis is one required deliverable.
+
+- Bad (do not send to task_create): "Rewrite this email to sound professional."
+- Better non-PlanExe action: use direct rewriting in the chat model.
 
 **Optional**
 
+- model_profile: LLM profile (`baseline` | `premium` | `frontier` | `custom`). If unsure, call `model_profiles` first.
 - user_api_key: user API key for credits and attribution (if your deployment requires it).
 
 Clients can call the MCP tool **prompt_examples** to retrieve example prompts. Use these as examples for task_create; they can also call task_create with any prompt—short prompts produce less detailed plans.
@@ -243,18 +322,19 @@ For the full catalog file:
 
 **Important**
 
-- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_download.
+- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_file_info (and task_download when using mcp_local).
 
 **Behavior**
 
 - Must be idempotent only if client supplies an optional client_request_id (optional extension).
 - Task config is immutable after creation in v1.
+- By default, repeated `task_create` calls produce new tasks (new `task_id`s).
 
 ---
 
 ### 6.3 task_status
 
-Returns run status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation takes 15–20+ minutes and frequent polling is unnecessary.
+Returns task status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation typically takes 10–20 minutes (baseline profile) and may take longer on higher-quality profiles.
 
 **Request**
 
@@ -268,12 +348,23 @@ Returns run status and progress. Used for progress bars and UI states. **Polling
 
 - task_id: UUID returned by task_create. Use it to reference the plan being created.
 
+**Caller contract (state meanings)**
+
+- `pending`: queued and waiting for a worker. Keep polling.
+- `processing`: picked up by a worker and in progress. Keep polling.
+- `completed`: terminal success. Download artifacts now.
+- `failed`: terminal error. Do not keep polling for completion.
+
+**Terminal states**
+
+- `completed`, `failed`
+
 **Response**
 
 ```json
 {
   "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
-  "state": "running",
+  "state": "processing",
   "progress_percentage": 62.0,
   "timing": {
     "started_at": "2026-01-14T12:35:10Z",
@@ -296,7 +387,7 @@ Returns run status and progress. Used for progress bars and UI states. **Polling
 
 ### 6.4 task_stop
 
-Requests the plan generation to stop. Pass the **task_id** (the UUID returned by task_create). This is a normal MCP tool call: call task_stop with that task_id.
+Requests the plan generation to stop. Pass the **task_id** (the UUID returned by task_create). Call `task_stop` with that task_id.
 
 **Request**
 
@@ -308,13 +399,14 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 
 **Input**
 
-- task_id: UUID returned by task_create. Use this same UUID when calling task_stop to request the run to stop.
+- task_id: UUID returned by task_create. Use this same UUID when calling task_stop to request the task to stop.
 
 **Response**
 
 ```json
 {
-  "state": "stopped"
+  "state": "processing",
+  "stop_requested": true
 }
 ```
 
@@ -336,6 +428,19 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 - task_id: UUID returned by task_create. Use it to download the created plan.
 - artifact: "report" or "zip" (default "report").
 
+**task_download local path behavior (mcp_local)**
+
+- Save directory is `PLANEXE_PATH`.
+- If `PLANEXE_PATH` is unset, save to current working directory.
+- If `PLANEXE_PATH` points to a file (not a directory), return an error.
+- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip`.
+- If a filename already exists, append `-1`, `-2`, ... before extension.
+- Successful responses include `saved_path`.
+
+**task_file_info URL behavior (mcp_cloud)**
+
+- `download_url` is an absolute URL where the requested artifact can be downloaded.
+
 ---
 
 ## 7. Targets
@@ -354,46 +459,88 @@ Targets map to Luigi "final tasks".
 
 ## 8. Concurrency & Locking
 
-### 8.1 Single active run per task
+### 8.1 Client-side concurrency guidance
 
-In v1, tasks MUST enforce:
+The server does not enforce a global limit on how many tasks a client can create.
+Concurrency is a client-side coordination concern.
 
-- at most one run in running state.
+Recommended practice for MCP clients:
+
+- Start with 1 active task.
+- If needed, increase to 2 tasks in parallel.
+- Going beyond 4 parallel tasks is usually hard to track; avoid unless necessary.
+
+Additional semantics:
+
+- Every `task_create` call creates a new independent task with a new `task_id`.
+- The server does not deduplicate “same prompt” requests into a single shared task.
+- Keep your own task registry/client state if you run multiple tasks concurrently.
 
 ---
 
 ## 9. Error Model
 
-Errors MUST return:
+### 9.1 Error object shape
 
-- code: stable machine-readable
-- message: human-readable
-- details: optional
+Tool errors return:
 
-**Example:**
+- `error.code`: stable machine-readable string
+- `error.message`: human-readable message
+- `error.details`: optional object
+
+Example:
 
 ```json
 {
   "error": {
-    "code": "RUN_ALREADY_ACTIVE",
-    "message": "A run is currently active for this task.",
-    "details": { "run_id": "run_0001" }
+    "code": "TASK_NOT_FOUND",
+    "message": "Task not found: <task_id>"
   }
 }
 ```
 
-### 9.1 Required error codes
+### 9.2 isError behavior
 
-- TASK_NOT_FOUND
-- RUN_NOT_FOUND
-- RUN_ALREADY_ACTIVE
-- RUN_NOT_ACTIVE
-- INVALID_TARGET
-- INVALID_ARTIFACT_URI
-- CONFLICT
-- PERMISSION_DENIED
-- RUNNING_READONLY
-- INTERNAL_ERROR
+- `task_create`, `task_status`, `task_stop`: unknown/invalid requests return `isError=true` with `error`.
+- `model_profiles`: returns `isError=true` with `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
+- `task_file_info`: uses mixed behavior:
+  - returns `{}` (not an error) while artifacts are not ready.
+  - may return `{"error": ...}` with `isError=false` for terminal artifact-level problems.
+  - returns `isError=true` for unknown task id (`TASK_NOT_FOUND`).
+- `mcp_local` may return proxy/transport failures as `REMOTE_ERROR` and local download write failures as `DOWNLOAD_FAILED`.
+
+### 9.3 Minimal code contract (current)
+
+Cloud/core tool codes:
+
+- `INVALID_TOOL`: unknown MCP tool name.
+- `INTERNAL_ERROR`: uncaught server error.
+- `TASK_NOT_FOUND`: task id not found.
+- `INVALID_USER_API_KEY`: provided user_api_key is invalid.
+- `USER_API_KEY_REQUIRED`: deployment requires user_api_key for task_create.
+- `INSUFFICIENT_CREDITS`: caller account has no credits for task_create.
+- `MODEL_PROFILES_UNAVAILABLE`: model_profiles found zero available models across all profiles.
+- `generation_failed`: task_file_info report path when task ended in failed.
+- `content_unavailable`: task_file_info cannot read requested artifact bytes.
+
+Local proxy specific codes:
+
+- `REMOTE_ERROR`: mcp_local could not call mcp_cloud (network/HTTP/protocol layer failure).
+- `DOWNLOAD_FAILED`: mcp_local could not write/download artifact to local filesystem.
+
+### 9.4 Caller handling guidance
+
+- Retry with backoff:
+  - `INTERNAL_ERROR`
+  - `REMOTE_ERROR`
+  - `content_unavailable` (short retry window)
+- Do not retry unchanged request:
+  - `INVALID_USER_API_KEY`
+  - `USER_API_KEY_REQUIRED`
+  - `INSUFFICIENT_CREDITS`
+  - `INVALID_TOOL`
+- For `TASK_NOT_FOUND`: verify task_id source and stop polling that id.
+- For `generation_failed`: treat as terminal failure and surface task progress_message to user.
 
 ---
 

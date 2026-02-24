@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class ErrorDetail(BaseModel):
     code: str
     message: str
+    details: dict[str, Any] | None = None
 
 
 class PromptExamplesOutput(BaseModel):
@@ -13,7 +14,9 @@ class PromptExamplesOutput(BaseModel):
         ...,
         description=(
             "Example prompts that define the baseline for what a good prompt looks like. "
-            "Take inspiration from these when writing your own prompt for task_create."
+            "Take inspiration from these when writing your own prompt for task_create "
+            "(typically ~300-800 words). Good prompt shape: objective, scope, constraints, "
+            "timeline, stakeholders, budget/resources, and success criteria."
         ),
     )
     message: str
@@ -22,6 +25,50 @@ class PromptExamplesOutput(BaseModel):
 class PromptExamplesInput(BaseModel):
     """No input parameters."""
     pass
+
+
+class ModelProfilesInput(BaseModel):
+    """No input parameters."""
+    pass
+
+
+class ModelProfileModelEntry(BaseModel):
+    key: str = Field(..., description="Model key from llm_config/<profile>.json.")
+    provider_class: str | None = Field(
+        default=None,
+        description="Provider class (for example OpenRouter, OpenAI, Ollama).",
+    )
+    model: str | None = Field(default=None, description="Provider model identifier when present.")
+    priority: int | None = Field(
+        default=None,
+        description="Priority from config (lower number means earlier in selection order).",
+    )
+
+
+class ModelProfileInfo(BaseModel):
+    profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        ...,
+        description="Model profile value accepted by task_create.model_profile.",
+    )
+    title: str = Field(..., description="Human-friendly profile label.")
+    summary: str = Field(..., description="Short profile guidance for callers.")
+    model_count: int = Field(..., description="Number of models currently available in this profile.")
+    models: list[ModelProfileModelEntry] = Field(
+        ...,
+        description="Models currently available to this profile.",
+    )
+
+
+class ModelProfilesOutput(BaseModel):
+    default_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        ...,
+        description="Default model profile used when task_create.model_profile is omitted/invalid.",
+    )
+    profiles: list[ModelProfileInfo] = Field(
+        ...,
+        description="Available profile options and their model inventory.",
+    )
+    message: str = Field(..., description="Caller guidance for selecting task_create.model_profile.")
 
 
 class TaskStatusInput(BaseModel):
@@ -52,7 +99,7 @@ class TaskFileInfoInput(BaseModel):
 class TaskCreateOutput(BaseModel):
     task_id: str = Field(
         ...,
-        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_download."
+        description="Task UUID returned by task_create. Stable across task_status/task_stop/task_file_info."
     )
     created_at: str
 
@@ -72,10 +119,26 @@ class TaskStatusSuccess(BaseModel):
         ...,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"]
-    progress_percentage: float
+    state: Literal["pending", "processing", "completed", "failed"] = Field(
+        ...,
+        description=(
+            "Caller contract: pending/processing => keep polling; "
+            "completed => download is ready; failed => terminal error."
+        ),
+    )
+    progress_percentage: float = Field(
+        ...,
+        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+    )
     timing: TaskStatusTiming
-    files: list[TaskStatusFile]
+    files: list[TaskStatusFile] = Field(
+        ...,
+        description=(
+            "Intermediate output files produced so far. "
+            "Use updated_at timestamps to detect stalls. "
+            "These files are included in the zip artifact when the task completes."
+        ),
+    )
 
 
 class TaskStatusOutput(BaseModel):
@@ -83,30 +146,59 @@ class TaskStatusOutput(BaseModel):
         default=None,
         description="Task UUID returned by task_create."
     )
-    state: Literal["stopped", "running", "completed", "failed", "stopping"] | None = None
-    progress_percentage: float | None = None
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+        default=None,
+        description=(
+            "Caller contract: pending/processing => keep polling; "
+            "completed => download is ready; failed => terminal error."
+        ),
+    )
+    progress_percentage: float | None = Field(
+        default=None,
+        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+    )
     timing: TaskStatusTiming | None = None
-    files: list[TaskStatusFile] | None = None
+    files: list[TaskStatusFile] | None = Field(
+        default=None,
+        description=(
+            "Intermediate output files produced so far. "
+            "Use updated_at timestamps to detect stalls. "
+            "These files are included in the zip artifact when the task completes."
+        ),
+    )
     error: ErrorDetail | None = None
 
 
 class TaskStopOutput(BaseModel):
-    state: Literal["stopped"] | None = None
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+        default=None,
+        description="Current task state after stop request.",
+    )
+    stop_requested: bool | None = Field(
+        default=None,
+        description="True when stop request flag was set for a pending/processing task.",
+    )
     error: ErrorDetail | None = None
 
 
 class TaskFileInfoReadyOutput(BaseModel):
-    content_type: str
-    sha256: str
-    download_size: int
-    download_url: str | None = None
+    content_type: str = Field(..., description="Artifact content type.")
+    sha256: str = Field(..., description="SHA-256 hash of artifact bytes.")
+    download_size: int = Field(..., description="Artifact size in bytes.")
+    download_url: str | None = Field(
+        default=None,
+        description="Absolute URL where the requested artifact can be downloaded.",
+    )
 
 
 class TaskFileInfoOutput(BaseModel):
-    content_type: str | None = None
-    sha256: str | None = None
-    download_size: int | None = None
-    download_url: str | None = None
+    content_type: str | None = Field(default=None, description="Artifact content type.")
+    sha256: str | None = Field(default=None, description="SHA-256 hash of artifact bytes.")
+    download_size: int | None = Field(default=None, description="Artifact size in bytes.")
+    download_url: str | None = Field(
+        default=None,
+        description="Absolute URL where the requested artifact can be downloaded.",
+    )
     error: ErrorDetail | None = None
 
 
@@ -116,16 +208,21 @@ class TaskCreateInput(BaseModel):
         description=(
             "What the plan should cover (goal, context, constraints). "
             "Use prompt_examples to get example prompts; use these as examples for task_create. "
-            "Short prompts produce less detailed plans."
+            "For best results, provide a detailed prompt (typically ~300-800 words). "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, "
+            "budget/resources, and success criteria. "
+            "Write as flowing prose, not structured markdown. Include banned approaches, "
+            "governance preferences, and phasing inline. "
+            "Short prompts produce less detailed plans. "
+            "Do not use task_create for tiny one-shot outputs (e.g., a 5-point checklist); use direct LLM responses for those."
         ),
-    )
-    speed_vs_detail: Literal["ping", "fast", "all"] = Field(
-        default="ping",
-        description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
-        description="LLM profile mapping to llm_config/<profile>.json (baseline, premium, frontier, custom).",
+        description=(
+            "Model profile selection: baseline (cheap/fast), premium (higher quality), "
+            "frontier (most capable), custom (user-defined). Call model_profiles for runtime availability."
+        ),
     )
     user_api_key: str | None = Field(
         default=None,

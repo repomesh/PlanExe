@@ -29,16 +29,18 @@ logger = logging.getLogger(__name__)
 DEFAULT_MCP_URL = "https://your-railway-app.up.railway.app/mcp"
 REPORT_FILENAME = "030-report.html"
 ZIP_FILENAME = "run.zip"
-SpeedVsDetailInput = Literal[
-    "ping",
-    "fast",
-    "all",
+ModelProfileInput = Literal[
+    "baseline",
+    "premium",
+    "frontier",
+    "custom",
 ]
 
 
 class TaskCreateRequest(BaseModel):
     prompt: str
-    speed_vs_detail: Optional[SpeedVsDetailInput] = None
+    model_profile: Optional[ModelProfileInput] = None
+    user_api_key: Optional[str] = None
 
 
 class TaskStatusRequest(BaseModel):
@@ -94,7 +96,7 @@ def _build_headers() -> dict[str, str]:
     }
     api_key = _get_env("PLANEXE_MCP_API_KEY")
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        headers["X-API-Key"] = api_key
     return headers
 
 
@@ -310,6 +312,7 @@ ERROR_SCHEMA = {
     "properties": {
         "code": {"type": "string"},
         "message": {"type": "string"},
+        "details": {"type": ["object", "null"]},
     },
     "required": ["code", "message"],
 }
@@ -321,14 +324,28 @@ TASK_CREATE_INPUT_SCHEMA = {
             "type": "string",
             "description": (
                 "What the plan should cover. Good prompts are often 300–800 words. "
-                "Use prompt_examples to get example prompts; use these as examples for task_create. Short prompts produce less detailed plans."
+                "Use prompt_examples to get example prompts; use these as examples for task_create. "
+                "Good prompt shape: objective, scope, constraints, timeline, stakeholders, "
+                "budget/resources, and success criteria. "
+                "Write as flowing prose, not structured markdown. Include banned approaches, "
+                "governance preferences, and phasing inline. "
+                "Short prompts produce less detailed plans. "
+                "Do not use task_create for tiny one-shot outputs (e.g., a 5-point checklist)."
             ),
         },
-        "speed_vs_detail": {
+        "model_profile": {
             "type": "string",
-            "enum": ["ping", "fast", "all"],
-            "default": "ping",
-            "description": "How much work to run. 'ping': single LLM call to check the pipeline is reachable (check logs if it fails). 'fast': minimal run (approx 5-10 min) through all pipeline steps, skipping where possible—use to verify the pipeline works. 'all': full plan with full detail (approx 10-20 min).",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+            "default": "baseline",
+            "description": (
+                "Model profile selection: baseline (cheap/fast), premium (higher quality), "
+                "frontier (most capable), custom (user-defined). Call model_profiles for runtime availability."
+            ),
+        },
+        "user_api_key": {
+            "type": ["string", "null"],
+            "default": None,
+            "description": "Optional user API key for credits and attribution.",
         },
     },
     "required": ["prompt"],
@@ -390,6 +407,61 @@ PROMPT_EXAMPLES_OUTPUT_SCHEMA = {
     },
     "required": ["samples", "message"],
 }
+MODEL_PROFILES_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+}
+MODEL_PROFILES_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "default_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+        },
+        "profiles": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "profile": {
+                        "type": "string",
+                        "enum": ["baseline", "premium", "frontier", "custom"],
+                    },
+                    "title": {"type": "string"},
+                    "summary": {"type": "string"},
+                    "model_count": {"type": "integer"},
+                    "models": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "key": {"type": "string"},
+                                "provider_class": {"type": ["string", "null"]},
+                                "model": {"type": ["string", "null"]},
+                                "priority": {"type": ["integer", "null"]},
+                            },
+                            "required": ["key"],
+                        },
+                    },
+                },
+                "required": [
+                    "profile",
+                    "title",
+                    "summary",
+                    "model_count",
+                    "models",
+                ],
+            },
+        },
+        "message": {"type": "string"},
+    },
+    "required": [
+        "default_profile",
+        "profiles",
+        "message",
+    ],
+}
 
 TASK_CREATE_OUTPUT_SCHEMA = {
     "type": "object",
@@ -437,11 +509,14 @@ TASK_STOP_OUTPUT_SCHEMA = {
 TASK_DOWNLOAD_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "content_type": {"type": "string"},
-        "sha256": {"type": "string"},
-        "download_size": {"type": "integer"},
-        "download_url": {"type": "string"},
-        "saved_path": {"type": "string"},
+        "content_type": {"type": "string", "description": "Artifact content type."},
+        "sha256": {"type": "string", "description": "SHA-256 hash of artifact bytes."},
+        "download_size": {"type": "integer", "description": "Artifact size in bytes."},
+        "download_url": {"type": "string", "description": "Remote URL used for download."},
+        "saved_path": {
+            "type": "string",
+            "description": "Local file path written by task_download.",
+        },
         "error": ERROR_SCHEMA,
     },
     "additionalProperties": False,
@@ -451,18 +526,46 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="prompt_examples",
         description=(
-            "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
-            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3)."
+            "Call this first. Returns example prompts that define what a good prompt looks like. "
+            "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
+            "Next is a non-tool step: formulate a prompt (use examples as a baseline, similar structure) and get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
+            "Then call task_create. "
+            "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
     ),
     ToolDefinition(
+        name="model_profiles",
+        description=(
+            "Optional helper before task_create. Returns model_profile options with plain-language guidance "
+            "and currently available models in each profile. "
+            "If no models are available, returns error code MODEL_PROFILES_UNAVAILABLE."
+        ),
+        input_schema=MODEL_PROFILES_INPUT_SCHEMA,
+        output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+    ),
+    ToolDefinition(
         name="task_create",
         description=(
-            "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
-            "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Runs in the background (10–20 min). Returns task_id (UUID); use it for task_status, task_stop, and task_download."
+            "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
+            "PlanExe turns the approved prompt into a strategic project-plan draft (20+ sections) in ~10-20 min. "
+            "Sections include: executive summary, interactive Gantt charts, investor pitch, project plan with SMART criteria, "
+            "strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, "
+            "SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, "
+            "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
+            "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
+            "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
+            "Returns task_id (UUID); use it for task_status, task_stop, and task_download. "
+            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
+            "Each task_create call creates a new task_id (proxied to cloud; no server-side dedup). "
+            "If you are unsure which model_profile to choose, call model_profiles first. "
+            "If your deployment uses credits, include user_api_key to charge the correct account. "
+            "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -471,8 +574,15 @@ TOOL_DEFINITIONS = [
         name="task_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
-            "and frequent polling is unnecessary."
+            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
+            "(baseline profile) and may take longer on higher-quality profiles. "
+            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "progress_percentage is 0-100 (integer-like float); 100 when completed. "
+            "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
+            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails). "
+            "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
+            "processing with no file-output changes for >20 minutes likely means failed/stalled. "
+            "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
         output_schema=TASK_STATUS_OUTPUT_SCHEMA,
@@ -481,7 +591,10 @@ TOOL_DEFINITIONS = [
         name="task_stop",
         description=(
             "Request the plan generation to stop. Pass the task_id (the UUID returned by task_create). "
-            "This is a normal MCP tool call: call task_stop with that task_id."
+            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
+            "A stopped task will eventually transition to the failed state. "
+            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
+            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails)."
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
@@ -489,9 +602,13 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="task_download",
         description=(
-            "Download the plan output and save it locally (calls task_file_info, then fetches and saves to PLANEXE_PATH). "
-            "Choose the HTML report (default) or a zip of all generated files. "
-            "Prefer this over task_file_info when you want the file on disk."
+            "Download the plan output and save it locally to PLANEXE_PATH. "
+            "Use artifact='report' (default) for the interactive HTML report (~700KB, self-contained with embedded JS "
+            "for collapsible sections and interactive Gantt charts — open in a browser). "
+            "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
+            "If PLANEXE_PATH is unset, files are saved to the current working directory. "
+            "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur. "
+            "Common local error codes: DOWNLOAD_FAILED, REMOTE_ERROR."
         ),
         input_schema=TASK_DOWNLOAD_INPUT_SCHEMA,
         output_schema=TASK_DOWNLOAD_OUTPUT_SCHEMA,
@@ -500,12 +617,34 @@ TOOL_DEFINITIONS = [
 
 # Shown in MCP initialize response (e.g. Inspector) so clients know what PlanExe is.
 PLANEXE_SERVER_INSTRUCTIONS = (
-    "PlanExe generates rough-draft project plans from a natural-language prompt. "
-    "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
-    "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
-    "Step 3 — Only then call task_create with the approved prompt. "
-    "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
-    "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
+    "PlanExe generates strategic project-plan drafts from a natural-language prompt. "
+    "Output is a self-contained interactive HTML report (~700KB) with 20+ sections including "
+    "executive summary, interactive Gantt charts, risk analysis, SWOT, governance, investor pitch, "
+    "team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections "
+    "(premortem, self-audit checklist, premise attacks) that stress-test whether the plan holds up. "
+    "The output is a draft to refine, not final ground truth — but it surfaces hard questions the prompter may not have considered. "
+    "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
+    "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
+    "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
+    "Required interaction order: call prompt_examples first. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
+    "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
+    "typically ~300-800 words, and get user approval. "
+    "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+    "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
+    "Only after approval, call task_create. "
+    "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
+    "Then poll task_status (about every 5 minutes); use task_download when complete. "
+    "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
+    "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
+    "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
+    "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "If task_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
+    "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
+    "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
+    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report."
 )
 
 mcp_local = Server("planexe-mcp-local", instructions=PLANEXE_SERVER_INSTRUCTIONS)
@@ -552,11 +691,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → task_id + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "speed_vs_detail": "fast"}
+        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}}
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - speed_vs_detail: Optional mode ("ping" | "fast" | "all").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
+        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -564,9 +704,35 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         - isError: True when the remote tool call fails.
     """
     req = TaskCreateRequest(**arguments)
+    payload: dict[str, Any] = {"prompt": req.prompt}
+    if req.model_profile:
+        payload["model_profile"] = req.model_profile
+    if req.user_api_key:
+        payload["user_api_key"] = req.user_api_key
+
+    metadata = arguments.get("metadata")
+    if isinstance(metadata, dict):
+        payload["metadata"] = metadata
+
+    # Backward compatibility: if callers still pass top-level speed args,
+    # forward them as hidden metadata so cloud can resolve the execution mode.
+    legacy_speed_vs_detail = arguments.get("speed_vs_detail")
+    legacy_speed = arguments.get("speed")
+    if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
+        if not isinstance(payload.get("metadata"), dict):
+            payload["metadata"] = {}
+        task_create_metadata = payload["metadata"].get("task_create")
+        if not isinstance(task_create_metadata, dict):
+            task_create_metadata = {}
+            payload["metadata"]["task_create"] = task_create_metadata
+        if isinstance(legacy_speed_vs_detail, str):
+            task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
+        if isinstance(legacy_speed, str):
+            task_create_metadata.setdefault("speed", legacy_speed)
+
     payload, error = _call_remote_tool(
         "task_create",
-        {"prompt": req.prompt, "speed_vs_detail": req.speed_vs_detail} if req.speed_vs_detail else {"prompt": req.prompt},
+        payload,
     )
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -576,6 +742,14 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     """Return curated prompts from mcp_cloud so LLMs can see example detail."""
     payload, error = _call_remote_tool("prompt_examples", arguments or {})
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
+async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
+    """Return model_profile options and available models from mcp_cloud."""
+    payload, error = _call_remote_tool("model_profiles", arguments or {})
     if error:
         return _wrap_response({"error": error}, is_error=True)
     return _wrap_response(payload)
@@ -603,7 +777,7 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request mcp_cloud to stop a running task.
+    """Request mcp_cloud to stop an active task.
 
     Examples:
         - {"task_id": "uuid"} → stop request acknowledged
@@ -613,7 +787,7 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: {"state": "stopped"} or error.
+        - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error.
         - isError: True when the remote tool call fails.
     """
     req = TaskStopRequest(**arguments)
@@ -695,6 +869,7 @@ TOOL_HANDLERS = {
     "task_stop": handle_task_stop,
     "task_download": handle_task_download,
     "prompt_examples": handle_prompt_examples,
+    "model_profiles": handle_model_profiles,
 }
 
 

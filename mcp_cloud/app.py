@@ -15,7 +15,6 @@ import os
 import tempfile
 import uuid
 import zipfile
-import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -29,7 +28,18 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, Tool, TextContent
 from pydantic import BaseModel
-from worker_plan_api.model_profile import normalize_model_profile
+from worker_plan_api.model_profile import (
+    ModelProfileEnum,
+    default_filename_for_profile,
+    normalize_model_profile,
+    resolve_model_profile_from_env,
+)
+from worker_plan_api.planexe_config import PlanExeConfig
+from worker_plan_api.llm_class_filter import (
+    ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES,
+    is_llm_class_allowed,
+    parse_llm_class_whitelist,
+)
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 _dotenv_loaded, _dotenv_paths = load_planexe_dotenv(Path(__file__).parent)
@@ -52,6 +62,8 @@ from database_api.model_user_account import UserAccount
 from database_api.model_user_api_key import UserApiKey
 from flask import Flask, has_app_context
 from mcp_cloud.tool_models import (
+    ModelProfilesInput,
+    ModelProfilesOutput,
     PromptExamplesInput,
     PromptExamplesOutput,
     TaskCreateInput,
@@ -111,12 +123,34 @@ with app.app_context():
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (
-    "PlanExe generates rough-draft project plans from a natural-language prompt. "
-    "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
-    "Step 2 — Formulate a good prompt (use the examples as a baseline; draft a prompt with similar structure; get user approval). "
-    "Step 3 — Only then call task_create with the approved prompt. "
-    "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
-    "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
+    "PlanExe generates strategic project-plan drafts from a natural-language prompt. "
+    "Output is a self-contained interactive HTML report (~700KB) with 20+ sections including "
+    "executive summary, interactive Gantt charts, risk analysis, SWOT, governance, investor pitch, "
+    "team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections "
+    "(premortem, self-audit checklist, premise attacks) that stress-test whether the plan holds up. "
+    "The output is a draft to refine, not final ground truth — but it surfaces hard questions the prompter may not have considered. "
+    "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
+    "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
+    "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
+    "Required interaction order: call prompt_examples first. "
+    "Optional before task_create: call model_profiles to see profile guidance and available models in each profile. "
+    "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
+    "typically ~300-800 words, and get user approval. "
+    "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+    "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
+    "Only after approval, call task_create. "
+    "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
+    "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
+    "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
+    "Tool errors use {error:{code,message}}. task_file_info returns an empty object {} while the artifact is not ready; check readiness by testing whether download_url is present. "
+    "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
+    "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
+    "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
+    "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
+    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report."
 )
 
 mcp_cloud = Server("planexe-mcp-cloud", instructions=PLANEXE_SERVER_INSTRUCTIONS)
@@ -132,23 +166,13 @@ ZIP_FILENAME = "run.zip"
 ZIP_CONTENT_TYPE = "application/zip"
 ZIP_SNAPSHOT_MAX_BYTES = 100_000_000
 
-SPEED_VS_DETAIL_DEFAULT = "ping_llm"
-SPEED_VS_DETAIL_DEFAULT_ALIAS = "ping"
+SPEED_VS_DETAIL_DEFAULT = "all_details_but_slow"
+SPEED_VS_DETAIL_DEFAULT_ALIAS = "all"
 SPEED_VS_DETAIL_VALUES = (
     "ping_llm",
     "fast_but_skip_details",
     "all_details_but_slow",
 )
-SPEED_VS_DETAIL_INPUT_VALUES = (
-    "ping",
-    "fast",
-    "all",
-)
-SpeedVsDetailInput = Literal[
-    "ping",
-    "fast",
-    "all",
-]
 ModelProfileInput = Literal[
     "baseline",
     "premium",
@@ -160,10 +184,21 @@ SPEED_VS_DETAIL_ALIASES = {
     "fast": "fast_but_skip_details",
     "all": "all_details_but_slow",
 }
+MODEL_PROFILE_TITLES = {
+    ModelProfileEnum.BASELINE.value: "Baseline",
+    ModelProfileEnum.PREMIUM.value: "Premium",
+    ModelProfileEnum.FRONTIER.value: "Frontier",
+    ModelProfileEnum.CUSTOM.value: "Custom",
+}
+MODEL_PROFILE_SUMMARIES = {
+    ModelProfileEnum.BASELINE.value: "Cheap and fast; recommended default when creating a plan.",
+    ModelProfileEnum.PREMIUM.value: "Higher-cost profile tuned for stronger output quality.",
+    ModelProfileEnum.FRONTIER.value: "Most capable models first; usually slowest/most expensive.",
+    ModelProfileEnum.CUSTOM.value: "User-managed profile file for custom model ordering.",
+}
 
 class TaskCreateRequest(BaseModel):
     prompt: str
-    speed_vs_detail: Optional[SpeedVsDetailInput] = None
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
@@ -176,6 +211,11 @@ class TaskStopRequest(BaseModel):
 class TaskFileInfoRequest(BaseModel):
     task_id: str
     artifact: Optional[str] = None
+
+
+class ModelProfilesRequest(BaseModel):
+    """No input parameters."""
+    pass
 
 # Helper functions
 def find_task_by_task_id(task_id: str) -> Optional[TaskItem]:
@@ -265,7 +305,7 @@ def _create_task_sync(
         task = TaskItem(
             prompt=prompt,
             state=TaskState.pending,
-            user_id=metadata.get("user_id", "mcp_user") if metadata else "mcp_user",
+            user_id=metadata.get("user_id", "admin") if metadata else "admin",
             parameters=parameters,
         )
         db.session.add(task)
@@ -310,18 +350,23 @@ def _get_task_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
             "timestamp_created": task.timestamp_created,
         }
 
-def _request_task_stop_sync(task_id: str) -> bool:
+def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
         task = find_task_by_task_id(task_id)
         if task is None:
-            return False
+            return None
+        stop_requested = False
         if task.state in (TaskState.pending, TaskState.processing):
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
             task.progress_message = "Stop requested by user."
             db.session.commit()
             logger.info("Stop requested for task %s; stop flag set on task %s.", task_id, task.id)
-        return True
+            stop_requested = True
+        return {
+            "state": get_task_state_mapping(task.state),
+            "stop_requested": stop_requested,
+        }
 
 def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
@@ -613,14 +658,14 @@ def compute_sha256(content: str | bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 def get_task_state_mapping(task_state: TaskState) -> str:
-    """Map TaskState to MCP run state."""
+    """Map TaskState to MCP task state."""
     mapping = {
-        TaskState.pending: "stopped",
-        TaskState.processing: "running",
+        TaskState.pending: "pending",
+        TaskState.processing: "processing",
         TaskState.completed: "completed",
         TaskState.failed: "failed",
     }
-    return mapping.get(task_state, "stopped")
+    return mapping.get(task_state, "pending")
 
 def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
     value: Optional[str] = None
@@ -633,6 +678,37 @@ def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
     if value in SPEED_VS_DETAIL_VALUES:
         return value
     return SPEED_VS_DETAIL_DEFAULT
+
+
+def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Extract task_create runtime overrides from hidden metadata containers.
+
+    Supported hidden containers:
+    - arguments.tool_metadata
+    - arguments.metadata
+    - arguments._meta
+
+    If a container includes nested namespaces, these are checked first:
+    - task_create
+    - planexe_task_create
+    - planexe
+    """
+    merged: dict[str, Any] = {}
+    metadata_candidates: list[dict[str, Any]] = []
+
+    for key in ("tool_metadata", "metadata", "_meta"):
+        candidate = arguments.get(key)
+        if isinstance(candidate, dict):
+            metadata_candidates.append(candidate)
+
+    for candidate in metadata_candidates:
+        merged.update(candidate)
+        for nested_key in ("task_create", "planexe_task_create", "planexe"):
+            nested = candidate.get(nested_key)
+            if isinstance(nested, dict):
+                merged.update(nested)
+
+    return merged
 
 def _merge_task_create_config(
     config: Optional[dict[str, Any]],
@@ -649,6 +725,131 @@ def _merge_task_create_config(
         if candidate_profile and "model_profile" not in merged:
             merged["model_profile"] = candidate_profile
     return merged or None
+
+
+def _sort_llm_config_entries(items: list[tuple[str, Any]]) -> list[tuple[str, Any]]:
+    def sort_key(item: tuple[str, Any]) -> tuple[int, str]:
+        key, model_data = item
+        priority = None
+        if isinstance(model_data, dict):
+            maybe_priority = model_data.get("priority")
+            if isinstance(maybe_priority, int):
+                priority = maybe_priority
+        if priority is None:
+            priority = 999999
+        return priority, key
+
+    return sorted(items, key=sort_key)
+
+
+def _extract_model_profile_entries(
+    model_map: dict[str, Any],
+    whitelist: Optional[set[str]],
+) -> list[dict[str, Any]]:
+    models: list[dict[str, Any]] = []
+
+    for model_key, model_data in _sort_llm_config_entries(list(model_map.items())):
+        class_name = model_data.get("class") if isinstance(model_data, dict) else None
+        if not is_llm_class_allowed(class_name, whitelist):
+            continue
+
+        model_name = None
+        priority = None
+        if isinstance(model_data, dict):
+            arguments = model_data.get("arguments")
+            if isinstance(arguments, dict):
+                maybe_model = arguments.get("model")
+                if isinstance(maybe_model, str):
+                    model_name = maybe_model
+            maybe_priority = model_data.get("priority")
+            if isinstance(maybe_priority, int):
+                priority = maybe_priority
+            elif isinstance(model_data.get("prio"), int):
+                priority = model_data["prio"]
+
+        models.append(
+            {
+                "key": model_key,
+                "provider_class": class_name if isinstance(class_name, str) else None,
+                "model": model_name,
+                "priority": priority,
+            }
+        )
+
+    return models
+
+
+def _profile_models_payload(
+    profile: ModelProfileEnum,
+    whitelist: Optional[set[str]],
+) -> dict[str, Any]:
+    config_filename = default_filename_for_profile(profile)
+    planexe_config_path = PlanExeConfig.resolve_planexe_config_path()
+    config_path = PlanExeConfig.find_file_in_search_order(config_filename, planexe_config_path)
+    if config_path is None:
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "model_count": 0,
+            "models": [],
+        }
+
+    try:
+        with config_path.open("r", encoding="utf-8") as fh:
+            model_map = json.load(fh)
+    except Exception as exc:
+        logger.warning(
+            "Unable to read profile config %s for model profile %s: %s",
+            config_filename,
+            profile.value,
+            exc,
+        )
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "model_count": 0,
+            "models": [],
+        }
+
+    if not isinstance(model_map, dict):
+        return {
+            "profile": profile.value,
+            "title": MODEL_PROFILE_TITLES[profile.value],
+            "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+            "model_count": 0,
+            "models": [],
+        }
+
+    models = _extract_model_profile_entries(model_map, whitelist)
+    return {
+        "profile": profile.value,
+        "title": MODEL_PROFILE_TITLES[profile.value],
+        "summary": MODEL_PROFILE_SUMMARIES[profile.value],
+        "model_count": len(models),
+        "models": models,
+    }
+
+
+def _get_model_profiles_sync() -> dict[str, Any]:
+    raw_whitelist = os.environ.get(ENV_PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES)
+    whitelist = parse_llm_class_whitelist(raw_whitelist)
+    default_profile = resolve_model_profile_from_env().value
+    profiles_all = [
+        _profile_models_payload(profile, whitelist)
+        for profile in ModelProfileEnum
+    ]
+    profiles = [profile for profile in profiles_all if int(profile.get("model_count") or 0) > 0]
+
+    return {
+        "default_profile": default_profile,
+        "profiles": profiles,
+        "message": (
+            "Use one of these profile values in task_create.model_profile. "
+            "Model lists show what is currently available in each profile."
+        ),
+    }
 
 # Context var set by HTTP server so download URLs use the request's host when
 # PLANEXE_MCP_PUBLIC_BASE_URL is not set (avoids localhost for remote clients).
@@ -811,6 +1012,8 @@ TASK_FILE_INFO_INPUT_SCHEMA = TaskFileInfoInput.model_json_schema()
 
 PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
 PROMPT_EXAMPLES_OUTPUT_SCHEMA = PromptExamplesOutput.model_json_schema()
+MODEL_PROFILES_INPUT_SCHEMA = ModelProfilesInput.model_json_schema()
+MODEL_PROFILES_OUTPUT_SCHEMA = ModelProfilesOutput.model_json_schema()
 
 @dataclass(frozen=True)
 class ToolDefinition:
@@ -823,25 +1026,46 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="prompt_examples",
         description=(
-            "Step 1 — Call this first. Returns example prompts that define what a good prompt looks like. "
-            "Do NOT call task_create yet. Next: formulate a prompt (use examples as a baseline, similar structure), get user approval, then call task_create (Step 3)."
+            "Call this first. Returns example prompts that define what a good prompt looks like. "
+            "Do NOT call task_create yet. Optional before task_create: call model_profiles to choose model_profile. "
+            "Next is a non-tool step: formulate a detailed prompt (typically ~300-800 words; use examples as a baseline, similar structure) and get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
+            "Then call task_create. "
+            "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
     ),
     ToolDefinition(
+        name="model_profiles",
+        description=(
+            "Optional helper before task_create. Returns model_profile options with plain-language guidance "
+            "and currently available models in each profile. "
+            "If no models are available, returns error code MODEL_PROFILES_UNAVAILABLE."
+        ),
+        input_schema=MODEL_PROFILES_INPUT_SCHEMA,
+        output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+    ),
+    ToolDefinition(
         name="task_create",
         description=(
-            "Step 3 — Call only after prompt_examples (Step 1) and after you have formulated a good prompt and got user approval (Step 2). "
-            "PlanExe turns the approved prompt into a structured strategic-plan draft (executive summary, Gantt, risk register, governance, etc.) in ~15–20 min. "
-            "Returns task_id (UUID); use it for task_status, task_stop, and task_download. "
+            "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
+            "PlanExe turns the approved prompt into a strategic project-plan draft (20+ sections) in ~10-20 min. "
+            "Sections include: executive summary, interactive Gantt charts, investor pitch, project plan with SMART criteria, "
+            "strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, "
+            "SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, "
+            "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
+            "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
+            "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
+            "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
+            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
+            "Each task_create call creates a new task_id (no server-side dedup). "
+            "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
-            "speed_vs_detail modes: "
-            "'all' runs the full pipeline with all details (slower, higher token usage/cost). "
-            "'fast' runs the full pipeline with minimal work per step (faster, fewer details), "
-            "useful to verify the pipeline is working. "
-            "'ping' runs the pipeline entrypoint and makes a single LLM call to verify the "
-            "worker_plan_database is processing tasks and can reach the LLM."
+            "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS."
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
@@ -850,8 +1074,15 @@ TOOL_DEFINITIONS = [
         name="task_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation takes 15–20+ minutes "
-            "and frequent polling is unnecessary."
+            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
+            "(baseline profile) and may take longer on higher-quality profiles. "
+            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "progress_percentage is 0-100 (integer-like float); 100 when completed. "
+            "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
+            "Unknown task_id returns error code TASK_NOT_FOUND. "
+            "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
+            "processing with no file-output changes for >20 minutes likely means failed/stalled. "
+            "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
         output_schema=TASK_STATUS_OUTPUT_SCHEMA,
@@ -860,7 +1091,10 @@ TOOL_DEFINITIONS = [
         name="task_stop",
         description=(
             "Request the plan generation to stop. Pass the task_id (the UUID returned by task_create). "
-            "This is a normal MCP tool call: call task_stop with that task_id."
+            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
+            "A stopped task will eventually transition to the failed state. "
+            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
+            "Unknown task_id returns error code TASK_NOT_FOUND."
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
@@ -868,9 +1102,16 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="task_file_info",
         description=(
-            "Returns file metadata (content_type, download_url, download_size) for the report or zip. "
-            "If your client exposes task_download (e.g. mcp_local), use that to save the file locally; "
-            "otherwise use this tool to get download_url and fetch the file yourself."
+            "Returns file metadata (content_type, download_url, download_size) for the report or zip artifact. "
+            "Use artifact='report' (default) for the interactive HTML report (~700KB, self-contained with embedded JS "
+            "for collapsible sections and interactive Gantt charts — open in a browser). "
+            "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
+            "While the task is still pending or processing, returns an empty object {} (no fields). "
+            "Check readiness by testing whether download_url is present in the response. "
+            "Once ready, present download_url to the user or fetch and save the file locally. "
+            "If your client exposes task_download (e.g. mcp_local), prefer that to save the file locally. "
+            "Terminal error codes: generation_failed (plan failed), content_unavailable (artifact missing). "
+            "Unknown task_id returns error code TASK_NOT_FOUND."
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,
@@ -917,12 +1158,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "speed_vs_detail": "fast"} → faster run
+        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}} → faster run
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
-        - speed_vs_detail: Optional mode ("ping" | "fast" | "all").
-        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom").
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
+        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -930,8 +1171,26 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         - isError: False on success.
     """
     req = TaskCreateRequest(**arguments)
+    metadata_overrides = _extract_task_create_metadata_overrides(arguments)
+    metadata_model_profile = metadata_overrides.get("model_profile")
+    model_profile = req.model_profile
+    if model_profile is None and isinstance(metadata_model_profile, str):
+        model_profile = metadata_model_profile
 
-    merged_config = _merge_task_create_config(None, req.speed_vs_detail, req.model_profile)
+    speed_vs_detail = metadata_overrides.get("speed_vs_detail")
+    if not isinstance(speed_vs_detail, str):
+        speed_alias = metadata_overrides.get("speed")
+        if isinstance(speed_alias, str):
+            speed_vs_detail = speed_alias
+        else:
+            # Backward-compatible hidden override when callers still send legacy top-level args.
+            legacy_speed = arguments.get("speed_vs_detail")
+            if isinstance(legacy_speed, str):
+                speed_vs_detail = legacy_speed
+            elif isinstance(arguments.get("speed"), str):
+                speed_vs_detail = arguments.get("speed")
+
+    merged_config = _merge_task_create_config(None, speed_vs_detail, model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:
@@ -952,12 +1211,12 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     if user_context and float(user_context.get("credits_balance", 0.0)) <= 0.0:
-            response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
-            return CallToolResult(
-                content=[TextContent(type="text", text=json.dumps(response))],
-                structuredContent=response,
-                isError=True,
-            )
+        response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
 
     response = await asyncio.to_thread(
         _create_task_sync,
@@ -978,8 +1237,14 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     payload = {
         "samples": samples,
         "message": (
-            "Step 1 done. Next: Step 2 — Formulate a good prompt using these as a baseline (similar structure). Get user approval. "
-            "Step 3 — Only then call task_create with the approved prompt. Do not call task_create yet."
+            "Next: complete the non-tool step by drafting a detailed prompt (typically ~300-800 words) using these as a baseline (similar structure), then get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
+            "Only after approval, call task_create. "
+            "Do not use PlanExe for tiny one-shot requests (e.g., rewrite this email, summarize this document). "
+            "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."
         ),
     }
     return CallToolResult(
@@ -989,8 +1254,35 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
+async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
+    """Return model profile options and currently available models in each profile."""
+    _ = ModelProfilesRequest(**(arguments or {}))
+    payload = await asyncio.to_thread(_get_model_profiles_sync)
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, list) or len(profiles) == 0:
+        response = {
+            "error": {
+                "code": "MODEL_PROFILES_UNAVAILABLE",
+                "message": (
+                    "No models are currently configured. "
+                    "Inform the user that the server administrator needs to set up model profiles before plans can be created."
+                ),
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+        isError=False,
+    )
+
+
 async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
-    """Fetch the current run status, progress, and recent files for a task.
+    """Fetch the current task status, progress, and recent files for a task.
 
     Examples:
         - {"task_id": "uuid"} → state/progress/timing + recent files
@@ -1024,8 +1316,6 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
 
     task_state = task_snapshot["state"]
     state = get_task_state_mapping(task_state)
-    if task_state == TaskState.processing and task_snapshot["stop_requested"]:
-        state = "stopping"
     if task_state == TaskState.completed:
         progress_percentage = 100.0
 
@@ -1073,7 +1363,7 @@ async def handle_task_status(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request the active run for a task to stop.
+    """Request an active task to stop.
 
     Examples:
         - {"task_id": "uuid"} → stop request accepted
@@ -1083,14 +1373,14 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: {"state": "stopped"} or error payload.
+        - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error payload.
         - isError: True only when task_id is unknown.
     """
     req = TaskStopRequest(**arguments)
     task_id = req.task_id
 
-    found = await asyncio.to_thread(_request_task_stop_sync, task_id)
-    if not found:
+    stop_result = await asyncio.to_thread(_request_task_stop_sync, task_id)
+    if stop_result is None:
         response = {
             "error": {
                 "code": "TASK_NOT_FOUND",
@@ -1103,9 +1393,7 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
-    response = {
-        "state": "stopped",
-    }
+    response = stop_result
 
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],
@@ -1240,6 +1528,7 @@ TOOL_HANDLERS = {
     "task_stop": handle_task_stop,
     "task_file_info": handle_task_file_info,
     "prompt_examples": handle_prompt_examples,
+    "model_profiles": handle_model_profiles,
 }
 
 async def main():

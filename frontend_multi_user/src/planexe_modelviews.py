@@ -8,12 +8,14 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.actions import action
 from markupsafe import Markup
 from flask import url_for, abort, redirect, Response
 from flask_login import current_user
 from sqlalchemy.orm import defer
+from wtforms import FileField, BooleanField
 
 class AdminOnlyModelView(ModelView):
     """Restrict admin views to authenticated admin users only."""
@@ -152,6 +154,19 @@ class TaskItemView(AdminOnlyModelView):
             f'<a href="{url_for("download_task_track_activity", task_id=str(m.id))}">Download</a>'
         ) if m.has_run_track_activity_jsonl else '—',
     }
+    form_excluded_columns = [
+        'generated_report_html',
+        'run_zip_snapshot',
+        'run_track_activity_jsonl',
+    ]
+    form_extra_fields = {
+        'generated_report_html_upload': FileField('Upload Report HTML'),
+        'generated_report_html_clear': BooleanField('Clear existing report HTML'),
+        'run_zip_snapshot_upload': FileField('Upload Run ZIP'),
+        'run_zip_snapshot_clear': BooleanField('Clear existing run ZIP'),
+        'run_track_activity_jsonl_upload': FileField('Upload Track Activity JSONL'),
+        'run_track_activity_jsonl_clear': BooleanField('Clear existing track activity JSONL'),
+    }
 
     def get_query(self):
         return super().get_query().options(
@@ -159,6 +174,68 @@ class TaskItemView(AdminOnlyModelView):
             defer(self.model.run_zip_snapshot),
             defer(self.model.run_track_activity_jsonl),
         )
+
+    def on_form_prefill(self, form: Any, id: Any) -> None:
+        model = self.get_one(id)
+        if model is None:
+            return
+
+        if hasattr(form, "generated_report_html_upload"):
+            if model.has_generated_report_html:
+                href = url_for("download_task_report", task_id=str(model.id))
+                form.generated_report_html_upload.description = Markup(
+                    f'Current file: <a href="{href}" target="_blank">download report.html</a>'
+                )
+            else:
+                form.generated_report_html_upload.description = "Current file: none"
+
+        if hasattr(form, "run_zip_snapshot_upload"):
+            if model.has_run_zip_snapshot:
+                href = url_for("download_task_run_zip", task_id=str(model.id))
+                form.run_zip_snapshot_upload.description = Markup(
+                    f'Current file: <a href="{href}" target="_blank">download run.zip</a>'
+                )
+            else:
+                form.run_zip_snapshot_upload.description = "Current file: none"
+
+        if hasattr(form, "run_track_activity_jsonl_upload"):
+            if model.has_run_track_activity_jsonl:
+                href = url_for("download_task_track_activity", task_id=str(model.id))
+                form.run_track_activity_jsonl_upload.description = Markup(
+                    f'Current file: <a href="{href}" target="_blank">download track_activity.jsonl</a>'
+                )
+            else:
+                form.run_track_activity_jsonl_upload.description = "Current file: none"
+
+    def on_model_change(self, form: Any, model: Any, is_created: bool) -> None:
+        def _read_upload(field_name: str):
+            field = getattr(form, field_name, None)
+            data = getattr(field, "data", None) if field is not None else None
+            filename = getattr(data, "filename", None) if data is not None else None
+            if not data or not filename:
+                return None
+            return data.read()
+
+        uploaded_report = _read_upload("generated_report_html_upload")
+        uploaded_zip = _read_upload("run_zip_snapshot_upload")
+        uploaded_track = _read_upload("run_track_activity_jsonl_upload")
+
+        if uploaded_report is not None:
+            model.generated_report_html = uploaded_report.decode("utf-8", errors="replace")
+        elif bool(getattr(form.generated_report_html_clear, "data", False)):
+            model.generated_report_html = None
+
+        if uploaded_zip is not None:
+            model.run_zip_snapshot = uploaded_zip
+        elif bool(getattr(form.run_zip_snapshot_clear, "data", False)):
+            model.run_zip_snapshot = None
+
+        if uploaded_track is not None:
+            model.run_track_activity_jsonl = uploaded_track.decode("utf-8", errors="replace")
+        elif bool(getattr(form.run_track_activity_jsonl_clear, "data", False)):
+            model.run_track_activity_jsonl = None
+
+        return super().on_model_change(form, model, is_created)
 
 class NonceItemView(AdminOnlyModelView):
     """Custom ModelView for NonceItem"""

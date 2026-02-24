@@ -97,6 +97,32 @@ class TestTaskFileInfoTool(unittest.TestCase):
         self.assertEqual(payload["download_size"], len(content_bytes))
         self.assertEqual(payload["content_type"], ZIP_CONTENT_TYPE)
 
+    def test_task_file_info_returns_empty_object_when_pending(self):
+        task_id = str(uuid.uuid4())
+        task_snapshot = {
+            "id": "task-id",
+            "state": TaskState.pending,
+            "progress_message": None,
+        }
+        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+            result = asyncio.run(handle_task_file_info({"task_id": task_id}))
+
+        self.assertFalse(result.isError)
+        self.assertEqual(result.structuredContent, {})
+
+    def test_task_file_info_returns_generation_failed_payload(self):
+        task_id = str(uuid.uuid4())
+        task_snapshot = {
+            "id": "task-id",
+            "state": TaskState.failed,
+            "progress_message": "Pipeline failed",
+        }
+        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+            result = asyncio.run(handle_task_file_info({"task_id": task_id, "artifact": "report"}))
+
+        self.assertFalse(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "generation_failed")
+
     def test_sanitize_legacy_zip_snapshot_removes_track_activity_jsonl(self):
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:

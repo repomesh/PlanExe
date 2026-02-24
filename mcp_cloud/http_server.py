@@ -25,6 +25,7 @@ from mcp.types import CallToolResult, ContentBlock, TextContent
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
+    ModelProfilesOutput,
     TaskCreateOutput,
     TaskFileInfoOutput,
     TaskStatusOutput,
@@ -46,6 +47,7 @@ if not _dotenv_loaded:
     )
 
 from mcp_cloud.app import (
+    PLANEXE_SERVER_INSTRUCTIONS,
     REPORT_CONTENT_TYPE,
     REPORT_FILENAME,
     TOOL_DEFINITIONS,
@@ -55,6 +57,7 @@ from mcp_cloud.app import (
     fetch_artifact_from_worker_plan,
     fetch_user_downloadable_zip,
     handle_task_create,
+    handle_model_profiles,
     handle_task_status,
     handle_task_stop,
     handle_task_file_info,
@@ -236,6 +239,7 @@ async def _enforce_body_size(request: Request) -> Optional[JSONResponse]:
 class MCPToolCallRequest(BaseModel):
     tool: str
     arguments: dict[str, Any]
+    metadata: Optional[dict[str, Any]] = None
 
 
 class MCPToolCallResponse(BaseModel):
@@ -315,29 +319,21 @@ def _normalize_tool_result(result: Any) -> tuple[list[dict[str, Any]], Optional[
     return content, error
 
 
-SpeedVsDetailInput = Literal["ping", "fast", "all"]
 ModelProfileInput = Literal["baseline", "premium", "frontier", "custom"]
 ResultArtifactInput = Literal["report", "zip"]
 
 
 async def task_create(
     prompt: str,
-    speed_vs_detail: Annotated[
-        SpeedVsDetailInput,
-        Field(
-            description="Defaults to ping (alias for ping_llm). Options: ping, fast, all.",
-        ),
-    ] = "ping",
     model_profile: Annotated[
         ModelProfileInput,
-        Field(description="LLM profile: baseline, premium, frontier, custom."),
+        Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, TaskCreateOutput]:
     """Create a new PlanExe task. Use prompt_examples first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
         "prompt": prompt,
-        "speed_vs_detail": speed_vs_detail,
         "model_profile": model_profile,
     }
     if authenticated_user_api_key:
@@ -374,6 +370,11 @@ async def prompt_examples() -> CallToolResult:
     return await handle_prompt_examples({})
 
 
+async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
+    """Return model_profile options with currently available models."""
+    return await handle_model_profiles({})
+
+
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
         "task_create": task_create,
@@ -381,6 +382,7 @@ def _register_tools(server: FastMCP) -> None:
         "task_stop": task_stop,
         "task_file_info": task_file_info,
         "prompt_examples": prompt_examples,
+        "model_profiles": model_profiles,
     }
     for tool in TOOL_DEFINITIONS:
         handler = handler_map.get(tool.name)
@@ -395,14 +397,7 @@ def _register_tools(server: FastMCP) -> None:
 
 fastmcp_server = FastMCP(
     name="planexe-mcp-server",
-    instructions=(
-        "PlanExe generates rough-draft project plans from a natural-language prompt. "
-        "Required interaction order: Step 1 — Call prompt_examples to fetch example prompts. "
-        "Step 2 — Formulate a good prompt (use examples as a baseline; similar structure; get user approval). "
-        "Step 3 — Only then call task_create with the approved prompt. "
-        "Then poll task_status; use task_download or task_file_info when complete. To stop, call task_stop with the task_id from task_create. "
-        "Main output: large HTML report (~700KB) and zip of intermediary files (md, json, csv)."
-    ),
+    instructions=PLANEXE_SERVER_INSTRUCTIONS,
     host=HTTP_HOST,
     port=HTTP_PORT,
     streamable_http_path="/",
@@ -437,7 +432,7 @@ async def _lifespan(app: FastAPI):
 
 app = FastAPI(
     title="PlanExe – AI Project Planning",
-    description="MCP server that generates rough-draft project plans from a natural-language prompt",
+    description="MCP server that generates strategic project-plan drafts from a natural-language prompt",
     version="1.0.0",
     lifespan=_lifespan,
 )
@@ -553,13 +548,36 @@ async def call_tool(
     Call an MCP tool by name with arguments.
 
     This endpoint wraps the stdio-based MCP tool handlers for HTTP access.
-    Download URLs use the request host when PLANEXE_MCP_PUBLIC_BASE_URL is not set (set in middleware).
     """
     arguments = dict(payload.arguments or {})
     if payload.tool == "task_create":
         authenticated_user_api_key = _get_authenticated_user_api_key()
         if authenticated_user_api_key and not arguments.get("user_api_key"):
             arguments["user_api_key"] = authenticated_user_api_key
+        if isinstance(payload.metadata, dict):
+            arguments["metadata"] = dict(payload.metadata)
+
+        # Backward compatibility: move legacy speed args into hidden metadata.
+        legacy_speed_vs_detail = arguments.pop("speed_vs_detail", None)
+        legacy_speed = arguments.pop("speed", None)
+        if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
+            metadata = arguments.get("metadata")
+            if not isinstance(metadata, dict):
+                metadata = {}
+                arguments["metadata"] = metadata
+            task_create_metadata = metadata.get("task_create")
+            if not isinstance(task_create_metadata, dict):
+                task_create_metadata = {}
+                metadata["task_create"] = task_create_metadata
+            if isinstance(legacy_speed_vs_detail, str):
+                task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
+            if isinstance(legacy_speed, str):
+                task_create_metadata.setdefault("speed", legacy_speed)
+
+        result = await handle_task_create(arguments)
+        content, error = _normalize_tool_result(result)
+        return MCPToolCallResponse(content=content, error=error)
+
     return await call_tool_via_registry(fastmcp_server, payload.tool, arguments)
 
 

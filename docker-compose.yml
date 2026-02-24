@@ -242,6 +242,8 @@ services:
       PLANEXE_WORKER_PLAN_URL: ${PLANEXE_WORKER_PLAN_URL:-http://worker_plan:8000}
     ports:
       - "${PLANEXE_MCP_HTTP_PORT:-8001}:8001"
+    volumes:
+      - ./llm_config:/app/llm_config:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/healthcheck').read()"]

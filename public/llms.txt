@@ -7,11 +7,22 @@ Use PlanExe when you need to:
 - Estimate timelines and identify dependencies and risks.
 - Generate plan artifacts for review and iteration.
 
+Do NOT use PlanExe when you only need a one-shot answer:
+- "Give me a 5-point checklist for X" -> use a normal LLM response.
+- "Summarize this paragraph in 6 bullets" -> use a normal LLM response.
+- "Rewrite this email" -> use a normal LLM response.
+
+Important pipeline constraint:
+- PlanExe always runs a fixed end-to-end planning pipeline.
+- You cannot request only specific internal pipeline parts (for example "run only risk section" or "create only the Gantt").
+- If you need only one small output artifact, use a normal LLM response instead.
+
 ## What PlanExe Produces
 
-- A long-running planning task (often ~10-20 minutes, depending on model and configuration).
-- A large HTML report and optional zip bundle of intermediate artifacts.
-- Typical plan sections: executive summary, work breakdown, timeline/Gantt-style schedule, risks, assumptions, and governance guidance.
+- A long-running planning task (typically ~10-20 minutes on baseline profile, longer on higher-quality profiles).
+- A self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. Optional zip bundle of intermediary pipeline files (md, json, csv).
+- The report contains 20+ sections including: executive summary, interactive Gantt charts, investor pitch, project plan with SMART criteria, strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, premortem with failure scenarios, self-audit checklist, and adversarial premise attacks.
+- The adversarial sections (premortem, self-audit, premise attacks) stress-test whether the plan holds up and surface risks the prompter may not have considered.
 - Output is a draft to refine, not final ground truth.
 
 Runtime, quality, and cost tradeoffs:
@@ -53,26 +64,53 @@ MCP Inspector setup guide:
 
 The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - prompt_examples
+- model_profiles
 - task_create
 - task_status
 - task_stop
 - task_file_info
 
 Key tool inputs/outputs:
-- task_create inputs: prompt (required), speed_vs_detail (ping | fast | all).
+- task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
+- task_create prompt quality: for best results, provide a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
+- model_profiles output: profile guidance + currently available models in each profile.
+- model_profiles returns `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
+- task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
+- task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
 - task_file_info output: downloadable report/zip metadata and URLs.
+- mcp_local task_download output: includes local saved_path where artifact was written.
+
+task_status caller contract:
+- pending: keep polling.
+- processing: keep polling.
+- completed: terminal success; download is ready.
+- failed: terminal error.
+
+Minimal error-handling contract:
+- Errors use `{"error":{"code","message","details?"}}`.
+- Common cloud/core codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
+- Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
+- `task_file_info` may return `{}` while artifact output is not ready yet.
 
 Recommended interaction order:
 1. Call prompt_examples.
-2. Prepare and approve a strong prompt.
-3. Call task_create.
-4. Poll task_status until complete (repeat every 5 minutes).
-5. Use task_file_info to get download URLs.
-6. Use task_stop if the run must be cancelled.
+2. Optionally call model_profiles to choose model_profile based on current availability.
+3. Non-tool step: prepare and approve a strong prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
+4. Call task_create.
+5. Poll task_status until complete (repeat every 5 minutes).
+6. Use task_file_info to get download URLs.
+7. Use task_stop if the run must be cancelled.
+
+Concurrency semantics:
+- Each task_create call creates a new task_id.
+- Server does not enforce a global per-client concurrency cap.
+- Client should track task_ids and usually start with 1 active task, then 2 if needed.
 
 Note:
 - task_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
+- In mcp_local, downloads save to PLANEXE_PATH (or current working directory if PLANEXE_PATH is unset).
+- In mcp_cloud, task_file_info download_url is an absolute URL where the requested artifact can be downloaded.
 
 ## Authentication
 
@@ -130,9 +168,14 @@ curl -X POST https://mcp.planexe.org/mcp/tools/call \
     "tool": "task_create",
     "arguments": {
       "prompt": "20-year, €40 billion infrastructure initiative to construct a pillar-supported transoceanic submerged tunnel connecting Spain and Morocco. This project will deploy a system of submerged, buoyant concrete tunnels engineered for high-speed rail traffic, which will be securely anchored at a controlled depth of 100 meters below sea level.",
-      "speed_vs_detail": "all"
+      "model_profile": "baseline"
+    },
+    "metadata": {
+      "task_create": {
+        "speed_vs_detail": "all"
+      }
     }
   }'
 ```
 
-Last updated: 2026-02-21
+Last updated: 2026-02-23

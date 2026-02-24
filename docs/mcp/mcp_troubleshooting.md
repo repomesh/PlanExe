@@ -10,7 +10,7 @@ Common MCP integration issues and fixes.
 
 ## Cannot create a plan
 
-- Ensure your prompt is detailed (300–800 words).
+- Ensure your prompt is detailed (typically ~300-800 words) and includes objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 - Some topics may be refused by the model (harmful, unethical, or dangerous requests).
 - Try a smaller model or a more reliable paid model.
 - Confirm the MCP server is reachable from your client.

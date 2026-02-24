@@ -9,10 +9,27 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 ## Tools
 
 `prompt_examples` - Return example prompts. Use these as examples for task_create. You can also call `task_create` with any prompt—short prompts produce less detailed plans.
+`model_profiles` - Show model_profile options and currently available models in each profile.
 `task_create` - Initiate creation of a plan.
 `task_status` - Get status and progress about the creation of a plan.
 `task_stop` - Abort creation of a plan.
 `task_download` - Download the plan, either html report or a zip with everything, and save it to disk.
+
+`task_status` caller contract:
+- `pending` / `processing`: keep polling.
+- `completed`: terminal success, download is ready.
+- `failed`: terminal error.
+
+Concurrency semantics:
+- Each `task_create` call creates a new `task_id`.
+- Server does not enforce a global one-task-at-a-time cap per client.
+- Local clients should track task ids explicitly when running tasks in parallel.
+
+Minimal error contract:
+- Tool errors use `{"error":{"code","message","details?"}}`.
+- Common proxied cloud codes include: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Local proxy specific codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
+- `task_file_info` (called under the hood by task_download) may return `{}` while output is not ready.
 
 **Tip**: Call `prompt_examples` to get example prompts to use with task_create. The full catalog lives at `worker_plan/worker_plan_api/prompt/data/simple_plan_prompts.jsonl`.
 
@@ -20,11 +37,18 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 remote MCP tool `task_file_info` to obtain a download URL, then downloads the
 file locally into `PLANEXE_PATH`.
 
+`PLANEXE_PATH` behavior:
+- If unset, downloads are saved to the current working directory.
+- If the path does not exist, it is created.
+- If the path points to a file (not a directory), download fails.
+- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip` (with `-1`, `-2`, ... suffixes on collisions).
+- `task_download` returns `saved_path` with the final file location.
+
 ## Run as task (MCP tasks protocol)
 
 Some MCP clients (e.g. the MCP Inspector) show a **"Run as task"** option for tools. That refers to the MCP **tasks** protocol: a separate mechanism where the client runs a tool in the background using RPC methods like `tasks/run`, `tasks/get`, `tasks/result`, and `tasks/cancel`, instead of a single blocking tool call.
 
-**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `task_create` → gets a `task_id` → polls `task_status` → uses `task_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
+**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `prompt_examples` and `model_profiles` for setup, completes a non-tool prompt drafting/approval step, then `task_create` → gets a `task_id` → polls `task_status` → uses `task_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
 
 You should **not** enable "Run as task" for PlanExe. The Python MCP SDK and clients like Cursor do not properly support the tasks protocol (method registration and initialization fail). Use the tools directly: create a task, poll status, then download when done.
 
@@ -35,7 +59,7 @@ You should **not** enable "Run as task" for PlanExe. The Python MCP SDK and clie
 - If the HTTP wrapper is unavailable, the proxy falls back to MCP JSON-RPC
   over `POST /mcp` (not SSE).
 - Downloads use the remote `/download/{task_id}/...` endpoints.
-- Authentication uses `PLANEXE_MCP_API_KEY` as a `Bearer` token.
+- Authentication uses `PLANEXE_MCP_API_KEY` as custom header `X-API-Key` (not OAuth/Bearer).
 - **Retry behavior**: Transient failures (server 5xx errors, network timeouts) are
   automatically retried up to 3 times with exponential backoff (1s, 2s delays).
   Client errors (4xx) are not retried. Retries are logged at WARNING level.

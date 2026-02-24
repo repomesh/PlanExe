@@ -120,7 +120,6 @@ Create a new planning task. This is the main entry point for generating plans.
     "name": "task_create",
     "arguments": {
       "prompt": "Create a project launch plan for Q2 2026",
-      "speed_vs_detail": "all",
       "model_profile": "premium",
       "user_api_key": "your_optional_api_key"
     }
@@ -129,12 +128,8 @@ Create a new planning task. This is the main entry point for generating plans.
 ```
 
 **Parameter Guide:**
-- `prompt` (required): Your planning request in natural language
-- `speed_vs_detail` (required): One of `"ping"`, `"fast"`, or `"all"`
-  - `"ping"`: Quick outline (~2-5 min)
-  - `"fast"`: Standard plan (~10-15 min)
-  - `"all"`: Comprehensive analysis (~20-30+ min)
-- `model_profile` (required): One of `"baseline"`, `"premium"`, `"frontier"`, or `"custom"`
+- `prompt` (required): Your planning request in natural language. Write as flowing prose (not structured markdown), typically 300-800 words.
+- `model_profile` (optional): One of `"baseline"`, `"premium"`, `"frontier"`, or `"custom"`. Defaults to `"baseline"`.
 - `user_api_key` (optional): Your PlanExe API key (if not set in environment)
 
 **Returns:** `task_id` for polling status and retrieving results.
@@ -160,9 +155,9 @@ Poll the status of a running planning task.
 }
 ```
 
-**Usage:** Planning tasks take 15-20+ minutes. Poll every 5+ minutes to check progress.
+**Usage:** Planning tasks typically take 10-20 minutes (baseline profile). Poll every 5+ minutes to check progress.
 
-**Returns:** Current status (`queued`, `running`, `completed`, `failed`), progress percentage, and estimated time remaining.
+**Returns:** Current status (`pending`, `processing`, `completed`, `failed`), and progress percentage.
 
 ---
 
@@ -210,8 +205,8 @@ Retrieve download information for completed plan artifacts.
 ```
 
 **Artifact Options:**
-- `"report"`: Markdown/PDF plan document
-- `"zip"`: Complete deliverables package
+- `"report"`: Interactive HTML report (~700KB, self-contained — open in a browser)
+- `"zip"`: Pipeline output bundle (md, json, csv intermediary files)
 
 **Returns:** `download_url` for accessing the artifact.
 

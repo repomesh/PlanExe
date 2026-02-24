@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
+from typing import Any
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.actions import action
 from markupsafe import Markup
@@ -174,7 +175,7 @@ class TaskItemView(AdminOnlyModelView):
             defer(self.model.run_track_activity_jsonl),
         )
 
-    def on_form_prefill(self, form, id):
+    def on_form_prefill(self, form: Any, id: Any) -> None:
         model = self.get_one(id)
         if model is None:
             return
@@ -206,7 +207,7 @@ class TaskItemView(AdminOnlyModelView):
             else:
                 form.run_track_activity_jsonl_upload.description = "Current file: none"
 
-    def on_model_change(self, form, model, is_created):
+    def on_model_change(self, form: Any, model: Any, is_created: bool) -> None:
         def _read_upload(field_name: str):
             field = getattr(form, field_name, None)
             data = getattr(field, "data", None) if field is not None else None

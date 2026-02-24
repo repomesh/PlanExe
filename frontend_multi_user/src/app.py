@@ -2027,7 +2027,7 @@ class MyFlaskApp:
                     if is_admin:
                         user_id = self.admin_username
                         user = SimpleNamespace(name="Admin", given_name=None)
-                        credits_balance_display = "N/A"
+                        credits_balance_display = "Full access"
                         can_create_plan = True
                     else:
                         user_uuid = uuid.UUID(str(current_user.id))

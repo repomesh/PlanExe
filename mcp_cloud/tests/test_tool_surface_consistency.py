@@ -50,10 +50,28 @@ class TestTaskCreateInputSchemaHasUserApiKey(unittest.TestCase):
         self.assertIn("user_api_key", props)
 
 
+class TestTaskRetryInputSchemaDefaults(unittest.TestCase):
+    """task_retry should default model_profile to baseline."""
+
+    def test_cloud_task_retry_schema_defaults_model_profile(self):
+        props = cloud_app.TASK_RETRY_INPUT_SCHEMA.get("properties", {})
+        model_profile = props.get("model_profile", {})
+        self.assertEqual(model_profile.get("default"), "baseline")
+
+    def test_local_task_retry_schema_defaults_model_profile(self):
+        props = local_app.TASK_RETRY_INPUT_SCHEMA.get("properties", {})
+        model_profile = props.get("model_profile", {})
+        self.assertEqual(model_profile.get("default"), "baseline")
+
+
 class TestCloudToolSurfaceConsistency(unittest.TestCase):
     def test_cloud_exposes_model_profiles_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("model_profiles", cloud_tool_names)
+
+    def test_cloud_exposes_task_retry_tool(self):
+        cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
+        self.assertIn("task_retry", cloud_tool_names)
 
     def test_cloud_exposes_task_file_info_not_task_download(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
@@ -103,6 +121,10 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
     def test_local_exposes_model_profiles_tool(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
         self.assertIn("model_profiles", local_tool_names)
+
+    def test_local_exposes_task_retry_tool(self):
+        local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
+        self.assertIn("task_retry", local_tool_names)
 
     def test_local_exposes_task_download_not_task_file_info(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}

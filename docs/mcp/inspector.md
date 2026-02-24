@@ -72,6 +72,7 @@ model_profiles
 task_create
 task_status
 task_stop
+task_retry
 task_file_info
 ```
 

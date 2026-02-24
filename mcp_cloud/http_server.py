@@ -28,6 +28,7 @@ from mcp_cloud.tool_models import (
     ModelProfilesOutput,
     TaskCreateOutput,
     TaskFileInfoOutput,
+    TaskRetryOutput,
     TaskStatusOutput,
     TaskStopOutput,
 )
@@ -59,6 +60,7 @@ from mcp_cloud.app import (
     handle_task_create,
     handle_model_profiles,
     handle_task_status,
+    handle_task_retry,
     handle_task_stop,
     handle_task_file_info,
     handle_prompt_examples,
@@ -355,6 +357,16 @@ async def task_stop(
     return await handle_task_stop({"task_id": task_id})
 
 
+async def task_retry(
+    task_id: str = Field(..., description="UUID of the failed task to retry."),
+    model_profile: Annotated[
+        ModelProfileInput,
+        Field(description="Model profile used for retry. Defaults to baseline."),
+    ] = "baseline",
+) -> Annotated[CallToolResult, TaskRetryOutput]:
+    return await handle_task_retry({"task_id": task_id, "model_profile": model_profile})
+
+
 async def task_file_info(
     task_id: str = Field(..., description="Task UUID returned by task_create. Use it to download the created plan."),
     artifact: Annotated[
@@ -380,6 +392,7 @@ def _register_tools(server: FastMCP) -> None:
         "task_create": task_create,
         "task_status": task_status,
         "task_stop": task_stop,
+        "task_retry": task_retry,
         "task_file_info": task_file_info,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,

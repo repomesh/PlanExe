@@ -22,6 +22,7 @@ No MCP experience is required to get started.
 - **Get example prompts** — See what good prompts look like (detailed, typically ~300-800 words). It is the **caller’s responsibility** to take inspiration from these examples and ensure the prompt sent to PlanExe is of similar or better quality. A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The agent can refine a vague idea into a high-quality prompt and show it to the user for approval before creating the plan.
 - **Create a plan** — Send a prompt; PlanExe starts creating the plan (typically takes 10–20 minutes on baseline profile). If the input prompt is of low quality, the output plan will be crap too. Visible `task_create` options include `model_profile`.
 - **Check progress** — Ask for status and see how far the plan has gotten.
+- **Retry failed runs** — If status is `failed`, call `task_retry` (defaults to baseline model profile) to requeue the same task id.
 - **Download the report** — When the plan is ready, the user specifies whether to download the HTML report or the zip of intermediary files (JSON, MD, CSV).
 
 Developer note: `speed_vs_detail` is intentionally hidden from the visible `task_create` interface and is provided via tool-specific metadata when needed.

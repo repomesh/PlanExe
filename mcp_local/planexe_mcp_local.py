@@ -51,6 +51,11 @@ class TaskStopRequest(BaseModel):
     task_id: str
 
 
+class TaskRetryRequest(BaseModel):
+    task_id: str
+    model_profile: ModelProfileInput = "baseline"
+
+
 class TaskDownloadRequest(BaseModel):
     task_id: str
     artifact: str = "report"
@@ -373,6 +378,23 @@ TASK_STOP_INPUT_SCHEMA = {
     "required": ["task_id"],
 }
 
+TASK_RETRY_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task_id": {
+            "type": "string",
+            "description": "UUID of the failed task to retry.",
+        },
+        "model_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+            "default": "baseline",
+            "description": "Model profile used for retry. Defaults to baseline.",
+        },
+    },
+    "required": ["task_id"],
+}
+
 TASK_DOWNLOAD_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -502,6 +524,21 @@ TASK_STOP_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "state": {"type": "string"},
+        "stop_requested": {"type": "boolean"},
+        "error": ERROR_SCHEMA,
+    },
+}
+
+TASK_RETRY_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "task_id": {"type": "string"},
+        "state": {"type": "string"},
+        "model_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+        },
+        "retried_at": {"type": "string"},
         "error": ERROR_SCHEMA,
     },
 }
@@ -560,7 +597,7 @@ TOOL_DEFINITIONS = [
             "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
-            "Returns task_id (UUID); use it for task_status, task_stop, and task_download. "
+            "Returns task_id (UUID); use it for task_status, task_stop, task_retry, and task_download. "
             "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
             "Each task_create call creates a new task_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
@@ -600,6 +637,17 @@ TOOL_DEFINITIONS = [
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
     ),
     ToolDefinition(
+        name="task_retry",
+        description=(
+            "Retry a task that is currently in failed state. "
+            "Pass the failed task_id and optionally model_profile (defaults to baseline). "
+            "The same task_id is requeued and reset to pending on the cloud service. "
+            "Unknown task_id returns TASK_NOT_FOUND; non-failed tasks return TASK_NOT_FAILED."
+        ),
+        input_schema=TASK_RETRY_INPUT_SCHEMA,
+        output_schema=TASK_RETRY_OUTPUT_SCHEMA,
+    ),
+    ToolDefinition(
         name="task_download",
         description=(
             "Download the plan output and save it locally to PLANEXE_PATH. "
@@ -635,6 +683,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_download when complete. "
+    "If a run fails, call task_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
     "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
@@ -797,6 +846,18 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
     return _wrap_response(payload)
 
 
+async def handle_task_retry(arguments: dict[str, Any]) -> CallToolResult:
+    """Request mcp_cloud to retry a failed task."""
+    req = TaskRetryRequest(**arguments)
+    payload, error = _call_remote_tool(
+        "task_retry",
+        {"task_id": req.task_id, "model_profile": req.model_profile},
+    )
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
 async def handle_task_download(arguments: dict[str, Any]) -> CallToolResult:
     """Download report/zip for a task from mcp_cloud and save it locally.
 
@@ -867,6 +928,7 @@ TOOL_HANDLERS = {
     "task_create": handle_task_create,
     "task_status": handle_task_status,
     "task_stop": handle_task_stop,
+    "task_retry": handle_task_retry,
     "task_download": handle_task_download,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,

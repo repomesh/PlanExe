@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifa
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
-- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` (mcp_local helper) or `task_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). To stop, call `task_stop` with the `task_id` from `task_create`.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `task_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `task_create`. Then poll `task_status` (about every 5 minutes); use `task_download` (mcp_local helper) or `task_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a task fails and the caller wants another attempt for the same `task_id`, call `task_retry` (optional `model_profile`, default `baseline`). To stop, call `task_stop` with the `task_id` from `task_create`.
 - **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
@@ -70,10 +70,10 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. task_create, task_status, task_stop): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → uses task_file_info (and optionally task_download via mcp_local). This document specifies those tools.
+- **MCP tools** (e.g. task_create, task_status, task_stop, task_retry): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls task_create → receives task_id → polls task_status → optionally calls task_retry on failed → uses task_file_info (and optionally task_download via mcp_local). This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: call `prompt_examples`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `task_create`; poll `task_status`; then call `task_file_info` (or `task_download` via mcp_local).
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: call `prompt_examples`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `task_create`; poll `task_status`; if failed call `task_retry` (optional); then call `task_file_info` (or `task_download` via mcp_local) when completed.
 
 ---
 
@@ -142,6 +142,7 @@ The public MCP `state` field is aligned with `TaskItem.state`:
 - pending → processing when picked up by a worker
 - processing → completed via normal success
 - processing → failed via error
+- failed → pending when `task_retry` is accepted
 
 ### 5.3 Invalid transitions
 
@@ -322,7 +323,7 @@ For the full catalog file:
 
 **Important**
 
-- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_file_info (and task_download when using mcp_local).
+- task_id is a UUID returned by task_create. Use this exact UUID for task_status/task_stop/task_retry/task_file_info (and task_download when using mcp_local).
 
 **Behavior**
 
@@ -417,7 +418,49 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 
 ---
 
-### 6.5 Download flow (task_download vs task_file_info)
+### 6.5 task_retry
+
+Retries a task that is currently in `failed` state.
+
+**Request**
+
+```json
+{
+  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "model_profile": "baseline"
+}
+```
+
+**Input**
+
+- task_id: UUID of a failed task.
+- model_profile: optional (`baseline` | `premium` | `frontier` | `custom`), default `baseline`.
+
+**Response**
+
+```json
+{
+  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "state": "pending",
+  "model_profile": "baseline",
+  "retried_at": "2026-02-24T15:20:00Z"
+}
+```
+
+**Required semantics**
+
+- Only failed tasks are retryable.
+- On success, the same task_id is reset to `pending` and requeued.
+- Prior artifacts for that task are cleared before requeue.
+
+**Error behavior**
+
+- Unknown task_id: `TASK_NOT_FOUND` (`isError=true`).
+- Task not failed: `TASK_NOT_FAILED` (`isError=true`).
+
+---
+
+### 6.6 Download flow (task_download vs task_file_info)
 
 **If your client exposes task_download** (e.g. mcp_local): use it to save the report or zip locally; it calls task_file_info under the hood, then fetches and writes to the local save path (e.g. PLANEXE_PATH).
 
@@ -473,6 +516,7 @@ Recommended practice for MCP clients:
 Additional semantics:
 
 - Every `task_create` call creates a new independent task with a new `task_id`.
+- `task_retry` reuses the existing failed `task_id` (it does not create a new task id).
 - The server does not deduplicate “same prompt” requests into a single shared task.
 - Keep your own task registry/client state if you run multiple tasks concurrently.
 
@@ -501,7 +545,7 @@ Example:
 
 ### 9.2 isError behavior
 
-- `task_create`, `task_status`, `task_stop`: unknown/invalid requests return `isError=true` with `error`.
+- `task_create`, `task_status`, `task_stop`, `task_retry`: unknown/invalid requests return `isError=true` with `error`.
 - `model_profiles`: returns `isError=true` with `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
 - `task_file_info`: uses mixed behavior:
   - returns `{}` (not an error) while artifacts are not ready.
@@ -516,6 +560,7 @@ Cloud/core tool codes:
 - `INVALID_TOOL`: unknown MCP tool name.
 - `INTERNAL_ERROR`: uncaught server error.
 - `TASK_NOT_FOUND`: task id not found.
+- `TASK_NOT_FAILED`: task_retry called for a task that is not in failed state.
 - `INVALID_USER_API_KEY`: provided user_api_key is invalid.
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for task_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for task_create.
@@ -539,6 +584,7 @@ Local proxy specific codes:
   - `USER_API_KEY_REQUIRED`
   - `INSUFFICIENT_CREDITS`
   - `INVALID_TOOL`
+- For `TASK_NOT_FAILED`: call `task_retry` only after `task_status.state == failed`.
 - For `TASK_NOT_FOUND`: verify task_id source and stop polling that id.
 - For `generation_failed`: treat as terminal failure and surface task progress_message to user.
 

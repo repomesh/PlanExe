@@ -13,6 +13,7 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 `task_create` - Initiate creation of a plan.
 `task_status` - Get status and progress about the creation of a plan.
 `task_stop` - Abort creation of a plan.
+`task_retry` - Retry a failed task using the same task id (optional model_profile, defaults to baseline).
 `task_download` - Download the plan, either html report or a zip with everything, and save it to disk.
 
 `task_status` caller contract:
@@ -22,12 +23,14 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 
 Concurrency semantics:
 - Each `task_create` call creates a new `task_id`.
+- `task_retry` reuses the same failed `task_id`.
 - Server does not enforce a global one-task-at-a-time cap per client.
 - Local clients should track task ids explicitly when running tasks in parallel.
 
 Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
 - Common proxied cloud codes include: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- `task_retry` may return `TASK_NOT_FAILED` if the task is not currently failed.
 - Local proxy specific codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `task_file_info` (called under the hood by task_download) may return `{}` while output is not ready.
 
@@ -48,7 +51,7 @@ file locally into `PLANEXE_PATH`.
 
 Some MCP clients (e.g. the MCP Inspector) show a **"Run as task"** option for tools. That refers to the MCP **tasks** protocol: a separate mechanism where the client runs a tool in the background using RPC methods like `tasks/run`, `tasks/get`, `tasks/result`, and `tasks/cancel`, instead of a single blocking tool call.
 
-**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `prompt_examples` and `model_profiles` for setup, completes a non-tool prompt drafting/approval step, then `task_create` → gets a `task_id` → polls `task_status` → uses `task_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
+**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `prompt_examples` and `model_profiles` for setup, completes a non-tool prompt drafting/approval step, then `task_create` → gets a `task_id` → polls `task_status` → optionally calls `task_retry` if failed → uses `task_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
 
 You should **not** enable "Run as task" for PlanExe. The Python MCP SDK and clients like Cursor do not properly support the tasks protocol (method registration and initialization fail). Use the tools directly: create a task, poll status, then download when done.
 

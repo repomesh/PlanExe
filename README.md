@@ -55,7 +55,8 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 3. non-tool step: draft/approve prompt
 4. `task_create`
 5. `task_status` (poll every 5 minutes until done)
-6. download the result via `task_download` or via `task_file_info`
+6. optional if failed: `task_retry`
+7. download the result via `task_download` or via `task_file_info`
 
 Concurrency note: each `task_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
 

@@ -167,6 +167,24 @@
     .stat-value.credits {
         color: #059669;
     }
+    .stat-card-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .stat-card-link:hover {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 1px var(--color-primary);
+    }
+    .stat-card-link .stat-value.credits {
+        text-decoration: underline;
+        text-underline-offset: 3px;
+        text-decoration-color: rgba(5, 150, 105, 0.4);
+    }
+    .stat-card-link:hover .stat-value.credits {
+        text-decoration-color: var(--color-primary);
+    }
     .stat-label {
         font-size: 0.8rem;
         color: var(--color-text-secondary);
@@ -531,10 +549,10 @@
 </div>
 
 <div class="stats-row">
-    <div class="stat-card">
+    <a href="{{ url_for('account') }}" class="stat-card stat-card-link" title="Manage credits and add more via Stripe">
         <div class="stat-value credits">{{ credits_balance_display }}</div>
-        <div class="stat-label">Credits</div>
-    </div>
+        <div class="stat-label">Credits{% if not can_create_plan and not is_admin %} · Add more{% endif %}</div>
+    </a>
     <div class="stat-card">
         <div class="stat-value">{{ total_tasks_count }}</div>
         <div class="stat-label">Plans</div>

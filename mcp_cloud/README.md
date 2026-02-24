@@ -14,7 +14,7 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 
 ## Run as task (MCP tasks protocol)
 
-MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_retry`, `task_file_info` (or `task_download` via `mcp_local`). The agent creates a task, polls status, retries on failed when needed, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
 Workflow clarity: prompt drafting + user approval is a non-tool step between setup tools and `task_create`.
 
 ## Client Choice Guide
@@ -134,21 +134,24 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 - `task_create` - Create a new task (returns task_id as UUID; may require user_api_key for credits)
 - `task_status` - Get task status and progress
 - `task_stop` - Stop an active task
+- `task_retry` - Retry a failed task with the same task_id (optional model_profile, default baseline)
 - `task_file_info` - Get file metadata for report or zip
 
 `task_status` caller contract:
 - `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
+- If `failed`, call `task_retry` to requeue the same task id.
 
 Concurrency semantics:
 - Each `task_create` call creates a new `task_id`.
+- `task_retry` reuses the same failed `task_id`.
 - Server does not enforce a global one-task-at-a-time cap per client.
 - Client should track task ids explicitly when running tasks in parallel.
 
 Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
-- Common codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Common codes: `TASK_NOT_FOUND`, `TASK_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
 - `task_file_info` may return `{}` while output is not ready (not an error payload).
 
 Note: `task_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `task_download`, use it to save the report or zip locally; otherwise use `task_file_info` to get `download_url` and fetch the file yourself.

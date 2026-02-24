@@ -85,6 +85,19 @@ class TaskStopInput(BaseModel):
     )
 
 
+class TaskRetryInput(BaseModel):
+    task_id: str = Field(
+        ...,
+        description="UUID of the failed task to retry.",
+    )
+    model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        default="baseline",
+        description=(
+            "Model profile used for the retry run. Defaults to baseline if omitted."
+        ),
+    )
+
+
 class TaskFileInfoInput(BaseModel):
     task_id: str = Field(
         ...,
@@ -177,6 +190,26 @@ class TaskStopOutput(BaseModel):
     stop_requested: bool | None = Field(
         default=None,
         description="True when stop request flag was set for a pending/processing task.",
+    )
+    error: ErrorDetail | None = None
+
+
+class TaskRetryOutput(BaseModel):
+    task_id: str | None = Field(
+        default=None,
+        description="Task UUID that was retried (same ID as the failed task).",
+    )
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+        default=None,
+        description="Current task state after retry request.",
+    )
+    model_profile: Literal["baseline", "premium", "frontier", "custom"] | None = Field(
+        default=None,
+        description="Model profile assigned to the retry request.",
+    )
+    retried_at: str | None = Field(
+        default=None,
+        description="UTC timestamp when the retry request was accepted.",
     )
     error: ErrorDetail | None = None
 

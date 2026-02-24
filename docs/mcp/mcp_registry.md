@@ -57,3 +57,28 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.Pla
 ```
 
 If found in registry search, it should become discoverable in the GitHub MCP Registry UI at [https://github.com/mcp](https://github.com/mcp).
+
+## 5) Claim on Glama
+
+Glama connector claim verification expects a public well-known file:
+
+- `https://mcp.planexe.org/.well-known/glama.json`
+
+PlanExe serves this from `mcp_cloud/http_server.py` with the schema:
+
+```json
+{
+  "$schema": "https://glama.ai/mcp/schemas/connector.json",
+  "maintainers": [
+    {
+      "email": "neoneye@gmail.com"
+    }
+  ]
+}
+```
+
+If needed, override the email via environment variable:
+
+```bash
+PLANEXE_MCP_GLAMA_MAINTAINER_EMAIL=neoneye@gmail.com
+```

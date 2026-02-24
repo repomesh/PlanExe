@@ -68,6 +68,7 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - task_create
 - task_status
 - task_stop
+- task_retry
 - task_file_info
 
 Key tool inputs/outputs:
@@ -78,6 +79,8 @@ Key tool inputs/outputs:
 - task_create hidden developer metadata: speed_vs_detail (ping | fast | all), provided via tool-specific metadata (not visible tool schema).
 - task_create output: task_id (use this for task_status, task_stop, and task_file_info).
 - task_status output: current state and progress for a task_id.
+- task_retry input: task_id (required), model_profile (optional; defaults to baseline).
+- task_retry output: task_id requeued to pending, with model_profile and retried_at.
 - task_file_info output: downloadable report/zip metadata and URLs.
 - mcp_local task_download output: includes local saved_path where artifact was written.
 
@@ -89,7 +92,7 @@ task_status caller contract:
 
 Minimal error-handling contract:
 - Errors use `{"error":{"code","message","details?"}}`.
-- Common cloud/core codes: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
+- Common cloud/core codes: `TASK_NOT_FOUND`, `TASK_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
 - Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `task_file_info` may return `{}` while artifact output is not ready yet.
 
@@ -99,11 +102,13 @@ Recommended interaction order:
 3. Non-tool step: prepare and approve a strong prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 4. Call task_create.
 5. Poll task_status until complete (repeat every 5 minutes).
-6. Use task_file_info to get download URLs.
-7. Use task_stop if the run must be cancelled.
+6. If failed, optionally call task_retry (defaults to baseline model_profile).
+7. Use task_file_info to get download URLs.
+8. Use task_stop if the run must be cancelled.
 
 Concurrency semantics:
 - Each task_create call creates a new task_id.
+- task_retry reuses the same failed task_id.
 - Server does not enforce a global per-client concurrency cap.
 - Client should track task_ids and usually start with 1 active task, then 2 if needed.
 
@@ -178,4 +183,4 @@ curl -X POST https://mcp.planexe.org/mcp/tools/call \
   }'
 ```
 
-Last updated: 2026-02-23
+Last updated: 2026-02-24

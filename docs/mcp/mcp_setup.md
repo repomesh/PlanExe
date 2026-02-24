@@ -16,7 +16,8 @@ This is the shortest path to a working PlanExe MCP integration.
    Use this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 4. Create the plan task.
 5. Poll for status (about every 5 minutes).
-6. Download artifacts via `task_file_info` (cloud) or `task_download` (mcp_local helper).
+6. If status is `failed`, optionally call `task_retry` (defaults to `model_profile=baseline`).
+7. Download artifacts via `task_file_info` (cloud) or `task_download` (mcp_local helper).
 
 ---
 
@@ -26,7 +27,8 @@ This is the shortest path to a working PlanExe MCP integration.
 2. `model_profiles`
 3. `task_create`
 4. `task_status`
-5. `task_file_info`
+5. `task_retry` (optional, only for failed tasks)
+6. `task_file_info`
 
 Optional local helper:
 - `task_download` (provided by `mcp_local`, not `mcp_cloud`)

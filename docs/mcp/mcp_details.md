@@ -168,6 +168,25 @@ Example call:
 {"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
 ```
 
+### task_retry
+
+Retry a failed task by requeueing the same `task_id`.
+
+Example prompt:
+```
+Retry failed task 2d57a448-1b09-45aa-ad37-e69891ff6ec7 with baseline profile.
+```
+
+Example call:
+```json
+{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "model_profile": "baseline"}
+```
+
+Notes:
+- `model_profile` is optional and defaults to `baseline`.
+- Only failed tasks can be retried.
+- Non-failed tasks return `TASK_NOT_FAILED`.
+
 ### task_file_info
 
 Return download metadata for report or zip artifacts.
@@ -245,6 +264,7 @@ Error payload shape:
 
 Common cloud/core error codes:
 - `TASK_NOT_FOUND`
+- `TASK_NOT_FAILED`
 - `INVALID_USER_API_KEY`
 - `USER_API_KEY_REQUIRED`
 - `INSUFFICIENT_CREDITS`
@@ -320,6 +340,13 @@ Get status for my latest task.
 Tool call:
 ```json
 {"task_id": "<task_id_from_task_create>"}
+```
+
+If state is `failed`, optional retry:
+
+Tool call:
+```json
+{"task_id": "<task_id_from_task_create>", "model_profile": "baseline"}
 ```
 
 ### 6. Download the report

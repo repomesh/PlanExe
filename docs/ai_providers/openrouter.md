@@ -8,17 +8,15 @@ For new users, OpenRouter is the recommended starting point. When you have have 
 
 [OpenRouter](https://openrouter.ai/) provides access to a large number of LLM models, that runs in the cloud.
 
-Unfortunately there is no `free` model that works reliable with PlanExe.
+Unfortunately there is no `free` model that works reliable with PlanExe. When I use a `free` model on OpenRouter, then most of the times PlanExe fails to create a plan. My impression is that the `free` models are unreliable and slow, I guess the AI providers doesn't treat `free` models as high priority.
 
 In my experience, the `paid` models are the most reliable. Models like [google/gemini-2.0-flash-001](https://openrouter.ai/google/gemini-2.0-flash-001). and [openai/gpt-4o-mini](https://openrouter.ai/openai/gpt-4o-mini) are cheap and faster than running models on my own computer and without risk of it overheating.
 
-I haven't been able to find a `free` model on OpenRouter that works well with PlanExe.
-
-Avoid pricey `paid` models. PlanExe does more than 100 LLM inference calls per plan, so each run uses many tokens. With a cheap model, creating a full plan costs less than 0.30 USD; with one of the newest models, the price can exceed 20 USD. To keep PlanExe affordable for as many users as possible, the defaults use older, cheaper models.
+Avoid pricey `paid` models. PlanExe does more than 100 LLM inference calls per plan, so each run uses many tokens. With a cheap model, creating a full plan costs less than 0.50 USD; with one of the newest models, the price can exceed 20 USD. To keep PlanExe affordable for as many users as possible, the defaults use older, cheaper models.
 
 ## Quickstart (Docker)
 
-1. Install Docker (with Docker Compose) — no local Python or pip is needed now.
+1. Install Docker (with Docker Compose) — no local Python or pip is needed.
 2. Clone the repo and enter it:
 ```
 git clone https://github.com/PlanExeOrg/PlanExe.git

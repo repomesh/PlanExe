@@ -21,13 +21,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
-from mcp.types import CallToolResult, ContentBlock, TextContent
+from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
     ModelProfilesOutput,
     TaskCreateOutput,
     TaskFileInfoOutput,
+    TaskRetryOutput,
     TaskStatusOutput,
     TaskStopOutput,
 )
@@ -59,6 +60,7 @@ from mcp_cloud.app import (
     handle_task_create,
     handle_model_profiles,
     handle_task_status,
+    handle_task_retry,
     handle_task_stop,
     handle_task_file_info,
     handle_prompt_examples,
@@ -74,6 +76,10 @@ HTTP_PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_MCP_HTTP_PORT"
 MAX_BODY_BYTES = int(os.environ.get("PLANEXE_MCP_MAX_BODY_BYTES", "1048576"))
 RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_RATE_WINDOW_SECONDS", "60"))
+GLAMA_MAINTAINER_EMAIL = os.environ.get(
+    "PLANEXE_MCP_GLAMA_MAINTAINER_EMAIL",
+    "neoneye@gmail.com",
+).strip()
 
 
 def _parse_bool_env(name: str, default: bool) -> bool:
@@ -355,6 +361,16 @@ async def task_stop(
     return await handle_task_stop({"task_id": task_id})
 
 
+async def task_retry(
+    task_id: str = Field(..., description="UUID of the failed task to retry."),
+    model_profile: Annotated[
+        ModelProfileInput,
+        Field(description="Model profile used for retry. Defaults to baseline."),
+    ] = "baseline",
+) -> Annotated[CallToolResult, TaskRetryOutput]:
+    return await handle_task_retry({"task_id": task_id, "model_profile": model_profile})
+
+
 async def task_file_info(
     task_id: str = Field(..., description="Task UUID returned by task_create. Use it to download the created plan."),
     artifact: Annotated[
@@ -380,6 +396,7 @@ def _register_tools(server: FastMCP) -> None:
         "task_create": task_create,
         "task_status": task_status,
         "task_stop": task_stop,
+        "task_retry": task_retry,
         "task_file_info": task_file_info,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,
@@ -392,6 +409,7 @@ def _register_tools(server: FastMCP) -> None:
         server.tool(
             name=tool.name,
             description=tool.description,
+            annotations=ToolAnnotations(**tool.annotations) if tool.annotations else None,
         )(handler)
 
 
@@ -653,6 +671,7 @@ def root() -> dict[str, Any]:
             "tools": "/mcp/tools",
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
+            "glama_connector": "/.well-known/glama.json",
             "download": f"/download/{{task_id}}/{REPORT_FILENAME}",
             "llms_txt": "/llms.txt",
         },
@@ -674,6 +693,15 @@ def _llms_txt_path() -> str:
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="llms.txt not found")
     return path
+
+
+@app.get("/.well-known/glama.json")
+def glama_connector_metadata() -> dict[str, Any]:
+    """Serve Glama connector ownership metadata."""
+    return {
+        "$schema": "https://glama.ai/mcp/schemas/connector.json",
+        "maintainers": [{"email": GLAMA_MAINTAINER_EMAIL}],
+    }
 
 
 @app.get("/llms.txt")

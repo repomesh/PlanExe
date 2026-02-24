@@ -26,7 +26,7 @@ from sqlalchemy import cast, text
 from sqlalchemy.dialects.postgresql import JSONB
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import CallToolResult, Tool, TextContent
+from mcp.types import CallToolResult, Tool, TextContent, ToolAnnotations
 from pydantic import BaseModel
 from worker_plan_api.model_profile import (
     ModelProfileEnum,
@@ -68,6 +68,8 @@ from mcp_cloud.tool_models import (
     PromptExamplesOutput,
     TaskCreateInput,
     TaskCreateOutput,
+    TaskRetryInput,
+    TaskRetryOutput,
     TaskStopOutput,
     TaskStatusInput,
     TaskStopInput,
@@ -141,6 +143,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call task_create. "
     "Each task_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll task_status (about every 5 minutes); use task_file_info when complete. "
+    "If a run fails, call task_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
     "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. task_file_info returns an empty object {} while the artifact is not ready; check readiness by testing whether download_url is present. "
@@ -207,6 +210,10 @@ class TaskStatusRequest(BaseModel):
 
 class TaskStopRequest(BaseModel):
     task_id: str
+
+class TaskRetryRequest(BaseModel):
+    task_id: str
+    model_profile: ModelProfileInput = "baseline"
 
 class TaskFileInfoRequest(BaseModel):
     task_id: str
@@ -367,6 +374,66 @@ def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
             "state": get_task_state_mapping(task.state),
             "stop_requested": stop_requested,
         }
+
+
+def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[str, Any]]:
+    with app.app_context():
+        task = find_task_by_task_id(task_id)
+        if task is None:
+            return None
+        if task.state != TaskState.failed:
+            return {
+                "error": {
+                    "code": "TASK_NOT_FAILED",
+                    "message": f"Task is not in failed state: {task_id}",
+                }
+            }
+
+        normalized_profile = normalize_model_profile(model_profile).value
+        now_utc = datetime.now(UTC)
+        parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+        parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
+        parameters["model_profile"] = normalized_profile
+        parameters["trigger_source"] = "mcp task_retry"
+
+        # Reset task state and clear prior run artifacts before requeueing.
+        task.state = TaskState.pending
+        task.timestamp_created = now_utc
+        task.progress_percentage = 0.0
+        task.progress_message = "Retry requested via MCP."
+        task.stop_requested = False
+        task.stop_requested_timestamp = None
+        task.generated_report_html = None
+        task.run_zip_snapshot = None
+        task.run_track_activity_jsonl = None
+        task.run_track_activity_bytes = None
+        task.run_activity_overview_json = None
+        task.run_artifact_layout_version = None
+        task.parameters = parameters
+        db.session.commit()
+
+        event_context = {
+            "task_id": str(task.id),
+            "task_handle": str(task.id),
+            "retry_of_task_id": task_id,
+            "model_profile": normalized_profile,
+            "parameters": task.parameters,
+        }
+        event = EventItem(
+            event_type=EventType.TASK_PENDING,
+            message="Retried failed task via MCP",
+            context=event_context,
+        )
+        db.session.add(event)
+        db.session.commit()
+
+        return {
+            "task_id": str(task.id),
+            "state": get_task_state_mapping(task.state),
+            "model_profile": normalized_profile,
+            "retried_at": now_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        }
+
 
 def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
@@ -990,6 +1057,7 @@ TASK_STATUS_OUTPUT_SCHEMA = {
     ]
 }
 TASK_STOP_OUTPUT_SCHEMA = TaskStopOutput.model_json_schema()
+TASK_RETRY_OUTPUT_SCHEMA = TaskRetryOutput.model_json_schema()
 TASK_FILE_INFO_READY_OUTPUT_SCHEMA = TaskFileInfoReadyOutput.model_json_schema()
 TASK_FILE_INFO_OUTPUT_SCHEMA = {
     "oneOf": [
@@ -1008,6 +1076,7 @@ TASK_FILE_INFO_OUTPUT_SCHEMA = {
 }
 TASK_STATUS_INPUT_SCHEMA = TaskStatusInput.model_json_schema()
 TASK_STOP_INPUT_SCHEMA = TaskStopInput.model_json_schema()
+TASK_RETRY_INPUT_SCHEMA = TaskRetryInput.model_json_schema()
 TASK_FILE_INFO_INPUT_SCHEMA = TaskFileInfoInput.model_json_schema()
 
 PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
@@ -1021,6 +1090,7 @@ class ToolDefinition:
     description: str
     input_schema: dict[str, Any]
     output_schema: Optional[dict[str, Any]] = None
+    annotations: Optional[dict[str, Any]] = None
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
@@ -1038,6 +1108,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
         output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="model_profiles",
@@ -1048,6 +1124,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="task_create",
@@ -1060,7 +1142,7 @@ TOOL_DEFINITIONS = [
             "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
-            "Returns task_id (UUID); use it for task_status, task_stop, and task_file_info. "
+            "Returns task_id (UUID); use it for task_status, task_stop, task_retry, and task_file_info. "
             "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
             "Each task_create call creates a new task_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
@@ -1069,6 +1151,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_CREATE_INPUT_SCHEMA,
         output_schema=TASK_CREATE_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
     ),
     ToolDefinition(
         name="task_status",
@@ -1086,6 +1174,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_STATUS_INPUT_SCHEMA,
         output_schema=TASK_STATUS_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
     ToolDefinition(
         name="task_stop",
@@ -1098,6 +1192,29 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_STOP_INPUT_SCHEMA,
         output_schema=TASK_STOP_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": True,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
+        name="task_retry",
+        description=(
+            "Retry a task that is currently in failed state. "
+            "Pass the failed task_id and optionally model_profile (defaults to baseline). "
+            "The task is reset to pending, prior artifacts are cleared, and the same task_id is requeued for processing. "
+            "Returns TASK_NOT_FOUND when task_id is unknown and TASK_NOT_FAILED when the task is not in failed state."
+        ),
+        input_schema=TASK_RETRY_INPUT_SCHEMA,
+        output_schema=TASK_RETRY_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
     ),
     ToolDefinition(
         name="task_file_info",
@@ -1115,6 +1232,12 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
     ),
 ]
 
@@ -1127,6 +1250,7 @@ async def handle_list_tools() -> list[Tool]:
             description=definition.description,
             outputSchema=definition.output_schema,
             inputSchema=definition.input_schema,
+            annotations=ToolAnnotations(**definition.annotations) if definition.annotations else None,
         )
         for definition in TOOL_DEFINITIONS
     ]
@@ -1401,6 +1525,42 @@ async def handle_task_stop(arguments: dict[str, Any]) -> CallToolResult:
         isError=False,
     )
 
+
+async def handle_task_retry(arguments: dict[str, Any]) -> CallToolResult:
+    """Retry a failed task by resetting it back to pending."""
+    req = TaskRetryRequest(**arguments)
+    task_id = req.task_id
+    retry_result = await asyncio.to_thread(_retry_failed_task_sync, task_id, req.model_profile)
+
+    if retry_result is None:
+        response = {
+            "error": {
+                "code": "TASK_NOT_FOUND",
+                "message": f"Task not found: {task_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    if isinstance(retry_result.get("error"), dict):
+        response = retry_result
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    response = retry_result
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
 async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
     """Return download metadata for a task's report or zip artifact.
 
@@ -1526,6 +1686,7 @@ TOOL_HANDLERS = {
     "task_create": handle_task_create,
     "task_status": handle_task_status,
     "task_stop": handle_task_stop,
+    "task_retry": handle_task_retry,
     "task_file_info": handle_task_file_info,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,

@@ -234,6 +234,87 @@ Adaptation 1 has the highest value/effort ratio. Simon already built `task_retry
 
 ---
 
+## Adaptation 5: Quantitative Grounding (Fermi Sanity Check)
+
+*Added after direct feedback from Simon Strandgaard, 2026-02-25*
+
+Simon's primary quality signal: **numbers off by 2 orders of magnitude are the real failure mode.** Plans must be grounded in current physical reality. Estimates without bounds are not estimates — they're guesses.
+
+This is the highest-priority adaptation. It doesn't require arcgentica patterns — it requires a new task.
+
+### New task: `FermiSanityCheck`
+
+Runs after `MakeAssumptions` and before `ReviewPlan`. Extracts quantitative claims from the plan and checks them against physical plausibility.
+
+```python
+class QuantifiedClaim(BaseModel):
+    description: str
+    lower_bound: float
+    upper_bound: float
+    unit: str
+    confidence: Literal["high", "medium", "low"]
+    evidence: str  # what justifies this range
+
+class FermiSanityResult(BaseModel):
+    claims: list[QuantifiedClaim]
+    flagged: list[str]  # claims where upper/lower ratio > 100x or evidence is empty
+    grounded: bool       # False if any critical claim is flagged
+
+class FermiSanityCheck(luigi.Task):
+    """
+    Extracts numerical claims from assumptions and validates order-of-magnitude plausibility.
+    Fails loudly if critical estimates are ungrounded (no bounds) or implausible (>2 OOM spread).
+    """
+    def requires(self):
+        return MakeAssumptions()
+
+    def run(self):
+        assumptions_text = self.input().open().read()
+        result = self.llm.execute(
+            FERMI_CHECK_PROMPT,
+            context=assumptions_text,
+            return_type=FermiSanityResult
+        )
+
+        flagged = [
+            c for c in result.claims
+            if c.lower_bound == 0
+            or (c.upper_bound / max(c.lower_bound, 1e-9)) > 100
+            or not c.evidence
+        ]
+        result.flagged = [c.description for c in flagged]
+        result.grounded = len(flagged) == 0
+
+        with self.output().open('w') as f:
+            f.write(result.model_dump_json(indent=2))
+
+        if not result.grounded:
+            # Do not halt pipeline — log and flag for ReviewPlan to catch
+            logger.warning(f"FermiSanityCheck: {len(flagged)} ungrounded claims")
+```
+
+**The prompt** (`FERMI_CHECK_PROMPT`) instructs the LLM to:
+1. Extract every numerical claim from the assumptions (cost, timeline, market size, resource requirements, physical quantities)
+2. Express each as lower/upper bounds with units
+3. Cite what justifies the range (industry data, physical constants, analogous projects)
+4. Flag any claim where the ratio `upper/lower > 100` or where no evidence is provided
+
+**Integration:** `ReviewPlan` reads `fermi_sanity.json` as an additional input. Ungrounded claims in `flagged` are automatically promoted to the `critical_issues` signal category in the ReviewPlan → task_retry bridge (Adaptation 2).
+
+### Revised Priority Order
+
+Based on Simon's feedback, the implementation order changes:
+
+| Priority | Adaptation | Rationale |
+|----------|-----------|-----------|
+| 1 | Fermi Sanity Check (new, Adaptation 5) | Simon's primary quality signal |
+| 2 | Typed output contracts for `MakeAssumptions` | Required for Fermi check to work reliably |
+| 3 | ReviewPlan → task_retry bridge | Connects Fermi failures to reruns |
+| 4 | Soft self-eval loop on high-stakes tasks | Incremental quality improvement |
+| 5 | Complexity-gated pipeline | Cost optimization, lower urgency |
+
+---
+
 ## Open Questions for Simon
 
 1. **What does a "good plan" look like to your actual users, and what's the most common complaint you hear?** We've speculated about which pipeline stages fail — it would be valuable to know what failure modes users actually notice.

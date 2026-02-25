@@ -2134,17 +2134,12 @@ class MyFlaskApp:
 
         @self.app.route('/healthcheck')
         def healthcheck():
-            response_payload = {"status": "ok", "database_target": self.database_settings}
             try:
                 self.db.session.execute(text("SELECT 1"))
-                response_payload["database"] = "ok"
-                status_code = 200
-            except Exception as exc:
+                return jsonify({"status": "ok", "database": "ok"}), 200
+            except Exception:
                 logger.error("Health check failed", exc_info=True)
-                response_payload["status"] = "error"
-                response_payload["database"] = f"error: {exc.__class__.__name__}"
-                status_code = 500
-            return jsonify(response_payload), status_code
+                return jsonify({"status": "error", "database": "error"}), 500
 
         @self.app.route('/llms.txt')
         def llms_txt():

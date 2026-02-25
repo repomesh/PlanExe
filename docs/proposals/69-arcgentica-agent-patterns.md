@@ -49,7 +49,7 @@ The agent checks its own work. If `soft_accuracy` is below threshold, it retries
 
 `ReviewPlan.execute()` asks 15 structured question blocks (critical issues, showstopper risks, assumptions, KPIs, etc.) and writes a structured critique to `review_plan.md`. That's where it stops. The critique never reaches the tasks that caused the problems.
 
-Simon recently added `task_retry` to the MCP layer — tasks can now be retried. The wiring between ReviewPlan's critique output and `task_retry` doesn't exist yet.
+⚠️ **CORRECTION (Simon Strandgaard, 2026-02-25):** task_retry is an MCP interface for restarting Luigi pipelines. The actual retry logic lives in `llm_executor.py` and is not exposed through MCP. Using MCP task_retry inside `run_plan_pipeline.py` would cause recursive calls and database manipulation, making it unsuitable as a fallback mechanism. Do not pursue the "ReviewPlan → task_retry bridge" pattern.
 
 ### Gap 3: Pipeline always runs all 40+ tasks regardless of input complexity
 
@@ -92,82 +92,23 @@ This adds one retry for the highest-risk tasks. Not 10 iterations — just 2. Th
 
 **Where to apply:** `MakeAssumptions`, `CreateWBSLevel1`, `SelectScenario`, `ReviewPlan`
 
-### Adaptation 2: Wire ReviewPlan Signals to `task_retry`
+### Adaptation 2: ~~Wire ReviewPlan Signals to `task_retry`~~ [INVALID]
 
-ReviewPlan already classifies failure signals by question block. The existing `task_retry` MCP tool already retries tasks. The missing piece is the bridge.
+⚠️ **REJECTED (Simon Strandgaard, 2026-02-25):** The MCP `task_retry` interface is not suitable as a ReviewPlan fallback mechanism. The retry logic is internal to `llm_executor.py` in each task, not exposed through MCP. Using MCP task_retry inside `run_plan_pipeline.py` would cause recursive calls and database corruption. 
 
-```python
-# New module: worker_plan_internal/diagnostics/review_retry_bridge.py
+**Do not pursue this adaptation.** Instead, focus on Adaption 5 (Fermi Sanity Check) and improving task-level retry logic directly within `llm_executor.py`.
 
-SIGNAL_TO_TASK_GROUP = {
-    "critical_issues":     ["MakeAssumptions", "ReviewAssumptions"],
-    "showstopper_risks":   ["GovernancePhase4", "GovernancePhase5"],
-    "timeline_dependency": ["CreateWBSLevel3", "EstimateWBSTaskDurations", "ProjectSchedulePopulator"],
-    "data_uncertainty":    ["DataCollection", "FilterDocumentsToFind"],
-    "stakeholder_gaps":    ["FindTeamMembers", "ReviewTeam"],
-}
+### Adaptation 3: Systemic Structured Output Validation (Already Implemented)
 
-def parse_review_signals(review_plan_path: Path) -> list[dict]:
-    """Extract actionable signals from review_plan.md."""
-    text = review_plan_path.read_text()
-    signals = []
-    for category, tasks in SIGNAL_TO_TASK_GROUP.items():
-        if is_flagged(text, category):
-            signals.append({"category": category, "tasks": tasks, "severity": extract_severity(text, category)})
-    return signals
+⚠️ **CORRECTION (Simon Strandgaard, 2026-02-25):** PlanExe **already uses structured output validation systemically**, not just at single task boundaries.
 
-def trigger_retries(run_id: str, signals: list[dict], budget: RetryBudget):
-    """Call task_retry for each flagged task group, respecting budget."""
-    for signal in signals:
-        if signal["severity"] < budget.severity_threshold:
-            continue
-        for task_name in signal["tasks"]:
-            if budget.can_retry():
-                task_retry(run_id=run_id, task_name=task_name, context=signal["category"])
-                budget.consume()
-```
+Across `premise_attack.py`, `identify_potential_levers.py`, `premortem.py`, and many other files, PlanExe enforces structured output by saving results as:
+- **JSON:** Full system prompt, user prompt, input data, and LLM response (for troubleshooting)
+- **Markdown:** Pretty-printed essential parts only (for human review)
 
-`RetryBudget` caps total retries per run (default: 3 task groups, 2 retries each) to prevent runaway costs.
+This dual output pattern (JSON + Markdown) is the systemic contract between tasks. Each task validates its JSON output before writing, and downstream tasks can trust the structure.
 
-### Adaptation 3: Typed Output Contracts
-
-arcgentica agents return typed objects, not raw strings:
-
-```python
-result = await agent.call(FinalSolution, task, examples=examples)
-# FinalSolution is a TypedDict — parsing failure raises immediately, not 20 tasks later
-```
-
-PlanExe tasks write markdown. Structural failures are discovered late. Adding Pydantic output validation to high-risk tasks catches them at the task boundary:
-
-```python
-from pydantic import BaseModel, validator
-
-class AssumptionsOutput(BaseModel):
-    assumptions: list[str]
-    risks: list[str]
-    confidence: float  # 0.0-1.0
-
-    @validator('assumptions')
-    def at_least_three(cls, v):
-        if len(v) < 3:
-            raise ValueError('Need at least 3 assumptions')
-        return v
-
-class MakeAssumptions(luigi.Task):
-    def run(self):
-        raw = self.llm.execute(self.prompt)
-        try:
-            parsed = AssumptionsOutput.model_validate_json(raw)
-        except ValidationError as e:
-            # Fail loudly at this task, not 30 tasks later
-            raise TaskOutputError(f"MakeAssumptions output failed validation: {e}")
-        self.output().open('w').write(parsed.model_dump_json())
-```
-
-This requires prompts to request JSON output — a prompt change, not an architecture change. The JSON structure becomes the contract between tasks.
-
-**Where to start:** `MakeAssumptions` → `AssumptionsOutput`. Single task, high leverage, easy to validate.
+**No change needed.** The typed output pattern is already built into PlanExe's core. Focus instead on improving task-level validation logic within existing structured output patterns.
 
 ### Adaptation 4: Complexity-Gated Task Selection
 
@@ -219,18 +160,20 @@ class GovernancePhase4(luigi.Task):
 
 ---
 
-## Implementation Priority
+## Implementation Priority (REVISED)
 
-Start small. Each adaptation is independent:
+⚠️ **UPDATE (Simon Strandgaard, 2026-02-25):** Adaptation 2 (ReviewPlan → task_retry bridge) is invalid. See corrections above.
 
-| Priority | Adaptation | Effort | Risk |
-|----------|-----------|--------|------|
-| 1 | ReviewPlan → task_retry bridge | Low | Low — uses existing task_retry |
-| 2 | Soft self-eval on MakeAssumptions | Medium | Low — bounded, isolated to one task |
-| 3 | Typed output for MakeAssumptions | Medium | Medium — requires prompt change |
-| 4 | PlanComplexityAssessor | High | Low — purely additive |
+**Valid adaptations, ranked by value/effort:**
 
-Adaptation 1 has the highest value/effort ratio. Simon already built `task_retry` — we're just connecting ReviewPlan output to it. No new infrastructure, no prompt changes, no Luigi restructuring.
+| Priority | Adaptation | Effort | Risk | Notes |
+|----------|-----------|--------|------|-------|
+| 1 | Fermi Sanity Check (Adaptation 5) | Medium | Low | Simon's primary quality signal: quantitative grounding |
+| 2 | Soft self-eval on MakeAssumptions | Medium | Low | Bounded, isolated to one task |
+| 3 | ~~Typed output for MakeAssumptions~~ | N/A | N/A | Already systemic in PlanExe — no change needed |
+| 4 | PlanComplexityAssessor | High | Low | Cost optimization, lower urgency |
+
+**Start with Adaptation 5 (Fermi Sanity Check).** It directly addresses Simon's feedback on quantitative grounding and doesn't require architectural changes to Luigi or task_retry.
 
 ---
 
@@ -301,17 +244,19 @@ class FermiSanityCheck(luigi.Task):
 
 **Integration:** `ReviewPlan` reads `fermi_sanity.json` as an additional input. Ungrounded claims in `flagged` are automatically promoted to the `critical_issues` signal category in the ReviewPlan → task_retry bridge (Adaptation 2).
 
-### Revised Priority Order
+### Final Priority Order (Updated 2026-02-25)
 
-Based on Simon's feedback, the implementation order changes:
+Based on Simon Strandgaard's feedback, the final implementation order is:
 
 | Priority | Adaptation | Rationale |
 |----------|-----------|-----------|
-| 1 | Fermi Sanity Check (new, Adaptation 5) | Simon's primary quality signal |
-| 2 | Typed output contracts for `MakeAssumptions` | Required for Fermi check to work reliably |
-| 3 | ReviewPlan → task_retry bridge | Connects Fermi failures to reruns |
-| 4 | Soft self-eval loop on high-stakes tasks | Incremental quality improvement |
-| 5 | Complexity-gated pipeline | Cost optimization, lower urgency |
+| 1 | **Fermi Sanity Check (Adaptation 5)** | Simon's primary quality signal; highest value/effort |
+| 2 | Soft self-eval loop on high-stakes tasks | Incremental quality improvement; low risk |
+| 3 | ~~ReviewPlan → task_retry bridge~~ | **INVALID** — do not pursue (see Gap 2 correction) |
+| 4 | ~~Typed output contracts~~ | **Already systemic in PlanExe** (see Adaptation 3 correction) |
+| 5 | Complexity-gated pipeline (Adaptation 4) | Cost optimization; lower urgency |
+
+**Removed from scope:** Adaptations 2 and 3 as described are either invalid (MCP task_retry) or redundant (structured output). Focus on Adaptation 5 first.
 
 ---
 

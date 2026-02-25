@@ -1,4 +1,4 @@
-# PlanExe 2026: From Plan Generator to Autonomous Agent Auditor
+# From Plan Generator to Autonomous Agent Auditor
 
 **Date:** 26 February 2026  
 **Authors:** Larry, Egon, Simon (for review)  

@@ -118,17 +118,57 @@ _authenticated_user_api_key_ctx: contextvars.ContextVar[Optional[str]] = context
 )
 
 
+def _normalize_api_key_value(raw_value: Optional[str]) -> Optional[str]:
+    """Strip common copy-paste artefacts from an API key value.
+
+    Handles cases where clients paste the full header line (e.g. 'X-API-Key: pex_…')
+    or include a Bearer/token scheme prefix (e.g. 'Bearer pex_…'), or wrap the
+    value in quotes.
+    """
+    if raw_value is None:
+        return None
+    value = raw_value.strip()
+    if not value:
+        return None
+
+    lower = value.lower()
+
+    # Strip common header-name prefixes (copy-paste of the full header line).
+    for prefix in ("x-api-key:", "api-key:", "api_key:", "authorization:"):
+        if lower.startswith(prefix):
+            value = value[len(prefix):].strip()
+            lower = value.lower()
+            break
+
+    # Strip scheme prefixes.
+    if lower.startswith("bearer "):
+        value = value[7:].strip()
+    elif lower.startswith("token "):
+        value = value[6:].strip()
+    elif " " in value:
+        # Generic "<scheme> <token>" – keep the last segment.
+        value = value.rsplit(" ", 1)[-1].strip()
+
+    # Strip matching surrounding quotes.
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1].strip()
+
+    return value or None
+
+
 def _extract_api_key(request: Request) -> Optional[str]:
+    # Prefer Authorization: Bearer <token>
     auth_header = request.headers.get("Authorization", "")
-    if auth_header:
-        parts = auth_header.split(" ", 1)
-        if len(parts) == 2 and parts[0].lower() == "bearer":
-            token = parts[1].strip()
-            if token:
-                return token
-    header_key = request.headers.get("X-API-Key") or request.headers.get("API_KEY")
-    if header_key:
-        return header_key
+    normalized_auth = _normalize_api_key_value(auth_header)
+    if normalized_auth:
+        return normalized_auth
+
+    # Fall back to explicit API-key headers (case-insensitive via Starlette).
+    for header_name in ("X-API-Key", "API-Key", "API_KEY", "X_API_KEY"):
+        value = _normalize_api_key_value(request.headers.get(header_name))
+        if value:
+            return value
+
     return None
 
 

@@ -91,7 +91,7 @@ Some MCP clients (e.g. OpenClaw/mcporter) connect by doing a **GET** to the serv
 **You do not need SSE for tools.** MCP over HTTP can use plain JSON:
 
 - **List tools:** `GET http://<host>:8001/mcp/tools` → returns `{"tools": [...]}` (JSON).
-- **Call a tool:** `POST http://<host>:8001/mcp/tools/call` with body `{"tool": "task_create", "arguments": {"prompt": "…"}, "metadata": {"task_create": {"speed_vs_detail": "ping"}}}` → returns JSON.
+- **Call a tool:** `POST http://<host>:8001/mcp/tools/call` with body `{"tool": "task_create", "arguments": {"prompt": "…"}}` → returns JSON.
 
 If your client only supports Streamable HTTP and fails on `/mcp`, you have two options:
 

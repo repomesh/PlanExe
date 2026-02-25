@@ -31,6 +31,8 @@ PlanExe has multiple MCP servers that can be connected to.
 npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.planexe.org/mcp/
 ```
 
+> **URL note**: The canonical server URL is `https://mcp.planexe.org/mcp` (no trailing slash) — use this in JSON config files and registry entries. The trailing slash (`/mcp/`) is used above because the MCP Inspector CLI appends sub-paths to the base URL; without it the inspector may send requests to the wrong path. Both forms are accepted by the server.
+
 This opens the inspector in a browser
 
 ![screenshot of mcp inspector](inspector_step1_mcp_planexe_org.webp)
@@ -77,7 +79,6 @@ task_file_info
 ```
 
 When you inspect `task_create`, the visible input schema includes `prompt` and optional `model_profile`.
-The `speed_vs_detail` parameter is intentionally hidden and only set via tool-specific metadata, since it confuses AI agents.
 
 Follow these steps:
 ![screenshot of mcp inspector invoke tool](inspector_step5_mcp_planexe_org.webp)

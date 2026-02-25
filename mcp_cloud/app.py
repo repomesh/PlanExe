@@ -8,11 +8,14 @@ database_api models.
 import asyncio
 import contextvars
 import hashlib
+import hmac
 import io
 import json
 import logging
 import os
+import secrets
 import tempfile
+import time
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -74,8 +77,11 @@ from mcp_cloud.tool_models import (
     TaskStatusInput,
     TaskStopInput,
     TaskFileInfoInput,
+    TaskFileInfoNotReadyOutput,
     TaskStatusSuccess,
     TaskFileInfoReadyOutput,
+    TaskListInput,
+    TaskListOutput,
     ErrorDetail,
 )
 
@@ -146,8 +152,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If a run fails, call task_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
     "To stop, call task_stop with the task_id from task_create; stopping is asynchronous and the task will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
-    "Tool errors use {error:{code,message}}. task_file_info returns an empty object {} while the artifact is not ready; check readiness by testing whether download_url is present. "
+    "Tool errors use {error:{code,message}}. task_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
     "task_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
+    "To list recent tasks for a user call task_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt for each task. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the task_create likely failed/stalled. "
@@ -169,24 +176,12 @@ ZIP_FILENAME = "run.zip"
 ZIP_CONTENT_TYPE = "application/zip"
 ZIP_SNAPSHOT_MAX_BYTES = 100_000_000
 
-SPEED_VS_DETAIL_DEFAULT = "all_details_but_slow"
-SPEED_VS_DETAIL_DEFAULT_ALIAS = "all"
-SPEED_VS_DETAIL_VALUES = (
-    "ping_llm",
-    "fast_but_skip_details",
-    "all_details_but_slow",
-)
 ModelProfileInput = Literal[
     "baseline",
     "premium",
     "frontier",
     "custom",
 ]
-SPEED_VS_DETAIL_ALIASES = {
-    "ping": "ping_llm",
-    "fast": "fast_but_skip_details",
-    "all": "all_details_but_slow",
-}
 MODEL_PROFILE_TITLES = {
     ModelProfileEnum.BASELINE.value: "Baseline",
     ModelProfileEnum.PREMIUM.value: "Premium",
@@ -219,6 +214,9 @@ class TaskFileInfoRequest(BaseModel):
     task_id: str
     artifact: Optional[str] = None
 
+class TaskListRequest(BaseModel):
+    user_api_key: str
+    limit: int = 10
 
 class ModelProfilesRequest(BaseModel):
     """No input parameters."""
@@ -305,7 +303,6 @@ def _create_task_sync(
 ) -> dict[str, Any]:
     with app.app_context():
         parameters = dict(config or {})
-        parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
         parameters["model_profile"] = normalize_model_profile(parameters.get("model_profile")).value
         parameters["trigger_source"] = "mcp task_create"
 
@@ -392,7 +389,6 @@ def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[s
         normalized_profile = normalize_model_profile(model_profile).value
         now_utc = datetime.now(UTC)
         parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
-        parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
         parameters["model_profile"] = normalized_profile
         parameters["trigger_source"] = "mcp task_retry"
 
@@ -445,6 +441,33 @@ def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
             "state": task.state,
             "progress_message": task.progress_message,
         }
+
+def _list_tasks_sync(user_id: str, limit: int) -> list[dict[str, Any]]:
+    with app.app_context():
+        tasks = (
+            db.session.query(TaskItem)
+            .filter_by(user_id=user_id)
+            .order_by(TaskItem.timestamp_created.desc())
+            .limit(max(1, min(limit, 50)))
+            .all()
+        )
+        results = []
+        for task in tasks:
+            created_at = task.timestamp_created
+            if created_at and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            results.append({
+                "task_id": str(task.id),
+                "state": get_task_state_mapping(task.state),
+                "progress_percentage": float(task.progress_percentage or 0.0),
+                "created_at": (
+                    created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                    if created_at else None
+                ),
+                "prompt_excerpt": (task.prompt or "")[:100],
+            })
+        return results
+
 
 def list_files_from_zip_bytes(zip_bytes: bytes) -> list[str]:
     """List file entries from an in-memory zip archive."""
@@ -734,19 +757,6 @@ def get_task_state_mapping(task_state: TaskState) -> str:
     }
     return mapping.get(task_state, "pending")
 
-def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
-    value: Optional[str] = None
-    if isinstance(config, dict):
-        raw_value = config.get("speed_vs_detail") or config.get("speed")
-        if isinstance(raw_value, str):
-            value = raw_value.strip().lower()
-    if value in SPEED_VS_DETAIL_ALIASES:
-        return SPEED_VS_DETAIL_ALIASES[value]
-    if value in SPEED_VS_DETAIL_VALUES:
-        return value
-    return SPEED_VS_DETAIL_DEFAULT
-
-
 def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
     """Extract task_create runtime overrides from hidden metadata containers.
 
@@ -779,14 +789,9 @@ def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[s
 
 def _merge_task_create_config(
     config: Optional[dict[str, Any]],
-    speed_vs_detail: Optional[str],
     model_profile: Optional[str],
 ) -> Optional[dict[str, Any]]:
     merged = dict(config or {})
-    if isinstance(speed_vs_detail, str):
-        candidate = speed_vs_detail.strip()
-        if candidate and "speed_vs_detail" not in merged and "speed" not in merged:
-            merged["speed_vs_detail"] = candidate
     if isinstance(model_profile, str):
         candidate_profile = model_profile.strip()
         if candidate_profile and "model_profile" not in merged:
@@ -961,22 +966,84 @@ def build_report_download_path(task_id: str) -> str:
     return f"/download/{task_id}/{REPORT_FILENAME}"
 
 
+def build_zip_download_path(task_id: str) -> str:
+    return f"/download/{task_id}/{ZIP_FILENAME}"
+
+
+# ---------------------------------------------------------------------------
+# Signed, expiring download tokens
+# ---------------------------------------------------------------------------
+
+# Default TTL for signed download tokens (seconds). Configurable via env var.
+DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("PLANEXE_DOWNLOAD_TOKEN_TTL", "900"))  # 15 min
+
+# Per-process fallback secret when no env var is set.  Tokens won't survive a
+# server restart, but that is acceptable for the fallback case.
+_random_token_secret: Optional[bytes] = None
+
+
+def _get_download_token_secret() -> bytes:
+    """Return the HMAC-SHA256 secret used to sign download tokens.
+
+    Priority: PLANEXE_DOWNLOAD_TOKEN_SECRET → PLANEXE_API_KEY_SECRET →
+    per-process random (with a warning logged once).
+    """
+    global _random_token_secret
+    for env_var in ("PLANEXE_DOWNLOAD_TOKEN_SECRET", "PLANEXE_API_KEY_SECRET"):
+        value = os.environ.get(env_var)
+        if value:
+            return value.encode()
+    if _random_token_secret is None:
+        _random_token_secret = secrets.token_bytes(32)
+        logger.warning(
+            "PLANEXE_DOWNLOAD_TOKEN_SECRET is not set; using a random per-process secret. "
+            "Download tokens will be invalidated on server restart. "
+            "Set PLANEXE_DOWNLOAD_TOKEN_SECRET to a stable value."
+        )
+    return _random_token_secret
+
+
+def generate_download_token(task_id: str, filename: str) -> str:
+    """Return a signed, time-limited token for one task artifact download.
+
+    Format: ``{expiry_unix_ts}.{hmac_hex}``
+    The HMAC covers ``task_id:filename:expiry`` so the token is scoped to
+    exactly one file and cannot be reused for a different task.
+    """
+    expiry = int(time.time()) + DOWNLOAD_TOKEN_TTL_SECONDS
+    message = f"{task_id}:{filename}:{expiry}".encode()
+    mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
+    return f"{expiry}.{mac}"
+
+
+def validate_download_token(token: str, task_id: str, filename: str) -> bool:
+    """Return True when *token* is a valid, unexpired token for the given artifact."""
+    try:
+        expiry_str, mac = token.split(".", 1)
+        expiry = int(expiry_str)
+    except (ValueError, AttributeError):
+        return False
+    if time.time() > expiry:
+        return False
+    message = f"{task_id}:{filename}:{expiry}".encode()
+    expected_mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(mac, expected_mac)
+
+
 def build_report_download_url(task_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    return f"{base_url}{build_report_download_path(task_id)}"
-
-
-def build_zip_download_path(task_id: str) -> str:
-    return f"/download/{task_id}/{ZIP_FILENAME}"
+    token = generate_download_token(task_id, REPORT_FILENAME)
+    return f"{base_url}{build_report_download_path(task_id)}?token={token}"
 
 
 def build_zip_download_url(task_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    return f"{base_url}{build_zip_download_path(task_id)}"
+    token = generate_download_token(task_id, ZIP_FILENAME)
+    return f"{base_url}{build_zip_download_path(task_id)}?token={token}"
 
 
 def _load_mcp_example_prompts() -> list[str]:
@@ -1059,6 +1126,7 @@ TASK_STATUS_OUTPUT_SCHEMA = {
 TASK_STOP_OUTPUT_SCHEMA = TaskStopOutput.model_json_schema()
 TASK_RETRY_OUTPUT_SCHEMA = TaskRetryOutput.model_json_schema()
 TASK_FILE_INFO_READY_OUTPUT_SCHEMA = TaskFileInfoReadyOutput.model_json_schema()
+TASK_FILE_INFO_NOT_READY_OUTPUT_SCHEMA = TaskFileInfoNotReadyOutput.model_json_schema()
 TASK_FILE_INFO_OUTPUT_SCHEMA = {
     "oneOf": [
         {
@@ -1066,11 +1134,7 @@ TASK_FILE_INFO_OUTPUT_SCHEMA = {
             "properties": {"error": ErrorDetail.model_json_schema()},
             "required": ["error"],
         },
-        {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        TASK_FILE_INFO_NOT_READY_OUTPUT_SCHEMA,
         TASK_FILE_INFO_READY_OUTPUT_SCHEMA,
     ]
 }
@@ -1083,6 +1147,8 @@ PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
 PROMPT_EXAMPLES_OUTPUT_SCHEMA = PromptExamplesOutput.model_json_schema()
 MODEL_PROFILES_INPUT_SCHEMA = ModelProfilesInput.model_json_schema()
 MODEL_PROFILES_OUTPUT_SCHEMA = ModelProfilesOutput.model_json_schema()
+TASK_LIST_INPUT_SCHEMA = TaskListInput.model_json_schema()
+TASK_LIST_OUTPUT_SCHEMA = TaskListOutput.model_json_schema()
 
 @dataclass(frozen=True)
 class ToolDefinition:
@@ -1143,7 +1209,7 @@ TOOL_DEFINITIONS = [
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
             "Returns task_id (UUID); use it for task_status, task_stop, task_retry, and task_file_info. "
-            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
+            "If you lose a task_id, call task_list with your user_api_key to recover it. "
             "Each task_create call creates a new task_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
@@ -1223,7 +1289,7 @@ TOOL_DEFINITIONS = [
             "Use artifact='report' (default) for the interactive HTML report (~700KB, self-contained with embedded JS "
             "for collapsible sections and interactive Gantt charts — open in a browser). "
             "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
-            "While the task is still pending or processing, returns an empty object {} (no fields). "
+            "While the task is still pending or processing, returns {ready:false,reason:\"processing\"}. "
             "Check readiness by testing whether download_url is present in the response. "
             "Once ready, present download_url to the user or fetch and save the file locally. "
             "If your client exposes task_download (e.g. mcp_local), prefer that to save the file locally. "
@@ -1232,6 +1298,24 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=TASK_FILE_INFO_INPUT_SCHEMA,
         output_schema=TASK_FILE_INFO_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
+        name="task_list",
+        description=(
+            "List the most recent tasks for an authenticated user. "
+            "Requires user_api_key (pex_...). "
+            "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
+            "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
+            "Use this to recover a lost task_id or to review recent activity."
+        ),
+        input_schema=TASK_LIST_INPUT_SCHEMA,
+        output_schema=TASK_LIST_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -1282,12 +1366,10 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}} → faster run
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
         - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
-        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -1301,20 +1383,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     if model_profile is None and isinstance(metadata_model_profile, str):
         model_profile = metadata_model_profile
 
-    speed_vs_detail = metadata_overrides.get("speed_vs_detail")
-    if not isinstance(speed_vs_detail, str):
-        speed_alias = metadata_overrides.get("speed")
-        if isinstance(speed_alias, str):
-            speed_vs_detail = speed_alias
-        else:
-            # Backward-compatible hidden override when callers still send legacy top-level args.
-            legacy_speed = arguments.get("speed_vs_detail")
-            if isinstance(legacy_speed, str):
-                speed_vs_detail = legacy_speed
-            elif isinstance(arguments.get("speed"), str):
-                speed_vs_detail = arguments.get("speed")
-
-    merged_config = _merge_task_create_config(None, speed_vs_detail, model_profile)
+    merged_config = _merge_task_create_config(None, model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:
@@ -1603,7 +1672,7 @@ async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
         if content_bytes is None:
             task_state = task_snapshot["state"]
             if task_state in (TaskState.pending, TaskState.processing) or task_state is None:
-                response = {}
+                response = {"ready": False, "reason": "processing"}
             else:
                 response = {
                     "error": {
@@ -1636,7 +1705,7 @@ async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
 
     task_state = task_snapshot["state"]
     if task_state in (TaskState.pending, TaskState.processing) or task_state is None:
-        response = {}
+        response = {"ready": False, "reason": "processing"}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
@@ -1644,7 +1713,7 @@ async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
         )
     if task_state == TaskState.failed:
         message = task_snapshot["progress_message"] or "Plan generation failed."
-        response = {"error": {"code": "generation_failed", "message": message}}
+        response = {"ready": False, "reason": "failed", "error": {"code": "generation_failed", "message": message}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
@@ -1682,12 +1751,45 @@ async def handle_task_file_info(arguments: dict[str, Any]) -> CallToolResult:
         isError=False,
     )
 
+async def handle_task_list(arguments: dict[str, Any]) -> CallToolResult:
+    """Return recent tasks for an authenticated user."""
+    try:
+        req = TaskListRequest(**arguments)
+    except Exception as exc:
+        response = {"error": {"code": "INVALID_ARGUMENTS", "message": str(exc)}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    user_context = _resolve_user_from_api_key(req.user_api_key.strip())
+    if not user_context:
+        response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    limit = max(1, min(req.limit, 50))
+    tasks = await asyncio.to_thread(_list_tasks_sync, str(user_context["user_id"]), limit)
+    response = {
+        "tasks": tasks,
+        "message": f"Returned {len(tasks)} task(s).",
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
 TOOL_HANDLERS = {
     "task_create": handle_task_create,
     "task_status": handle_task_status,
     "task_stop": handle_task_stop,
     "task_retry": handle_task_retry,
     "task_file_info": handle_task_file_info,
+    "task_list": handle_task_list,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
 }

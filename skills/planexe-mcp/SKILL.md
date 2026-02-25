@@ -83,7 +83,7 @@ PLANEXE_API_KEY=your_api_key
 
 ## Invoking PlanExe Tools
 
-The PlanExe MCP exposes five core tools via the `/mcp` endpoint:
+The PlanExe MCP exposes eight core tools via the `/mcp` endpoint:
 
 ### Tool 1: `prompt_examples`
 
@@ -184,7 +184,28 @@ Stop a running planning task.
 
 ---
 
-### Tool 5: `task_file_info`
+### Tool 5: `model_profiles`
+
+Return available model profiles and their guidance before calling `task_create`.
+
+**No required parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "model_profiles",
+    "arguments": {}
+  }
+}
+```
+
+**Returns:** Available model profiles (`baseline`, `premium`, `frontier`, `custom`) with descriptions and currently loaded models.
+
+---
+
+### Tool 6: `task_file_info`
 
 Retrieve download information for completed plan artifacts.
 
@@ -212,15 +233,66 @@ Retrieve download information for completed plan artifacts.
 
 ---
 
+### Tool 7: `task_list`
+
+List recent tasks for an authenticated user. Useful for recovering a lost `task_id`.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_list",
+    "arguments": {
+      "user_api_key": "pex_your_key_here",
+      "limit": 10
+    }
+  }
+}
+```
+
+**Returns:** List of recent tasks with `task_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
+
+---
+
+### Tool 8: `task_retry`
+
+Retry a failed task with an optional upgraded model profile.
+
+**Parameters:**
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "task_retry",
+    "arguments": {
+      "task_id": "task_abc123def456",
+      "model_profile": "premium"
+    }
+  }
+}
+```
+
+**Returns:** Confirmation that the task was requeued to `pending` state.
+
+---
+
 ## Typical Workflow
 
 1. Call `prompt_examples` to understand available planning scenarios
-2. Formulate your planning prompt
-3. Get user approval for the request
-4. Call `task_create` with your prompt and parameters → receives `task_id`
-5. Poll `task_status` every 5+ minutes until status is `completed` or `failed`
-6. Call `task_file_info` with completed `task_id` to get download link
-7. Download and use the generated plan
+2. Optionally call `model_profiles` to choose an appropriate `model_profile`
+3. Formulate your planning prompt
+4. Get user approval for the request
+5. Call `task_create` with your prompt and parameters → receives `task_id`
+6. Poll `task_status` every 5+ minutes until status is `completed` or `failed`
+7. If `failed`, optionally call `task_retry` to requeue with a stronger model
+8. Call `task_file_info` with completed `task_id` to get download link
+9. Download and use the generated plan
+10. If you lose a `task_id`, call `task_list` with your `user_api_key` to recover it
 
 Refer to the [PlanExe API documentation](https://planexe.org/docs) for extended examples and advanced use cases.
 

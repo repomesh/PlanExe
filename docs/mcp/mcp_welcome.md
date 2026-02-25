@@ -25,8 +25,6 @@ No MCP experience is required to get started.
 - **Retry failed runs** — If status is `failed`, call `task_retry` (defaults to baseline model profile) to requeue the same task id.
 - **Download the report** — When the plan is ready, the user specifies whether to download the HTML report or the zip of intermediary files (JSON, MD, CSV).
 
-Developer note: `speed_vs_detail` is intentionally hidden from the visible `task_create` interface and is provided via tool-specific metadata when needed.
-
 ---
 
 ## What you get

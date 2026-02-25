@@ -50,6 +50,22 @@ class TestTaskCreateInputSchemaHasUserApiKey(unittest.TestCase):
         self.assertIn("user_api_key", props)
 
 
+class TestTaskListInputSchemaHasUserApiKey(unittest.TestCase):
+    """user_api_key must be required in the task_list input schema."""
+
+    def test_cloud_task_list_schema_requires_user_api_key(self):
+        props = cloud_app.TASK_LIST_INPUT_SCHEMA.get("properties", {})
+        self.assertIn("user_api_key", props)
+        required = cloud_app.TASK_LIST_INPUT_SCHEMA.get("required", [])
+        self.assertIn("user_api_key", required)
+
+    def test_local_task_list_schema_requires_user_api_key(self):
+        props = local_app.TASK_LIST_INPUT_SCHEMA.get("properties", {})
+        self.assertIn("user_api_key", props)
+        required = local_app.TASK_LIST_INPUT_SCHEMA.get("required", [])
+        self.assertIn("user_api_key", required)
+
+
 class TestTaskRetryInputSchemaDefaults(unittest.TestCase):
     """task_retry should default model_profile to baseline."""
 
@@ -108,6 +124,7 @@ class TestRemainingToolAnnotations(unittest.TestCase):
             "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
             "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "task_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "task_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
         for tool_name, expected_annotations in expected.items():
             with self.subTest(tool=tool_name):
@@ -121,6 +138,7 @@ class TestRemainingToolAnnotations(unittest.TestCase):
             "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
             "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "task_download": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "task_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
         for tool_name, expected_annotations in expected.items():
             with self.subTest(tool=tool_name):
@@ -141,6 +159,10 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("task_file_info", cloud_tool_names)
         self.assertNotIn("task_download", cloud_tool_names)
+
+    def test_cloud_exposes_task_list_tool(self):
+        cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
+        self.assertIn("task_list", cloud_tool_names)
 
     def test_cloud_instructions_reference_cloud_download_tool(self):
         self.assertIn("task_file_info", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
@@ -194,6 +216,10 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
         self.assertIn("task_download", local_tool_names)
         self.assertNotIn("task_file_info", local_tool_names)
+
+    def test_local_exposes_task_list_tool(self):
+        local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
+        self.assertIn("task_list", local_tool_names)
 
     def test_local_instructions_reference_local_download_tool(self):
         self.assertIn("task_download", local_app.PLANEXE_SERVER_INSTRUCTIONS)

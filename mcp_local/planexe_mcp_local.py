@@ -61,6 +61,11 @@ class TaskDownloadRequest(BaseModel):
     artifact: str = "report"
 
 
+class TaskListRequest(BaseModel):
+    user_api_key: str
+    limit: int = 10
+
+
 def _get_env(name: str, default: Optional[str] = None) -> Optional[str]:
     value = os.environ.get(name)
     return value if value else default
@@ -560,6 +565,46 @@ TASK_DOWNLOAD_OUTPUT_SCHEMA = {
     "additionalProperties": False,
 }
 
+TASK_LIST_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "user_api_key": {
+            "type": "string",
+            "description": "User API key (pex_...) to scope the task list to the authenticated user.",
+        },
+        "limit": {
+            "type": "integer",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50,
+            "description": "Maximum number of tasks to return (1-50). Newest tasks are returned first.",
+        },
+    },
+    "required": ["user_api_key"],
+}
+TASK_LIST_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "tasks": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string"},
+                    "state": {"type": "string"},
+                    "progress_percentage": {"type": "number"},
+                    "created_at": {"type": "string"},
+                    "prompt_excerpt": {"type": "string"},
+                },
+            },
+            "description": "Tasks for the authenticated user, newest first.",
+        },
+        "message": {"type": "string"},
+        "error": ERROR_SCHEMA,
+    },
+    "additionalProperties": False,
+}
+
 TOOL_DEFINITIONS = [
     ToolDefinition(
         name="prompt_examples",
@@ -611,7 +656,7 @@ TOOL_DEFINITIONS = [
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
             "Returns task_id (UUID); use it for task_status, task_stop, task_retry, and task_download. "
-            "Save task_id immediately: there is no task_list tool, so a lost task_id cannot be recovered. "
+            "If you lose a task_id, call task_list with your user_api_key to recover it. "
             "Each task_create call creates a new task_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
@@ -704,6 +749,24 @@ TOOL_DEFINITIONS = [
             "openWorldHint": True,
         },
     ),
+    ToolDefinition(
+        name="task_list",
+        description=(
+            "List the most recent tasks for an authenticated user. "
+            "Requires user_api_key (pex_...). "
+            "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
+            "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
+            "Use this to recover a lost task_id or to review recent activity."
+        ),
+        input_schema=TASK_LIST_INPUT_SCHEMA,
+        output_schema=TASK_LIST_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
 ]
 
 # Shown in MCP initialize response (e.g. Inspector) so clients know what PlanExe is.
@@ -731,6 +794,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. task_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "task_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
+    "To list recent tasks for a user call task_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt. "
     "task_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if task_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If task_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
@@ -784,12 +848,10 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → task_id + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}}
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
         - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
-        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -806,22 +868,6 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     metadata = arguments.get("metadata")
     if isinstance(metadata, dict):
         payload["metadata"] = metadata
-
-    # Backward compatibility: if callers still pass top-level speed args,
-    # forward them as hidden metadata so cloud can resolve the execution mode.
-    legacy_speed_vs_detail = arguments.get("speed_vs_detail")
-    legacy_speed = arguments.get("speed")
-    if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
-        if not isinstance(payload.get("metadata"), dict):
-            payload["metadata"] = {}
-        task_create_metadata = payload["metadata"].get("task_create")
-        if not isinstance(task_create_metadata, dict):
-            task_create_metadata = {}
-            payload["metadata"]["task_create"] = task_create_metadata
-        if isinstance(legacy_speed_vs_detail, str):
-            task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
-        if isinstance(legacy_speed, str):
-            task_create_metadata.setdefault("speed", legacy_speed)
 
     payload, error = _call_remote_tool(
         "task_create",
@@ -968,12 +1014,23 @@ async def handle_task_download(arguments: dict[str, Any]) -> CallToolResult:
     return _wrap_response(payload)
 
 
+async def handle_task_list(arguments: dict[str, Any]) -> CallToolResult:
+    """List recent tasks for an authenticated user via mcp_cloud."""
+    req = TaskListRequest(**arguments)
+    payload_args: dict[str, Any] = {"user_api_key": req.user_api_key, "limit": req.limit}
+    payload, error = _call_remote_tool("task_list", payload_args)
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
 TOOL_HANDLERS = {
     "task_create": handle_task_create,
     "task_status": handle_task_status,
     "task_stop": handle_task_stop,
     "task_retry": handle_task_retry,
     "task_download": handle_task_download,
+    "task_list": handle_task_list,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
 }

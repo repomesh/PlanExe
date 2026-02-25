@@ -11,6 +11,19 @@ This page covers common Docker workflows and troubleshooting.
 - Build fresh and start services: `docker compose build --no-cache database_postgres worker_plan frontend_single_user frontend_multi_user && docker compose up`
 
 ## While developing
+
+Simons typical workflow.
+
+While making code changes, I do this.
+
+```bash
+docker compose down --remove-orphans
+docker compose build --no-cache
+docker compose up
+```
+
+Frequently I do `docker system prune -a` to free disk space.
+
 - Live rebuild/restart on changes: `docker compose watch` (requires Docker Desktop 4.28+).  
   If watch misses changes after file moves, rerun the no-cache build above.
 - View logs: 

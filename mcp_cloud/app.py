@@ -8,11 +8,14 @@ database_api models.
 import asyncio
 import contextvars
 import hashlib
+import hmac
 import io
 import json
 import logging
 import os
+import secrets
 import tempfile
+import time
 import uuid
 import zipfile
 from dataclasses import dataclass
@@ -963,22 +966,84 @@ def build_report_download_path(task_id: str) -> str:
     return f"/download/{task_id}/{REPORT_FILENAME}"
 
 
+def build_zip_download_path(task_id: str) -> str:
+    return f"/download/{task_id}/{ZIP_FILENAME}"
+
+
+# ---------------------------------------------------------------------------
+# Signed, expiring download tokens
+# ---------------------------------------------------------------------------
+
+# Default TTL for signed download tokens (seconds). Configurable via env var.
+DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("PLANEXE_DOWNLOAD_TOKEN_TTL", "900"))  # 15 min
+
+# Per-process fallback secret when no env var is set.  Tokens won't survive a
+# server restart, but that is acceptable for the fallback case.
+_random_token_secret: Optional[bytes] = None
+
+
+def _get_download_token_secret() -> bytes:
+    """Return the HMAC-SHA256 secret used to sign download tokens.
+
+    Priority: PLANEXE_DOWNLOAD_TOKEN_SECRET → PLANEXE_API_KEY_SECRET →
+    per-process random (with a warning logged once).
+    """
+    global _random_token_secret
+    for env_var in ("PLANEXE_DOWNLOAD_TOKEN_SECRET", "PLANEXE_API_KEY_SECRET"):
+        value = os.environ.get(env_var)
+        if value:
+            return value.encode()
+    if _random_token_secret is None:
+        _random_token_secret = secrets.token_bytes(32)
+        logger.warning(
+            "PLANEXE_DOWNLOAD_TOKEN_SECRET is not set; using a random per-process secret. "
+            "Download tokens will be invalidated on server restart. "
+            "Set PLANEXE_DOWNLOAD_TOKEN_SECRET to a stable value."
+        )
+    return _random_token_secret
+
+
+def generate_download_token(task_id: str, filename: str) -> str:
+    """Return a signed, time-limited token for one task artifact download.
+
+    Format: ``{expiry_unix_ts}.{hmac_hex}``
+    The HMAC covers ``task_id:filename:expiry`` so the token is scoped to
+    exactly one file and cannot be reused for a different task.
+    """
+    expiry = int(time.time()) + DOWNLOAD_TOKEN_TTL_SECONDS
+    message = f"{task_id}:{filename}:{expiry}".encode()
+    mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
+    return f"{expiry}.{mac}"
+
+
+def validate_download_token(token: str, task_id: str, filename: str) -> bool:
+    """Return True when *token* is a valid, unexpired token for the given artifact."""
+    try:
+        expiry_str, mac = token.split(".", 1)
+        expiry = int(expiry_str)
+    except (ValueError, AttributeError):
+        return False
+    if time.time() > expiry:
+        return False
+    message = f"{task_id}:{filename}:{expiry}".encode()
+    expected_mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(mac, expected_mac)
+
+
 def build_report_download_url(task_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    return f"{base_url}{build_report_download_path(task_id)}"
-
-
-def build_zip_download_path(task_id: str) -> str:
-    return f"/download/{task_id}/{ZIP_FILENAME}"
+    token = generate_download_token(task_id, REPORT_FILENAME)
+    return f"{base_url}{build_report_download_path(task_id)}?token={token}"
 
 
 def build_zip_download_url(task_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    return f"{base_url}{build_zip_download_path(task_id)}"
+    token = generate_download_token(task_id, ZIP_FILENAME)
+    return f"{base_url}{build_zip_download_path(task_id)}?token={token}"
 
 
 def _load_mcp_example_prompts() -> list[str]:

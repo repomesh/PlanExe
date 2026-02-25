@@ -81,10 +81,17 @@ All tool handlers, auth logic, DB calls, and schema definitions live in one file
 
 Recovers lost task IDs, enables dashboards, and is the single most-requested missing feature in similar task-runner MCP servers.
 
-### 3.2 Signed, expiring download tokens (security)
+### 3.2 ~~Signed, expiring download tokens~~ (FIXED)
 
-`task_file_info` returns a plain `/download?task_id=…` URL. Anyone who intercepts that URL can download the file.
-Replace with short-lived signed tokens (HMAC-SHA256, 15-minute TTL) so the URL is only valid for the session.
+`task_file_info` now returns download URLs that include a signed, short-lived token:
+`/download/{task_id}/{filename}?token={expiry}.{hmac_sha256}`.
+
+- Token is HMAC-SHA256 over `task_id:filename:expiry`, scoped to one artifact.
+- Default TTL: 15 minutes (configurable via `PLANEXE_DOWNLOAD_TOKEN_TTL`).
+- Secret priority: `PLANEXE_DOWNLOAD_TOKEN_SECRET` → `PLANEXE_API_KEY_SECRET` → random per-process (with warning).
+- Tokenised URLs work in a browser without an API key header; the middleware validates the token and skips the API-key check.
+- Defence-in-depth: the download endpoint re-validates the token even after the middleware has passed it.
+- Backward compatible: requests without a token still require a valid API key header (existing behaviour).
 
 ### 3.3 SSE progress streaming (UX)
 
@@ -168,7 +175,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1 | Write README demo GIF / YouTube link | 1 h |
 | P2 | Add `log_lines` to task_status | 4 h |
 | P2 | Refactor app.py into modules | 1 day |
-| P3 | Signed download tokens | 4 h |
+| P3 | ~~Signed download tokens~~ (DONE) | — |
 | P3 | Webhook support | 1 day |
 | P3 | GitHub Actions integration | 1 day |
 

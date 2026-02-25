@@ -67,6 +67,7 @@ from mcp_cloud.app import (
     handle_prompt_examples,
     resolve_task_for_task_id,
     set_download_base_url,
+    validate_download_token,
     _resolve_user_from_api_key,
 )
 
@@ -519,6 +520,24 @@ def _request_origin(request: Request) -> str:
     return f"{scheme}://{netloc}"
 
 
+def _has_valid_download_token(request: Request) -> bool:
+    """Return True when the request carries a valid signed download token.
+
+    Expected URL shape: /download/{task_id}/{filename}?token=...
+    The token is validated against the task_id and filename so it cannot be
+    reused for a different artifact.
+    """
+    token = request.query_params.get("token")
+    if not token:
+        return False
+    parts = request.url.path.strip("/").split("/")
+    # parts == ["download", "{task_id}", "{filename}"]
+    if len(parts) != 3 or parts[0] != "download":
+        return False
+    task_id, filename = parts[1], parts[2]
+    return validate_download_token(token, task_id, filename)
+
+
 @app.middleware("http")
 async def enforce_api_key(
     request: Request,
@@ -528,9 +547,15 @@ async def enforce_api_key(
     if request.method != "OPTIONS" and (
         request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
     ):
-        error_response = await _validate_api_key(request)
-        if error_response:
-            return error_response
+        # /download with a valid signed token is self-authenticating — no API key needed.
+        is_tokenized_download = (
+            request.url.path.startswith("/download")
+            and _has_valid_download_token(request)
+        )
+        if not is_tokenized_download:
+            error_response = await _validate_api_key(request)
+            if error_response:
+                return error_response
 
     error_response = await _enforce_body_size(request)
     if error_response:
@@ -653,10 +678,23 @@ async def list_tools(fastmcp_server: FastMCP = Depends(_get_fastmcp)) -> dict[st
 app.mount("/mcp", fastmcp_http_app)
 
 @app.get("/download/{task_id}/{filename}")
-async def download_report(task_id: str, filename: str) -> Response:
-    """Download the generated report HTML for a task."""
+async def download_report(
+    task_id: str,
+    filename: str,
+    token: Optional[str] = None,
+) -> Response:
+    """Download the generated report HTML or zip for a task.
+
+    Authentication: either a valid ``?token=...`` query parameter (signed,
+    expiring) or a valid API key in the request headers (existing behaviour).
+    The middleware enforces one of these; the token is re-validated here for
+    defence-in-depth.
+    """
     if filename not in (REPORT_FILENAME, ZIP_FILENAME):
         raise HTTPException(status_code=404, detail="Report not found")
+    # Defence-in-depth: if a token was supplied, it must be valid for this artifact.
+    if token is not None and not validate_download_token(token, task_id, filename):
+        raise HTTPException(status_code=401, detail="Invalid or expired download token")
     task = await asyncio.to_thread(resolve_task_for_task_id, task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")

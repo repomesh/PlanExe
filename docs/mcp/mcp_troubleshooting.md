@@ -51,3 +51,19 @@ Then:
 - Verify your provider has active billing.
 - Check usage limits or rate limits.
 - Try a different model or provider.
+
+---
+
+## `Invalid API key` (403)
+
+If your MCP client can reach `https://mcp.planexe.org/mcp` but receives `{"detail":"Invalid API key"}`:
+
+- Send **only the raw key value** (e.g. `pex_…`), not `X-API-Key: pex_…`.
+- The header should be `X-API-Key: <key>` or `Authorization: Bearer <key>`.
+- Verify with curl:
+
+```bash
+curl -i -H "X-API-Key: pex_your_key_here" https://mcp.planexe.org/mcp/tools
+```
+
+- For self-hosted deployments: ensure `PLANEXE_API_KEY_SECRET` matches in both `frontend_multi_user` (key issuer) and `mcp_cloud` (key validator). A mismatch causes all `pex_…` keys to be rejected.

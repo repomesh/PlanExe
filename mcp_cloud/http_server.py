@@ -624,6 +624,12 @@ async def options_mcp() -> Response:
     return Response(status_code=200)
 
 
+@app.api_route("/mcp", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
+async def redirect_mcp_no_trailing_slash() -> RedirectResponse:
+    """Normalize '/mcp' to '/mcp/' so streamable HTTP requests avoid 405 mismatches."""
+    return RedirectResponse(url="/mcp/", status_code=307)
+
+
 @app.post("/mcp/tools/call", response_model=MCPToolCallResponse)
 async def call_tool(
     payload: MCPToolCallRequest,

@@ -141,6 +141,13 @@ if not CORS_ORIGINS:
     # access control; CORS is defence-in-depth only.
     CORS_ORIGINS = ["*"]
 
+PUBLIC_JSONRPC_METHODS_NO_AUTH = {
+    "initialize",
+    "notifications/initialized",
+    "tools/list",
+    "ping",
+}
+
 
 def _allowed_cors_origin(request: Request) -> Optional[str]:
     origin = request.headers.get("origin")
@@ -178,6 +185,50 @@ def _append_cors_headers(request: Request, response: Response) -> Response:
         else:
             headers["Vary"] = "Origin"
     return response
+
+
+def _extract_jsonrpc_methods_from_payload(payload: Any) -> list[str]:
+    methods: list[str] = []
+    if isinstance(payload, dict):
+        method = payload.get("method")
+        if isinstance(method, str):
+            methods.append(method)
+        return methods
+
+    if isinstance(payload, list):
+        for item in payload:
+            if isinstance(item, dict):
+                method = item.get("method")
+                if isinstance(method, str):
+                    methods.append(method)
+    return methods
+
+
+async def _is_public_mcp_request_without_auth(request: Request) -> bool:
+    """Allow unauthenticated MCP handshake/discovery calls."""
+    path = request.url.path
+    method = request.method.upper()
+
+    # Public HTTP JSON endpoint for tool introspection.
+    if path == "/mcp/tools" and method == "GET":
+        return True
+
+    # Streamable HTTP endpoint: allow only lightweight discovery methods.
+    if path not in ("/mcp", "/mcp/") or method != "POST":
+        return False
+
+    body = await request.body()
+    if not body:
+        return False
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return False
+
+    methods = _extract_jsonrpc_methods_from_payload(payload)
+    if not methods:
+        return False
+    return all(item in PUBLIC_JSONRPC_METHODS_NO_AUTH for item in methods)
 
 _rate_lock = asyncio.Lock()
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
@@ -610,7 +661,7 @@ async def enforce_api_key(
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     # OPTIONS (CORS preflight) must not require auth; browser does not send custom headers
-    if request.method != "OPTIONS" and (
+    if request.method != "OPTIONS" and not await _is_public_mcp_request_without_auth(request) and (
         request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
     ):
         # /download with a valid signed token is self-authenticating — no API key needed.

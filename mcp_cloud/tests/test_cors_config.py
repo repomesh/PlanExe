@@ -1,12 +1,25 @@
 import unittest
 from unittest.mock import patch
+import asyncio
 
 import mcp_cloud.http_server as http_server
 
 
 class _RequestStub:
-    def __init__(self, headers: dict[str, str]):
+    def __init__(
+        self,
+        headers: dict[str, str],
+        method: str = "GET",
+        path: str = "/",
+        body: bytes | None = None,
+    ):
         self.headers = headers
+        self.method = method
+        self.url = type("URL", (), {"path": path})()
+        self._body = body or b""
+
+    async def body(self) -> bytes:
+        return self._body
 
 
 class _ResponseStub:
@@ -59,6 +72,43 @@ class TestCorsHeaderAppending(unittest.TestCase):
         with patch.object(http_server, "CORS_ORIGINS", ["https://allowed.example.com"]):
             updated = http_server._append_cors_headers(request, response)
         self.assertNotIn("Access-Control-Allow-Origin", updated.headers)
+
+
+class TestPublicMcpNoAuthRules(unittest.TestCase):
+    def test_public_tools_listing_route(self):
+        request = _RequestStub(headers={}, method="GET", path="/mcp/tools")
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_streamable_initialize(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp",
+            body=b'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_streamable_tools_list(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp/",
+            body=b'{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_non_public_streamable_tools_call(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp/",
+            body=b'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_create","arguments":{"prompt":"x"}}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertFalse(result)
 
 
 if __name__ == "__main__":

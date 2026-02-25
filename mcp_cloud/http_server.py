@@ -103,7 +103,35 @@ AUTH_REQUIRED = _parse_bool_env("PLANEXE_MCP_REQUIRE_AUTH", default=True)
 def _split_csv_env(value: Optional[str]) -> list[str]:
     if not value:
         return []
-    return [item.strip() for item in value.split(",") if item.strip()]
+    raw = value.strip()
+    if not raw:
+        return []
+
+    values: list[str]
+    if raw.startswith("[") and raw.endswith("]"):
+        # Allow JSON array format in env var, e.g. ["https://a", "https://b"].
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, list):
+            values = [str(item) for item in parsed]
+        else:
+            values = raw.split(",")
+    else:
+        values = raw.split(",")
+
+    origins: list[str] = []
+    for item in values:
+        normalized = str(item).strip()
+        if not normalized:
+            continue
+        # Be tolerant to copy-pasted shell quoting in deployment env values.
+        if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {"'", '"'}:
+            normalized = normalized[1:-1].strip()
+        if normalized:
+            origins.append(normalized)
+    return origins
 
 
 CORS_ORIGINS = _split_csv_env(os.environ.get("PLANEXE_MCP_CORS_ORIGINS"))
@@ -112,6 +140,44 @@ if not CORS_ORIGINS:
     # localhost:6274) can connect directly.  API-key auth is the primary
     # access control; CORS is defence-in-depth only.
     CORS_ORIGINS = ["*"]
+
+
+def _allowed_cors_origin(request: Request) -> Optional[str]:
+    origin = request.headers.get("origin")
+    if not origin:
+        return None
+    if "*" in CORS_ORIGINS:
+        return "*"
+    if origin in CORS_ORIGINS:
+        return origin
+    return None
+
+
+def _append_cors_headers(request: Request, response: Response) -> Response:
+    """Ensure browser clients receive CORS headers even on early error responses."""
+    allow_origin = _allowed_cors_origin(request)
+    if not allow_origin:
+        return response
+
+    headers = response.headers
+    headers.setdefault("Access-Control-Allow-Origin", allow_origin)
+    headers.setdefault("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+
+    request_headers = request.headers.get("access-control-request-headers")
+    if request_headers:
+        headers.setdefault("Access-Control-Allow-Headers", request_headers)
+    else:
+        headers.setdefault("Access-Control-Allow-Headers", "*")
+
+    if allow_origin != "*":
+        existing_vary = headers.get("Vary")
+        if existing_vary:
+            vary_values = [item.strip() for item in existing_vary.split(",") if item.strip()]
+            if "Origin" not in vary_values:
+                headers["Vary"] = f"{existing_vary}, Origin"
+        else:
+            headers["Vary"] = "Origin"
+    return response
 
 _rate_lock = asyncio.Lock()
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
@@ -555,15 +621,15 @@ async def enforce_api_key(
         if not is_tokenized_download:
             error_response = await _validate_api_key(request)
             if error_response:
-                return error_response
+                return _append_cors_headers(request, error_response)
 
     error_response = await _enforce_body_size(request)
     if error_response:
-        return error_response
+        return _append_cors_headers(request, error_response)
 
     error_response = await _enforce_rate_limit(request)
     if error_response:
-        return error_response
+        return _append_cors_headers(request, error_response)
 
     if request.url.path.startswith("/mcp"):
         set_download_base_url(_request_origin(request))
@@ -592,7 +658,7 @@ async def enforce_api_key(
                         headers=headers,
                         background=response.background,
                     )
-    return response
+    return _append_cors_headers(request, response)
 
 
 async def call_tool_via_registry(
@@ -622,6 +688,12 @@ async def call_tool_via_registry(
 async def options_mcp() -> Response:
     """Handle CORS preflight for /mcp so browser-based tools (e.g. MCP Inspector) succeed."""
     return Response(status_code=200)
+
+
+@app.api_route("/mcp", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
+async def redirect_mcp_no_trailing_slash() -> RedirectResponse:
+    """Normalize '/mcp' to '/mcp/' so streamable HTTP requests avoid 405 mismatches."""
+    return RedirectResponse(url="/mcp/", status_code=307)
 
 
 @app.post("/mcp/tools/call", response_model=MCPToolCallResponse)

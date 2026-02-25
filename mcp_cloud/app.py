@@ -169,24 +169,12 @@ ZIP_FILENAME = "run.zip"
 ZIP_CONTENT_TYPE = "application/zip"
 ZIP_SNAPSHOT_MAX_BYTES = 100_000_000
 
-SPEED_VS_DETAIL_DEFAULT = "all_details_but_slow"
-SPEED_VS_DETAIL_DEFAULT_ALIAS = "all"
-SPEED_VS_DETAIL_VALUES = (
-    "ping_llm",
-    "fast_but_skip_details",
-    "all_details_but_slow",
-)
 ModelProfileInput = Literal[
     "baseline",
     "premium",
     "frontier",
     "custom",
 ]
-SPEED_VS_DETAIL_ALIASES = {
-    "ping": "ping_llm",
-    "fast": "fast_but_skip_details",
-    "all": "all_details_but_slow",
-}
 MODEL_PROFILE_TITLES = {
     ModelProfileEnum.BASELINE.value: "Baseline",
     ModelProfileEnum.PREMIUM.value: "Premium",
@@ -305,7 +293,6 @@ def _create_task_sync(
 ) -> dict[str, Any]:
     with app.app_context():
         parameters = dict(config or {})
-        parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
         parameters["model_profile"] = normalize_model_profile(parameters.get("model_profile")).value
         parameters["trigger_source"] = "mcp task_create"
 
@@ -392,7 +379,6 @@ def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[s
         normalized_profile = normalize_model_profile(model_profile).value
         now_utc = datetime.now(UTC)
         parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
-        parameters["speed_vs_detail"] = resolve_speed_vs_detail(parameters)
         parameters["model_profile"] = normalized_profile
         parameters["trigger_source"] = "mcp task_retry"
 
@@ -734,19 +720,6 @@ def get_task_state_mapping(task_state: TaskState) -> str:
     }
     return mapping.get(task_state, "pending")
 
-def resolve_speed_vs_detail(config: Optional[dict[str, Any]]) -> str:
-    value: Optional[str] = None
-    if isinstance(config, dict):
-        raw_value = config.get("speed_vs_detail") or config.get("speed")
-        if isinstance(raw_value, str):
-            value = raw_value.strip().lower()
-    if value in SPEED_VS_DETAIL_ALIASES:
-        return SPEED_VS_DETAIL_ALIASES[value]
-    if value in SPEED_VS_DETAIL_VALUES:
-        return value
-    return SPEED_VS_DETAIL_DEFAULT
-
-
 def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
     """Extract task_create runtime overrides from hidden metadata containers.
 
@@ -779,14 +752,9 @@ def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[s
 
 def _merge_task_create_config(
     config: Optional[dict[str, Any]],
-    speed_vs_detail: Optional[str],
     model_profile: Optional[str],
 ) -> Optional[dict[str, Any]]:
     merged = dict(config or {})
-    if isinstance(speed_vs_detail, str):
-        candidate = speed_vs_detail.strip()
-        if candidate and "speed_vs_detail" not in merged and "speed" not in merged:
-            merged["speed_vs_detail"] = candidate
     if isinstance(model_profile, str):
         candidate_profile = model_profile.strip()
         if candidate_profile and "model_profile" not in merged:
@@ -1282,12 +1250,10 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}} → faster run
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
         - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
-        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -1301,20 +1267,7 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     if model_profile is None and isinstance(metadata_model_profile, str):
         model_profile = metadata_model_profile
 
-    speed_vs_detail = metadata_overrides.get("speed_vs_detail")
-    if not isinstance(speed_vs_detail, str):
-        speed_alias = metadata_overrides.get("speed")
-        if isinstance(speed_alias, str):
-            speed_vs_detail = speed_alias
-        else:
-            # Backward-compatible hidden override when callers still send legacy top-level args.
-            legacy_speed = arguments.get("speed_vs_detail")
-            if isinstance(legacy_speed, str):
-                speed_vs_detail = legacy_speed
-            elif isinstance(arguments.get("speed"), str):
-                speed_vs_detail = arguments.get("speed")
-
-    merged_config = _merge_task_create_config(None, speed_vs_detail, model_profile)
+    merged_config = _merge_task_create_config(None, model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:

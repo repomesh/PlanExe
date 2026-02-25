@@ -13,9 +13,6 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - Use `model_profiles` to help agents select `task_create.model_profile` without relying on internal file knowledge.
 - Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
 - Keep concurrency wording explicit: each `task_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
-- Runtime override `speed_vs_detail` is metadata-only (hidden from visible schema);
-  when callers still pass legacy top-level `speed_vs_detail`/`speed`, forward those
-  into `metadata.task_create` for backward compatibility.
 
 ## Public state contract
 - `task_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.

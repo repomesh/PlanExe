@@ -46,11 +46,9 @@ This causes connection failures in clients that do not normalise URLs.
 
 **Fix:** Pick one canonical form (prefer no trailing slash, matching RFC 3986) and use it everywhere.
 
-### 2.3 `speed_vs_detail` is documented but hidden from agents
+### 2.3 ~~`speed_vs_detail` is documented but hidden from agents~~ (FIXED)
 
-`docs/mcp/mcp_details.md` documents a `speed_vs_detail` parameter for `task_create`, but it is not present in the published input schema (`TASK_CREATE_INPUT_SCHEMA`). Agents reading only the live schema never see it; agents reading only the docs expect it to work.
-
-**Fix:** Either expose the parameter in the schema, or remove it from the docs.
+The `speed_vs_detail` parameter was a developer-only hidden override that was rarely used and created a docs/schema mismatch. It has been removed from the MCP interface entirely: the dead code was deleted from `mcp_cloud/app.py` and `mcp_cloud/http_server.py`, the legacy backward-compat forwarding block was removed from `mcp_local/planexe_mcp_local.py`, and all references were purged from docs.
 
 ### 2.4 `task_file_info` returns `{}` on success instead of `isError`
 
@@ -175,7 +173,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 |----------|------|--------|
 | P0 | Fix SKILL.md tool count (5 → 7) | 5 min |
 | P0 | Standardise URL trailing slash across all docs | 10 min |
-| P0 | Fix `speed_vs_detail` schema/docs mismatch | 15 min |
+| P0 | ~~Fix `speed_vs_detail` schema/docs mismatch~~ (DONE) | — |
 | P1 | Add `task_list` tool | 2 h |
 | P1 | Fix `task_file_info` empty-dict response | 1 h |
 | P1 | Submit to mcp.so + Smithery | 30 min |

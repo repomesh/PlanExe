@@ -615,23 +615,6 @@ async def call_tool(
         if isinstance(payload.metadata, dict):
             arguments["metadata"] = dict(payload.metadata)
 
-        # Backward compatibility: move legacy speed args into hidden metadata.
-        legacy_speed_vs_detail = arguments.pop("speed_vs_detail", None)
-        legacy_speed = arguments.pop("speed", None)
-        if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
-            metadata = arguments.get("metadata")
-            if not isinstance(metadata, dict):
-                metadata = {}
-                arguments["metadata"] = metadata
-            task_create_metadata = metadata.get("task_create")
-            if not isinstance(task_create_metadata, dict):
-                task_create_metadata = {}
-                metadata["task_create"] = task_create_metadata
-            if isinstance(legacy_speed_vs_detail, str):
-                task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
-            if isinstance(legacy_speed, str):
-                task_create_metadata.setdefault("speed", legacy_speed)
-
         result = await handle_task_create(arguments)
         content, error = _normalize_tool_result(result)
         return MCPToolCallResponse(content=content, error=error)

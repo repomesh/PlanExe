@@ -784,12 +784,10 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Examples:
         - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → task_id + created_at
-        - {"prompt": "Launch a bike repair shop in Amsterdam with retail sales, service bays, and mobile repair van. Budget 150k EUR. Profitability goal: month 18.", "metadata": {"task_create": {"speed_vs_detail": "fast"}}}
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
         - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
-        - speed_vs_detail: Optional hidden runtime override via tool-specific metadata.
 
     Returns:
         - content: JSON string matching structuredContent.
@@ -806,22 +804,6 @@ async def handle_task_create(arguments: dict[str, Any]) -> CallToolResult:
     metadata = arguments.get("metadata")
     if isinstance(metadata, dict):
         payload["metadata"] = metadata
-
-    # Backward compatibility: if callers still pass top-level speed args,
-    # forward them as hidden metadata so cloud can resolve the execution mode.
-    legacy_speed_vs_detail = arguments.get("speed_vs_detail")
-    legacy_speed = arguments.get("speed")
-    if isinstance(legacy_speed_vs_detail, str) or isinstance(legacy_speed, str):
-        if not isinstance(payload.get("metadata"), dict):
-            payload["metadata"] = {}
-        task_create_metadata = payload["metadata"].get("task_create")
-        if not isinstance(task_create_metadata, dict):
-            task_create_metadata = {}
-            payload["metadata"]["task_create"] = task_create_metadata
-        if isinstance(legacy_speed_vs_detail, str):
-            task_create_metadata.setdefault("speed_vs_detail", legacy_speed_vs_detail)
-        if isinstance(legacy_speed, str):
-            task_create_metadata.setdefault("speed", legacy_speed)
 
     payload, error = _call_remote_tool(
         "task_create",

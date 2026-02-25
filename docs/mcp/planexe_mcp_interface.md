@@ -245,30 +245,6 @@ Use the returned `profile` values directly in `task_create.model_profile`.
 }
 ```
 
-**Tool-specific metadata (developer-only, hidden from model-visible schema)**
-
-Use tool-specific metadata when you need runtime overrides that should not be visible in the tool interface shown to AI agents.
-
-`speed_vs_detail` is read from metadata, not from the visible input schema.
-
-- `speed_vs_detail` accepted values:
-  - `ping`: single LLM call to verify the pipeline/LLM path.
-  - `fast`: reduced-detail run through the full pipeline.
-  - `all`: full-detail run through the full pipeline.
-
-**Metadata example**
-
-```json
-{
-  "prompt": "string",
-  "metadata": {
-    "task_create": {
-      "speed_vs_detail": "ping"
-    }
-  }
-}
-```
-
 **Prompt quality**
 
 The `prompt` parameter should be a detailed description of what the plan should cover. Good prompts are typically 300-800 words and include:

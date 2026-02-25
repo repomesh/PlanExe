@@ -77,7 +77,6 @@ task_file_info
 ```
 
 When you inspect `task_create`, the visible input schema includes `prompt` and optional `model_profile`.
-The `speed_vs_detail` parameter is intentionally hidden and only set via tool-specific metadata, since it confuses AI agents.
 
 Follow these steps:
 ![screenshot of mcp inspector invoke tool](inspector_step5_mcp_planexe_org.webp)

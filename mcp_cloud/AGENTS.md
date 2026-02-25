@@ -40,14 +40,6 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
   - `user_api_key` (optional)
-- Keep `speed_vs_detail` out of model-visible input schema.
-- Runtime override for `speed_vs_detail` is metadata-only (tool-specific metadata),
-  read from hidden containers (`tool_metadata`, `metadata`, `_meta`) and nested
-  namespaces (`task_create`, `planexe_task_create`, `planexe`).
-- Preserve compatibility aliases for metadata speed values:
-  - `ping` -> `ping_llm`
-  - `fast` -> `fast_but_skip_details`
-  - `all` -> `all_details_but_slow`
 
 ## MCP Protocol
 - The server communicates over stdio (standard input/output) following the MCP protocol.

@@ -214,6 +214,11 @@ class TaskRetryOutput(BaseModel):
     error: ErrorDetail | None = None
 
 
+class TaskFileInfoNotReadyOutput(BaseModel):
+    ready: bool = Field(False, description="Always False; indicates the artifact is not yet available.")
+    reason: str = Field(..., description="Human-readable explanation, e.g. 'processing' or 'failed'.")
+
+
 class TaskFileInfoReadyOutput(BaseModel):
     content_type: str = Field(..., description="Artifact content type.")
     sha256: str = Field(..., description="SHA-256 hash of artifact bytes.")
@@ -233,6 +238,35 @@ class TaskFileInfoOutput(BaseModel):
         description="Absolute URL where the requested artifact can be downloaded.",
     )
     error: ErrorDetail | None = None
+
+
+class TaskListInput(BaseModel):
+    user_api_key: str = Field(
+        ...,
+        description="User API key (pex_...) to scope the task list to the authenticated user.",
+    )
+    limit: int = Field(
+        default=10,
+        ge=1,
+        le=50,
+        description="Maximum number of tasks to return (1–50). Newest tasks are returned first.",
+    )
+
+
+class TaskListItem(BaseModel):
+    task_id: str = Field(..., description="Task UUID.")
+    state: Literal["pending", "processing", "completed", "failed"] = Field(
+        ...,
+        description="Current task state.",
+    )
+    progress_percentage: float = Field(..., description="Progress from 0 to 100.")
+    created_at: str = Field(..., description="UTC creation timestamp (ISO 8601).")
+    prompt_excerpt: str = Field(..., description="First 100 characters of the prompt.")
+
+
+class TaskListOutput(BaseModel):
+    tasks: list[TaskListItem] = Field(..., description="Tasks for the authenticated user, newest first.")
+    message: str = Field(..., description="Human-readable summary (e.g. how many tasks were returned).")
 
 
 class TaskCreateInput(BaseModel):

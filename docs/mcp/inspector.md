@@ -31,6 +31,8 @@ PlanExe has multiple MCP servers that can be connected to.
 npx @modelcontextprotocol/inspector --transport http --server-url https://mcp.planexe.org/mcp/
 ```
 
+> **URL note**: The canonical server URL is `https://mcp.planexe.org/mcp` (no trailing slash) — use this in JSON config files and registry entries. The trailing slash (`/mcp/`) is used above because the MCP Inspector CLI appends sub-paths to the base URL; without it the inspector may send requests to the wrong path. Both forms are accepted by the server.
+
 This opens the inspector in a browser
 
 ![screenshot of mcp inspector](inspector_step1_mcp_planexe_org.webp)

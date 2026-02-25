@@ -31,42 +31,29 @@ An honest audit of the current MCP surface (mcp_cloud + mcp_local), followed by 
 
 ## 2. What's Broken or Inconsistent
 
-### 2.1 `skills/planexe-mcp/SKILL.md` says "5 tools"
+### 2.1 ~~`skills/planexe-mcp/SKILL.md` says "5 tools"~~ (FIXED)
 
-The skill card lists five tools, but the server now exposes **7** (prompt_examples, model_profiles, task_create, task_status, task_stop, task_retry, task_file_info). Any agent or user reading SKILL.md gets a wrong mental model.
+Updated to "seven core tools"; added Tool 5 (`model_profiles`) and Tool 7 (`task_retry`) sections; updated the typical workflow to reference both. Note: with `task_list` now added the total is eight — SKILL.md updated accordingly.
 
-**Fix:** Update SKILL.md tool count and add task_retry + model_profiles to the description.
+### 2.2 ~~Trailing-slash inconsistency~~ (FIXED)
 
-### 2.2 Trailing-slash inconsistency
-
-`mcp_cloud/server.json` registers the URL as `https://mcp.planexe.org/mcp` (no trailing slash).
-`docs/mcp/inspector.md` tells users to connect to `https://mcp.planexe.org/mcp/` (trailing slash).
-
-This causes connection failures in clients that do not normalise URLs.
-
-**Fix:** Pick one canonical form (prefer no trailing slash, matching RFC 3986) and use it everywhere.
+The canonical URL (`https://mcp.planexe.org/mcp`, no trailing slash) is used in all JSON config files and registry entries. The MCP Inspector CLI command in `docs/mcp/inspector.md` intentionally keeps the trailing slash (the inspector appends sub-paths; without `/` it sends requests to the wrong path). A note clarifying this distinction was added to `inspector.md`.
 
 ### 2.3 ~~`speed_vs_detail` is documented but hidden from agents~~ (FIXED)
 
 The `speed_vs_detail` parameter was a developer-only hidden override that was rarely used and created a docs/schema mismatch. It has been removed from the MCP interface entirely: the dead code was deleted from `mcp_cloud/app.py` and `mcp_cloud/http_server.py`, the legacy backward-compat forwarding block was removed from `mcp_local/planexe_mcp_local.py`, and all references were purged from docs.
 
-### 2.4 `task_file_info` returns `{}` on success instead of `isError`
+### 2.4 ~~`task_file_info` returns `{}` on success instead of `isError`~~ (FIXED)
 
-When a task has not finished yet, `task_file_info` returns an empty dict `{}` rather than a structured "not ready" response. Callers cannot distinguish "no files yet" from "something went wrong" without reading `task_status` separately.
+`task_file_info` now returns `{"ready": false, "reason": "processing"}` when the task is still running, and `{"ready": false, "reason": "failed", "error": {...}}` when it has failed. The output schema was updated (replaced the empty-dict variant with `TaskFileInfoNotReadyOutput`), and both `PLANEXE_SERVER_INSTRUCTIONS` and the tool description were updated accordingly.
 
-**Fix:** Return a typed response, e.g. `{"ready": false, "reason": "processing"}` or set `isError=True` with a message.
+### 2.5 ~~Rate limiting covers REST but not the Streamable HTTP `/mcp` endpoint~~ (FIXED)
 
-### 2.5 Rate limiting covers REST but not the Streamable HTTP `/mcp` endpoint
+`_enforce_rate_limit` in `mcp_cloud/http_server.py` now applies to `/mcp` and `/mcp/` in addition to `/mcp/tools/call`. The default limit (60 req/60 s per client) is high enough that normal polling of `task_status` is never affected.
 
-The slowapi limiter is applied to `/tasks` routes. The MCP `task_create` tool also triggers task creation on the backend but goes through the `/mcp` Starlette sub-app, which has no equivalent rate guard.
+### 2.6 ~~No `task_list` tool — lost `task_id` = lost task~~ (FIXED)
 
-**Fix:** Apply rate limiting inside the MCP tool handler itself (e.g. a per-user token bucket stored in Redis / memory) so the protection is transport-agnostic.
-
-### 2.6 No `task_list` tool — lost `task_id` = lost task
-
-There is no way for an agent to list its own tasks. If the agent loses the `task_id` between turns (context truncation, restart), the task is permanently inaccessible.
-
-**Fix:** Add a `task_list` tool that returns recent tasks for the authenticated user (up to the last 20, newest first).
+Added `task_list` to both `mcp_cloud` and `mcp_local`. Requires `user_api_key`; returns up to 50 tasks newest-first with `task_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`. The `task_create` description was updated to say "call task_list to recover a lost task_id" instead of "no task_list, lost task_id = lost task".
 
 ### 2.7 `app.py` is an 81 KB monolith
 
@@ -171,14 +158,14 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 | Priority | Task | Effort |
 |----------|------|--------|
-| P0 | Fix SKILL.md tool count (5 → 7) | 5 min |
-| P0 | Standardise URL trailing slash across all docs | 10 min |
+| P0 | ~~Fix SKILL.md tool count~~ (DONE) | — |
+| P0 | ~~Standardise URL trailing slash~~ (DONE) | — |
 | P0 | ~~Fix `speed_vs_detail` schema/docs mismatch~~ (DONE) | — |
-| P1 | Add `task_list` tool | 2 h |
-| P1 | Fix `task_file_info` empty-dict response | 1 h |
+| P1 | ~~Add `task_list` tool~~ (DONE) | — |
+| P1 | ~~Fix `task_file_info` empty-dict response~~ (DONE) | — |
+| P1 | ~~Add rate limiting to `/mcp` endpoint~~ (DONE) | — |
 | P1 | Submit to mcp.so + Smithery | 30 min |
 | P1 | Write README demo GIF / YouTube link | 1 h |
-| P2 | Add rate limiting to MCP tool handlers | 3 h |
 | P2 | Add `log_lines` to task_status | 4 h |
 | P2 | Refactor app.py into modules | 1 day |
 | P3 | Signed download tokens | 4 h |

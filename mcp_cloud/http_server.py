@@ -58,6 +58,7 @@ from mcp_cloud.app import (
     fetch_artifact_from_worker_plan,
     fetch_user_downloadable_zip,
     handle_task_create,
+    handle_task_list,
     handle_model_profiles,
     handle_task_status,
     handle_task_retry,
@@ -223,7 +224,8 @@ def _client_identifier(request: Request) -> str:
 async def _enforce_rate_limit(request: Request) -> Optional[JSONResponse]:
     if RATE_LIMIT_REQUESTS <= 0:
         return None
-    if request.url.path != "/mcp/tools/call":
+    # Apply to the legacy JSON-call endpoint and to the Streamable HTTP /mcp endpoint.
+    if request.url.path not in ("/mcp/tools/call", "/mcp", "/mcp/"):
         return None
 
     identifier = _client_identifier(request)

@@ -104,11 +104,6 @@ class PlanItem(db.Model):
     # Artifact schema/version marker (legacy snapshots are NULL/1, split-storage snapshots are 2+).
     run_artifact_layout_version = db.Column(db.Integer, nullable=True, default=None)
 
-    # Lightweight admin/UI helpers; avoids loading large payload columns just to render links.
-    has_generated_report_html = column_property(generated_report_html.isnot(None))
-    has_run_zip_snapshot = column_property(run_zip_snapshot.isnot(None))
-    has_run_track_activity_jsonl = column_property(run_track_activity_jsonl.isnot(None))
-
     def __repr__(self):
         return f"{self.id}: {self.timestamp_created}, {self.state}, {self.prompt!r}, parameters: {self.parameters!r}"
 
@@ -146,6 +141,17 @@ class PlanItem(db.Model):
             }
         )
         return [task1, task2, task3]
+
+
+# Lightweight IS NOT NULL checks — defined outside the class body because
+# deferred() descriptors do not support .isnot() at class-definition time
+# (produces NotImplemented).  Using __table__.c gives us the raw Column
+# objects which support SQL operators correctly.
+_t = PlanItem.__table__.c
+PlanItem.has_generated_report_html = column_property(_t.generated_report_html.isnot(None))
+PlanItem.has_run_zip_snapshot = column_property(_t.run_zip_snapshot.isnot(None))
+PlanItem.has_run_track_activity_jsonl = column_property(_t.run_track_activity_jsonl.isnot(None))
+del _t
 
 
 @event.listens_for(PlanItem, "before_insert")

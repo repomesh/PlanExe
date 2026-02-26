@@ -100,6 +100,31 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - required auth headers must match the server auth policy (`X-API-Key`).
 - Publish with `mcp-publisher` from the `mcp_cloud/` directory so it picks up this file.
 
+## PlanItem deferred columns
+- `PlanItem.generated_report_html`, `run_zip_snapshot`, and `run_track_activity_jsonl`
+  are declared with `deferred()` so they are **not** loaded by default ORM queries.
+- **column_property and deferred()**: `deferred()` descriptors do not support SQL
+  operators (`.isnot()`, etc.) at class-definition time — they return `NotImplemented`.
+  The `has_*` column properties are therefore defined **after** the class body using
+  `PlanItem.__table__.c` (raw Column objects). Type hints inside the class use
+  `TYPE_CHECKING` guards so pyright can see them without confusing SQLAlchemy.
+- **Session lifetime**: When accessing a deferred column, the ORM instance must still
+  be bound to an active session. `get_plan_by_id()` may open a temporary app context
+  that closes before the caller touches the deferred attribute, detaching the instance.
+  Use `_load_plan_column()` (in `zip_utils.py`) to load a PlanItem and read a deferred
+  attribute inside a single app context.
+- **Read-only queries**: Prefer explicit column selection (`db.session.query(Col1, Col2, …)`)
+  over loading full ORM objects for read-only endpoints like `plan_status` and `plan_list`.
+  This avoids accidentally triggering deferred loads and reduces data transfer.
+
+## Worker HTTP fallback ordering
+- When resolving file lists or artifacts, try fast local sources first:
+  1. DB zip snapshot (`list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
+  2. Local run directory (`list_files_from_local_run_dir`)
+  3. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`)
+- The worker HTTP call has a 30-second timeout. If it runs first, every poll blocks
+  for 30 seconds when the worker is unreachable — even when the data is already in the DB.
+
 ## Testing
 - Automated tests exist under `mcp_cloud/tests/`.
 - If you change MCP tool behavior, state mapping, or tool surface, update/add unit

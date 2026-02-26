@@ -2,13 +2,40 @@
 import hashlib
 import io
 import logging
+import uuid as _uuid
 import zipfile
 from io import BytesIO
 from typing import Optional
 
-from mcp_cloud.db_queries import get_plan_by_id
+from flask import has_app_context
 
 logger = logging.getLogger(__name__)
+
+
+def _load_plan_column(plan_id: str, column_name: str):
+    """Load a single (possibly deferred) PlanItem column inside an app context.
+
+    get_plan_by_id() may close its temporary app context before the caller
+    accesses a deferred column, detaching the ORM instance.  This helper
+    keeps the session alive for the duration of the attribute access.
+    """
+    from mcp_cloud.db_setup import app, db
+    from database_api.model_planitem import PlanItem
+
+    def _query():
+        try:
+            plan_uuid = _uuid.UUID(plan_id)
+        except ValueError:
+            return None
+        plan = db.session.get(PlanItem, plan_uuid)
+        if plan is None:
+            return None
+        return getattr(plan, column_name, None)
+
+    if has_app_context():
+        return _query()
+    with app.app_context():
+        return _query()
 
 
 def list_files_from_zip_bytes(zip_bytes: bytes) -> list[str]:
@@ -49,30 +76,27 @@ def extract_file_from_zip_file(file_handle: io.BufferedIOBase, file_path: str) -
 
 def fetch_report_from_db(plan_id: str) -> Optional[bytes]:
     """Fetch the report HTML stored in the PlanItem."""
-    plan = get_plan_by_id(plan_id)
-    if plan and plan.generated_report_html is not None:
-        return plan.generated_report_html.encode("utf-8")
+    html = _load_plan_column(plan_id, "generated_report_html")
+    if html is not None:
+        return html.encode("utf-8")
     return None
 
 def fetch_zip_snapshot(plan_id: str) -> Optional[bytes]:
     """Fetch the zip snapshot stored in the PlanItem."""
-    plan = get_plan_by_id(plan_id)
-    if plan and plan.run_zip_snapshot is not None:
-        return plan.run_zip_snapshot
-    return None
+    return _load_plan_column(plan_id, "run_zip_snapshot")
 
 def fetch_file_from_zip_snapshot(plan_id: str, file_path: str) -> Optional[bytes]:
     """Fetch a file from the PlanItem zip snapshot."""
-    plan = get_plan_by_id(plan_id)
-    if plan and plan.run_zip_snapshot is not None:
-        return extract_file_from_zip_bytes(plan.run_zip_snapshot, file_path)
+    zip_bytes = _load_plan_column(plan_id, "run_zip_snapshot")
+    if zip_bytes is not None:
+        return extract_file_from_zip_bytes(zip_bytes, file_path)
     return None
 
 def list_files_from_zip_snapshot(plan_id: str) -> Optional[list[str]]:
     """List files from the PlanItem zip snapshot."""
-    plan = get_plan_by_id(plan_id)
-    if plan and plan.run_zip_snapshot is not None:
-        return list_files_from_zip_bytes(plan.run_zip_snapshot)
+    zip_bytes = _load_plan_column(plan_id, "run_zip_snapshot")
+    if zip_bytes is not None:
+        return list_files_from_zip_bytes(zip_bytes)
     return None
 
 def _sanitize_legacy_zip_snapshot(zip_bytes: bytes) -> Optional[bytes]:

@@ -268,11 +268,11 @@ def _hash_sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _derive_download_url(task_id: str, artifact: str) -> str:
+def _derive_download_url(plan_id: str, artifact: str) -> str:
     if artifact == "zip":
-        path = f"/download/{task_id}/{ZIP_FILENAME}"
+        path = f"/download/{plan_id}/{ZIP_FILENAME}"
     else:
-        path = f"/download/{task_id}/{REPORT_FILENAME}"
+        path = f"/download/{plan_id}/{REPORT_FILENAME}"
     return urljoin(_get_download_base_url().rstrip("/") + "/", path.lstrip("/"))
 
 
@@ -282,14 +282,14 @@ def _ensure_directory(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def _choose_output_path(task_id: str, download_url: str, artifact: str) -> Path:
+def _choose_output_path(plan_id: str, download_url: str, artifact: str) -> Path:
     base_path = Path(_get_env("PLANEXE_PATH", str(Path.cwd()))).expanduser()
     _ensure_directory(base_path)
 
     basename = Path(urlparse(download_url).path).name
     if not basename:
         basename = REPORT_FILENAME if artifact == "report" else ZIP_FILENAME
-    filename = f"{task_id}-{basename}"
+    filename = f"{plan_id}-{basename}"
     candidate = base_path / filename
     if not candidate.exists():
         return candidate

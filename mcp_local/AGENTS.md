@@ -12,7 +12,7 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - `plan_create` visible input schema includes `prompt`, optional `model_profile`, and optional `user_api_key`.
 - Use `model_profiles` to help agents select `plan_create.model_profile` without relying on internal file knowledge.
 - Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `plan_create`.
-- Keep concurrency wording explicit: each `plan_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
+- Keep concurrency wording explicit: each `plan_create` call creates a new `plan_id`; no global per-client concurrency cap is enforced server-side.
 
 ## Public state contract
 - `plan_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
@@ -52,4 +52,4 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
   - Must be a directory.
   - Created automatically when missing.
   - Defaults to current working directory when unset.
-  - Saved filename pattern: `<task_id>-<artifact_basename>` with numeric suffixes on collisions.
+  - Saved filename pattern: `<plan_id>-<artifact_basename>` with numeric suffixes on collisions.

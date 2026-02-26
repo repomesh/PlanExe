@@ -227,14 +227,14 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         - isError: True only when plan_id is unknown.
     """
     req = PlanStatusRequest(**arguments)
-    task_id = req.plan_id
+    plan_id = req.plan_id
 
-    plan_snapshot = await asyncio.to_thread(_get_plan_status_snapshot_sync, task_id)
+    plan_snapshot = await asyncio.to_thread(_get_plan_status_snapshot_sync, plan_id)
     if plan_snapshot is None:
         response = {
             "error": {
                 "code": "PLAN_NOT_FOUND",
-                "message": f"Plan not found: {task_id}",
+                "message": f"Plan not found: {plan_id}",
             }
         }
         return CallToolResult(
@@ -308,14 +308,14 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
         - isError: True only when plan_id is unknown.
     """
     req = PlanStopRequest(**arguments)
-    task_id = req.plan_id
+    plan_id = req.plan_id
 
-    stop_result = await asyncio.to_thread(_request_plan_stop_sync, task_id)
+    stop_result = await asyncio.to_thread(_request_plan_stop_sync, plan_id)
     if stop_result is None:
         response = {
             "error": {
                 "code": "PLAN_NOT_FOUND",
-                "message": f"Plan not found: {task_id}",
+                "message": f"Plan not found: {plan_id}",
             }
         }
         return CallToolResult(
@@ -336,14 +336,14 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     """Retry a failed plan by resetting it back to pending."""
     req = PlanRetryRequest(**arguments)
-    task_id = req.plan_id
-    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, task_id, req.model_profile)
+    plan_id = req.plan_id
+    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, plan_id, req.model_profile)
 
     if retry_result is None:
         response = {
             "error": {
                 "code": "PLAN_NOT_FOUND",
-                "message": f"Plan not found: {task_id}",
+                "message": f"Plan not found: {plan_id}",
             }
         }
         return CallToolResult(
@@ -386,7 +386,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
         - isError: True only when plan_id is unknown.
     """
     req = PlanFileInfoRequest(**arguments)
-    task_id = req.plan_id
+    plan_id = req.plan_id
     artifact = req.artifact.strip().lower() if isinstance(req.artifact, str) else "report"
     if artifact not in ("report", "zip"):
         response = {
@@ -400,12 +400,12 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
             structuredContent=response,
             isError=True,
         )
-    plan_snapshot = await asyncio.to_thread(_get_plan_for_report_sync, task_id)
+    plan_snapshot = await asyncio.to_thread(_get_plan_for_report_sync, plan_id)
     if plan_snapshot is None:
         response = {
             "error": {
                 "code": "PLAN_NOT_FOUND",
-                "message": f"Plan not found: {task_id}",
+                "message": f"Plan not found: {plan_id}",
             }
         }
         return CallToolResult(

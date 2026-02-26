@@ -52,12 +52,12 @@ def _get_download_base_url() -> Optional[str]:
         return None
 
 
-def build_report_download_path(task_id: str) -> str:
-    return f"/download/{task_id}/{REPORT_FILENAME}"
+def build_report_download_path(plan_id: str) -> str:
+    return f"/download/{plan_id}/{REPORT_FILENAME}"
 
 
-def build_zip_download_path(task_id: str) -> str:
-    return f"/download/{task_id}/{ZIP_FILENAME}"
+def build_zip_download_path(plan_id: str) -> str:
+    return f"/download/{plan_id}/{ZIP_FILENAME}"
 
 
 # ---------------------------------------------------------------------------
@@ -109,20 +109,20 @@ def _get_download_token_secret() -> bytes:
     return _random_token_secret
 
 
-def generate_download_token(task_id: str, filename: str) -> str:
-    """Return a signed, time-limited token for one task artifact download.
+def generate_download_token(plan_id: str, filename: str) -> str:
+    """Return a signed, time-limited token for one plan artifact download.
 
     Format: ``{expiry_unix_ts}.{hmac_hex}``
-    The HMAC covers ``task_id:filename:expiry`` so the token is scoped to
-    exactly one file and cannot be reused for a different task.
+    The HMAC covers ``plan_id:filename:expiry`` so the token is scoped to
+    exactly one file and cannot be reused for a different plan.
     """
     expiry = int(time.time()) + DOWNLOAD_TOKEN_TTL_SECONDS
-    message = f"{task_id}:{filename}:{expiry}".encode()
+    message = f"{plan_id}:{filename}:{expiry}".encode()
     mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
     return f"{expiry}.{mac}"
 
 
-def validate_download_token(token: str, task_id: str, filename: str) -> bool:
+def validate_download_token(token: str, plan_id: str, filename: str) -> bool:
     """Return True when *token* is a valid, unexpired token for the given artifact."""
     try:
         expiry_str, mac = token.split(".", 1)
@@ -131,22 +131,22 @@ def validate_download_token(token: str, task_id: str, filename: str) -> bool:
         return False
     if time.time() > expiry:
         return False
-    message = f"{task_id}:{filename}:{expiry}".encode()
+    message = f"{plan_id}:{filename}:{expiry}".encode()
     expected_mac = hmac.new(_get_download_token_secret(), message, hashlib.sha256).hexdigest()
     return hmac.compare_digest(mac, expected_mac)
 
 
-def build_report_download_url(task_id: str) -> Optional[str]:
+def build_report_download_url(plan_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    token = generate_download_token(task_id, REPORT_FILENAME)
-    return f"{base_url}{build_report_download_path(task_id)}?token={token}"
+    token = generate_download_token(plan_id, REPORT_FILENAME)
+    return f"{base_url}{build_report_download_path(plan_id)}?token={token}"
 
 
-def build_zip_download_url(task_id: str) -> Optional[str]:
+def build_zip_download_url(plan_id: str) -> Optional[str]:
     base_url = _get_download_base_url()
     if not base_url:
         return None
-    token = generate_download_token(task_id, ZIP_FILENAME)
-    return f"{base_url}{build_zip_download_path(task_id)}?token={token}"
+    token = generate_download_token(plan_id, ZIP_FILENAME)
+    return f"{base_url}{build_zip_download_path(plan_id)}?token={token}"

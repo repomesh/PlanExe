@@ -20,9 +20,9 @@ PROMPT_EXCERPT_MAX_LENGTH = 100
 # Plan lookup
 # ---------------------------------------------------------------------------
 
-def find_plan_by_task_id(task_id: str) -> Optional[PlanItem]:
-    """Find PlanItem by MCP task_id (UUID), with legacy fallback."""
-    plan = get_plan_by_id(task_id)
+def find_plan_by_id(plan_id: str) -> Optional[PlanItem]:
+    """Find PlanItem by plan_id (UUID), with legacy JSONB fallback."""
+    plan = get_plan_by_id(plan_id)
     if plan is not None:
         return plan
 
@@ -30,11 +30,11 @@ def find_plan_by_task_id(task_id: str) -> Optional[PlanItem]:
         query = db.session.query(PlanItem)
         if db.engine.dialect.name == "postgresql":
             plans = query.filter(
-                cast(PlanItem.parameters, JSONB).contains({"_mcp_task_id": task_id})
+                cast(PlanItem.parameters, JSONB).contains({"_mcp_task_id": plan_id})
             ).all()
         else:
             plans = query.filter(
-                PlanItem.parameters.contains({"_mcp_task_id": task_id})
+                PlanItem.parameters.contains({"_mcp_task_id": plan_id})
             ).all()
         if plans:
             return plans[0]
@@ -46,14 +46,14 @@ def find_plan_by_task_id(task_id: str) -> Optional[PlanItem]:
         with app.app_context():
             legacy_plan = _query_legacy()
     if legacy_plan is not None:
-        logger.debug("Resolved legacy MCP task id %s to plan %s", task_id, legacy_plan.id)
+        logger.debug("Resolved legacy MCP plan id %s to plan %s", plan_id, legacy_plan.id)
     return legacy_plan
 
-def get_plan_by_id(task_id: str) -> Optional[PlanItem]:
+def get_plan_by_id(plan_id: str) -> Optional[PlanItem]:
     """Fetch a PlanItem by its UUID string."""
     def _query() -> Optional[PlanItem]:
         try:
-            plan_uuid = uuid.UUID(task_id)
+            plan_uuid = uuid.UUID(plan_id)
         except ValueError:
             return None
         return db.session.get(PlanItem, plan_uuid)
@@ -63,9 +63,9 @@ def get_plan_by_id(task_id: str) -> Optional[PlanItem]:
     with app.app_context():
         return _query()
 
-def resolve_plan_for_task_id(task_id: str) -> Optional[PlanItem]:
-    """Resolve a PlanItem from a task_id (UUID), with legacy fallback."""
-    return find_plan_by_task_id(task_id)
+def resolve_plan_by_id(plan_id: str) -> Optional[PlanItem]:
+    """Resolve a PlanItem from a plan_id (UUID), with legacy fallback."""
+    return find_plan_by_id(plan_id)
 
 
 # ---------------------------------------------------------------------------
@@ -117,9 +117,9 @@ def _create_plan_sync(
             "created_at": created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
 
-def _get_plan_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = find_plan_by_task_id(task_id)
+        plan = find_plan_by_id(plan_id)
         if plan is None:
             return None
         return {
@@ -130,9 +130,9 @@ def _get_plan_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
             "timestamp_created": plan.timestamp_created,
         }
 
-def _request_plan_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = find_plan_by_task_id(task_id)
+        plan = find_plan_by_id(plan_id)
         if plan is None:
             return None
         stop_requested = False
@@ -141,7 +141,7 @@ def _request_plan_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
             plan.stop_requested_timestamp = datetime.now(UTC)
             plan.progress_message = "Stop requested by user."
             db.session.commit()
-            logger.info("Stop requested for task %s; stop flag set on plan %s.", task_id, plan.id)
+            logger.info("Stop requested for plan %s; stop flag set on plan %s.", plan_id, plan.id)
             stop_requested = True
         return {
             "state": get_plan_state_mapping(plan.state),
@@ -149,16 +149,16 @@ def _request_plan_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
         }
 
 
-def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[str, Any]]:
+def _retry_failed_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = find_plan_by_task_id(task_id)
+        plan = find_plan_by_id(plan_id)
         if plan is None:
             return None
         if plan.state != PlanState.failed:
             return {
                 "error": {
                     "code": "PLAN_NOT_FAILED",
-                    "message": f"Plan is not in failed state: {task_id}",
+                    "message": f"Plan is not in failed state: {plan_id}",
                 }
             }
 
@@ -187,7 +187,7 @@ def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[s
         event_context = {
             "plan_id": str(plan.id),
             "task_handle": str(plan.id),
-            "retry_of_plan_id": task_id,
+            "retry_of_plan_id": plan_id,
             "model_profile": normalized_profile,
             "parameters": plan.parameters,
         }
@@ -207,9 +207,9 @@ def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[s
         }
 
 
-def _get_plan_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _get_plan_for_report_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = resolve_plan_for_task_id(task_id)
+        plan = resolve_plan_by_id(plan_id)
         if plan is None:
             return None
         return {

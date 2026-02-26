@@ -250,15 +250,15 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
     if plan_state == PlanState.completed:
         progress_percentage = 100.0
 
-    # Collect files from worker_plan
+    # Collect files — try fast local sources first, then fall back to worker HTTP.
     plan_uuid = plan_snapshot["id"]
     files = []
     if plan_uuid:
-        files_list = await fetch_file_list_from_worker_plan(plan_uuid)
-        if not files_list:
-            files_list = await asyncio.to_thread(list_files_from_zip_snapshot, plan_uuid)
+        files_list = await asyncio.to_thread(list_files_from_zip_snapshot, plan_uuid)
         if not files_list:
             files_list = await asyncio.to_thread(list_files_from_local_run_dir, plan_uuid)
+        if not files_list:
+            files_list = await fetch_file_list_from_worker_plan(plan_uuid)
         if files_list:
             for file_name in files_list[:10]:  # Limit to 10 most recent
                 if file_name != "log.txt":

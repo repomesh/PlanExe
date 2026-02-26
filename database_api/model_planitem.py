@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime, UTC
+from typing import TYPE_CHECKING
 from database_api.planexe_db_singleton import db
 from sqlalchemy_utils import UUIDType
 from sqlalchemy import JSON
@@ -103,6 +104,14 @@ class PlanItem(db.Model):
 
     # Artifact schema/version marker (legacy snapshots are NULL/1, split-storage snapshots are 2+).
     run_artifact_layout_version = db.Column(db.Integer, nullable=True, default=None)
+
+    # Lightweight IS NOT NULL checks (actual column_property assigned after class body).
+    # TYPE_CHECKING-only annotations so pyright knows the types without confusing
+    # SQLAlchemy's declarative metaclass at runtime.
+    if TYPE_CHECKING:
+        has_generated_report_html: bool
+        has_run_zip_snapshot: bool
+        has_run_track_activity_jsonl: bool
 
     def __repr__(self):
         return f"{self.id}: {self.timestamp_created}, {self.state}, {self.prompt!r}, parameters: {self.parameters!r}"

@@ -103,7 +103,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
     """Create a new PlanExe task and enqueue it for processing.
 
     Examples:
-        - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
+        - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns plan_id (UUID) + created_at
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
@@ -111,7 +111,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: {"task_id": "<uuid>", "created_at": ...}
+        - structuredContent: {"plan_id": "<uuid>", "created_at": ...}
         - isError: False on success.
     """
     req = PlanCreateRequest(**arguments)
@@ -213,28 +213,28 @@ async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
-    """Fetch the current task status, progress, and recent files for a task.
+    """Fetch the current plan status, progress, and recent files for a plan.
 
     Examples:
-        - {"task_id": "uuid"} → state/progress/timing + recent files
+        - {"plan_id": "uuid"} → state/progress/timing + recent files
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
 
     Returns:
         - content: JSON string matching structuredContent.
         - structuredContent: status payload or error.
-        - isError: True only when task_id is unknown.
+        - isError: True only when plan_id is unknown.
     """
     req = PlanStatusRequest(**arguments)
-    task_id = req.task_id
+    task_id = req.plan_id
 
     plan_snapshot = await asyncio.to_thread(_get_plan_status_snapshot_sync, task_id)
     if plan_snapshot is None:
         response = {
             "error": {
-                "code": "TASK_NOT_FOUND",
-                "message": f"Task not found: {task_id}",
+                "code": "PLAN_NOT_FOUND",
+                "message": f"Plan not found: {task_id}",
             }
         }
         return CallToolResult(
@@ -273,7 +273,7 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         created_at = created_at.replace(tzinfo=UTC)
 
     response = {
-        "task_id": plan_uuid,
+        "plan_id": plan_uuid,
         "state": state,
         "progress_percentage": progress_percentage,
         "timing": {
@@ -294,28 +294,28 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request an active task to stop.
+    """Request an active plan to stop.
 
     Examples:
-        - {"task_id": "uuid"} → stop request accepted
+        - {"plan_id": "uuid"} → stop request accepted
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
 
     Returns:
         - content: JSON string matching structuredContent.
         - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error payload.
-        - isError: True only when task_id is unknown.
+        - isError: True only when plan_id is unknown.
     """
     req = PlanStopRequest(**arguments)
-    task_id = req.task_id
+    task_id = req.plan_id
 
     stop_result = await asyncio.to_thread(_request_plan_stop_sync, task_id)
     if stop_result is None:
         response = {
             "error": {
-                "code": "TASK_NOT_FOUND",
-                "message": f"Task not found: {task_id}",
+                "code": "PLAN_NOT_FOUND",
+                "message": f"Plan not found: {task_id}",
             }
         }
         return CallToolResult(
@@ -334,16 +334,16 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
-    """Retry a failed task by resetting it back to pending."""
+    """Retry a failed plan by resetting it back to pending."""
     req = PlanRetryRequest(**arguments)
-    task_id = req.task_id
+    task_id = req.plan_id
     retry_result = await asyncio.to_thread(_retry_failed_plan_sync, task_id, req.model_profile)
 
     if retry_result is None:
         response = {
             "error": {
-                "code": "TASK_NOT_FOUND",
-                "message": f"Task not found: {task_id}",
+                "code": "PLAN_NOT_FOUND",
+                "message": f"Plan not found: {task_id}",
             }
         }
         return CallToolResult(
@@ -369,24 +369,24 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
-    """Return download metadata for a task's report or zip artifact.
+    """Return download metadata for a plan's report or zip artifact.
 
     Examples:
-        - {"task_id": "uuid"} → report metadata (default)
-        - {"task_id": "uuid", "artifact": "zip"} → zip metadata
+        - {"plan_id": "uuid"} → report metadata (default)
+        - {"plan_id": "uuid", "artifact": "zip"} → zip metadata
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
         - artifact: Optional "report" or "zip".
 
     Returns:
         - content: JSON string matching structuredContent.
         - structuredContent: metadata (content_type, sha256, download_size,
           optional download_url) or {} if not ready, or error payload.
-        - isError: True only when task_id is unknown.
+        - isError: True only when plan_id is unknown.
     """
     req = PlanFileInfoRequest(**arguments)
-    task_id = req.task_id
+    task_id = req.plan_id
     artifact = req.artifact.strip().lower() if isinstance(req.artifact, str) else "report"
     if artifact not in ("report", "zip"):
         response = {
@@ -404,8 +404,8 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     if plan_snapshot is None:
         response = {
             "error": {
-                "code": "TASK_NOT_FOUND",
-                "message": f"Task not found: {task_id}",
+                "code": "PLAN_NOT_FOUND",
+                "message": f"Plan not found: {task_id}",
             }
         }
         return CallToolResult(
@@ -500,7 +500,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
-    """Return recent tasks for an authenticated user."""
+    """Return recent plans for an authenticated user."""
     try:
         req = PlanListRequest(**arguments)
     except Exception as exc:
@@ -532,8 +532,8 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     limit = max(1, min(req.limit, 50))
     plans = await asyncio.to_thread(_list_plans_sync, user_id, limit)
     response = {
-        "tasks": plans,
-        "message": f"Returned {len(plans)} task(s).",
+        "plans": plans,
+        "message": f"Returned {len(plans)} plan(s).",
     }
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],

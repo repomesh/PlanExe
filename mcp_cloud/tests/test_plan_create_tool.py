@@ -38,9 +38,9 @@ class TestPlanCreateTool(unittest.TestCase):
 
         self.assertIsInstance(result, CallToolResult)
         self.assertIsInstance(result.structuredContent, dict)
-        self.assertIn("task_id", result.structuredContent)
+        self.assertIn("plan_id", result.structuredContent)
         self.assertIn("created_at", result.structuredContent)
-        self.assertIsInstance(uuid.UUID(result.structuredContent["task_id"]), uuid.UUID)
+        self.assertIsInstance(uuid.UUID(result.structuredContent["plan_id"]), uuid.UUID)
 
 
 if __name__ == "__main__":

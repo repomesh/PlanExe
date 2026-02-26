@@ -12,6 +12,7 @@ An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed
 - **2026-02-26 (rev 2):** Updated after `app.py` refactor into modules, `plan_list` `user_api_key` made optional in schema (auto-injected by HTTP layer), and re-evaluation of all open issues.
 - **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_*` to `test_plan_*`.
 - **2026-02-26 (rev 4):** Updated after completing 4.2 — added separate download rate limiter with configurable limits (default 10 req/60s).
+- **2026-02-26 (rev 5):** Renamed external-facing fields: `task_id` → `plan_id`, `tasks` → `plans`, error codes `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`. Internal function names and download URL paths unchanged.
 
 ---
 
@@ -65,7 +66,7 @@ Nine tools, split across two transports:
 
 **Prompt guidance in schema.** The `prompt` field description ("300–800 words … objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria") sets user expectations up front.
 
-**`plan_list` for task recovery.** Authenticated users can list their most recent tasks (up to 50, newest-first) to recover a lost `task_id`. Each entry includes `task_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
+**`plan_list` for plan recovery.** Authenticated users can list their most recent plans (up to 50, newest-first) to recover a lost `plan_id`. Each entry includes `plan_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
 
 **Comprehensive test suite.** 12 test files covering tool surface consistency, auth key parsing, CORS config, download tokens, HTTP routing, and individual tool behaviour (`test_plan_create_tool.py`, `test_plan_status_tool.py`, `test_plan_retry_tool.py`, `test_plan_file_info_tool.py`, `test_model_profiles_tool.py`).
 

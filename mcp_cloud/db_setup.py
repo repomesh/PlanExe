@@ -94,16 +94,16 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
     "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
     "Only after approval, call plan_create. "
-    "Each plan_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
+    "Each plan_create call creates a new plan_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll plan_status (about every 5 minutes); use plan_file_info when complete. "
-    "If a run fails, call plan_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
-    "To stop, call plan_stop with the task_id from plan_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If a run fails, call plan_retry with the failed plan_id to requeue it (optional model_profile, defaults to baseline). "
+    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
     "plan_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
-    "To list recent tasks for a user call plan_list; returns task_id, state, progress_percentage, created_at, and prompt_excerpt for each task. "
+    "To list recent plans for a user call plan_list; returns plan_id, state, progress_percentage, created_at, and prompt_excerpt for each plan. "
     "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
-    "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the plan was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the plan_create likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
@@ -148,17 +148,17 @@ class PlanCreateRequest(BaseModel):
     user_api_key: Optional[str] = None
 
 class PlanStatusRequest(BaseModel):
-    task_id: str
+    plan_id: str
 
 class PlanStopRequest(BaseModel):
-    task_id: str
+    plan_id: str
 
 class PlanRetryRequest(BaseModel):
-    task_id: str
+    plan_id: str
     model_profile: ModelProfileInput = "baseline"
 
 class PlanFileInfoRequest(BaseModel):
-    task_id: str
+    plan_id: str
     artifact: Optional[str] = None
 
 class PlanListRequest(BaseModel):

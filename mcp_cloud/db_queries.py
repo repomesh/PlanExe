@@ -93,7 +93,7 @@ def _create_plan_sync(
 
         plan_id = str(plan.id)
         event_context = {
-            "task_id": plan_id,
+            "plan_id": plan_id,
             "task_handle": plan_id,
             "prompt": plan.prompt,
             "user_id": plan.user_id,
@@ -113,7 +113,7 @@ def _create_plan_sync(
         if created_at and created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
         return {
-            "task_id": plan_id,
+            "plan_id": plan_id,
             "created_at": created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
 
@@ -157,8 +157,8 @@ def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[s
         if plan.state != PlanState.failed:
             return {
                 "error": {
-                    "code": "TASK_NOT_FAILED",
-                    "message": f"Task is not in failed state: {task_id}",
+                    "code": "PLAN_NOT_FAILED",
+                    "message": f"Plan is not in failed state: {task_id}",
                 }
             }
 
@@ -185,9 +185,9 @@ def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[s
         db.session.commit()
 
         event_context = {
-            "task_id": str(plan.id),
+            "plan_id": str(plan.id),
             "task_handle": str(plan.id),
-            "retry_of_task_id": task_id,
+            "retry_of_plan_id": task_id,
             "model_profile": normalized_profile,
             "parameters": plan.parameters,
         }
@@ -200,7 +200,7 @@ def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[s
         db.session.commit()
 
         return {
-            "task_id": str(plan.id),
+            "plan_id": str(plan.id),
             "state": get_plan_state_mapping(plan.state),
             "model_profile": normalized_profile,
             "retried_at": now_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -235,7 +235,7 @@ def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]
             if created_at and created_at.tzinfo is None:
                 created_at = created_at.replace(tzinfo=UTC)
             results.append({
-                "task_id": str(plan.id),
+                "plan_id": str(plan.id),
                 "state": get_plan_state_mapping(plan.state),
                 "progress_percentage": float(plan.progress_percentage or 0.0),
                 "created_at": (

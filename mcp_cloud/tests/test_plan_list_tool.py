@@ -12,17 +12,17 @@ class TestPlanListTool(unittest.TestCase):
         tool_names = {tool.name for tool in tools}
         self.assertIn("plan_list", tool_names)
 
-    def test_plan_list_returns_tasks(self):
+    def test_plan_list_returns_plans(self):
         fake_plans = [
             {
-                "task_id": "aaa-111",
+                "plan_id": "aaa-111",
                 "state": "completed",
                 "progress_percentage": 100.0,
                 "created_at": "2026-01-01T00:00:00Z",
                 "prompt_excerpt": "Build a rocket",
             },
             {
-                "task_id": "bbb-222",
+                "plan_id": "bbb-222",
                 "state": "processing",
                 "progress_percentage": 42.0,
                 "created_at": "2026-01-02T00:00:00Z",
@@ -36,8 +36,8 @@ class TestPlanListTool(unittest.TestCase):
 
         self.assertIsInstance(result, CallToolResult)
         self.assertFalse(result.isError)
-        self.assertEqual(len(result.structuredContent["tasks"]), 2)
-        self.assertIn("Returned 2 task(s)", result.structuredContent["message"])
+        self.assertEqual(len(result.structuredContent["plans"]), 2)
+        self.assertIn("Returned 2 plan(s)", result.structuredContent["message"])
 
     def test_plan_list_empty_result(self):
         user_context = {"user_id": "user-1", "credits_balance": 10.0}
@@ -46,8 +46,8 @@ class TestPlanListTool(unittest.TestCase):
             result = asyncio.run(handle_plan_list({"user_api_key": "pex_test"}))
 
         self.assertFalse(result.isError)
-        self.assertEqual(result.structuredContent["tasks"], [])
-        self.assertIn("Returned 0 task(s)", result.structuredContent["message"])
+        self.assertEqual(result.structuredContent["plans"], [])
+        self.assertIn("Returned 0 plan(s)", result.structuredContent["message"])
 
     def test_plan_list_clamps_limit(self):
         """Limit is clamped to [1, 50]."""

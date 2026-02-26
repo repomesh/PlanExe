@@ -122,9 +122,9 @@ TOOL_DEFINITIONS = [
             "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
-            "Returns task_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_file_info. "
-            "If you lose a task_id, call plan_list to recover it. "
-            "Each plan_create call creates a new task_id (no server-side dedup). "
+            "Returns plan_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_file_info. "
+            "If you lose a plan_id, call plan_list to recover it. "
+            "Each plan_create call creates a new plan_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
             "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS."
@@ -147,7 +147,7 @@ TOOL_DEFINITIONS = [
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
-            "Unknown task_id returns error code TASK_NOT_FOUND. "
+            "Unknown plan_id returns error code PLAN_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
@@ -164,11 +164,11 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_stop",
         description=(
-            "Request the plan generation to stop. Pass the task_id (the UUID returned by plan_create). "
-            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
-            "A stopped task will eventually transition to the failed state. "
-            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
-            "Unknown task_id returns error code TASK_NOT_FOUND."
+            "Request the plan generation to stop. Pass the plan_id (the UUID returned by plan_create). "
+            "Stopping is asynchronous: the stop flag is set immediately but the plan may continue briefly before halting. "
+            "A stopped plan will eventually transition to the failed state. "
+            "If the plan is already completed or failed, stop_requested returns false (the plan already finished). "
+            "Unknown plan_id returns error code PLAN_NOT_FOUND."
         ),
         input_schema=PLAN_STOP_INPUT_SCHEMA,
         output_schema=PLAN_STOP_OUTPUT_SCHEMA,
@@ -182,10 +182,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_retry",
         description=(
-            "Retry a task that is currently in failed state. "
-            "Pass the failed task_id and optionally model_profile (defaults to baseline). "
-            "The task is reset to pending, prior artifacts are cleared, and the same task_id is requeued for processing. "
-            "Returns TASK_NOT_FOUND when task_id is unknown and TASK_NOT_FAILED when the task is not in failed state."
+            "Retry a plan that is currently in failed state. "
+            "Pass the failed plan_id and optionally model_profile (defaults to baseline). "
+            "The plan is reset to pending, prior artifacts are cleared, and the same plan_id is requeued for processing. "
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_FAILED when the plan is not in failed state."
         ),
         input_schema=PLAN_RETRY_INPUT_SCHEMA,
         output_schema=PLAN_RETRY_OUTPUT_SCHEMA,
@@ -208,7 +208,7 @@ TOOL_DEFINITIONS = [
             "Once ready, present download_url to the user or fetch and save the file locally. "
             "If your client exposes plan_download (e.g. mcp_local), prefer that to save the file locally. "
             "Terminal error codes: generation_failed (plan failed), content_unavailable (artifact missing). "
-            "Unknown task_id returns error code TASK_NOT_FOUND."
+            "Unknown plan_id returns error code PLAN_NOT_FOUND."
         ),
         input_schema=PLAN_FILE_INFO_INPUT_SCHEMA,
         output_schema=PLAN_FILE_INFO_OUTPUT_SCHEMA,
@@ -222,10 +222,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_list",
         description=(
-            "List the most recent tasks for an authenticated user. "
-            "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
+            "List the most recent plans for an authenticated user. "
+            "Returns up to `limit` plans (default 10, max 50) newest-first, each with plan_id, state, "
             "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
-            "Use this to recover a lost task_id or to review recent activity."
+            "Use this to recover a lost plan_id or to review recent activity."
         ),
         input_schema=PLAN_LIST_INPUT_SCHEMA,
         output_schema=PLAN_LIST_OUTPUT_SCHEMA,

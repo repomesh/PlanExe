@@ -16,36 +16,36 @@ class TestPlanRetryTool(unittest.TestCase):
     def test_plan_retry_returns_structured_content(self):
         task_id = str(uuid.uuid4())
         payload = {
-            "task_id": task_id,
+            "plan_id": task_id,
             "state": "pending",
             "model_profile": "baseline",
             "retried_at": "2026-01-01T00:00:00Z",
         }
         with patch("mcp_cloud.handlers._retry_failed_plan_sync", return_value=payload):
-            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"plan_id": task_id}))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertFalse(result.isError)
-        self.assertEqual(result.structuredContent["task_id"], task_id)
+        self.assertEqual(result.structuredContent["plan_id"], task_id)
         self.assertEqual(result.structuredContent["state"], "pending")
         self.assertEqual(result.structuredContent["model_profile"], "baseline")
 
-    def test_plan_retry_returns_task_not_found(self):
+    def test_plan_retry_returns_plan_not_found(self):
         task_id = str(uuid.uuid4())
         with patch("mcp_cloud.handlers._retry_failed_plan_sync", return_value=None):
-            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"plan_id": task_id}))
 
         self.assertTrue(result.isError)
-        self.assertEqual(result.structuredContent["error"]["code"], "TASK_NOT_FOUND")
+        self.assertEqual(result.structuredContent["error"]["code"], "PLAN_NOT_FOUND")
 
-    def test_plan_retry_returns_task_not_failed(self):
+    def test_plan_retry_returns_plan_not_failed(self):
         task_id = str(uuid.uuid4())
-        payload = {"error": {"code": "TASK_NOT_FAILED", "message": "Task is not failed."}}
+        payload = {"error": {"code": "PLAN_NOT_FAILED", "message": "Plan is not failed."}}
         with patch("mcp_cloud.handlers._retry_failed_plan_sync", return_value=payload):
-            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"plan_id": task_id}))
 
         self.assertTrue(result.isError)
-        self.assertEqual(result.structuredContent["error"]["code"], "TASK_NOT_FAILED")
+        self.assertEqual(result.structuredContent["error"]["code"], "PLAN_NOT_FAILED")
 
 
 if __name__ == "__main__":

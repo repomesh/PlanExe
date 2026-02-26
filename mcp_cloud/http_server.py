@@ -648,35 +648,35 @@ async def plan_create(
 
 
 async def plan_status(
-    task_id: str = Field(..., description="Task UUID returned by plan_create."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create."),
 ) -> Annotated[CallToolResult, PlanStatusOutput]:
-    return await handle_plan_status({"task_id": task_id})
+    return await handle_plan_status({"plan_id": plan_id})
 
 
 async def plan_stop(
-    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to stop the plan creation."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to stop the plan creation."),
 ) -> Annotated[CallToolResult, PlanStopOutput]:
-    return await handle_plan_stop({"task_id": task_id})
+    return await handle_plan_stop({"plan_id": plan_id})
 
 
 async def plan_retry(
-    task_id: str = Field(..., description="UUID of the failed task to retry."),
+    plan_id: str = Field(..., description="UUID of the failed plan to retry."),
     model_profile: Annotated[
         ModelProfileInput,
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, PlanRetryOutput]:
-    return await handle_plan_retry({"task_id": task_id, "model_profile": model_profile})
+    return await handle_plan_retry({"plan_id": plan_id, "model_profile": model_profile})
 
 
 async def plan_file_info(
-    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to download the created plan."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to download the created plan."),
     artifact: Annotated[
         ResultArtifactInput,
         Field(description="Download artifact type: report or zip."),
     ] = "report",
 ) -> Annotated[CallToolResult, PlanFileInfoOutput]:
-    return await handle_plan_file_info({"task_id": task_id, "artifact": artifact})
+    return await handle_plan_file_info({"plan_id": plan_id, "artifact": artifact})
 
 
 async def prompt_examples() -> CallToolResult:
@@ -690,9 +690,9 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
 
 
 async def plan_list(
-    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of tasks to return (1–50). Newest tasks are returned first."),
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of plans to return (1–50). Newest plans are returned first."),
 ) -> Annotated[CallToolResult, PlanListOutput]:
-    """List the most recent tasks for an authenticated user."""
+    """List the most recent plans for an authenticated user."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {"limit": limit}
     if authenticated_user_api_key:
@@ -1014,7 +1014,7 @@ def root() -> dict[str, Any]:
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
             "glama_connector": "/.well-known/glama.json",
-            "download": f"/download/{{task_id}}/{REPORT_FILENAME}",
+            "download": f"/download/{{plan_id}}/{REPORT_FILENAME}",
             "llms_txt": "/llms.txt",
         },
         "documentation": "See /docs for OpenAPI documentation",

@@ -147,11 +147,9 @@ Added `mcp_cloud/tests/test_plan_list_tool.py` with 8 tests covering: tool liste
 
 **Fix:** Default to a restrictive origin list (e.g. `["https://mcp.planexe.org", "https://home.planexe.org"]`) and document the `PLANEXE_MCP_CORS_ORIGINS` override in the README.
 
-### 4.7 No request logging for successful tool calls
+### ~~4.7 No request logging for successful tool calls~~ (FIXED)
 
-`_log_auth_rejection()` logs failed auth attempts, but successful tool calls are not logged. This makes it impossible to audit which tools were called by whom.
-
-**Fix:** Add INFO-level logging in `handle_call_tool` on successful dispatch (tool name, user ID if authenticated, duration).
+`handle_call_tool` now logs every tool call at INFO level with tool name, result (ok/error/exception), and duration in milliseconds. Unknown tools are logged at WARNING. Format: `tool_call tool=<name> result=<ok|error|exception> duration_ms=<N>`.
 
 ### ~~4.8 Prompt excerpt length hardcoded~~ (FIXED)
 
@@ -243,7 +241,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
 | P2       | ~~Body size validation on Streamable HTTP (4.3)~~                      | —      | DONE   |
 | P2       | ~~Return error for invalid artifact value (4.4)~~                      | —      | DONE   |
-| P2       | Add tool-call audit logging (4.7)                                      | 1 h    |        |
+| P2       | ~~Add tool-call audit logging (4.7)~~                                  | —      | DONE   |
 | P2       | Add `log_lines` to `plan_status` (5.1)                                 | 4 h    |        |
 | P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~   | —      | DONE   |
 | P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —  | DONE   |
@@ -261,4 +259,4 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 The MCP surface is functionally solid and ahead of most MCP servers in terms of schema rigour, annotation coverage, and security (signed download tokens, layered auth, auto-injected user keys). The codebase has been significantly improved since rev 1: `app.py` was refactored from a 76 KB monolith into 10+ focused modules, `plan_list` now follows the same auth-injection pattern as `plan_create`, and all P0 issues are resolved.
 
-The remaining weaknesses are: production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`); and there is no audit trail for successful tool calls. None of these are blocking, but addressing the P1 items (secret validation, `plan_list` tests) would meaningfully tighten the security and reliability posture.
+The main remaining weakness is that production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`). This is not blocking, but addressing it (fail-hard on missing secrets when auth is enabled) would meaningfully tighten the security posture.

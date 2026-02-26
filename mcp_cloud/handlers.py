@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -70,18 +71,27 @@ async def handle_list_tools() -> list[Tool]:
 @mcp_cloud_server.call_tool()
 async def handle_call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
     """Dispatch MCP tool calls and return structured JSON errors for unknown tools."""
+    start = time.monotonic()
     try:
         handler = TOOL_HANDLERS.get(name)
         if handler is None:
+            logger.warning("tool_call tool=%s result=unknown_tool", name)
             response = {"error": {"code": "INVALID_TOOL", "message": f"Unknown tool: {name}"}}
             return CallToolResult(
                 content=[TextContent(type="text", text=json.dumps(response))],
                 structuredContent=response,
                 isError=True,
             )
-        return await handler(arguments)
+        result = await handler(arguments)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        if result.isError:
+            logger.info("tool_call tool=%s result=error duration_ms=%.0f", name, elapsed_ms)
+        else:
+            logger.info("tool_call tool=%s result=ok duration_ms=%.0f", name, elapsed_ms)
+        return result
     except Exception as e:
-        logger.error(f"Error handling tool {name}: {e}", exc_info=True)
+        elapsed_ms = (time.monotonic() - start) * 1000
+        logger.error("tool_call tool=%s result=exception duration_ms=%.0f error=%s", name, elapsed_ms, e, exc_info=True)
         response = {"error": {"code": "INTERNAL_ERROR", "message": str(e)}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],

@@ -20,7 +20,7 @@ class TestTaskCreateTool(unittest.TestCase):
     def test_task_create_returns_structured_content(self):
         arguments = {"prompt": "xcv", "config": None, "metadata": None}
         fake_session = MagicMock()
-        class StubTaskItem:
+        class StubPlanItem:
             def __init__(self, prompt: str, state, user_id: str, parameters):
                 self.id = uuid.uuid4()
                 self.prompt = prompt
@@ -32,7 +32,7 @@ class TestTaskCreateTool(unittest.TestCase):
         with patch("mcp_cloud.app.app.app_context", return_value=nullcontext()), patch(
             "mcp_cloud.app.db.session", fake_session
         ), patch(
-            "mcp_cloud.app.TaskItem", StubTaskItem
+            "mcp_cloud.app.PlanItem", StubPlanItem
         ):
             result = asyncio.run(handle_task_create(arguments))
 

@@ -26,7 +26,7 @@ class TokenMetrics(db.Model):
     # The LLM model name that was used
     llm_model = db.Column(String(255), nullable=False, index=True)
 
-    # Optional TaskItem.id associated with this LLM invocation.
+    # Optional PlanItem.id associated with this LLM invocation.
     task_id = db.Column(String(255), nullable=True, index=True)
     # UserAccount.id associated with the task for billing and support investigations.
     user_id = db.Column(String(255), nullable=True, index=True)

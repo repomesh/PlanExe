@@ -241,8 +241,8 @@ Steps:
 
 mcp_cloud maps MCP concepts to PlanExe's database models:
 
-- **Task** → `TaskItem` (each task corresponds to a TaskItem)
-- **Run** → Execution of a TaskItem by `worker_plan_database`
+- **Task** → `PlanItem` (each task corresponds to a PlanItem)
+- **Run** → Execution of a PlanItem by `worker_plan_database`
 - **Report** → HTML report fetched from `worker_plan` via HTTP API
 
 mcp_cloud reads task state and progress from the database, and fetches artifacts from `worker_plan` via HTTP instead of accessing the run directory directly. This allows mcp_cloud to work without mounting the run directory, making it compatible with Railway and other cloud platforms that don't support shared volumes across services.
@@ -407,5 +407,5 @@ See `railway.md` for Railway-specific deployment instructions. The server automa
   - Other files are fetched by downloading the run zip and extracting the file (less efficient but works without additional endpoints)
 - Artifact writes are not yet supported via HTTP (would require a write endpoint in `worker_plan`).
 - Artifact writes are rejected while a run is active (strict policy per spec).
-- Task IDs use the TaskItem UUID (e.g., `5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1`).
+- Task IDs use the PlanItem UUID (e.g., `5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1`).
 - **Security**: Authentication is configurable. For production, set `PLANEXE_MCP_REQUIRE_AUTH=true` and use UserApiKey validation (optionally with `PLANEXE_MCP_API_KEY` as a shared secret).

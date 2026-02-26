@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
 from mcp.types import CallToolResult
-from database_api.model_taskitem import TaskState
+from database_api.model_planitem import PlanState
 from mcp_cloud.app import handle_plan_status as handle_task_status
 
 
@@ -14,7 +14,7 @@ class TestTaskStatusTool(unittest.TestCase):
         task_id = str(uuid.uuid4())
         task_snapshot = {
             "id": task_id,
-            "state": TaskState.completed,
+            "state": PlanState.completed,
             "stop_requested": False,
             "progress_percentage": 0.0,
             "timestamp_created": datetime.now(UTC),
@@ -39,7 +39,7 @@ class TestTaskStatusTool(unittest.TestCase):
         task_id = str(uuid.uuid4())
         task_snapshot = {
             "id": task_id,
-            "state": TaskState.processing,
+            "state": PlanState.processing,
             "stop_requested": False,
             "progress_percentage": 34.23,
             "timestamp_created": datetime.now(UTC),
@@ -67,7 +67,7 @@ class TestTaskStatusTool(unittest.TestCase):
         task_id = str(uuid.uuid4())
         task_snapshot = {
             "id": task_id,
-            "state": TaskState.processing,
+            "state": PlanState.processing,
             "stop_requested": True,
             "progress_percentage": 10.0,
             "timestamp_created": datetime.now(UTC),

@@ -79,7 +79,7 @@ class TokenMetricsStore:
         Record token usage for an LLM call.
 
         Args:
-            task_id: The TaskItem.id or run identifier associated with this execution
+            task_id: The PlanItem.id or run identifier associated with this execution
             llm_model: The LLM model name (e.g., "gpt-4", "ollama-llama3.1")
             input_tokens: Number of input tokens (optional)
             output_tokens: Number of output tokens (optional)

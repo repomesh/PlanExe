@@ -5,7 +5,7 @@ import zipfile
 from io import BytesIO
 from unittest.mock import AsyncMock, patch
 
-from database_api.model_taskitem import TaskState
+from database_api.model_planitem import PlanState
 from mcp_cloud.app import (
     REPORT_FILENAME,
     ZIP_CONTENT_TYPE,
@@ -42,7 +42,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         content_bytes = b"a" * 10
         task_snapshot = {
             "id": "task-id",
-            "state": TaskState.completed,
+            "state": PlanState.completed,
             "progress_message": None,
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
@@ -64,7 +64,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         content_bytes = b"zipdata"
         task_snapshot = {
             "id": "task-id",
-            "state": TaskState.completed,
+            "state": PlanState.completed,
             "progress_message": None,
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
@@ -83,7 +83,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         content_bytes = b"zipdata"
         task_snapshot = {
             "id": "task-id",
-            "state": TaskState.failed,
+            "state": PlanState.failed,
             "progress_message": "Stopped",
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
@@ -101,7 +101,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         task_id = str(uuid.uuid4())
         task_snapshot = {
             "id": "task-id",
-            "state": TaskState.pending,
+            "state": PlanState.pending,
             "progress_message": None,
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
@@ -114,7 +114,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
         task_id = str(uuid.uuid4())
         task_snapshot = {
             "id": "task-id",
-            "state": TaskState.failed,
+            "state": PlanState.failed,
             "progress_message": "Pipeline failed",
         }
         with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):

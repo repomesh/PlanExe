@@ -16,12 +16,12 @@ models. Keep interfaces stable across services.
   SQLAlchemy engines or sessions here.
 - Keep `.env` loading via `PlanExeDotEnv` and `update_os_environ()` early so
   local/debug behavior is consistent.
-- If schema usage changes (e.g., new TaskItem columns), update the
-  `_ensure_taskitem_artifact_columns()` helper and keep changes backward
+- If schema usage changes (e.g., new PlanItem columns), update the
+  `_ensure_planitem_artifact_columns()` helper and keep changes backward
   compatible.
 - Artifact storage model:
-  - Use `TaskItem.run_activity_overview_json` as primary UI cost/usage source.
-  - Keep `TaskItem.run_track_activity_jsonl` internal/admin-only.
+  - Use `PlanItem.run_activity_overview_json` as primary UI cost/usage source.
+  - Keep `PlanItem.run_track_activity_jsonl` internal/admin-only.
   - User zip downloads should serve layout-versioned snapshots directly for
     new tasks; sanitize legacy snapshots only.
 - Admin navbar UX invariant:

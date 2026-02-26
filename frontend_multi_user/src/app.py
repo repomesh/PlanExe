@@ -38,7 +38,7 @@ from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
 from worker_plan_api.prompt_catalog import PromptCatalog
 from sqlalchemy import text, inspect, func
 from sqlalchemy.exc import OperationalError, DataError
-from database_api.model_taskitem import TaskItem, TaskState
+from database_api.model_planitem import PlanItem, PlanState
 from database_api.model_event import EventType, EventItem
 from database_api.model_worker import WorkerItem
 from database_api.model_nonce import NonceItem
@@ -48,7 +48,7 @@ from database_api.model_user_api_key import UserApiKey
 from database_api.model_credit_history import CreditHistory
 from database_api.model_payment_record import PaymentRecord
 from database_api.model_token_metrics import TokenMetrics, TokenMetricsSummary
-from planexe_modelviews import WorkerItemView, TaskItemView, NonceItemView, TokenMetricsView, AdminOnlyModelView
+from planexe_modelviews import WorkerItemView, PlanItemView, NonceItemView, TokenMetricsView, AdminOnlyModelView
 logger = logging.getLogger(__name__)
 
 from worker_plan_api.planexe_dotenv import DotEnvKeyEnum, PlanExeDotEnv
@@ -389,7 +389,7 @@ class MyFlaskApp:
         self.db = db
         self.db.init_app(self.app)
         
-        def _ensure_taskitem_artifact_columns() -> None:
+        def _ensure_planitem_artifact_columns() -> None:
             insp = inspect(self.db.engine)
             columns = {col["name"] for col in insp.get_columns("task_item")}
             with self.db.engine.begin() as conn:
@@ -467,7 +467,7 @@ class MyFlaskApp:
                 if "frontend_multi_user_config" not in columns:
                     conn.execute(text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS frontend_multi_user_config JSON"))
 
-        def _ensure_taskitem_indexes() -> None:
+        def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
             if "task_item" not in set(insp.get_table_names()):
                 return
@@ -479,8 +479,8 @@ class MyFlaskApp:
 
         def _seed_initial_records() -> None:
             # Add initial records if the table is empty
-            if TaskItem.query.count() == 0:
-                tasks = TaskItem.demo_items()
+            if PlanItem.query.count() == 0:
+                tasks = PlanItem.demo_items()
                 for task in tasks:
                     self.db.session.add(task)
                 self.db.session.commit()
@@ -503,11 +503,11 @@ class MyFlaskApp:
                 try:
                     with self.app.app_context():
                         self.db.create_all()
-                        _ensure_taskitem_artifact_columns()
+                        _ensure_planitem_artifact_columns()
                         _ensure_token_metrics_columns()
                         _ensure_fractional_credit_columns()
                         _ensure_user_account_columns()
-                        _ensure_taskitem_indexes()
+                        _ensure_planitem_indexes()
                         _seed_initial_records()
                     return
                 except OperationalError as exc:
@@ -558,7 +558,7 @@ class MyFlaskApp:
         self.admin = Admin(self.app, name='PlanExe Admin', index_view=MyAdminIndexView())
         
         # Add database tables to admin panel
-        self.admin.add_view(TaskItemView(model=TaskItem, session=self.db.session, name="Task"))
+        self.admin.add_view(PlanItemView(model=PlanItem, session=self.db.session, name="Task"))
         self.admin.add_view(AdminOnlyModelView(model=EventItem, session=self.db.session, name="Event"))
         self.admin.add_view(WorkerItemView(model=WorkerItem, session=self.db.session, name="Worker"))
         self.admin.add_view(NonceItemView(model=NonceItem, session=self.db.session, name="Nonce"))
@@ -1156,8 +1156,8 @@ class MyFlaskApp:
         """Load a prompt preview for one task, tolerating corrupted UTF-8 rows."""
         try:
             preview = (
-                self.db.session.query(func.substr(TaskItem.prompt, 1, max_chars))
-                .filter(TaskItem.id == task_id)
+                self.db.session.query(func.substr(PlanItem.prompt, 1, max_chars))
+                .filter(PlanItem.id == task_id)
                 .scalar()
             )
             text = (preview or "").strip()
@@ -1258,7 +1258,7 @@ class MyFlaskApp:
             return None
         return self._safe_float(payload.get("total_cost"))
 
-    def _read_activity_overview_from_task(self, task: TaskItem) -> Optional[dict[str, Any]]:
+    def _read_activity_overview_from_task(self, task: PlanItem) -> Optional[dict[str, Any]]:
         raw_payload = getattr(task, "run_activity_overview_json", None)
         if isinstance(raw_payload, dict):
             return raw_payload
@@ -1271,7 +1271,7 @@ class MyFlaskApp:
                 logger.warning("Unable to parse task.run_activity_overview_json for %s: %s", task.id, exc)
         return self._read_activity_overview_from_run_zip(task.run_zip_snapshot)
 
-    def _read_inference_cost_from_task(self, task: TaskItem) -> Optional[float]:
+    def _read_inference_cost_from_task(self, task: PlanItem) -> Optional[float]:
         payload = self._read_activity_overview_from_task(task)
         if not isinstance(payload, dict):
             return None
@@ -1321,7 +1321,7 @@ class MyFlaskApp:
                 return event
         return None
 
-    def _build_plan_failure_trace(self, task: TaskItem) -> dict[str, Any]:
+    def _build_plan_failure_trace(self, task: PlanItem) -> dict[str, Any]:
         task_id = str(task.id)
         token_metrics_rows = (
             TokenMetrics.query
@@ -1568,7 +1568,7 @@ class MyFlaskApp:
                 "events_table": "events.context.{task_id, duration_between_pending_and_processing, duration_between_processing_and_completion, machai_error_message}",
                 "token_metrics_table": "token_metrics.{timestamp, upstream_provider, upstream_model, llm_model, duration_seconds, success, error_message, raw_usage_data}",
                 "task_parameters": "taskitem.parameters",
-                "activity_overview_json": "TaskItem.run_activity_overview_json (fallback: TaskItem.run_zip_snapshot -> */activity_overview.json)",
+                "activity_overview_json": "PlanItem.run_activity_overview_json (fallback: PlanItem.run_zip_snapshot -> */activity_overview.json)",
             },
         }
         failure_trace["has_data"] = any(
@@ -1591,9 +1591,9 @@ class MyFlaskApp:
 
         return failure_trace
 
-    def _build_plan_telemetry_cache_key(self, task: TaskItem, include_raw: bool) -> Optional[tuple[str, str, bool, bool]]:
-        state = task.state if isinstance(task.state, TaskState) else None
-        if include_raw or state not in (TaskState.completed, TaskState.failed):
+    def _build_plan_telemetry_cache_key(self, task: PlanItem, include_raw: bool) -> Optional[tuple[str, str, bool, bool]]:
+        state = task.state if isinstance(task.state, PlanState) else None
+        if include_raw or state not in (PlanState.completed, PlanState.failed):
             return None
         return (
             str(task.id),
@@ -1604,7 +1604,7 @@ class MyFlaskApp:
 
     def _build_plan_telemetry(
         self,
-        task: TaskItem,
+        task: PlanItem,
         include_raw: bool = False,
         expose_raw_usage_data: bool = False,
     ) -> dict[str, Any]:
@@ -1731,7 +1731,7 @@ class MyFlaskApp:
             },
             "source_paths": {
                 "token_metrics_table": "token_metrics.{input_tokens, output_tokens, thinking_tokens, cost_usd, upstream_provider, upstream_model}",
-                "activity_overview_json": "TaskItem.run_activity_overview_json (fallback: TaskItem.run_zip_snapshot -> */activity_overview.json)",
+                "activity_overview_json": "PlanItem.run_activity_overview_json (fallback: PlanItem.run_zip_snapshot -> */activity_overview.json)",
             },
             "source_availability": {
                 "token_metrics_row_count": len(token_metrics_rows),
@@ -1794,8 +1794,8 @@ class MyFlaskApp:
 
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
-            TaskItem.query
-            .order_by(TaskItem.timestamp_created.desc())
+            PlanItem.query
+            .order_by(PlanItem.timestamp_created.desc())
             .limit(max_tasks)
             .all()
         )
@@ -1852,7 +1852,7 @@ class MyFlaskApp:
                         if task.timestamp_created
                         else None
                     ),
-                    "state": task.state.name if isinstance(task.state, TaskState) else str(task.state),
+                    "state": task.state.name if isinstance(task.state, PlanState) else str(task.state),
                     "billed_usage_cost_usd": billed_usage_cost_usd,
                     "tracked_usage_cost_usd": tracked_usage_cost_usd,
                     "delta_usd": delta_usd,
@@ -2044,12 +2044,12 @@ class MyFlaskApp:
                         try:
                             recent_task_rows = (
                                 self.db.session.query(
-                                    TaskItem.id,
-                                    TaskItem.state,
-                                    func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                                    PlanItem.id,
+                                    PlanItem.state,
+                                    func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                                 )
-                                .filter(TaskItem.user_id == str(user_id))
-                                .order_by(TaskItem.timestamp_created.desc())
+                                .filter(PlanItem.user_id == str(user_id))
+                                .order_by(PlanItem.timestamp_created.desc())
                                 .limit(10)
                                 .all()
                             )
@@ -2063,11 +2063,11 @@ class MyFlaskApp:
                             )
                             recent_task_rows = (
                                 self.db.session.query(
-                                    TaskItem.id,
-                                    TaskItem.state,
+                                    PlanItem.id,
+                                    PlanItem.state,
                                 )
-                                .filter(TaskItem.user_id == str(user_id))
-                                .order_by(TaskItem.timestamp_created.desc())
+                                .filter(PlanItem.user_id == str(user_id))
+                                .order_by(PlanItem.timestamp_created.desc())
                                 .limit(10)
                                 .all()
                             )
@@ -2081,12 +2081,12 @@ class MyFlaskApp:
                             recent_tasks.append(
                                 SimpleNamespace(
                                     id=str(task.id),
-                                    state=task.state if isinstance(task.state, TaskState) else None,
+                                    state=task.state if isinstance(task.state, PlanState) else None,
                                     prompt=prompt_text,
                                 )
                             )
                         total_tasks_count = (
-                            TaskItem.query
+                            PlanItem.query
                             .filter_by(user_id=str(user_id))
                             .count()
                         )
@@ -2735,8 +2735,8 @@ class MyFlaskApp:
                             return jsonify({"error": "No credits available"}), 402
 
                 task = _new_model(
-                    TaskItem,
-                    state=TaskState.pending,
+                    PlanItem,
+                    state=PlanState.pending,
                     prompt=prompt_param,
                     progress_percentage=0.0,
                     progress_message="Awaiting server to start…",
@@ -2827,8 +2827,8 @@ class MyFlaskApp:
                         return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
 
                 task = _new_model(
-                    TaskItem,
-                    state=TaskState.pending,
+                    PlanItem,
+                    state=PlanState.pending,
                     prompt=prompt_param,
                     progress_percentage=0.0,
                     progress_message="Awaiting server to start…",
@@ -2869,7 +2869,7 @@ class MyFlaskApp:
         @nocache
         def run_status():
             run_id = request.args.get('id', '')
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -2881,14 +2881,14 @@ class MyFlaskApp:
             run_id = request.args.get('run_id', '')
             logger.debug(f"Progress endpoint received run_id: {run_id!r}")
             # lookup the task in the database
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 logger.error(f"Task not found for run_id: {run_id!r}")
                 return jsonify({"error": "Task not found"}), 400
             
             progress_percentage = float(task.progress_percentage) if task.progress_percentage is not None else 0.0
             progress_message = task.progress_message if task.progress_message is not None else ""
-            if isinstance(task.state, TaskState):
+            if isinstance(task.state, PlanState):
                 status = task.state.name
             else:
                 status = f"unknown-{task.state}"
@@ -2910,7 +2910,7 @@ class MyFlaskApp:
             run_id = request.args.get('run_id', '')
             logger.info(f"ViewPlan endpoint requested for run_id: {run_id!r}")
             # lookup the task in the database
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 logger.error(f"Task not found for run_id: {run_id!r}")
                 return jsonify({"error": "Task not found"}), 400
@@ -2945,13 +2945,13 @@ class MyFlaskApp:
                 try:
                     tasks = (
                         self.db.session.query(
-                            TaskItem.id,
-                            TaskItem.timestamp_created,
-                            TaskItem.state,
-                            func.substr(TaskItem.prompt, 1, 240).label("prompt_preview"),
+                            PlanItem.id,
+                            PlanItem.timestamp_created,
+                            PlanItem.state,
+                            func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                         )
-                        .filter(TaskItem.user_id == user_id)
-                        .order_by(TaskItem.timestamp_created.desc())
+                        .filter(PlanItem.user_id == user_id)
+                        .order_by(PlanItem.timestamp_created.desc())
                         .all()
                     )
                 except DataError:
@@ -2964,12 +2964,12 @@ class MyFlaskApp:
                     )
                     tasks = (
                         self.db.session.query(
-                            TaskItem.id,
-                            TaskItem.timestamp_created,
-                            TaskItem.state,
+                            PlanItem.id,
+                            PlanItem.timestamp_created,
+                            PlanItem.state,
                         )
-                        .filter(TaskItem.user_id == user_id)
-                        .order_by(TaskItem.timestamp_created.desc())
+                        .filter(PlanItem.user_id == user_id)
+                        .order_by(PlanItem.timestamp_created.desc())
                         .all()
                     )
                 rows = []
@@ -2985,13 +2985,13 @@ class MyFlaskApp:
                         "id": str(task.id),
                         "created_compact": created_compact,
                         "created_relative": self._format_relative_time(ts),
-                        "status": task.state.name if isinstance(task.state, TaskState) else "pending",
+                        "status": task.state.name if isinstance(task.state, PlanState) else "pending",
                         "prompt": prompt_text,
                     })
                 return render_template("plan_list.html", plan_rows=rows)
 
             logger.info(f"Plan iframe wrapper requested for run_id: {run_id!r}")
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 logger.error(f"Task not found for run_id: {run_id!r}")
                 return jsonify({"error": "Task not found"}), 400
@@ -3019,7 +3019,7 @@ class MyFlaskApp:
         @login_required
         def plan_download_report():
             run_id = request.args.get('id', '')
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -3035,7 +3035,7 @@ class MyFlaskApp:
         @login_required
         def plan_download_zip():
             run_id = request.args.get('id', '')
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -3060,7 +3060,7 @@ class MyFlaskApp:
         @login_required
         def plan_stop():
             run_id = request.form.get('id', '').strip()
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -3068,14 +3068,14 @@ class MyFlaskApp:
 
             # Guard against stale UI: if task already completed (or report exists),
             # ignore stop requests so completion billing cannot be bypassed.
-            if task.state == TaskState.completed or bool(task.generated_report_html):
+            if task.state == PlanState.completed or bool(task.generated_report_html):
                 logger.info("Ignoring stop request for already completed task %s", run_id)
                 return redirect(url_for('plan', id=run_id))
 
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
-            if task.state == TaskState.pending:
-                task.state = TaskState.failed
+            if task.state == PlanState.pending:
+                task.state = PlanState.failed
                 task.progress_message = "Stop requested by user."
             self.db.session.commit()
             return redirect(url_for('plan', id=run_id))
@@ -3084,13 +3084,13 @@ class MyFlaskApp:
         @login_required
         def plan_retry():
             run_id = request.form.get('id', '').strip()
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 return jsonify({"error": "Forbidden"}), 403
 
-            if task.state == TaskState.processing and not bool(task.stop_requested):
+            if task.state == PlanState.processing and not bool(task.stop_requested):
                 return jsonify({"error": "Task is currently processing. Stop it first before retrying."}), 409
 
             raw_profile = request.form.get("model_profile")
@@ -3099,7 +3099,7 @@ class MyFlaskApp:
             parameters["model_profile"] = selected_model_profile
             task.parameters = parameters
 
-            task.state = TaskState.pending
+            task.state = PlanState.pending
             task.stop_requested = False
             task.stop_requested_timestamp = None
             task.progress_percentage = 0.0
@@ -3118,13 +3118,13 @@ class MyFlaskApp:
         @login_required
         def plan_meta():
             run_id = request.args.get('id', '').strip()
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 return jsonify({"error": "Forbidden"}), 403
 
-            state_name = task.state.name if isinstance(task.state, TaskState) else "pending"
+            state_name = task.state.name if isinstance(task.state, PlanState) else "pending"
             telemetry = self._build_plan_telemetry(task, include_raw=False)
             failure_trace = self._build_plan_failure_trace(task)
             return jsonify({
@@ -3151,7 +3151,7 @@ class MyFlaskApp:
         @login_required
         def plan_telemetry():
             run_id = request.args.get('id', '').strip()
-            task = self.db.session.get(TaskItem, run_id)
+            task = self.db.session.get(PlanItem, run_id)
             if task is None:
                 return jsonify({"error": "Task not found"}), 400
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -3166,7 +3166,7 @@ class MyFlaskApp:
         @self.app.route('/admin/task/<uuid:task_id>/report')
         @admin_required
         def download_task_report(task_id):
-            task = self.db.session.get(TaskItem, task_id)
+            task = self.db.session.get(PlanItem, task_id)
             if task is None or not task.generated_report_html:
                 return "Report not found", 404
             buffer = io.BytesIO(task.generated_report_html.encode('utf-8'))
@@ -3176,7 +3176,7 @@ class MyFlaskApp:
         @self.app.route('/admin/task/<uuid:task_id>/run_zip')
         @admin_required
         def download_task_run_zip(task_id):
-            task = self.db.session.get(TaskItem, task_id)
+            task = self.db.session.get(PlanItem, task_id)
             if task is None or not task.run_zip_snapshot:
                 return "Run zip not found", 404
             buffer = io.BytesIO(task.run_zip_snapshot)
@@ -3187,7 +3187,7 @@ class MyFlaskApp:
         @self.app.route('/admin/task/<uuid:task_id>/track_activity')
         @admin_required
         def download_task_track_activity(task_id):
-            task = self.db.session.get(TaskItem, task_id)
+            task = self.db.session.get(PlanItem, task_id)
             if task is None or not task.run_track_activity_jsonl:
                 return "Track activity not found", 404
             buffer = io.BytesIO(task.run_track_activity_jsonl.encode('utf-8'))

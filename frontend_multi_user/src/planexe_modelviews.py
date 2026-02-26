@@ -102,8 +102,8 @@ class WorkerItemView(AdminOnlyModelView):
     column_searchable_list = ['id', 'current_task_id']
     column_filters = ['started_at', 'last_heartbeat_at']
 
-class TaskItemView(AdminOnlyModelView):
-    """Custom ModelView for TaskItem"""
+class PlanItemView(AdminOnlyModelView):
+    """Custom ModelView for PlanItem"""
     column_list = [
         'id',
         'timestamp_created',

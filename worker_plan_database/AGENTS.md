@@ -1,6 +1,6 @@
 # worker_plan_database agent instructions
 
-Scope: database-backed worker that polls Postgres `TaskItem` rows, runs the
+Scope: database-backed worker that polls Postgres `PlanItem` rows, runs the
 PlanExe pipeline, and updates task state/progress.
 
 ## Guidelines
@@ -14,11 +14,11 @@ PlanExe pipeline, and updates task state/progress.
 - Keep worker identity and required env checks intact (`PLANEXE_WORKER_ID`,
   `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_*`).
 - When changing schema usage, add columns in a backward-compatible way and
-  ensure `ensure_taskitem_artifact_columns()` or related helpers are updated.
+  ensure `ensure_planitem_artifact_columns()` or related helpers are updated.
 - Artifact storage model:
-  - Persist `track_activity.jsonl` into `TaskItem.run_track_activity_jsonl`
+  - Persist `track_activity.jsonl` into `PlanItem.run_track_activity_jsonl`
     (+ bytes in `run_track_activity_bytes`).
-  - Persist `activity_overview.json` into `TaskItem.run_activity_overview_json`.
+  - Persist `activity_overview.json` into `PlanItem.run_activity_overview_json`.
   - Build `run_zip_snapshot` without `track_activity.jsonl` and set
     `run_artifact_layout_version` for new runs.
 - Forbidden imports: `worker_plan.app`, `frontend_*`, `open_dir_server`.

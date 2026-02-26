@@ -128,9 +128,9 @@ A typed message emitted during execution for UI/agent consumption.
 
 ## 5. State Machine
 
-### 5.1 TaskItem.state values
+### 5.1 PlanItem.state values
 
-The public MCP `state` field is aligned with `TaskItem.state`:
+The public MCP `state` field is aligned with `PlanItem.state`:
 
 - pending (queued, waiting for a worker)
 - processing (picked up by a worker)

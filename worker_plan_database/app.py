@@ -1,5 +1,5 @@
 """
-This project monitors the database for pending TaskItems and automatically changes their status to processing
+This project monitors the database for pending PlanItems and automatically changes their status to processing
 when found. It then executes the pipeline for each task.
 
 PROMPT> PLANEXE_WORKER_ID=1 python -m app.py
@@ -150,7 +150,7 @@ try:
     from worker_plan_internal.plan.ping_llm import run_ping_llm_report
     logger.debug("Importing required modules... PlanExe-server.")
     from database_api.planexe_db_singleton import db
-    from database_api.model_taskitem import TaskItem, TaskState
+    from database_api.model_planitem import PlanItem, PlanState
     from database_api.model_event import EventType, EventItem
     from database_api.model_worker import WorkerItem
     from database_api.model_user_account import UserAccount
@@ -195,7 +195,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle' : 280, 'pool_pre_ping': True}
 db.init_app(app)
 
-def ensure_taskitem_artifact_columns() -> None:
+def ensure_planitem_artifact_columns() -> None:
     insp = inspect(db.engine)
     columns = {col["name"] for col in insp.get_columns("task_item")}
     with db.engine.begin() as conn:
@@ -288,11 +288,11 @@ def worker_process_started() -> None:
 
 worker_process_started()
 
-def update_task_state_with_retry(task_id: str, new_state: TaskState, max_retries: int = 3, retry_delay: int = 5) -> bool:
+def update_task_state_with_retry(task_id: str, new_state: PlanState, max_retries: int = 3, retry_delay: int = 5) -> bool:
     """Helper function to update task state with retry logic for database operations."""
     for attempt in range(max_retries):
         try:
-            task = db.session.get(TaskItem, task_id)
+            task = db.session.get(PlanItem, task_id)
             if task is None:
                 logger.error(f"Task with ID {task_id!r} not found in database. Cannot update task state.")
                 return False
@@ -318,7 +318,7 @@ def update_task_progress_with_retry(task_id: str, progress_percentage: float, pr
     """Helper function to update task progress with retry logic for database operations."""
     for attempt in range(max_retries):
         try:
-            task = db.session.get(TaskItem, task_id)
+            task = db.session.get(PlanItem, task_id)
             if task is None:
                 logger.error(f"Task with ID {task_id!r} not found in database. Cannot update task progress.")
                 return False
@@ -365,14 +365,14 @@ class ServerExecutePipeline(ExecutePipeline):
 
         # Lookup the taskitem in the database by self.task_id
         with app.app_context():
-            task = db.session.get(TaskItem, self.task_id)
+            task = db.session.get(PlanItem, self.task_id)
             if task is None:
                 logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
                 raise Exception(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
             stop_requested = bool(task.stop_requested)
 
         if task.last_seen_timestamp is None:
-            # A new TaskItem is supposed to have a last_seen_timestamp.
+            # A new PlanItem is supposed to have a last_seen_timestamp.
             # If it doesn't have a last_seen_timestamp, it's an inconsistency that should be fixed.
             logger.error(f"Task with ID {self.task_id!r} has no last_seen_timestamp. This is an inconsistency.")
             raise Exception(f"Task with ID {self.task_id!r} has no last_seen_timestamp. This is an inconsistency.")
@@ -448,7 +448,7 @@ def create_zip_bytes(run_dir: Path) -> bytes:
 
 
 def read_activity_artifacts(run_id_dir: Path) -> tuple[Optional[str], Optional[int], Optional[dict[str, object]]]:
-    """Read track/activity artifacts from a run directory for TaskItem persistence."""
+    """Read track/activity artifacts from a run directory for PlanItem persistence."""
     track_activity_path = run_id_dir / ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value
     activity_overview_path = run_id_dir / ExtraFilenameEnum.ACTIVITY_OVERVIEW_JSON.value
 
@@ -513,7 +513,7 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
     should_charge = True
 
     with app.app_context():
-        task = db.session.get(TaskItem, task_id)
+        task = db.session.get(PlanItem, task_id)
         if task is None:
             logger.warning("Unable to bill task %s: task row not found.", task_id)
             return {
@@ -717,10 +717,10 @@ def execute_pipeline_for_job(
         "WORKER_ID": str(WORKER_ID)
     }
 
-    # Persist artifacts to the TaskItem record.
+    # Persist artifacts to the PlanItem record.
     stop_requested = False
     with app.app_context():
-        task = db.session.get(TaskItem, task_id)
+        task = db.session.get(PlanItem, task_id)
         if task is None:
             logger.error("Task %s not found while attempting to store report/zip.", task_id)
         else:
@@ -751,10 +751,10 @@ def execute_pipeline_for_job(
     else:
         machai_error_message = 'Error. Unable to generate the report. Likely reasons: censorship, restricted content.'
 
-    # Update the TaskItem state to completed or failed
+    # Update the PlanItem state to completed or failed
     with app.app_context():
         if pipeline_instance.has_report_file:
-            update_task_state_with_retry(task_id, TaskState.completed)
+            update_task_state_with_retry(task_id, PlanState.completed)
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=True)
             event_context.update({
                 "billing_usage_cost_usd": str(billing_result["usage_cost_usd"]),
@@ -772,7 +772,7 @@ def execute_pipeline_for_job(
             db.session.add(event)
             db.session.commit()
         else:
-            update_task_state_with_retry(task_id, TaskState.failed)
+            update_task_state_with_retry(task_id, PlanState.failed)
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
             event_context["machai_error_message"] = machai_error_message or ""
             event_context.update({
@@ -832,10 +832,10 @@ def process_pending_tasks() -> bool:
                 # `with_for_update(skip_locked=True)` is crucial for multi-worker
                 # It tells the DB to lock the selected row and if it's already locked by another transaction,
                 # skip it and try the next one, instead of waiting.
-                task_to_claim = db.session.query(TaskItem)\
-                    .filter(TaskItem.state == TaskState.pending)\
-                    .filter(or_(TaskItem.stop_requested.is_(False), TaskItem.stop_requested.is_(None)))\
-                    .order_by(TaskItem.timestamp_created.asc())\
+                task_to_claim = db.session.query(PlanItem)\
+                    .filter(PlanItem.state == PlanState.pending)\
+                    .filter(or_(PlanItem.stop_requested.is_(False), PlanItem.stop_requested.is_(None)))\
+                    .order_by(PlanItem.timestamp_created.asc())\
                     .with_for_update(skip_locked=True)\
                     .first()
 
@@ -856,7 +856,7 @@ def process_pending_tasks() -> bool:
                 timestamp_created = task_to_claim.timestamp_created
         
                 # Now, modify the task state
-                task_to_claim.state = TaskState.processing
+                task_to_claim.state = PlanState.processing
                 task_to_claim.progress_message = "Picked up by server"
                 task_to_claim.progress_percentage = 0.0
 
@@ -941,7 +941,7 @@ def process_pending_tasks() -> bool:
         logger.error(f"Error processing task {task_id!r}: {e}", exc_info=True)
         # Update task state to failed
         with app.app_context():
-            update_task_state_with_retry(task_id, TaskState.failed)
+            update_task_state_with_retry(task_id, PlanState.failed)
         billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
         machai_error_message = 'Unknown error happened while processing.'
         machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
@@ -987,7 +987,7 @@ def startup_worker():
     with app.app_context():
         try:
             db.create_all()
-            ensure_taskitem_artifact_columns()
+            ensure_planitem_artifact_columns()
             ensure_token_metrics_columns()
             ensure_fractional_credit_columns()
             logger.debug(f"Ensured database tables exist.")

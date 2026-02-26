@@ -51,19 +51,19 @@ class TestPlanCreateInputSchemaHasUserApiKey(unittest.TestCase):
 
 
 class TestPlanListInputSchemaHasUserApiKey(unittest.TestCase):
-    """user_api_key must be required in the plan_list input schema."""
+    """user_api_key must be in plan_list input schema but NOT required."""
 
-    def test_cloud_plan_list_schema_requires_user_api_key(self):
+    def test_cloud_plan_list_schema_has_optional_user_api_key(self):
         props = cloud_app.PLAN_LIST_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
         required = cloud_app.PLAN_LIST_INPUT_SCHEMA.get("required", [])
-        self.assertIn("user_api_key", required)
+        self.assertNotIn("user_api_key", required)
 
-    def test_local_plan_list_schema_requires_user_api_key(self):
+    def test_local_plan_list_schema_has_optional_user_api_key(self):
         props = local_app.PLAN_LIST_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
         required = local_app.PLAN_LIST_INPUT_SCHEMA.get("required", [])
-        self.assertIn("user_api_key", required)
+        self.assertNotIn("user_api_key", required)
 
 
 class TestPlanRetryInputSchemaDefaults(unittest.TestCase):

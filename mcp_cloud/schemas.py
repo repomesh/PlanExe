@@ -137,7 +137,7 @@ TOOL_DEFINITIONS = [
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
             "Returns task_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_file_info. "
-            "If you lose a task_id, call plan_list with your user_api_key to recover it. "
+            "If you lose a task_id, call plan_list to recover it. "
             "Each plan_create call creates a new task_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
@@ -237,7 +237,6 @@ TOOL_DEFINITIONS = [
         name="plan_list",
         description=(
             "List the most recent tasks for an authenticated user. "
-            "Requires user_api_key (pex_...). "
             "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
             "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
             "Use this to recover a lost task_id or to review recent activity."

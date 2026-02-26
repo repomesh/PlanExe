@@ -62,7 +62,7 @@ class TaskDownloadRequest(BaseModel):
 
 
 class TaskListRequest(BaseModel):
-    user_api_key: str
+    user_api_key: Optional[str] = None
     limit: int = 10
 
 
@@ -576,8 +576,9 @@ PLAN_LIST_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "user_api_key": {
-            "type": "string",
-            "description": "User API key (pex_...) to scope the task list to the authenticated user.",
+            "type": ["string", "null"],
+            "default": None,
+            "description": "Optional user API key for credits and attribution.",
         },
         "limit": {
             "type": "integer",
@@ -587,7 +588,7 @@ PLAN_LIST_INPUT_SCHEMA = {
             "description": "Maximum number of tasks to return (1-50). Newest tasks are returned first.",
         },
     },
-    "required": ["user_api_key"],
+    "required": [],
 }
 PLAN_LIST_OUTPUT_SCHEMA = {
     "type": "object",
@@ -672,7 +673,7 @@ TOOL_DEFINITIONS = [
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
             "Returns task_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_download. "
-            "If you lose a task_id, call plan_list with your user_api_key to recover it. "
+            "If you lose a task_id, call plan_list to recover it. "
             "Each plan_create call creates a new task_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
@@ -769,7 +770,6 @@ TOOL_DEFINITIONS = [
         name="plan_list",
         description=(
             "List the most recent tasks for an authenticated user. "
-            "Requires user_api_key (pex_...). "
             "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
             "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
             "Use this to recover a lost task_id or to review recent activity."
@@ -810,7 +810,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "plan_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
-    "To list recent tasks for a user call plan_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt. "
+    "To list recent tasks for a user call plan_list; returns task_id, state, progress_percentage, created_at, and prompt_excerpt. "
     "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
@@ -1033,7 +1033,9 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     """List recent tasks for an authenticated user via mcp_cloud."""
     req = TaskListRequest(**arguments)
-    payload_args: dict[str, Any] = {"user_api_key": req.user_api_key, "limit": req.limit}
+    payload_args: dict[str, Any] = {"limit": req.limit}
+    if req.user_api_key:
+        payload_args["user_api_key"] = req.user_api_key
     payload, error = _call_remote_tool("plan_list", payload_args)
     if error:
         return _wrap_response({"error": error}, is_error=True)

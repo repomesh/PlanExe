@@ -640,11 +640,14 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
 
 
 async def plan_list(
-    user_api_key: str = Field(..., description="User API key (pex_...) to scope the task list to the authenticated user."),
     limit: int = Field(default=10, ge=1, le=50, description="Maximum number of tasks to return (1–50). Newest tasks are returned first."),
 ) -> Annotated[CallToolResult, PlanListOutput]:
     """List the most recent tasks for an authenticated user."""
-    return await handle_plan_list({"user_api_key": user_api_key, "limit": limit})
+    authenticated_user_api_key = _get_authenticated_user_api_key()
+    arguments: dict[str, Any] = {"limit": limit}
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
+    return await handle_plan_list(arguments)
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -855,10 +858,12 @@ async def call_tool(
     This endpoint wraps the stdio-based MCP tool handlers for HTTP access.
     """
     arguments = dict(payload.arguments or {})
-    if payload.tool == "plan_create":
+    if payload.tool in ("plan_create", "plan_list"):
         authenticated_user_api_key = _get_authenticated_user_api_key()
         if authenticated_user_api_key and not arguments.get("user_api_key"):
             arguments["user_api_key"] = authenticated_user_api_key
+
+    if payload.tool == "plan_create":
         if isinstance(payload.metadata, dict):
             arguments["metadata"] = dict(payload.metadata)
 

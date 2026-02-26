@@ -241,9 +241,9 @@ class PlanFileInfoOutput(BaseModel):
 
 
 class PlanListInput(BaseModel):
-    user_api_key: str = Field(
-        ...,
-        description="User API key (pex_...) to scope the task list to the authenticated user.",
+    user_api_key: str | None = Field(
+        default=None,
+        description="Optional user API key for credits and attribution.",
     )
     limit: int = Field(
         default=10,

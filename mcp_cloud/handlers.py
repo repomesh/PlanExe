@@ -490,9 +490,17 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
             structuredContent=response,
             isError=True,
         )
-    user_context = _resolve_user_from_api_key(req.user_api_key.strip())
-    if not user_context:
-        response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+    if req.user_api_key:
+        user_context = _resolve_user_from_api_key(req.user_api_key.strip())
+        if not user_context:
+            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=True,
+            )
+    else:
+        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_list."}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,

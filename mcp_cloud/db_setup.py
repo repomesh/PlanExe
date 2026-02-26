@@ -101,7 +101,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
     "plan_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
-    "To list recent tasks for a user call plan_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt for each task. "
+    "To list recent tasks for a user call plan_list; returns task_id, state, progress_percentage, created_at, and prompt_excerpt for each task. "
     "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
     "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the plan_create likely failed/stalled. "
@@ -162,7 +162,7 @@ class TaskFileInfoRequest(BaseModel):
     artifact: Optional[str] = None
 
 class TaskListRequest(BaseModel):
-    user_api_key: str
+    user_api_key: Optional[str] = None
     limit: int = 10
 
 class ModelProfilesRequest(BaseModel):

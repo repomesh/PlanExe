@@ -15,53 +15,53 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Task lookup
+# Plan lookup
 # ---------------------------------------------------------------------------
 
 def find_plan_by_task_id(task_id: str) -> Optional[PlanItem]:
     """Find PlanItem by MCP task_id (UUID), with legacy fallback."""
-    task = get_task_by_id(task_id)
-    if task is not None:
-        return task
+    plan = get_plan_by_id(task_id)
+    if plan is not None:
+        return plan
 
     def _query_legacy() -> Optional[PlanItem]:
         query = db.session.query(PlanItem)
         if db.engine.dialect.name == "postgresql":
-            tasks = query.filter(
+            plans = query.filter(
                 cast(PlanItem.parameters, JSONB).contains({"_mcp_task_id": task_id})
             ).all()
         else:
-            tasks = query.filter(
+            plans = query.filter(
                 PlanItem.parameters.contains({"_mcp_task_id": task_id})
             ).all()
-        if tasks:
-            return tasks[0]
+        if plans:
+            return plans[0]
         return None
 
     if has_app_context():
-        legacy_task = _query_legacy()
+        legacy_plan = _query_legacy()
     else:
         with app.app_context():
-            legacy_task = _query_legacy()
-    if legacy_task is not None:
-        logger.debug("Resolved legacy MCP task id %s to task %s", task_id, legacy_task.id)
-    return legacy_task
+            legacy_plan = _query_legacy()
+    if legacy_plan is not None:
+        logger.debug("Resolved legacy MCP task id %s to plan %s", task_id, legacy_plan.id)
+    return legacy_plan
 
-def get_task_by_id(task_id: str) -> Optional[PlanItem]:
+def get_plan_by_id(task_id: str) -> Optional[PlanItem]:
     """Fetch a PlanItem by its UUID string."""
     def _query() -> Optional[PlanItem]:
         try:
-            task_uuid = uuid.UUID(task_id)
+            plan_uuid = uuid.UUID(task_id)
         except ValueError:
             return None
-        return db.session.get(PlanItem, task_uuid)
+        return db.session.get(PlanItem, plan_uuid)
 
     if has_app_context():
         return _query()
     with app.app_context():
         return _query()
 
-def resolve_task_for_task_id(task_id: str) -> Optional[PlanItem]:
+def resolve_plan_for_task_id(task_id: str) -> Optional[PlanItem]:
     """Resolve a PlanItem from a task_id (UUID), with legacy fallback."""
     return find_plan_by_task_id(task_id)
 
@@ -70,7 +70,7 @@ def resolve_task_for_task_id(task_id: str) -> Optional[PlanItem]:
 # Sync operations called from handlers via asyncio.to_thread
 # ---------------------------------------------------------------------------
 
-def _create_task_sync(
+def _create_plan_sync(
     prompt: str,
     config: Optional[dict[str, Any]],
     metadata: Optional[dict[str, Any]],
@@ -80,24 +80,24 @@ def _create_task_sync(
         parameters["model_profile"] = normalize_model_profile(parameters.get("model_profile")).value
         parameters["trigger_source"] = "mcp plan_create"
 
-        task = PlanItem(
+        plan = PlanItem(
             prompt=prompt,
             state=PlanState.pending,
             user_id=metadata.get("user_id", "admin") if metadata else "admin",
             parameters=parameters,
         )
-        db.session.add(task)
+        db.session.add(plan)
         db.session.commit()
 
-        task_id = str(task.id)
+        plan_id = str(plan.id)
         event_context = {
-            "task_id": task_id,
-            "task_handle": task_id,
-            "prompt": task.prompt,
-            "user_id": task.user_id,
+            "task_id": plan_id,
+            "task_handle": plan_id,
+            "prompt": plan.prompt,
+            "user_id": plan.user_id,
             "config": config,
             "metadata": metadata,
-            "parameters": task.parameters,
+            "parameters": plan.parameters,
         }
         event = EventItem(
             event_type=EventType.TASK_PENDING,
@@ -107,52 +107,52 @@ def _create_task_sync(
         db.session.add(event)
         db.session.commit()
 
-        created_at = task.timestamp_created
+        created_at = plan.timestamp_created
         if created_at and created_at.tzinfo is None:
             created_at = created_at.replace(tzinfo=UTC)
         return {
-            "task_id": task_id,
+            "task_id": plan_id,
             "created_at": created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
 
-def _get_task_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _get_plan_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_plan_by_task_id(task_id)
-        if task is None:
+        plan = find_plan_by_task_id(task_id)
+        if plan is None:
             return None
         return {
-            "id": str(task.id),
-            "state": task.state,
-            "stop_requested": bool(task.stop_requested),
-            "progress_percentage": task.progress_percentage,
-            "timestamp_created": task.timestamp_created,
+            "id": str(plan.id),
+            "state": plan.state,
+            "stop_requested": bool(plan.stop_requested),
+            "progress_percentage": plan.progress_percentage,
+            "timestamp_created": plan.timestamp_created,
         }
 
-def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _request_plan_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_plan_by_task_id(task_id)
-        if task is None:
+        plan = find_plan_by_task_id(task_id)
+        if plan is None:
             return None
         stop_requested = False
-        if task.state in (PlanState.pending, PlanState.processing):
-            task.stop_requested = True
-            task.stop_requested_timestamp = datetime.now(UTC)
-            task.progress_message = "Stop requested by user."
+        if plan.state in (PlanState.pending, PlanState.processing):
+            plan.stop_requested = True
+            plan.stop_requested_timestamp = datetime.now(UTC)
+            plan.progress_message = "Stop requested by user."
             db.session.commit()
-            logger.info("Stop requested for task %s; stop flag set on task %s.", task_id, task.id)
+            logger.info("Stop requested for task %s; stop flag set on plan %s.", task_id, plan.id)
             stop_requested = True
         return {
-            "state": get_task_state_mapping(task.state),
+            "state": get_plan_state_mapping(plan.state),
             "stop_requested": stop_requested,
         }
 
 
-def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[str, Any]]:
+def _retry_failed_plan_sync(task_id: str, model_profile: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_plan_by_task_id(task_id)
-        if task is None:
+        plan = find_plan_by_task_id(task_id)
+        if plan is None:
             return None
-        if task.state != PlanState.failed:
+        if plan.state != PlanState.failed:
             return {
                 "error": {
                     "code": "TASK_NOT_FAILED",
@@ -162,32 +162,32 @@ def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[s
 
         normalized_profile = normalize_model_profile(model_profile).value
         now_utc = datetime.now(UTC)
-        parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+        parameters = dict(plan.parameters) if isinstance(plan.parameters, dict) else {}
         parameters["model_profile"] = normalized_profile
         parameters["trigger_source"] = "mcp plan_retry"
 
-        # Reset task state and clear prior run artifacts before requeueing.
-        task.state = PlanState.pending
-        task.timestamp_created = now_utc
-        task.progress_percentage = 0.0
-        task.progress_message = "Retry requested via MCP."
-        task.stop_requested = False
-        task.stop_requested_timestamp = None
-        task.generated_report_html = None
-        task.run_zip_snapshot = None
-        task.run_track_activity_jsonl = None
-        task.run_track_activity_bytes = None
-        task.run_activity_overview_json = None
-        task.run_artifact_layout_version = None
-        task.parameters = parameters
+        # Reset plan state and clear prior run artifacts before requeueing.
+        plan.state = PlanState.pending
+        plan.timestamp_created = now_utc
+        plan.progress_percentage = 0.0
+        plan.progress_message = "Retry requested via MCP."
+        plan.stop_requested = False
+        plan.stop_requested_timestamp = None
+        plan.generated_report_html = None
+        plan.run_zip_snapshot = None
+        plan.run_track_activity_jsonl = None
+        plan.run_track_activity_bytes = None
+        plan.run_activity_overview_json = None
+        plan.run_artifact_layout_version = None
+        plan.parameters = parameters
         db.session.commit()
 
         event_context = {
-            "task_id": str(task.id),
-            "task_handle": str(task.id),
+            "task_id": str(plan.id),
+            "task_handle": str(plan.id),
             "retry_of_task_id": task_id,
             "model_profile": normalized_profile,
-            "parameters": task.parameters,
+            "parameters": plan.parameters,
         }
         event = EventItem(
             event_type=EventType.TASK_PENDING,
@@ -198,49 +198,49 @@ def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[s
         db.session.commit()
 
         return {
-            "task_id": str(task.id),
-            "state": get_task_state_mapping(task.state),
+            "task_id": str(plan.id),
+            "state": get_plan_state_mapping(plan.state),
             "model_profile": normalized_profile,
             "retried_at": now_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         }
 
 
-def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
+def _get_plan_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = resolve_task_for_task_id(task_id)
-        if task is None:
+        plan = resolve_plan_for_task_id(task_id)
+        if plan is None:
             return None
         return {
-            "id": str(task.id),
-            "state": task.state,
-            "progress_message": task.progress_message,
+            "id": str(plan.id),
+            "state": plan.state,
+            "progress_message": plan.progress_message,
         }
 
-def _list_tasks_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]:
+def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]:
     with app.app_context():
         query = db.session.query(PlanItem)
         if user_id is not None:
             query = query.filter_by(user_id=user_id)
-        tasks = (
+        plans = (
             query
             .order_by(PlanItem.timestamp_created.desc())
             .limit(max(1, min(limit, 50)))
             .all()
         )
         results = []
-        for task in tasks:
-            created_at = task.timestamp_created
+        for plan in plans:
+            created_at = plan.timestamp_created
             if created_at and created_at.tzinfo is None:
                 created_at = created_at.replace(tzinfo=UTC)
             results.append({
-                "task_id": str(task.id),
-                "state": get_task_state_mapping(task.state),
-                "progress_percentage": float(task.progress_percentage or 0.0),
+                "task_id": str(plan.id),
+                "state": get_plan_state_mapping(plan.state),
+                "progress_percentage": float(plan.progress_percentage or 0.0),
                 "created_at": (
                     created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
                     if created_at else None
                 ),
-                "prompt_excerpt": (task.prompt or "")[:100],
+                "prompt_excerpt": (plan.prompt or "")[:100],
             })
         return results
 
@@ -249,7 +249,7 @@ def _list_tasks_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]
 # Utilities
 # ---------------------------------------------------------------------------
 
-def get_task_state_mapping(task_state: PlanState) -> str:
+def get_plan_state_mapping(plan_state: PlanState) -> str:
     """Map PlanState to MCP task state."""
     mapping = {
         PlanState.pending: "pending",
@@ -257,9 +257,9 @@ def get_task_state_mapping(task_state: PlanState) -> str:
         PlanState.completed: "completed",
         PlanState.failed: "failed",
     }
-    return mapping.get(task_state, "pending")
+    return mapping.get(plan_state, "pending")
 
-def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
+def _extract_plan_create_metadata_overrides(arguments: dict[str, Any]) -> dict[str, Any]:
     """Extract plan_create runtime overrides from hidden metadata containers.
 
     Supported hidden containers:
@@ -290,7 +290,7 @@ def _extract_task_create_metadata_overrides(arguments: dict[str, Any]) -> dict[s
 
     return merged
 
-def _merge_task_create_config(
+def _merge_plan_create_config(
     config: Optional[dict[str, Any]],
     model_profile: Optional[str],
 ) -> Optional[dict[str, Any]]:

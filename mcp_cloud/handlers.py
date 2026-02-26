@@ -14,26 +14,26 @@ from mcp_cloud.db_setup import (
     REPORT_FILENAME,
     ZIP_CONTENT_TYPE,
     ModelProfileInput,
-    TaskCreateRequest,
-    TaskStatusRequest,
-    TaskStopRequest,
-    TaskRetryRequest,
-    TaskFileInfoRequest,
-    TaskListRequest,
+    PlanCreateRequest,
+    PlanStatusRequest,
+    PlanStopRequest,
+    PlanRetryRequest,
+    PlanFileInfoRequest,
+    PlanListRequest,
     ModelProfilesRequest,
     mcp_cloud_server,
 )
 from mcp_cloud.auth import _resolve_user_from_api_key
 from mcp_cloud.db_queries import (
-    _create_task_sync,
-    _get_task_status_snapshot_sync,
-    _request_task_stop_sync,
-    _retry_failed_task_sync,
-    _get_task_for_report_sync,
-    _list_tasks_sync,
-    get_task_state_mapping,
-    _extract_task_create_metadata_overrides,
-    _merge_task_create_config,
+    _create_plan_sync,
+    _get_plan_status_snapshot_sync,
+    _request_plan_stop_sync,
+    _retry_failed_plan_sync,
+    _get_plan_for_report_sync,
+    _list_plans_sync,
+    get_plan_state_mapping,
+    _extract_plan_create_metadata_overrides,
+    _merge_plan_create_config,
 )
 from mcp_cloud.zip_utils import (
     list_files_from_zip_snapshot,
@@ -104,14 +104,14 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: {"task_id": "<uuid>", "created_at": ...}
         - isError: False on success.
     """
-    req = TaskCreateRequest(**arguments)
-    metadata_overrides = _extract_task_create_metadata_overrides(arguments)
+    req = PlanCreateRequest(**arguments)
+    metadata_overrides = _extract_plan_create_metadata_overrides(arguments)
     metadata_model_profile = metadata_overrides.get("model_profile")
     model_profile = req.model_profile
     if model_profile is None and isinstance(metadata_model_profile, str):
         model_profile = metadata_model_profile
 
-    merged_config = _merge_task_create_config(None, model_profile)
+    merged_config = _merge_plan_create_config(None, model_profile)
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:
@@ -140,7 +140,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     response = await asyncio.to_thread(
-        _create_task_sync,
+        _create_plan_sync,
         req.prompt,
         merged_config,
         {"user_id": str(user_context["user_id"])} if user_context else None,
@@ -216,11 +216,11 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: status payload or error.
         - isError: True only when task_id is unknown.
     """
-    req = TaskStatusRequest(**arguments)
+    req = PlanStatusRequest(**arguments)
     task_id = req.task_id
 
-    task_snapshot = await asyncio.to_thread(_get_task_status_snapshot_sync, task_id)
-    if task_snapshot is None:
+    plan_snapshot = await asyncio.to_thread(_get_plan_status_snapshot_sync, task_id)
+    if plan_snapshot is None:
         response = {
             "error": {
                 "code": "TASK_NOT_FOUND",
@@ -233,22 +233,22 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
-    progress_percentage = float(task_snapshot.get("progress_percentage") or 0.0)
+    progress_percentage = float(plan_snapshot.get("progress_percentage") or 0.0)
 
-    task_state = task_snapshot["state"]
-    state = get_task_state_mapping(task_state)
-    if task_state == PlanState.completed:
+    plan_state = plan_snapshot["state"]
+    state = get_plan_state_mapping(plan_state)
+    if plan_state == PlanState.completed:
         progress_percentage = 100.0
 
     # Collect files from worker_plan
-    task_uuid = task_snapshot["id"]
+    plan_uuid = plan_snapshot["id"]
     files = []
-    if task_uuid:
-        files_list = await fetch_file_list_from_worker_plan(task_uuid)
+    if plan_uuid:
+        files_list = await fetch_file_list_from_worker_plan(plan_uuid)
         if not files_list:
-            files_list = await asyncio.to_thread(list_files_from_zip_snapshot, task_uuid)
+            files_list = await asyncio.to_thread(list_files_from_zip_snapshot, plan_uuid)
         if not files_list:
-            files_list = await asyncio.to_thread(list_files_from_local_run_dir, task_uuid)
+            files_list = await asyncio.to_thread(list_files_from_local_run_dir, plan_uuid)
         if files_list:
             for file_name in files_list[:10]:  # Limit to 10 most recent
                 if file_name != "log.txt":
@@ -258,12 +258,12 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
                         "updated_at": updated_at.isoformat().replace("+00:00", "Z"),  # Approximate
                     })
 
-    created_at = task_snapshot["timestamp_created"]
+    created_at = plan_snapshot["timestamp_created"]
     if created_at and created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
 
     response = {
-        "task_id": task_uuid,
+        "task_id": plan_uuid,
         "state": state,
         "progress_percentage": progress_percentage,
         "timing": {
@@ -297,10 +297,10 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error payload.
         - isError: True only when task_id is unknown.
     """
-    req = TaskStopRequest(**arguments)
+    req = PlanStopRequest(**arguments)
     task_id = req.task_id
 
-    stop_result = await asyncio.to_thread(_request_task_stop_sync, task_id)
+    stop_result = await asyncio.to_thread(_request_plan_stop_sync, task_id)
     if stop_result is None:
         response = {
             "error": {
@@ -325,9 +325,9 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
 
 async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     """Retry a failed task by resetting it back to pending."""
-    req = TaskRetryRequest(**arguments)
+    req = PlanRetryRequest(**arguments)
     task_id = req.task_id
-    retry_result = await asyncio.to_thread(_retry_failed_task_sync, task_id, req.model_profile)
+    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, task_id, req.model_profile)
 
     if retry_result is None:
         response = {
@@ -375,13 +375,13 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
           optional download_url) or {} if not ready, or error payload.
         - isError: True only when task_id is unknown.
     """
-    req = TaskFileInfoRequest(**arguments)
+    req = PlanFileInfoRequest(**arguments)
     task_id = req.task_id
     artifact = req.artifact.strip().lower() if isinstance(req.artifact, str) else "report"
     if artifact not in ("report", "zip"):
         artifact = "report"
-    task_snapshot = await asyncio.to_thread(_get_task_for_report_sync, task_id)
-    if task_snapshot is None:
+    plan_snapshot = await asyncio.to_thread(_get_plan_for_report_sync, task_id)
+    if plan_snapshot is None:
         response = {
             "error": {
                 "code": "TASK_NOT_FOUND",
@@ -394,12 +394,12 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
-    run_id = task_snapshot["id"]
+    run_id = plan_snapshot["id"]
     if artifact == "zip":
         content_bytes = await fetch_user_downloadable_zip(run_id)
         if content_bytes is None:
-            task_state = task_snapshot["state"]
-            if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
+            plan_state = plan_snapshot["state"]
+            if plan_state in (PlanState.pending, PlanState.processing) or plan_state is None:
                 response = {"ready": False, "reason": "processing"}
             else:
                 response = {
@@ -431,16 +431,16 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
             isError=False,
         )
 
-    task_state = task_snapshot["state"]
-    if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
+    plan_state = plan_snapshot["state"]
+    if plan_state in (PlanState.pending, PlanState.processing) or plan_state is None:
         response = {"ready": False, "reason": "processing"}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
             isError=False,
         )
-    if task_state == PlanState.failed:
-        message = task_snapshot["progress_message"] or "Plan generation failed."
+    if plan_state == PlanState.failed:
+        message = plan_snapshot["progress_message"] or "Plan generation failed."
         response = {"ready": False, "reason": "failed", "error": {"code": "generation_failed", "message": message}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
@@ -482,7 +482,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     """Return recent tasks for an authenticated user."""
     try:
-        req = TaskListRequest(**arguments)
+        req = PlanListRequest(**arguments)
     except Exception as exc:
         response = {"error": {"code": "INVALID_ARGUMENTS", "message": str(exc)}}
         return CallToolResult(
@@ -510,10 +510,10 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
         )
     user_id = str(user_context["user_id"]) if user_context else None
     limit = max(1, min(req.limit, 50))
-    tasks = await asyncio.to_thread(_list_tasks_sync, user_id, limit)
+    plans = await asyncio.to_thread(_list_plans_sync, user_id, limit)
     response = {
-        "tasks": tasks,
-        "message": f"Returned {len(tasks)} task(s).",
+        "tasks": plans,
+        "message": f"Returned {len(plans)} task(s).",
     }
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],
@@ -532,11 +532,3 @@ TOOL_HANDLERS = {
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
 }
-
-# Backward-compatible aliases so existing imports of handle_task_* still work
-handle_task_create = handle_plan_create
-handle_task_status = handle_plan_status
-handle_task_stop = handle_plan_stop
-handle_task_retry = handle_plan_retry
-handle_task_file_info = handle_plan_file_info
-handle_task_list = handle_plan_list

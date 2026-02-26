@@ -296,25 +296,3 @@ class PlanCreateInput(BaseModel):
         description="Optional user API key for credits and attribution.",
     )
 
-
-# ---------------------------------------------------------------------------
-# Backward-compatible aliases for old Task* names (used internally in app.py)
-# ---------------------------------------------------------------------------
-TaskCreateInput = PlanCreateInput
-TaskCreateOutput = PlanCreateOutput
-TaskStatusInput = PlanStatusInput
-TaskStatusOutput = PlanStatusOutput
-TaskStatusTiming = PlanStatusTiming
-TaskStatusFile = PlanStatusFile
-TaskStatusSuccess = PlanStatusSuccess
-TaskStopInput = PlanStopInput
-TaskStopOutput = PlanStopOutput
-TaskRetryInput = PlanRetryInput
-TaskRetryOutput = PlanRetryOutput
-TaskFileInfoInput = PlanFileInfoInput
-TaskFileInfoOutput = PlanFileInfoOutput
-TaskFileInfoNotReadyOutput = PlanFileInfoNotReadyOutput
-TaskFileInfoReadyOutput = PlanFileInfoReadyOutput
-TaskListInput = PlanListInput
-TaskListItem = PlanListItem
-TaskListOutput = PlanListOutput

@@ -66,7 +66,7 @@ from mcp_cloud.app import (
     handle_plan_stop,
     handle_plan_file_info,
     handle_prompt_examples,
-    resolve_task_for_task_id,
+    resolve_plan_for_task_id,
     set_download_base_url,
     validate_download_token,
     _resolve_user_from_api_key,
@@ -920,17 +920,17 @@ async def download_report(
     # Defence-in-depth: if a token was supplied, it must be valid for this artifact.
     if token is not None and not validate_download_token(token, task_id, filename):
         raise HTTPException(status_code=401, detail="Invalid or expired download token")
-    task = await asyncio.to_thread(resolve_task_for_task_id, task_id)
-    if task is None:
+    plan = await asyncio.to_thread(resolve_plan_for_task_id, task_id)
+    if plan is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if filename == ZIP_FILENAME:
-        content_bytes = await fetch_user_downloadable_zip(str(task.id))
+        content_bytes = await fetch_user_downloadable_zip(str(plan.id))
         if content_bytes is None:
             raise HTTPException(status_code=404, detail="Report not found")
         headers = {"Content-Disposition": f'attachment; filename="{task_id}.zip"'}
         return Response(content=content_bytes, media_type=ZIP_CONTENT_TYPE, headers=headers)
 
-    content_bytes = await fetch_artifact_from_worker_plan(str(task.id), REPORT_FILENAME)
+    content_bytes = await fetch_artifact_from_worker_plan(str(plan.id), REPORT_FILENAME)
     if content_bytes is None:
         raise HTTPException(status_code=404, detail="Report not found")
     headers = {"Content-Disposition": f'inline; filename="{REPORT_FILENAME}"'}

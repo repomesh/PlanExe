@@ -13,7 +13,7 @@ from mcp_cloud.db_setup import (
     WORKER_PLAN_URL,
     ZIP_SNAPSHOT_MAX_BYTES,
 )
-from mcp_cloud.db_queries import get_task_by_id
+from mcp_cloud.db_queries import get_plan_by_id
 from mcp_cloud.zip_utils import (
     _sanitize_legacy_zip_snapshot,
     extract_file_from_zip_file,
@@ -199,18 +199,18 @@ async def fetch_user_downloadable_zip(task_id: str) -> Optional[bytes]:
     New layout snapshots are served directly from PlanItem.run_zip_snapshot.
     Legacy/task-dir fallbacks are sanitized to remove track_activity.jsonl.
     """
-    task = await asyncio.to_thread(get_task_by_id, task_id)
-    if task is None:
+    plan = await asyncio.to_thread(get_plan_by_id, task_id)
+    if plan is None:
         return None
 
-    snapshot_bytes = task.run_zip_snapshot if task.run_zip_snapshot is not None else None
-    layout_version = task.run_artifact_layout_version or 0
+    snapshot_bytes = plan.run_zip_snapshot if plan.run_zip_snapshot is not None else None
+    layout_version = plan.run_artifact_layout_version or 0
     if snapshot_bytes is not None:
         if layout_version >= 2:
             return snapshot_bytes
         return _sanitize_legacy_zip_snapshot(snapshot_bytes)
 
-    worker_plan_zip = await fetch_zip_from_worker_plan(str(task.id))
+    worker_plan_zip = await fetch_zip_from_worker_plan(str(plan.id))
     if worker_plan_zip is None:
         return None
     return _sanitize_legacy_zip_snapshot(worker_plan_zip)

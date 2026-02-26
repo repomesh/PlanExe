@@ -142,26 +142,26 @@ MODEL_PROFILE_SUMMARIES = {
     ModelProfileEnum.CUSTOM.value: "User-managed profile file for custom model ordering.",
 }
 
-class TaskCreateRequest(BaseModel):
+class PlanCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
-class TaskStatusRequest(BaseModel):
+class PlanStatusRequest(BaseModel):
     task_id: str
 
-class TaskStopRequest(BaseModel):
+class PlanStopRequest(BaseModel):
     task_id: str
 
-class TaskRetryRequest(BaseModel):
+class PlanRetryRequest(BaseModel):
     task_id: str
     model_profile: ModelProfileInput = "baseline"
 
-class TaskFileInfoRequest(BaseModel):
+class PlanFileInfoRequest(BaseModel):
     task_id: str
     artifact: Optional[str] = None
 
-class TaskListRequest(BaseModel):
+class PlanListRequest(BaseModel):
     user_api_key: Optional[str] = None
     limit: int = 10
 

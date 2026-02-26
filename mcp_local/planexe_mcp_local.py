@@ -37,31 +37,31 @@ ModelProfileInput = Literal[
 ]
 
 
-class TaskCreateRequest(BaseModel):
+class PlanCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
 
-class TaskStatusRequest(BaseModel):
+class PlanStatusRequest(BaseModel):
     task_id: str
 
 
-class TaskStopRequest(BaseModel):
+class PlanStopRequest(BaseModel):
     task_id: str
 
 
-class TaskRetryRequest(BaseModel):
+class PlanRetryRequest(BaseModel):
     task_id: str
     model_profile: ModelProfileInput = "baseline"
 
 
-class TaskDownloadRequest(BaseModel):
+class PlanDownloadRequest(BaseModel):
     task_id: str
     artifact: str = "report"
 
 
-class TaskListRequest(BaseModel):
+class PlanListRequest(BaseModel):
     user_api_key: Optional[str] = None
     limit: int = 10
 
@@ -418,13 +418,6 @@ PLAN_DOWNLOAD_INPUT_SCHEMA = {
     "required": ["task_id"],
 }
 
-# Backward-compatible aliases
-TASK_CREATE_INPUT_SCHEMA = PLAN_CREATE_INPUT_SCHEMA
-TASK_STATUS_INPUT_SCHEMA = PLAN_STATUS_INPUT_SCHEMA
-TASK_STOP_INPUT_SCHEMA = PLAN_STOP_INPUT_SCHEMA
-TASK_RETRY_INPUT_SCHEMA = PLAN_RETRY_INPUT_SCHEMA
-TASK_DOWNLOAD_INPUT_SCHEMA = PLAN_DOWNLOAD_INPUT_SCHEMA
-
 PROMPT_EXAMPLES_INPUT_SCHEMA = {
     "type": "object",
     "properties": {},
@@ -612,15 +605,6 @@ PLAN_LIST_OUTPUT_SCHEMA = {
     },
     "additionalProperties": False,
 }
-
-# Backward-compatible aliases
-TASK_CREATE_OUTPUT_SCHEMA = PLAN_CREATE_OUTPUT_SCHEMA
-TASK_STATUS_OUTPUT_SCHEMA = PLAN_STATUS_OUTPUT_SCHEMA
-TASK_STOP_OUTPUT_SCHEMA = PLAN_STOP_OUTPUT_SCHEMA
-TASK_RETRY_OUTPUT_SCHEMA = PLAN_RETRY_OUTPUT_SCHEMA
-TASK_DOWNLOAD_OUTPUT_SCHEMA = PLAN_DOWNLOAD_OUTPUT_SCHEMA
-TASK_LIST_INPUT_SCHEMA = PLAN_LIST_INPUT_SCHEMA
-TASK_LIST_OUTPUT_SCHEMA = PLAN_LIST_OUTPUT_SCHEMA
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
@@ -874,7 +858,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: task_id/created_at payload or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskCreateRequest(**arguments)
+    req = PlanCreateRequest(**arguments)
     payload: dict[str, Any] = {"prompt": req.prompt}
     if req.model_profile:
         payload["model_profile"] = req.model_profile
@@ -924,7 +908,7 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: status payload or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskStatusRequest(**arguments)
+    req = PlanStatusRequest(**arguments)
     payload, error = _call_remote_tool("plan_status", {"task_id": req.task_id})
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -945,7 +929,7 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskStopRequest(**arguments)
+    req = PlanStopRequest(**arguments)
     payload, error = _call_remote_tool("plan_stop", {"task_id": req.task_id})
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -954,7 +938,7 @@ async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
 
 async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     """Request mcp_cloud to retry a failed task."""
-    req = TaskRetryRequest(**arguments)
+    req = PlanRetryRequest(**arguments)
     payload, error = _call_remote_tool(
         "plan_retry",
         {"task_id": req.task_id, "model_profile": req.model_profile},
@@ -980,7 +964,7 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: metadata + saved_path or error.
         - isError: True when download fails or remote tool errors.
     """
-    req = TaskDownloadRequest(**arguments)
+    req = PlanDownloadRequest(**arguments)
     artifact = (req.artifact or "report").strip().lower()
     if artifact not in ("report", "zip"):
         artifact = "report"
@@ -1032,7 +1016,7 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
 
 async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     """List recent tasks for an authenticated user via mcp_cloud."""
-    req = TaskListRequest(**arguments)
+    req = PlanListRequest(**arguments)
     payload_args: dict[str, Any] = {"limit": req.limit}
     if req.user_api_key:
         payload_args["user_api_key"] = req.user_api_key
@@ -1052,14 +1036,6 @@ TOOL_HANDLERS = {
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
 }
-
-# Backward-compatible aliases
-handle_task_create = handle_plan_create
-handle_task_status = handle_plan_status
-handle_task_stop = handle_plan_stop
-handle_task_retry = handle_plan_retry
-handle_task_download = handle_plan_download
-handle_task_list = handle_plan_list
 
 
 async def main() -> None:

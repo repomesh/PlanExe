@@ -27,12 +27,12 @@ from mcp_cloud.db_setup import (  # noqa: F401
     ModelProfileInput,
     MODEL_PROFILE_TITLES,
     MODEL_PROFILE_SUMMARIES,
-    TaskCreateRequest,
-    TaskStatusRequest,
-    TaskStopRequest,
-    TaskRetryRequest,
-    TaskFileInfoRequest,
-    TaskListRequest,
+    PlanCreateRequest,
+    PlanStatusRequest,
+    PlanStopRequest,
+    PlanRetryRequest,
+    PlanFileInfoRequest,
+    PlanListRequest,
     ModelProfilesRequest,
     PlanItem,
     PlanState,
@@ -49,20 +49,20 @@ from mcp_cloud.auth import (  # noqa: F401
     _resolve_user_from_api_key,
 )
 
-# -- db_queries: task lookup and sync DB operations ----------------------------
+# -- db_queries: plan lookup and sync DB operations ----------------------------
 from mcp_cloud.db_queries import (  # noqa: F401
     find_plan_by_task_id,
-    get_task_by_id,
-    resolve_task_for_task_id,
-    _create_task_sync,
-    _get_task_status_snapshot_sync,
-    _request_task_stop_sync,
-    _retry_failed_task_sync,
-    _get_task_for_report_sync,
-    _list_tasks_sync,
-    get_task_state_mapping,
-    _extract_task_create_metadata_overrides,
-    _merge_task_create_config,
+    get_plan_by_id,
+    resolve_plan_for_task_id,
+    _create_plan_sync,
+    _get_plan_status_snapshot_sync,
+    _request_plan_stop_sync,
+    _retry_failed_plan_sync,
+    _get_plan_for_report_sync,
+    _list_plans_sync,
+    get_plan_state_mapping,
+    _extract_plan_create_metadata_overrides,
+    _merge_plan_create_config,
 )
 
 # -- zip_utils: zip extraction, sanitization, hashing -------------------------
@@ -137,18 +137,6 @@ from mcp_cloud.schemas import (  # noqa: F401
     MODEL_PROFILES_OUTPUT_SCHEMA,
     PLAN_LIST_INPUT_SCHEMA,
     PLAN_LIST_OUTPUT_SCHEMA,
-    TASK_CREATE_INPUT_SCHEMA,
-    TASK_CREATE_OUTPUT_SCHEMA,
-    TASK_STATUS_INPUT_SCHEMA,
-    TASK_STATUS_OUTPUT_SCHEMA,
-    TASK_STOP_INPUT_SCHEMA,
-    TASK_STOP_OUTPUT_SCHEMA,
-    TASK_RETRY_INPUT_SCHEMA,
-    TASK_RETRY_OUTPUT_SCHEMA,
-    TASK_FILE_INFO_INPUT_SCHEMA,
-    TASK_FILE_INFO_OUTPUT_SCHEMA,
-    TASK_LIST_INPUT_SCHEMA,
-    TASK_LIST_OUTPUT_SCHEMA,
     ToolDefinition,
     TOOL_DEFINITIONS,
 )
@@ -166,12 +154,6 @@ from mcp_cloud.handlers import (  # noqa: F401
     handle_plan_file_info,
     handle_plan_list,
     TOOL_HANDLERS,
-    handle_task_create,
-    handle_task_status,
-    handle_task_stop,
-    handle_task_retry,
-    handle_task_file_info,
-    handle_task_list,
 )
 
 

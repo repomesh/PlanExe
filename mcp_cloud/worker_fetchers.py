@@ -2,10 +2,12 @@
 import asyncio
 import logging
 import tempfile
+import uuid as _uuid
 from io import BytesIO
-from typing import Optional
+from typing import Any, Optional
 
 import httpx
+from flask import has_app_context
 
 from mcp_cloud.db_setup import (
     BASE_DIR_RUN,
@@ -13,7 +15,6 @@ from mcp_cloud.db_setup import (
     WORKER_PLAN_URL,
     ZIP_SNAPSHOT_MAX_BYTES,
 )
-from mcp_cloud.db_queries import get_plan_by_id
 from mcp_cloud.zip_utils import (
     _sanitize_legacy_zip_snapshot,
     extract_file_from_zip_file,
@@ -193,24 +194,53 @@ async def fetch_zip_from_worker_plan(run_id: str) -> Optional[bytes]:
         return None
 
 
+def _load_zip_snapshot_sync(plan_id: str) -> dict[str, Any]:
+    """Load zip snapshot and layout version inside a single app context.
+
+    Returns dict with 'id', 'run_zip_snapshot', 'run_artifact_layout_version',
+    or empty dict if plan not found.
+    """
+    from mcp_cloud.db_setup import app, db
+    from database_api.model_planitem import PlanItem
+
+    def _query():
+        try:
+            plan_uuid = _uuid.UUID(plan_id)
+        except ValueError:
+            return {}
+        plan = db.session.get(PlanItem, plan_uuid)
+        if plan is None:
+            return {}
+        return {
+            "id": str(plan.id),
+            "run_zip_snapshot": plan.run_zip_snapshot,
+            "run_artifact_layout_version": plan.run_artifact_layout_version or 0,
+        }
+
+    if has_app_context():
+        return _query()
+    with app.app_context():
+        return _query()
+
+
 async def fetch_user_downloadable_zip(plan_id: str) -> Optional[bytes]:
     """
     Fetch a user-downloadable zip for a plan.
     New layout snapshots are served directly from PlanItem.run_zip_snapshot.
     Legacy fallbacks are sanitized to remove track_activity.jsonl.
     """
-    plan = await asyncio.to_thread(get_plan_by_id, plan_id)
-    if plan is None:
+    snapshot_info = await asyncio.to_thread(_load_zip_snapshot_sync, plan_id)
+    if not snapshot_info:
         return None
 
-    snapshot_bytes = plan.run_zip_snapshot if plan.run_zip_snapshot is not None else None
-    layout_version = plan.run_artifact_layout_version or 0
+    snapshot_bytes = snapshot_info["run_zip_snapshot"]
+    layout_version = snapshot_info["run_artifact_layout_version"]
     if snapshot_bytes is not None:
         if layout_version >= 2:
             return snapshot_bytes
         return _sanitize_legacy_zip_snapshot(snapshot_bytes)
 
-    worker_plan_zip = await fetch_zip_from_worker_plan(str(plan.id))
+    worker_plan_zip = await fetch_zip_from_worker_plan(snapshot_info["id"])
     if worker_plan_zip is None:
         return None
     return _sanitize_legacy_zip_snapshot(worker_plan_zip)

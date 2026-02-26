@@ -10,6 +10,7 @@ An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed
 **Revision history:**
 - **2026-02-26 (rev 1):** Initial version after `task_*` → `plan_*` rename.
 - **2026-02-26 (rev 2):** Updated after `app.py` refactor into modules, `plan_list` `user_api_key` made optional in schema (auto-injected by HTTP layer), and re-evaluation of all open issues.
+- **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_*` to `test_plan_*`.
 
 ---
 
@@ -43,7 +44,7 @@ Nine tools, split across two transports:
 
 **Clean module structure.** `mcp_cloud/app.py` is now a thin re-export facade (~195 lines). Logic lives in focused modules: `handlers.py` (tool handlers), `schemas.py` (tool definitions), `tool_models.py` (Pydantic models), `db_queries.py` (DB operations), `auth.py` (key hashing/user resolution), `download_tokens.py` (signed tokens), `model_profiles.py`, `worker_fetchers.py`, `zip_utils.py`, `prompt_examples.py`. This makes PRs reviewable and bugs easy to isolate.
 
-**Consistent `plan_*` naming.** The rename from `task_*` to `plan_*` aligns tool names with the product domain.
+**Consistent `plan_*` naming throughout.** The rename from `task_*` to `plan_*` covers the full stack: external tool names, handler functions, request classes (`PlanCreateRequest`, etc.), DB query helpers (`_create_plan_sync`, `get_plan_by_id`, etc.), local variable names, and test file names. No backward-compat aliases remain.
 
 **Layered authentication.** Two distinct auth paths — a server-wide `PLANEXE_MCP_API_KEY` for self-hosters, and per-user `pex_…` keys issued by home.planexe.org — are a good design. The key-normalisation helper (`_normalize_api_key_value` in `http_server.py`) handles common copy-paste artefacts (Bearer prefix, surrounding quotes, full header line pasted as value).
 
@@ -65,7 +66,7 @@ Nine tools, split across two transports:
 
 **`plan_list` for task recovery.** Authenticated users can list their most recent tasks (up to 50, newest-first) to recover a lost `task_id`. Each entry includes `task_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
 
-**Comprehensive test suite.** 12 test files covering tool surface consistency, auth key parsing, CORS config, download tokens, HTTP routing, and individual tool behaviour (`test_task_create_tool.py`, `test_task_status_tool.py`, `test_task_retry_tool.py`, `test_task_file_info_tool.py`, `test_model_profiles_tool.py`).
+**Comprehensive test suite.** 12 test files covering tool surface consistency, auth key parsing, CORS config, download tokens, HTTP routing, and individual tool behaviour (`test_plan_create_tool.py`, `test_plan_status_tool.py`, `test_plan_retry_tool.py`, `test_plan_file_info_tool.py`, `test_model_profiles_tool.py`).
 
 ---
 
@@ -165,22 +166,9 @@ If a caller passes `artifact="invalid"`, the handler silently falls back to `"re
 
 **Fix:** Define as a module constant `PROMPT_EXCERPT_MAX_LENGTH = 100`.
 
-### 4.9 Stale `task` variable names and backward-compat aliases
+### ~~4.9 Stale `task` variable names and backward-compat aliases~~ (FIXED)
 
-The tool rename from `task_*` to `plan_*` only covered external-facing tool names and handler function names. Internally, the code still uses `task` naming pervasively:
-
-- **Request classes** in `db_setup.py` are still named `TaskCreateRequest`, `TaskStatusRequest`, `TaskStopRequest`, `TaskRetryRequest`, `TaskFileInfoRequest`, `TaskListRequest`.
-- **Helper functions** in `db_queries.py` still use the old naming: `get_task_by_id`, `find_plan_by_task_id`, `resolve_task_for_task_id`, `_create_task_sync`, `_get_task_status_snapshot_sync`, `_request_task_stop_sync`, `_retry_failed_task_sync`, `_get_task_for_report_sync`, `_list_tasks_sync`.
-- **Backward-compat aliases** in `tool_models.py` (lines 303–320): `TaskCreateInput = PlanCreateInput`, etc. (18 aliases).
-- **Backward-compat aliases** in `schemas.py` (lines 66–78): `TASK_*_SCHEMA = PLAN_*_SCHEMA`.
-- **Backward-compat aliases** in `handlers.py` (lines 526–531): `handle_task_* = handle_plan_*`.
-- **Backward-compat aliases** in `mcp_local/planexe_mcp_local.py` (lines 421–426, 615–622, 1054–1060).
-- **Re-exports** in `app.py` facade: exports both `PLAN_*` and `TASK_*` names.
-- **Test file names**: `test_task_create_tool.py`, `test_task_status_tool.py`, `test_task_retry_tool.py`, `test_task_file_info_tool.py` still use `task_` prefix despite testing `plan_*` tools.
-
-This creates a confusing split where the external API says `plan_*` but reading the implementation requires mentally translating `task` back to `plan`. The backward-compat aliases add ~80 lines of dead weight across five files.
-
-**Fix:** Rename request classes to `PlanCreateRequest`, etc. Rename helper functions from `*_task_*` to `*_plan_*`. Rename test files to match tool names. Remove the backward-compat aliases — nothing external imports them.
+All internal naming now uses `plan` consistently. Request classes renamed (`TaskCreateRequest` → `PlanCreateRequest`, etc.), DB query helpers renamed (`_create_task_sync` → `_create_plan_sync`, `get_task_by_id` → `get_plan_by_id`, etc.), local variables renamed (`task_snapshot` → `plan_snapshot`, etc.), all backward-compat aliases removed from `tool_models.py`, `schemas.py`, `handlers.py`, `app.py`, and `mcp_local/planexe_mcp_local.py` (~86 lines deleted). Test files renamed from `test_task_*.py` to `test_plan_*.py` with patch targets updated.
 
 ### ~~4.10 `plan_list` auth differs from `plan_create`~~ (FIXED)
 
@@ -266,9 +254,9 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P2       | Return error for invalid artifact value (4.4)                          | 30 min |        |
 | P2       | Add tool-call audit logging (4.7)                                      | 1 h    |        |
 | P2       | Add `log_lines` to `plan_status` (5.1)                                 | 4 h    |        |
-| P2       | Rename internal `task` variables/classes/helpers to `plan` (4.9)       | 4 h    |        |
-| P2       | Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)  | 1 h    |        |
-| P2       | Rename test files from `test_task_*` to `test_plan_*` (4.9)           | 30 min |        |
+| P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~   | —      | DONE   |
+| P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —  | DONE   |
+| P2       | ~~Rename test files from `test_task_*` to `test_plan_*` (4.9)~~       | —      | DONE   |
 | P2       | Tighten default CORS origins (4.6)                                     | 30 min |        |
 | P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                   | —      | DONE   |
 | P3       | Webhook support (5.2)                                                  | 1 day  |        |
@@ -282,4 +270,4 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 The MCP surface is functionally solid and ahead of most MCP servers in terms of schema rigour, annotation coverage, and security (signed download tokens, layered auth, auto-injected user keys). The codebase has been significantly improved since rev 1: `app.py` was refactored from a 76 KB monolith into 10+ focused modules, `plan_list` now follows the same auth-injection pattern as `plan_create`, and all P0 issues are resolved.
 
-The remaining weaknesses are: production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`); the `/download` endpoint lacks rate limiting; there is no audit trail for successful tool calls; and the internal naming still uses `task` while the external API uses `plan_*`. None of these are blocking, but addressing the P1 items (secret validation, download rate limiting, `plan_list` tests) would meaningfully tighten the security and reliability posture.
+The remaining weaknesses are: production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`); the `/download` endpoint lacks rate limiting; and there is no audit trail for successful tool calls. None of these are blocking, but addressing the P1 items (secret validation, download rate limiting, `plan_list` tests) would meaningfully tighten the security and reliability posture.

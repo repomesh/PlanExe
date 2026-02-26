@@ -547,11 +547,11 @@
             </form>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
 
-            <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.generated_report_html %}style="display:none"{% endif %}>Download Report</a>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.generated_report_html %}style="display:none"{% endif %}>Download Report</span>
+            <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</span>
 
-            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
         </div>
     </div>
 
@@ -686,7 +686,7 @@
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
-        src="{% if task.generated_report_html %}{{ url_for('viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('run_status') }}?id={{ run_id }}{% endif %}"
+        src="{% if task.has_generated_report_html %}{{ url_for('viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('run_status') }}?id={{ run_id }}{% endif %}"
         title="Plan report"
         loading="eager"
         referrerpolicy="no-referrer"

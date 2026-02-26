@@ -137,11 +137,9 @@ A separate download rate limiter (`_enforce_download_rate_limit`) now covers `/d
 
 Both `handle_plan_file_info` (cloud) and `handle_plan_download` (local) now return `INVALID_ARGUMENT` with a descriptive message when the artifact value is not `"report"` or `"zip"`.
 
-### 4.5 No dedicated `plan_list` test
+### ~~4.5 No dedicated `plan_list` test~~ (FIXED)
 
-`plan_list` is validated for schema presence and annotation correctness in `test_tool_surface_consistency.py`, but there is no dedicated test file exercising the handler logic (limit clamping, auth validation, empty-result behaviour, ordering, `USER_API_KEY_REQUIRED` when key is absent).
-
-**Fix:** Add `mcp_cloud/tests/test_plan_list_tool.py`.
+Added `mcp_cloud/tests/test_plan_list_tool.py` with 8 tests covering: tool listed, returns tasks, empty result, limit clamping (both directions), invalid API key, `USER_API_KEY_REQUIRED` when env requires key, no-key passthrough when not required (user_id=None), and default limit.
 
 ### 4.6 CORS default is wildcard
 
@@ -242,7 +240,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | ~~Remove `user_api_key` from `plan_list` visible schema~~              | —      | DONE   |
 | P1       | Fail-hard on missing secrets in production (4.1)                       | 1 h    |        |
 | P1       | ~~Rate-limit `/download` endpoint (4.2)~~                              | —      | DONE   |
-| P1       | Add `plan_list` handler tests (4.5)                                    | 2 h    |        |
+| P1       | ~~Add `plan_list` handler tests (4.5)~~                                | —      | DONE   |
 | P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
 | P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
 | P2       | ~~Body size validation on Streamable HTTP (4.3)~~                      | —      | DONE   |

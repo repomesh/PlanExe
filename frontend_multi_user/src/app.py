@@ -1598,7 +1598,7 @@ class MyFlaskApp:
         return (
             str(task.id),
             state.name,
-            bool(task.run_zip_snapshot),
+            bool(task.has_run_zip_snapshot),
             bool(getattr(task, "run_activity_overview_json", None)),
         )
 
@@ -1857,8 +1857,8 @@ class MyFlaskApp:
                     "tracked_usage_cost_usd": tracked_usage_cost_usd,
                     "delta_usd": delta_usd,
                     "status": status,
-                    "has_report": bool(task.generated_report_html),
-                    "has_run_zip": bool(task.run_zip_snapshot),
+                    "has_report": bool(task.has_generated_report_html),
+                    "has_run_zip": bool(task.has_run_zip_snapshot),
                     "billing_event_timestamp": billing_event.timestamp if billing_event else None,
                 }
             )
@@ -3068,7 +3068,7 @@ class MyFlaskApp:
 
             # Guard against stale UI: if task already completed (or report exists),
             # ignore stop requests so completion billing cannot be bypassed.
-            if task.state == PlanState.completed or bool(task.generated_report_html):
+            if task.state == PlanState.completed or bool(task.has_generated_report_html):
                 logger.info("Ignoring stop request for already completed task %s", run_id)
                 return redirect(url_for('plan', id=run_id))
 
@@ -3132,8 +3132,8 @@ class MyFlaskApp:
                 "state": state_name,
                 "progress_percentage": float(task.progress_percentage) if task.progress_percentage is not None else 0.0,
                 "progress_message": task.progress_message or "",
-                "generated_report_html": bool(task.generated_report_html),
-                "run_zip_snapshot": bool(task.run_zip_snapshot),
+                "generated_report_html": bool(task.has_generated_report_html),
+                "run_zip_snapshot": bool(task.has_run_zip_snapshot),
                 "stop_requested": bool(task.stop_requested),
                 "telemetry": telemetry,
                 "failure_trace": failure_trace,

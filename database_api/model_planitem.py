@@ -4,7 +4,7 @@ from datetime import datetime, UTC
 from database_api.planexe_db_singleton import db
 from sqlalchemy_utils import UUIDType
 from sqlalchemy import JSON
-from sqlalchemy.orm import column_property
+from sqlalchemy.orm import column_property, deferred
 from sqlalchemy import event
 
 
@@ -81,13 +81,19 @@ class PlanItem(db.Model):
     parameters = db.Column(JSON, nullable=True, default=None)
 
     # The generated report HTML (stored when the pipeline succeeds).
-    generated_report_html = db.Column(db.Text, nullable=True)
+    # HEAVY (~800KB) — deferred so it is only loaded when explicitly accessed.
+    # Use has_generated_report_html to check presence without loading the data.
+    generated_report_html = deferred(db.Column(db.Text, nullable=True))
 
-    # A zip archive of the run directory for this task (stored for both success and failure).
-    run_zip_snapshot = db.Column(db.LargeBinary, nullable=True)
+    # A zip archive of the run directory for this plan (stored for both success and failure).
+    # HEAVY (~5MB) — deferred so it is only loaded when explicitly accessed.
+    # Use has_run_zip_snapshot to check presence without loading the data.
+    run_zip_snapshot = deferred(db.Column(db.LargeBinary, nullable=True))
 
     # Internal-only raw activity log (contains sensitive provider payloads).
-    run_track_activity_jsonl = db.Column(db.Text, nullable=True)
+    # HEAVY (~20MB) — deferred so it is only loaded when explicitly accessed.
+    # Use has_run_track_activity_jsonl to check presence without loading the data.
+    run_track_activity_jsonl = deferred(db.Column(db.Text, nullable=True))
 
     # Original byte size for run_track_activity_jsonl (for observability/migration checks).
     run_track_activity_bytes = db.Column(db.Integer, nullable=True)

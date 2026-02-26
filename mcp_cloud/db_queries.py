@@ -220,29 +220,37 @@ def _get_plan_for_report_sync(plan_id: str) -> Optional[dict[str, Any]]:
 
 def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]:
     with app.app_context():
-        query = db.session.query(PlanItem)
+        from sqlalchemy import func
+
+        query = db.session.query(
+            PlanItem.id,
+            PlanItem.state,
+            PlanItem.progress_percentage,
+            PlanItem.timestamp_created,
+            func.substr(PlanItem.prompt, 1, PROMPT_EXCERPT_MAX_LENGTH).label("prompt_excerpt"),
+        )
         if user_id is not None:
             query = query.filter_by(user_id=user_id)
-        plans = (
+        rows = (
             query
             .order_by(PlanItem.timestamp_created.desc())
             .limit(max(1, min(limit, 50)))
             .all()
         )
         results = []
-        for plan in plans:
-            created_at = plan.timestamp_created
+        for row in rows:
+            created_at = row.timestamp_created
             if created_at and created_at.tzinfo is None:
                 created_at = created_at.replace(tzinfo=UTC)
             results.append({
-                "plan_id": str(plan.id),
-                "state": get_plan_state_mapping(plan.state),
-                "progress_percentage": float(plan.progress_percentage or 0.0),
+                "plan_id": str(row.id),
+                "state": get_plan_state_mapping(row.state),
+                "progress_percentage": float(row.progress_percentage or 0.0),
                 "created_at": (
                     created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
                     if created_at else None
                 ),
-                "prompt_excerpt": (plan.prompt or "")[:PROMPT_EXCERPT_MAX_LENGTH],
+                "prompt_excerpt": (row.prompt_excerpt or "").strip()[:PROMPT_EXCERPT_MAX_LENGTH],
             })
         return results
 

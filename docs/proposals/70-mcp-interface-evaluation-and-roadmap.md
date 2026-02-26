@@ -208,10 +208,6 @@ All tool names and schemas are currently unversioned. A future breaking change w
 
 Add an explicit check at server startup that required secrets (`PLANEXE_API_KEY_SECRET`, `PLANEXE_DOWNLOAD_TOKEN_SECRET`) are set when auth is enabled. Fail loudly instead of falling back to dev defaults.
 
-### 5.5 Remove or deprecate legacy REST endpoints
-
-The `/tasks` REST routes duplicate functionality now available through MCP tools. Keeping both surfaces means bugs can exist in one but not the other. Deprecate `/tasks` in favour of the MCP tool surface, with a sunset date in the changelog.
-
 ---
 
 ## 6. Promotion and Growth Strategies

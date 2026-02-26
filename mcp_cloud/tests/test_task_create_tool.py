@@ -6,13 +6,13 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from mcp.types import CallToolResult
-from mcp_cloud.app import handle_list_tools, handle_task_create
+from mcp_cloud.app import handle_list_tools, handle_plan_create as handle_task_create
 
 
 class TestTaskCreateTool(unittest.TestCase):
     def test_task_create_visible_schema_exposes_prompt_and_model_profile(self):
         tools = asyncio.run(handle_list_tools())
-        task_create_tool = next(tool for tool in tools if tool.name == "task_create")
+        task_create_tool = next(tool for tool in tools if tool.name == "plan_create")
         properties = task_create_tool.inputSchema.get("properties", {})
         self.assertIn("prompt", properties)
         self.assertIn("model_profile", properties)

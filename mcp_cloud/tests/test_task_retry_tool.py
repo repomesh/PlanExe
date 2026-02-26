@@ -4,14 +4,14 @@ import uuid
 from unittest.mock import patch
 
 from mcp.types import CallToolResult
-from mcp_cloud.app import handle_list_tools, handle_task_retry
+from mcp_cloud.app import handle_list_tools, handle_plan_retry as handle_task_retry
 
 
 class TestTaskRetryTool(unittest.TestCase):
     def test_task_retry_tool_listed(self):
         tools = asyncio.run(handle_list_tools())
         tool_names = {tool.name for tool in tools}
-        self.assertIn("task_retry", tool_names)
+        self.assertIn("plan_retry", tool_names)
 
     def test_task_retry_returns_structured_content(self):
         task_id = str(uuid.uuid4())

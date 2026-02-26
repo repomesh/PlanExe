@@ -17,25 +17,25 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - Events are queried from `EventItem` database records.
 - Use the TaskItem UUID as the MCP `task_id`.
 - Public task state contract:
-  - `task_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
+  - `plan_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
   - These values correspond 1:1 with `database_api.model_taskitem.TaskState`.
-  - Do not use legacy public names like `running`, `stopping`, or `stopped` for `task_status`.
+  - Do not use legacy public names like `running`, `stopping`, or `stopped` for `plan_status`.
   - Do not expose internal symbol/class names (for example `TaskState.pending`, `TaskItem.state`) in model-facing tool descriptions; use plain public state strings.
 - Download contract:
   - `track_activity.jsonl` is internal-only (`TaskItem.run_track_activity_jsonl`).
   - Downloadable zip artifacts must never include `track_activity.jsonl`.
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
-- `task_stop` contract:
-  - `task_stop` does not create a separate lifecycle state.
+- `plan_stop` contract:
+  - `plan_stop` does not create a separate lifecycle state.
   - Return current public `state` plus `stop_requested` to acknowledge stop-flag request.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.
 
-## task_create contract
+## plan_create contract
 - Expose `model_profiles` as the discovery tool for profile selection.
 - `model_profiles` must report profile guidance and currently available models after class whitelist filtering.
-- Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
-- Keep concurrency wording explicit: each `task_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
+- Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `plan_create`.
+- Keep concurrency wording explicit: each `plan_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
 - Visible input schema is intentionally limited to:
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
@@ -47,7 +47,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - All tool responses must be JSON-serializable and follow the error model in the spec.
 - Keep tool error codes/docs aligned with actual runtime payloads (for example `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `generation_failed`, `content_unavailable`, `INTERNAL_ERROR`).
 - Event cursors use format `cursor_{event_id}` for incremental polling.
-- **Run as task**: We expose MCP **tools** only (task_create, task_status, task_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
+- **Run as task**: We expose MCP **tools** only (plan_create, plan_status, plan_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
 
 ## Authentication Policy
 - PlanExe MCP cloud authentication is API-key header based.
@@ -61,7 +61,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - `tools/call` without API key is allowed **only** for free setup tools:
     - `model_profiles`
     - `prompt_examples`
-  - All other tool invocations (for example `task_create`) must remain API-key protected.
+  - All other tool invocations (for example `plan_create`) must remain API-key protected.
 - Keep auth-denial logging explicit (`Auth rejected: ...`) with method/path/user-agent and parsed JSON-RPC methods to make Railway debugging easier.
 
 ## HTTP Compatibility and Crawler Endpoints
@@ -72,7 +72,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - FastMCP session lifecycle lines like `Terminating session: None` are expected informational logs; do not treat them as application failures solely based on Railway’s log-level labeling.
 
 ## Download URL environment behavior
-- `task_file_info.download_url` should be built from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.
+- `plan_file_info.download_url` should be built from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.
 - If `PLANEXE_MCP_PUBLIC_BASE_URL` is unset in HTTP mode, use request host/scheme.
 - If no public base URL is available, `download_url` may be absent; document this and guide operators to set `PLANEXE_MCP_PUBLIC_BASE_URL`.
 
@@ -82,9 +82,9 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - the HTTP wrapper endpoint (`/mcp/tools/call`), or
   - the streamable MCP JSON-RPC endpoint (`/mcp`).
 - Tool-surface split must stay explicit:
-  - `mcp_cloud` exposes `task_file_info` (not `task_download`).
-  - `mcp_local` exposes `task_download` and implements it via cloud `task_file_info`.
-- `task_file_info` provides download metadata that `mcp_local` uses to download
+  - `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
+  - `mcp_local` exposes `plan_download` and implements it via cloud `plan_file_info`.
+- `plan_file_info` provides download metadata that `mcp_local` uses to download
   artifacts via `/download/{task_id}/...`.
 
 ## Troubleshooting guidance (caller-facing text)
@@ -106,4 +106,4 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   tests close to the changed logic.
 - Run focused tests from repo root, for example:
   - `python -m unittest mcp_cloud.tests.test_tool_surface_consistency`
-  - `python -m unittest mcp_cloud.tests.test_task_status_tool`
+  - `python -m unittest mcp_cloud.tests.test_plan_status_tool`

@@ -65,25 +65,25 @@ MCP Inspector setup guide:
 The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - prompt_examples
 - model_profiles
-- task_create
-- task_status
-- task_stop
-- task_retry
-- task_file_info
+- plan_create
+- plan_status
+- plan_stop
+- plan_retry
+- plan_file_info
 
 Key tool inputs/outputs:
-- task_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
-- task_create prompt quality: for best results, provide a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
+- plan_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
+- plan_create prompt quality: for best results, provide a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 - model_profiles output: profile guidance + currently available models in each profile.
 - model_profiles returns `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
-- task_create output: task_id (use this for task_status, task_stop, and task_file_info).
-- task_status output: current state and progress for a task_id.
-- task_retry input: task_id (required), model_profile (optional; defaults to baseline).
-- task_retry output: task_id requeued to pending, with model_profile and retried_at.
-- task_file_info output: downloadable report/zip metadata and URLs.
-- mcp_local task_download output: includes local saved_path where artifact was written.
+- plan_create output: task_id (use this for plan_status, plan_stop, and plan_file_info).
+- plan_status output: current state and progress for a task_id.
+- plan_retry input: task_id (required), model_profile (optional; defaults to baseline).
+- plan_retry output: task_id requeued to pending, with model_profile and retried_at.
+- plan_file_info output: downloadable report/zip metadata and URLs.
+- mcp_local plan_download output: includes local saved_path where artifact was written.
 
-task_status caller contract:
+plan_status caller contract:
 - pending: keep polling.
 - processing: keep polling.
 - completed: terminal success; download is ready.
@@ -93,28 +93,28 @@ Minimal error-handling contract:
 - Errors use `{"error":{"code","message","details?"}}`.
 - Common cloud/core codes: `TASK_NOT_FOUND`, `TASK_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
 - Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
-- `task_file_info` may return `{}` while artifact output is not ready yet.
+- `plan_file_info` may return `{}` while artifact output is not ready yet.
 
 Recommended interaction order:
 1. Call prompt_examples.
 2. Optionally call model_profiles to choose model_profile based on current availability.
 3. Non-tool step: prepare and approve a strong prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
-4. Call task_create.
-5. Poll task_status until complete (repeat every 5 minutes).
-6. If failed, optionally call task_retry (defaults to baseline model_profile).
-7. Use task_file_info to get download URLs.
-8. Use task_stop if the run must be cancelled.
+4. Call plan_create.
+5. Poll plan_status until complete (repeat every 5 minutes).
+6. If failed, optionally call plan_retry (defaults to baseline model_profile).
+7. Use plan_file_info to get download URLs.
+8. Use plan_stop if the run must be cancelled.
 
 Concurrency semantics:
-- Each task_create call creates a new task_id.
-- task_retry reuses the same failed task_id.
+- Each plan_create call creates a new task_id.
+- plan_retry reuses the same failed task_id.
 - Server does not enforce a global per-client concurrency cap.
 - Client should track task_ids and usually start with 1 active task, then 2 if needed.
 
 Note:
-- task_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
+- plan_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
 - In mcp_local, downloads save to PLANEXE_PATH (or current working directory if PLANEXE_PATH is unset).
-- In mcp_cloud, task_file_info download_url is an absolute URL where the requested artifact can be downloaded.
+- In mcp_cloud, plan_file_info download_url is an absolute URL where the requested artifact can be downloaded.
 
 ## Authentication
 
@@ -169,7 +169,7 @@ curl -X POST https://mcp.planexe.org/mcp/tools/call \
   -H "X-API-Key: <API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
-    "tool": "task_create",
+    "tool": "plan_create",
     "arguments": {
       "prompt": "20-year, €40 billion infrastructure initiative to construct a pillar-supported transoceanic submerged tunnel connecting Spain and Morocco. This project will deploy a system of submerged, buoyant concrete tunnels engineered for high-speed rail traffic, which will be securely anchored at a controlled depth of 100 meters below sea level.",
       "model_profile": "baseline"

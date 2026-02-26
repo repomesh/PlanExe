@@ -11,7 +11,7 @@ from mcp_cloud.app import (
     ZIP_CONTENT_TYPE,
     _sanitize_legacy_zip_snapshot,
     extract_file_from_zip_bytes,
-    handle_task_file_info,
+    handle_plan_file_info as handle_task_file_info,
     handle_list_tools,
     list_files_from_zip_bytes,
 )
@@ -21,7 +21,7 @@ class TestTaskFileInfoTool(unittest.TestCase):
     def test_task_file_info_tool_listed(self):
         tools = asyncio.run(handle_list_tools())
         tool_names = {tool.name for tool in tools}
-        self.assertIn("task_file_info", tool_names)
+        self.assertIn("plan_file_info", tool_names)
 
     def test_zip_helpers(self):
         buffer = BytesIO()

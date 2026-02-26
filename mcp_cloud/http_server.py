@@ -26,11 +26,11 @@ from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
     ModelProfilesOutput,
-    TaskCreateOutput,
-    TaskFileInfoOutput,
-    TaskRetryOutput,
-    TaskStatusOutput,
-    TaskStopOutput,
+    PlanCreateOutput,
+    PlanFileInfoOutput,
+    PlanRetryOutput,
+    PlanStatusOutput,
+    PlanStopOutput,
 )
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
@@ -57,13 +57,13 @@ from mcp_cloud.app import (
     clear_download_base_url,
     fetch_artifact_from_worker_plan,
     fetch_user_downloadable_zip,
-    handle_task_create,
-    handle_task_list,
+    handle_plan_create,
+    handle_plan_list,
     handle_model_profiles,
-    handle_task_status,
-    handle_task_retry,
-    handle_task_stop,
-    handle_task_file_info,
+    handle_plan_status,
+    handle_plan_retry,
+    handle_plan_stop,
+    handle_plan_file_info,
     handle_prompt_examples,
     resolve_task_for_task_id,
     set_download_base_url,
@@ -576,13 +576,13 @@ ModelProfileInput = Literal["baseline", "premium", "frontier", "custom"]
 ResultArtifactInput = Literal["report", "zip"]
 
 
-async def task_create(
+async def plan_create(
     prompt: str,
     model_profile: Annotated[
         ModelProfileInput,
         Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
-) -> Annotated[CallToolResult, TaskCreateOutput]:
+) -> Annotated[CallToolResult, PlanCreateOutput]:
     """Create a new PlanExe task. Use prompt_examples first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
@@ -591,41 +591,41 @@ async def task_create(
     }
     if authenticated_user_api_key:
         arguments["user_api_key"] = authenticated_user_api_key
-    return await handle_task_create(
+    return await handle_plan_create(
         arguments,
     )
 
 
-async def task_status(
-    task_id: str = Field(..., description="Task UUID returned by task_create."),
-) -> Annotated[CallToolResult, TaskStatusOutput]:
-    return await handle_task_status({"task_id": task_id})
+async def plan_status(
+    task_id: str = Field(..., description="Task UUID returned by plan_create."),
+) -> Annotated[CallToolResult, PlanStatusOutput]:
+    return await handle_plan_status({"task_id": task_id})
 
 
-async def task_stop(
-    task_id: str = Field(..., description="Task UUID returned by task_create. Use it to stop the plan creation."),
-) -> Annotated[CallToolResult, TaskStopOutput]:
-    return await handle_task_stop({"task_id": task_id})
+async def plan_stop(
+    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to stop the plan creation."),
+) -> Annotated[CallToolResult, PlanStopOutput]:
+    return await handle_plan_stop({"task_id": task_id})
 
 
-async def task_retry(
+async def plan_retry(
     task_id: str = Field(..., description="UUID of the failed task to retry."),
     model_profile: Annotated[
         ModelProfileInput,
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
-) -> Annotated[CallToolResult, TaskRetryOutput]:
-    return await handle_task_retry({"task_id": task_id, "model_profile": model_profile})
+) -> Annotated[CallToolResult, PlanRetryOutput]:
+    return await handle_plan_retry({"task_id": task_id, "model_profile": model_profile})
 
 
-async def task_file_info(
-    task_id: str = Field(..., description="Task UUID returned by task_create. Use it to download the created plan."),
+async def plan_file_info(
+    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to download the created plan."),
     artifact: Annotated[
         ResultArtifactInput,
         Field(description="Download artifact type: report or zip."),
     ] = "report",
-) -> Annotated[CallToolResult, TaskFileInfoOutput]:
-    return await handle_task_file_info({"task_id": task_id, "artifact": artifact})
+) -> Annotated[CallToolResult, PlanFileInfoOutput]:
+    return await handle_plan_file_info({"task_id": task_id, "artifact": artifact})
 
 
 async def prompt_examples() -> CallToolResult:
@@ -640,11 +640,11 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
 
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
-        "task_create": task_create,
-        "task_status": task_status,
-        "task_stop": task_stop,
-        "task_retry": task_retry,
-        "task_file_info": task_file_info,
+        "plan_create": plan_create,
+        "plan_status": plan_status,
+        "plan_stop": plan_stop,
+        "plan_retry": plan_retry,
+        "plan_file_info": plan_file_info,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,
     }
@@ -845,14 +845,14 @@ async def call_tool(
     This endpoint wraps the stdio-based MCP tool handlers for HTTP access.
     """
     arguments = dict(payload.arguments or {})
-    if payload.tool == "task_create":
+    if payload.tool == "plan_create":
         authenticated_user_api_key = _get_authenticated_user_api_key()
         if authenticated_user_api_key and not arguments.get("user_api_key"):
             arguments["user_api_key"] = authenticated_user_api_key
         if isinstance(payload.metadata, dict):
             arguments["metadata"] = dict(payload.metadata)
 
-        result = await handle_task_create(arguments)
+        result = await handle_plan_create(arguments)
         content, error = _normalize_tool_result(result)
         return MCPToolCallResponse(content=content, error=error)
 

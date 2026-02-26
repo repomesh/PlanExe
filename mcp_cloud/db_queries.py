@@ -13,6 +13,8 @@ from mcp_cloud.db_setup import app, db, PlanItem, PlanState, EventItem, EventTyp
 
 logger = logging.getLogger(__name__)
 
+PROMPT_EXCERPT_MAX_LENGTH = 100
+
 
 # ---------------------------------------------------------------------------
 # Plan lookup
@@ -240,7 +242,7 @@ def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]
                     created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
                     if created_at else None
                 ),
-                "prompt_excerpt": (plan.prompt or "")[:100],
+                "prompt_excerpt": (plan.prompt or "")[:PROMPT_EXCERPT_MAX_LENGTH],
             })
         return results
 

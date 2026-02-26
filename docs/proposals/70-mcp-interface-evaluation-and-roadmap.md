@@ -153,11 +153,9 @@ Added `mcp_cloud/tests/test_plan_list_tool.py` with 8 tests covering: tool liste
 
 **Fix:** Add INFO-level logging in `handle_call_tool` on successful dispatch (tool name, user ID if authenticated, duration).
 
-### 4.8 Prompt excerpt length hardcoded
+### ~~4.8 Prompt excerpt length hardcoded~~ (FIXED)
 
-`_list_tasks_sync` truncates prompts to 100 characters (`db_queries.py:241`). This matches the tool description ("first 100 chars") but is a magic number buried in the function body.
-
-**Fix:** Define as a module constant `PROMPT_EXCERPT_MAX_LENGTH = 100`.
+Extracted to `PROMPT_EXCERPT_MAX_LENGTH = 100` at module level in `db_queries.py`.
 
 ### ~~4.9 Stale `task` variable names and backward-compat aliases~~ (FIXED)
 

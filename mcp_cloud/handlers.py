@@ -379,7 +379,17 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     task_id = req.task_id
     artifact = req.artifact.strip().lower() if isinstance(req.artifact, str) else "report"
     if artifact not in ("report", "zip"):
-        artifact = "report"
+        response = {
+            "error": {
+                "code": "INVALID_ARGUMENT",
+                "message": f"Invalid artifact type: {req.artifact!r}. Must be 'report' or 'zip'.",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
     plan_snapshot = await asyncio.to_thread(_get_plan_for_report_sync, task_id)
     if plan_snapshot is None:
         response = {

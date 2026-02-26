@@ -133,11 +133,9 @@ A separate download rate limiter (`_enforce_download_rate_limit`) now covers `/d
 
 `_enforce_body_size` now checks both `/mcp/tools/call` and `/mcp/` POST requests. The `Content-Length` requirement (411) is only enforced on the REST endpoint since Streamable HTTP may use chunked encoding without `Content-Length`; however, when `Content-Length` is present on either endpoint it is validated against `MAX_BODY_BYTES`.
 
-### 4.4 `plan_file_info` silently defaults invalid artifact to `"report"`
+### ~~4.4 `plan_file_info` silently defaults invalid artifact to `"report"`~~ (FIXED)
 
-If a caller passes `artifact="invalid"`, the handler silently falls back to `"report"` (`handlers.py:380–382`) instead of returning a validation error.
-
-**Fix:** Return an `INVALID_ARGUMENT` error for unrecognised artifact values.
+Both `handle_plan_file_info` (cloud) and `handle_plan_download` (local) now return `INVALID_ARGUMENT` with a descriptive message when the artifact value is not `"report"` or `"zip"`.
 
 ### 4.5 No dedicated `plan_list` test
 
@@ -248,7 +246,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
 | P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
 | P2       | ~~Body size validation on Streamable HTTP (4.3)~~                      | —      | DONE   |
-| P2       | Return error for invalid artifact value (4.4)                          | 30 min |        |
+| P2       | ~~Return error for invalid artifact value (4.4)~~                      | —      | DONE   |
 | P2       | Add tool-call audit logging (4.7)                                      | 1 h    |        |
 | P2       | Add `log_lines` to `plan_status` (5.1)                                 | 4 h    |        |
 | P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~   | —      | DONE   |

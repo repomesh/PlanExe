@@ -967,7 +967,10 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
     req = PlanDownloadRequest(**arguments)
     artifact = (req.artifact or "report").strip().lower()
     if artifact not in ("report", "zip"):
-        artifact = "report"
+        return _wrap_response(
+            {"error": {"code": "INVALID_ARGUMENT", "message": f"Invalid artifact type: {req.artifact!r}. Must be 'report' or 'zip'."}},
+            is_error=True,
+        )
 
     payload, error = _call_remote_tool(
         "plan_file_info",

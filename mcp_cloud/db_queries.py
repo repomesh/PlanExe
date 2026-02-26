@@ -119,15 +119,29 @@ def _create_plan_sync(
 
 def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = find_plan_by_id(plan_id)
-        if plan is None:
+        try:
+            plan_uuid = uuid.UUID(plan_id)
+        except ValueError:
+            return None
+        row = (
+            db.session.query(
+                PlanItem.id,
+                PlanItem.state,
+                PlanItem.stop_requested,
+                PlanItem.progress_percentage,
+                PlanItem.timestamp_created,
+            )
+            .filter(PlanItem.id == plan_uuid)
+            .first()
+        )
+        if row is None:
             return None
         return {
-            "id": str(plan.id),
-            "state": plan.state,
-            "stop_requested": bool(plan.stop_requested),
-            "progress_percentage": plan.progress_percentage,
-            "timestamp_created": plan.timestamp_created,
+            "id": str(row.id),
+            "state": row.state,
+            "stop_requested": bool(row.stop_requested),
+            "progress_percentage": row.progress_percentage,
+            "timestamp_created": row.timestamp_created,
         }
 
 def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
@@ -209,13 +223,25 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[s
 
 def _get_plan_for_report_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        plan = resolve_plan_by_id(plan_id)
-        if plan is None:
+        try:
+            plan_uuid = uuid.UUID(plan_id)
+        except ValueError:
+            return None
+        row = (
+            db.session.query(
+                PlanItem.id,
+                PlanItem.state,
+                PlanItem.progress_message,
+            )
+            .filter(PlanItem.id == plan_uuid)
+            .first()
+        )
+        if row is None:
             return None
         return {
-            "id": str(plan.id),
-            "state": plan.state,
-            "progress_message": plan.progress_message,
+            "id": str(row.id),
+            "state": row.state,
+            "progress_message": row.progress_message,
         }
 
 def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]:

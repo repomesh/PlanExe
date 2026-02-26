@@ -150,6 +150,10 @@ PUBLIC_JSONRPC_METHODS_NO_AUTH = {
     "resources/templates/list",
     "ping",
 }
+PUBLIC_TOOL_CALLS_NO_AUTH = {
+    "model_profiles",
+    "prompt_examples",
+}
 
 
 def _allowed_cors_origin(request: Request) -> Optional[str]:
@@ -222,6 +226,37 @@ async def _extract_jsonrpc_methods_from_request(request: Request) -> list[str]:
     return _extract_jsonrpc_methods_from_payload(payload)
 
 
+def _extract_jsonrpc_tools_call_names(payload: Any) -> list[str]:
+    names: list[str] = []
+    entries: list[Any]
+    if isinstance(payload, dict):
+        entries = [payload]
+    elif isinstance(payload, list):
+        entries = payload
+    else:
+        return names
+
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        if entry.get("method") != "tools/call":
+            continue
+        params = entry.get("params")
+        if not isinstance(params, dict):
+            continue
+        name = params.get("name")
+        if isinstance(name, str):
+            names.append(name)
+    return names
+
+
+def _extract_rest_tools_call_name(payload: Any) -> Optional[str]:
+    if not isinstance(payload, dict):
+        return None
+    tool = payload.get("tool")
+    return tool if isinstance(tool, str) else None
+
+
 async def _is_public_mcp_request_without_auth(request: Request) -> bool:
     """Allow unauthenticated MCP handshake/discovery calls."""
     path = request.url.path
@@ -237,14 +272,35 @@ async def _is_public_mcp_request_without_auth(request: Request) -> bool:
     if path == "/mcp/tools" and method == "GET":
         return True
 
-    # Streamable HTTP endpoint: allow only lightweight discovery methods.
+    # REST MCP tools call endpoint: expose only free setup/discovery tools.
+    if path == "/mcp/tools/call" and method == "POST":
+        try:
+            payload = json.loads((await request.body()) or b"")
+        except json.JSONDecodeError:
+            return False
+        tool = _extract_rest_tools_call_name(payload)
+        return tool in PUBLIC_TOOL_CALLS_NO_AUTH
+
+    # Streamable HTTP endpoint: allow lightweight discovery methods and free setup tools.
     if path != "/mcp/" or method != "POST":
         return False
 
-    methods = await _extract_jsonrpc_methods_from_request(request)
+    try:
+        payload = json.loads((await request.body()) or b"")
+    except json.JSONDecodeError:
+        return False
+
+    methods = _extract_jsonrpc_methods_from_payload(payload)
     if not methods:
         return False
-    return all(item in PUBLIC_JSONRPC_METHODS_NO_AUTH for item in methods)
+    if all(item in PUBLIC_JSONRPC_METHODS_NO_AUTH for item in methods):
+        return True
+
+    if all(item == "tools/call" for item in methods):
+        names = _extract_jsonrpc_tools_call_names(payload)
+        if names and all(name in PUBLIC_TOOL_CALLS_NO_AUTH for name in names):
+            return True
+    return False
 
 
 async def _log_auth_rejection(request: Request, reason: str) -> None:

@@ -42,7 +42,7 @@ mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`).
 - `true`: provide a valid `X-API-Key`.
 Accepted keys are (1) UserApiKey from home.planexe.org (`pex_...`), or (2) `PLANEXE_MCP_API_KEY` if set (for dev or shared secret).
 OAuth is not supported for the MCP API.
-When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, `GET /mcp/tools`, and probe traffic to `/mcp` for redirect/handshake compatibility) are intentionally allowed without API key for connector health checks; tool execution remains protected.
+When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, `GET /mcp/tools`, and probe traffic to `/mcp` for redirect/handshake compatibility) are intentionally allowed without API key for connector health checks. In addition, `tools/call` is open without API key only for `model_profiles` and `prompt_examples`; all other tool calls remain protected.
 
 ### Connecting via HTTP/URL
 

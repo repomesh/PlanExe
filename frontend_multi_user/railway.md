@@ -19,6 +19,7 @@ PLANEXE_GOOGLE_ANALYTICS="insert-your-secret"
 PLANEXE_FRONTEND_MULTIUSER_SECRET_KEY='insert-a-long-random-secret-for-sessions'
 PLANEXE_STRIPE_SECRET_KEY='insert-your-secret'
 PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES="${{shared.PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES}}"
+PLANEXE_API_KEY_SECRET="${{shared.PLANEXE_API_KEY_SECRET}}"
 ```
 
 ## Session / admin login (production)

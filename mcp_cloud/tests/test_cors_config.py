@@ -100,6 +100,36 @@ class TestPublicMcpNoAuthRules(unittest.TestCase):
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertTrue(result)
 
+    def test_public_streamable_prompts_list(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp/",
+            body=b'{"jsonrpc":"2.0","id":4,"method":"prompts/list","params":{}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_streamable_resources_list(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp/",
+            body=b'{"jsonrpc":"2.0","id":5,"method":"resources/list","params":{}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_streamable_resource_templates_list(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp/",
+            body=b'{"jsonrpc":"2.0","id":6,"method":"resources/templates/list","params":{}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
     def test_non_public_streamable_tools_call(self):
         request = _RequestStub(
             headers={},

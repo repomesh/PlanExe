@@ -145,6 +145,9 @@ PUBLIC_JSONRPC_METHODS_NO_AUTH = {
     "initialize",
     "notifications/initialized",
     "tools/list",
+    "prompts/list",
+    "resources/list",
+    "resources/templates/list",
     "ping",
 }
 

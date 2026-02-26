@@ -38,44 +38,44 @@ class TestAllToolsHaveOutputSchema(unittest.TestCase):
                 )
 
 
-class TestTaskCreateInputSchemaHasUserApiKey(unittest.TestCase):
-    """user_api_key must be in the visible task_create input schema."""
+class TestPlanCreateInputSchemaHasUserApiKey(unittest.TestCase):
+    """user_api_key must be in the visible plan_create input schema."""
 
-    def test_cloud_task_create_schema_has_user_api_key(self):
-        props = cloud_app.TASK_CREATE_INPUT_SCHEMA.get("properties", {})
+    def test_cloud_plan_create_schema_has_user_api_key(self):
+        props = cloud_app.PLAN_CREATE_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
 
-    def test_local_task_create_schema_has_user_api_key(self):
-        props = local_app.TASK_CREATE_INPUT_SCHEMA.get("properties", {})
+    def test_local_plan_create_schema_has_user_api_key(self):
+        props = local_app.PLAN_CREATE_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
 
 
-class TestTaskListInputSchemaHasUserApiKey(unittest.TestCase):
-    """user_api_key must be required in the task_list input schema."""
+class TestPlanListInputSchemaHasUserApiKey(unittest.TestCase):
+    """user_api_key must be required in the plan_list input schema."""
 
-    def test_cloud_task_list_schema_requires_user_api_key(self):
-        props = cloud_app.TASK_LIST_INPUT_SCHEMA.get("properties", {})
+    def test_cloud_plan_list_schema_requires_user_api_key(self):
+        props = cloud_app.PLAN_LIST_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
-        required = cloud_app.TASK_LIST_INPUT_SCHEMA.get("required", [])
+        required = cloud_app.PLAN_LIST_INPUT_SCHEMA.get("required", [])
         self.assertIn("user_api_key", required)
 
-    def test_local_task_list_schema_requires_user_api_key(self):
-        props = local_app.TASK_LIST_INPUT_SCHEMA.get("properties", {})
+    def test_local_plan_list_schema_requires_user_api_key(self):
+        props = local_app.PLAN_LIST_INPUT_SCHEMA.get("properties", {})
         self.assertIn("user_api_key", props)
-        required = local_app.TASK_LIST_INPUT_SCHEMA.get("required", [])
+        required = local_app.PLAN_LIST_INPUT_SCHEMA.get("required", [])
         self.assertIn("user_api_key", required)
 
 
-class TestTaskRetryInputSchemaDefaults(unittest.TestCase):
-    """task_retry should default model_profile to baseline."""
+class TestPlanRetryInputSchemaDefaults(unittest.TestCase):
+    """plan_retry should default model_profile to baseline."""
 
-    def test_cloud_task_retry_schema_defaults_model_profile(self):
-        props = cloud_app.TASK_RETRY_INPUT_SCHEMA.get("properties", {})
+    def test_cloud_plan_retry_schema_defaults_model_profile(self):
+        props = cloud_app.PLAN_RETRY_INPUT_SCHEMA.get("properties", {})
         model_profile = props.get("model_profile", {})
         self.assertEqual(model_profile.get("default"), "baseline")
 
-    def test_local_task_retry_schema_defaults_model_profile(self):
-        props = local_app.TASK_RETRY_INPUT_SCHEMA.get("properties", {})
+    def test_local_plan_retry_schema_defaults_model_profile(self):
+        props = local_app.PLAN_RETRY_INPUT_SCHEMA.get("properties", {})
         model_profile = props.get("model_profile", {})
         self.assertEqual(model_profile.get("default"), "baseline")
 
@@ -119,12 +119,12 @@ class TestModelProfilesAnnotations(unittest.TestCase):
 class TestRemainingToolAnnotations(unittest.TestCase):
     def test_cloud_remaining_tool_annotations(self):
         expected = {
-            "task_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-            "task_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-            "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
-            "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-            "task_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-            "task_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "plan_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "plan_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
+            "plan_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "plan_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
         for tool_name, expected_annotations in expected.items():
             with self.subTest(tool=tool_name):
@@ -133,12 +133,12 @@ class TestRemainingToolAnnotations(unittest.TestCase):
 
     def test_local_remaining_tool_annotations(self):
         expected = {
-            "task_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-            "task_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-            "task_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
-            "task_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-            "task_download": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
-            "task_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "plan_create": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "plan_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
+            "plan_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_download": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
         for tool_name, expected_annotations in expected.items():
             with self.subTest(tool=tool_name):
@@ -151,29 +151,29 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("model_profiles", cloud_tool_names)
 
-    def test_cloud_exposes_task_retry_tool(self):
+    def test_cloud_exposes_plan_retry_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
-        self.assertIn("task_retry", cloud_tool_names)
+        self.assertIn("plan_retry", cloud_tool_names)
 
-    def test_cloud_exposes_task_file_info_not_task_download(self):
+    def test_cloud_exposes_plan_file_info_not_plan_download(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
-        self.assertIn("task_file_info", cloud_tool_names)
-        self.assertNotIn("task_download", cloud_tool_names)
+        self.assertIn("plan_file_info", cloud_tool_names)
+        self.assertNotIn("plan_download", cloud_tool_names)
 
-    def test_cloud_exposes_task_list_tool(self):
+    def test_cloud_exposes_plan_list_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
-        self.assertIn("task_list", cloud_tool_names)
+        self.assertIn("plan_list", cloud_tool_names)
 
     def test_cloud_instructions_reference_cloud_download_tool(self):
-        self.assertIn("task_file_info", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
-        self.assertNotIn("task_download", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
+        self.assertIn("plan_file_info", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
+        self.assertNotIn("plan_download", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
 
-    def test_cloud_task_create_description_references_cloud_download_tool(self):
-        description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "task_create")
-        self.assertIn("task_file_info", description)
-        self.assertNotIn("task_download", description)
+    def test_cloud_plan_create_description_references_cloud_download_tool(self):
+        description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "plan_create")
+        self.assertIn("plan_file_info", description)
+        self.assertNotIn("plan_download", description)
 
-    def test_cloud_instructions_include_task_status_state_contract(self):
+    def test_cloud_instructions_include_plan_status_state_contract(self):
         instructions = cloud_app.PLANEXE_SERVER_INSTRUCTIONS
         self.assertIn("pending/processing", instructions)
         self.assertIn("completed", instructions)
@@ -183,8 +183,8 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("longer than 20 minutes", instructions)
         self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
-    def test_cloud_task_status_description_includes_state_contract(self):
-        description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "task_status")
+    def test_cloud_plan_status_description_includes_state_contract(self):
+        description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "plan_status")
         self.assertIn("pending/processing", description)
         self.assertIn("completed", description)
         self.assertIn("failed", description)
@@ -198,7 +198,7 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("MODEL_PROFILES_UNAVAILABLE", instructions)
 
     def test_cloud_prompt_schema_includes_prompt_shape_guidance(self):
-        prompt_schema = cloud_app.TASK_CREATE_INPUT_SCHEMA["properties"]["prompt"]["description"]
+        prompt_schema = cloud_app.PLAN_CREATE_INPUT_SCHEMA["properties"]["prompt"]["description"]
         self.assertIn("300-800 words", prompt_schema)
         self.assertIn("objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria", prompt_schema)
 
@@ -208,29 +208,29 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
         self.assertIn("model_profiles", local_tool_names)
 
-    def test_local_exposes_task_retry_tool(self):
+    def test_local_exposes_plan_retry_tool(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
-        self.assertIn("task_retry", local_tool_names)
+        self.assertIn("plan_retry", local_tool_names)
 
-    def test_local_exposes_task_download_not_task_file_info(self):
+    def test_local_exposes_plan_download_not_plan_file_info(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
-        self.assertIn("task_download", local_tool_names)
-        self.assertNotIn("task_file_info", local_tool_names)
+        self.assertIn("plan_download", local_tool_names)
+        self.assertNotIn("plan_file_info", local_tool_names)
 
-    def test_local_exposes_task_list_tool(self):
+    def test_local_exposes_plan_list_tool(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
-        self.assertIn("task_list", local_tool_names)
+        self.assertIn("plan_list", local_tool_names)
 
     def test_local_instructions_reference_local_download_tool(self):
-        self.assertIn("task_download", local_app.PLANEXE_SERVER_INSTRUCTIONS)
-        self.assertNotIn("task_file_info", local_app.PLANEXE_SERVER_INSTRUCTIONS)
+        self.assertIn("plan_download", local_app.PLANEXE_SERVER_INSTRUCTIONS)
+        self.assertNotIn("plan_file_info", local_app.PLANEXE_SERVER_INSTRUCTIONS)
 
-    def test_local_task_create_description_references_local_download_tool(self):
-        description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_create")
-        self.assertIn("task_download", description)
-        self.assertNotIn("task_file_info", description)
+    def test_local_plan_create_description_references_local_download_tool(self):
+        description = _tool_desc(local_app.TOOL_DEFINITIONS, "plan_create")
+        self.assertIn("plan_download", description)
+        self.assertNotIn("plan_file_info", description)
 
-    def test_local_instructions_include_task_status_state_contract(self):
+    def test_local_instructions_include_plan_status_state_contract(self):
         instructions = local_app.PLANEXE_SERVER_INSTRUCTIONS
         self.assertIn("pending/processing", instructions)
         self.assertIn("completed", instructions)
@@ -240,8 +240,8 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("longer than 20 minutes", instructions)
         self.assertIn("PlanExeOrg/PlanExe/issues", instructions)
 
-    def test_local_task_status_description_includes_state_contract(self):
-        description = _tool_desc(local_app.TOOL_DEFINITIONS, "task_status")
+    def test_local_plan_status_description_includes_state_contract(self):
+        description = _tool_desc(local_app.TOOL_DEFINITIONS, "plan_status")
         self.assertIn("pending/processing", description)
         self.assertIn("completed", description)
         self.assertIn("failed", description)

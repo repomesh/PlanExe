@@ -6,16 +6,16 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 ## Interaction model
 - The local proxy exposes MCP tools over stdio and forwards requests to mcp_cloud
   using `PLANEXE_URL` (defaults to the hosted `/mcp` endpoint).
-- Supported tools: `prompt_examples`, `model_profiles`, `task_create`, `task_status`, `task_stop`, `task_download`.
-- `task_download` calls the remote `task_file_info` tool to obtain a download URL,
+- Supported tools: `prompt_examples`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_download`.
+- `plan_download` calls the remote `plan_file_info` tool to obtain a download URL,
   then downloads the artifact to `PLANEXE_PATH` on the local machine.
-- `task_create` visible input schema includes `prompt`, optional `model_profile`, and optional `user_api_key`.
-- Use `model_profiles` to help agents select `task_create.model_profile` without relying on internal file knowledge.
-- Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `task_create`.
-- Keep concurrency wording explicit: each `task_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
+- `plan_create` visible input schema includes `prompt`, optional `model_profile`, and optional `user_api_key`.
+- Use `model_profiles` to help agents select `plan_create.model_profile` without relying on internal file knowledge.
+- Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `plan_create`.
+- Keep concurrency wording explicit: each `plan_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
 
 ## Public state contract
-- `task_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
+- `plan_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
 - Caller contract:
   - `pending`/`processing`: keep polling.
   - `completed`: download is ready.
@@ -28,8 +28,8 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
   - `processing` with no output-file changes for longer than 20 minutes likely means stalled/failed execution.
   - Report both cases at `https://github.com/PlanExeOrg/PlanExe/issues`.
 
-## task_stop semantics
-- `task_stop` is a stop request/acknowledgement, not a separate lifecycle state.
+## plan_stop semantics
+- `plan_stop` is a stop request/acknowledgement, not a separate lifecycle state.
 - Return payload should include current public `state` plus `stop_requested`.
 
 ## Constraints
@@ -40,10 +40,10 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 - Ensure all tool responses include structured content when an output schema is defined.
 - Keep local proxy error semantics documented and stable (`REMOTE_ERROR`, `DOWNLOAD_FAILED`) and pass through cloud error payloads unchanged when possible.
 - Tool-surface split must remain explicit:
-  - local exposes `task_download`.
-  - cloud exposes `task_file_info`.
-  - do not expose `task_file_info` as a local tool name.
-- **Run as task**: Do not advertise the MCP **tasks** protocol (tasks/get, tasks/result, tasks/cancel, tasks/list) or add tool-level "Run as task" support. PlanExe’s interface is tool-based only (task_create → task_status → task_download). The MCP tasks protocol is a different, client-driven feature; Cursor and the Python MCP SDK do not support it properly, so we keep tools-only for compatibility.
+  - local exposes `plan_download`.
+  - cloud exposes `plan_file_info`.
+  - do not expose `plan_file_info` as a local tool name.
+- **Run as task**: Do not advertise the MCP **tasks** protocol (tasks/get, tasks/result, tasks/cancel, tasks/list) or add tool-level "Run as task" support. PlanExe’s interface is tool-based only (plan_create → plan_status → plan_download). The MCP tasks protocol is a different, client-driven feature; Cursor and the Python MCP SDK do not support it properly, so we keep tools-only for compatibility.
 
 ## Env vars
 - `PLANEXE_URL`: Base URL for mcp_cloud (e.g., `http://localhost:8001/mcp`).

@@ -106,7 +106,7 @@ Get example prompts to understand what PlanExe can do.
 
 ---
 
-### Tool 2: `task_create`
+### Tool 2: `plan_create`
 
 Create a new planning task. This is the main entry point for generating plans.
 
@@ -117,7 +117,7 @@ Create a new planning task. This is the main entry point for generating plans.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_create",
+    "name": "plan_create",
     "arguments": {
       "prompt": "Create a project launch plan for Q2 2026",
       "model_profile": "premium",
@@ -136,7 +136,7 @@ Create a new planning task. This is the main entry point for generating plans.
 
 ---
 
-### Tool 3: `task_status`
+### Tool 3: `plan_status`
 
 Poll the status of a running planning task.
 
@@ -147,7 +147,7 @@ Poll the status of a running planning task.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_status",
+    "name": "plan_status",
     "arguments": {
       "task_id": "task_abc123def456"
     }
@@ -161,7 +161,7 @@ Poll the status of a running planning task.
 
 ---
 
-### Tool 4: `task_stop`
+### Tool 4: `plan_stop`
 
 Stop a running planning task.
 
@@ -172,7 +172,7 @@ Stop a running planning task.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_stop",
+    "name": "plan_stop",
     "arguments": {
       "task_id": "task_abc123def456"
     }
@@ -186,7 +186,7 @@ Stop a running planning task.
 
 ### Tool 5: `model_profiles`
 
-Return available model profiles and their guidance before calling `task_create`.
+Return available model profiles and their guidance before calling `plan_create`.
 
 **No required parameters:**
 
@@ -205,7 +205,7 @@ Return available model profiles and their guidance before calling `task_create`.
 
 ---
 
-### Tool 6: `task_file_info`
+### Tool 6: `plan_file_info`
 
 Retrieve download information for completed plan artifacts.
 
@@ -216,7 +216,7 @@ Retrieve download information for completed plan artifacts.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_file_info",
+    "name": "plan_file_info",
     "arguments": {
       "task_id": "task_abc123def456",
       "artifact": "report"
@@ -233,7 +233,7 @@ Retrieve download information for completed plan artifacts.
 
 ---
 
-### Tool 7: `task_list`
+### Tool 7: `plan_list`
 
 List recent tasks for an authenticated user. Useful for recovering a lost `task_id`.
 
@@ -244,7 +244,7 @@ List recent tasks for an authenticated user. Useful for recovering a lost `task_
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_list",
+    "name": "plan_list",
     "arguments": {
       "user_api_key": "pex_your_key_here",
       "limit": 10
@@ -257,7 +257,7 @@ List recent tasks for an authenticated user. Useful for recovering a lost `task_
 
 ---
 
-### Tool 8: `task_retry`
+### Tool 8: `plan_retry`
 
 Retry a failed task with an optional upgraded model profile.
 
@@ -268,7 +268,7 @@ Retry a failed task with an optional upgraded model profile.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "task_retry",
+    "name": "plan_retry",
     "arguments": {
       "task_id": "task_abc123def456",
       "model_profile": "premium"
@@ -287,12 +287,12 @@ Retry a failed task with an optional upgraded model profile.
 2. Optionally call `model_profiles` to choose an appropriate `model_profile`
 3. Formulate your planning prompt
 4. Get user approval for the request
-5. Call `task_create` with your prompt and parameters → receives `task_id`
-6. Poll `task_status` every 5+ minutes until status is `completed` or `failed`
-7. If `failed`, optionally call `task_retry` to requeue with a stronger model
-8. Call `task_file_info` with completed `task_id` to get download link
+5. Call `plan_create` with your prompt and parameters → receives `task_id`
+6. Poll `plan_status` every 5+ minutes until status is `completed` or `failed`
+7. If `failed`, optionally call `plan_retry` to requeue with a stronger model
+8. Call `plan_file_info` with completed `task_id` to get download link
 9. Download and use the generated plan
-10. If you lose a `task_id`, call `task_list` with your `user_api_key` to recover it
+10. If you lose a `task_id`, call `plan_list` with your `user_api_key` to recover it
 
 Refer to the [PlanExe API documentation](https://planexe.org/docs) for extended examples and advanced use cases.
 

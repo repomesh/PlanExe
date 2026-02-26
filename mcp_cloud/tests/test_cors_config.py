@@ -95,7 +95,7 @@ class TestPublicMcpNoAuthRules(unittest.TestCase):
             headers={},
             method="POST",
             path="/mcp",
-            body=b'{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"task_create","arguments":{"prompt":"x"}}}',
+            body=b'{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"plan_create","arguments":{"prompt":"x"}}}',
         )
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertTrue(result)
@@ -155,7 +155,7 @@ class TestPublicMcpNoAuthRules(unittest.TestCase):
             headers={},
             method="POST",
             path="/mcp/",
-            body=b'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"task_create","arguments":{"prompt":"x"}}}',
+            body=b'{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"plan_create","arguments":{"prompt":"x"}}}',
         )
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertFalse(result)
@@ -190,12 +190,12 @@ class TestPublicMcpNoAuthRules(unittest.TestCase):
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertTrue(result)
 
-    def test_non_public_rest_tools_call_task_create(self):
+    def test_non_public_rest_tools_call_plan_create(self):
         request = _RequestStub(
             headers={},
             method="POST",
             path="/mcp/tools/call",
-            body=b'{"tool":"task_create","arguments":{"prompt":"x"}}',
+            body=b'{"tool":"plan_create","arguments":{"prompt":"x"}}',
         )
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertFalse(result)

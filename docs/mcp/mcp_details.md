@@ -10,13 +10,13 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 - The primary MCP server runs in the cloud (see `mcp_cloud`).
 - The local MCP proxy (`mcp_local`) forwards calls to the server and adds a local download helper.
 - Tool responses return JSON in both `content.text` and `structuredContent`.
-- Workflow note: drafting and user approval of the prompt is a non-tool step between setup tools and `task_create`.
+- Workflow note: drafting and user approval of the prompt is a non-tool step between setup tools and `plan_create`.
 
 ## Tool Catalog, `mcp_cloud`
 
 ### prompt_examples
 
-Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `task_create`. Shorter or vaguer prompts produce lower-quality plans.
+Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `plan_create`. Shorter or vaguer prompts produce lower-quality plans.
 
 Example prompt:
 ```
@@ -32,7 +32,7 @@ Response includes `samples` (array of prompt strings, each ~300-800 words) and `
 
 ### model_profiles
 
-Returns profile guidance and model availability for `task_create.model_profile`.
+Returns profile guidance and model availability for `plan_create.model_profile`.
 This helps agents pick a profile without knowing internal `llm_config/*.json` details.
 Profiles with zero models are omitted from the `profiles` list.
 If no models are available in any profile, `model_profiles` returns `isError=true` with `error.code = MODEL_PROFILES_UNAVAILABLE`.
@@ -56,7 +56,7 @@ Response includes:
   - `model_count`
   - `models[]` (`key`, `provider_class`, `model`, `priority`)
 
-### task_create
+### plan_create
 
 Create a new plan task.
 
@@ -92,7 +92,7 @@ What to do instead:
 - For PlanExe, send a substantial multi-phase project prompt with scope, constraints, timeline, budget, stakeholders, and success criteria.
 - PlanExe always runs a fixed end-to-end pipeline; it does not support selecting only internal pipeline subsets.
 
-### task_status
+### plan_status
 
 Fetch status/progress and recent files for a task.
 
@@ -113,7 +113,7 @@ State contract:
 - `completed`: terminal success, proceed to download.
 - `failed`: terminal error.
 
-### task_stop
+### plan_stop
 
 Request an active task to stop.
 
@@ -127,7 +127,7 @@ Example call:
 {"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
 ```
 
-### task_retry
+### plan_retry
 
 Retry a failed task by requeueing the same `task_id`.
 
@@ -146,7 +146,7 @@ Notes:
 - Only failed tasks can be retried.
 - Non-failed tasks return `TASK_NOT_FAILED`.
 
-### task_file_info
+### plan_file_info
 
 Return download metadata for report or zip artifacts.
 
@@ -177,7 +177,7 @@ Typical successful response:
 
 ### Download with `curl`
 
-When `task_file_info` returns a `download_url`, you can download directly with the same `X-API-Key` used for MCP authentication.
+When `plan_file_info` returns a `download_url`, you can download directly with the same `X-API-Key` used for MCP authentication.
 
 Download zip:
 ```bash
@@ -193,7 +193,7 @@ curl -H "X-API-Key: pex_0123456789abcdef" -O "https://mcp.planexe.org/download/2
 
 The local proxy exposes the same tools as the server, and adds:
 
-### task_download
+### plan_download
 
 Download report or zip to a local path.
 
@@ -207,7 +207,7 @@ Example call:
 {"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
 ```
 
-`PLANEXE_PATH` behavior for `task_download`:
+`PLANEXE_PATH` behavior for `plan_download`:
 - Save directory is `PLANEXE_PATH`, or current working directory if unset.
 - Non-existing directories are created automatically.
 - If `PLANEXE_PATH` points to a file, download fails.
@@ -237,11 +237,11 @@ Common local proxy error codes:
 - `DOWNLOAD_FAILED`
 
 Special case:
-- `task_file_info` may return `{}` while the artifact is not ready yet (not an error).
+- `plan_file_info` may return `{}` while the artifact is not ready yet (not an error).
 
 ## Concurrency semantics (practical)
 
-- Each `task_create` call creates a new task with a new `task_id`.
+- Each `plan_create` call creates a new task with a new `task_id`.
 - The server does not enforce a global “one active task per client” cap.
 - Parallelism is a client orchestration concern:
   - start with 1 task
@@ -282,7 +282,7 @@ At this step, the agent writes a high-quality prompt draft (typically 300-800 wo
 
 ### 4. Create a plan
 
-The user reviews the prompt and either asks for further changes or confirms it’s good to go. When the user confirms, the agent calls `task_create` with that prompt.
+The user reviews the prompt and either asks for further changes or confirms it’s good to go. When the user confirms, the agent calls `plan_create` with that prompt.
 
 Tool call:
 ```json
@@ -298,14 +298,14 @@ Get status for my latest task.
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_task_create>"}
+{"task_id": "<task_id_from_plan_create>"}
 ```
 
 If state is `failed`, optional retry:
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_task_create>", "model_profile": "baseline"}
+{"task_id": "<task_id_from_plan_create>", "model_profile": "baseline"}
 ```
 
 ### 6. Download the report
@@ -317,5 +317,5 @@ Download the report for my task.
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_task_create>", "artifact": "report"}
+{"task_id": "<task_id_from_plan_create>", "artifact": "report"}
 ```

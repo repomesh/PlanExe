@@ -71,14 +71,14 @@ Now there should be a list with tool names and descriptions:
 ```
 prompt_examples
 model_profiles
-task_create
-task_status
-task_stop
-task_retry
-task_file_info
+plan_create
+plan_status
+plan_stop
+plan_retry
+plan_file_info
 ```
 
-When you inspect `task_create`, the visible input schema includes `prompt` and optional `model_profile`.
+When you inspect `plan_create`, the visible input schema includes `prompt` and optional `model_profile`.
 
 Follow these steps:
 ![screenshot of mcp inspector invoke tool](inspector_step5_mcp_planexe_org.webp)
@@ -86,7 +86,7 @@ Follow these steps:
 1. In the `Tools` panel; Click on the `prompt_examples` tool.
 2. In the `prompt_examples` right sidepanel; Click on `Run Tool`.
 3. The MCP server should respond with a list of example prompts.
-4. Optionally run `model_profiles` to inspect available `model_profile` choices before `task_create`.
+4. Optionally run `model_profiles` to inspect available `model_profile` choices before `plan_create`.
 
 ## Approach 2. MCP server inside docker
 

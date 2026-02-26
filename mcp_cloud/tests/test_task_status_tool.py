@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 from mcp.types import CallToolResult
 from database_api.model_taskitem import TaskState
-from mcp_cloud.app import handle_task_status
+from mcp_cloud.app import handle_plan_status as handle_task_status
 
 
 class TestTaskStatusTool(unittest.TestCase):

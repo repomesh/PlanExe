@@ -53,12 +53,12 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 1. `prompt_examples`
 2. `model_profiles` (optional, helps choose `model_profile`)
 3. non-tool step: draft/approve prompt
-4. `task_create`
-5. `task_status` (poll every 5 minutes until done)
-6. optional if failed: `task_retry`
-7. download the result via `task_download` or via `task_file_info`
+4. `plan_create`
+5. `plan_status` (poll every 5 minutes until done)
+6. optional if failed: `plan_retry`
+7. download the result via `plan_download` or via `plan_file_info`
 
-Concurrency note: each `task_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
+Concurrency note: each `plan_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
 
 ### Option A: Remote MCP (fastest path)
 

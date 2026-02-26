@@ -72,23 +72,23 @@ class ModelProfilesOutput(BaseModel):
 
 
 class PlanStatusInput(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="Task UUID returned by plan_create. Use it to reference the plan being created.",
+        description="Plan UUID returned by plan_create. Use it to reference the plan being created.",
     )
 
 
 class PlanStopInput(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="The UUID returned by plan_create. Call plan_stop with this task_id to request the plan generation to stop.",
+        description="The UUID returned by plan_create. Call plan_stop with this plan_id to request the plan generation to stop.",
     )
 
 
 class PlanRetryInput(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="UUID of the failed task to retry.",
+        description="UUID of the failed plan to retry.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
@@ -99,9 +99,9 @@ class PlanRetryInput(BaseModel):
 
 
 class PlanFileInfoInput(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="Task UUID returned by plan_create. Use it to download the created plan.",
+        description="Plan UUID returned by plan_create. Use it to download the created plan.",
     )
     artifact: str = Field(
         default="report",
@@ -110,9 +110,9 @@ class PlanFileInfoInput(BaseModel):
 
 
 class PlanCreateOutput(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="Task UUID returned by plan_create. Stable across plan_status/plan_stop/plan_file_info."
+        description="Plan UUID returned by plan_create. Stable across plan_status/plan_stop/plan_file_info."
     )
     created_at: str
 
@@ -128,9 +128,9 @@ class PlanStatusFile(BaseModel):
 
 
 class PlanStatusSuccess(BaseModel):
-    task_id: str = Field(
+    plan_id: str = Field(
         ...,
-        description="Task UUID returned by plan_create."
+        description="Plan UUID returned by plan_create."
     )
     state: Literal["pending", "processing", "completed", "failed"] = Field(
         ...,
@@ -149,15 +149,15 @@ class PlanStatusSuccess(BaseModel):
         description=(
             "Intermediate output files produced so far. "
             "Use updated_at timestamps to detect stalls. "
-            "These files are included in the zip artifact when the task completes."
+            "These files are included in the zip artifact when the plan completes."
         ),
     )
 
 
 class PlanStatusOutput(BaseModel):
-    task_id: str | None = Field(
+    plan_id: str | None = Field(
         default=None,
-        description="Task UUID returned by plan_create."
+        description="Plan UUID returned by plan_create."
     )
     state: Literal["pending", "processing", "completed", "failed"] | None = Field(
         default=None,
@@ -176,7 +176,7 @@ class PlanStatusOutput(BaseModel):
         description=(
             "Intermediate output files produced so far. "
             "Use updated_at timestamps to detect stalls. "
-            "These files are included in the zip artifact when the task completes."
+            "These files are included in the zip artifact when the plan completes."
         ),
     )
     error: ErrorDetail | None = None
@@ -185,7 +185,7 @@ class PlanStatusOutput(BaseModel):
 class PlanStopOutput(BaseModel):
     state: Literal["pending", "processing", "completed", "failed"] | None = Field(
         default=None,
-        description="Current task state after stop request.",
+        description="Current plan state after stop request.",
     )
     stop_requested: bool | None = Field(
         default=None,
@@ -195,13 +195,13 @@ class PlanStopOutput(BaseModel):
 
 
 class PlanRetryOutput(BaseModel):
-    task_id: str | None = Field(
+    plan_id: str | None = Field(
         default=None,
-        description="Task UUID that was retried (same ID as the failed task).",
+        description="Plan UUID that was retried (same ID as the failed plan).",
     )
     state: Literal["pending", "processing", "completed", "failed"] | None = Field(
         default=None,
-        description="Current task state after retry request.",
+        description="Current plan state after retry request.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] | None = Field(
         default=None,
@@ -241,23 +241,23 @@ class PlanFileInfoOutput(BaseModel):
 
 
 class PlanListInput(BaseModel):
-    user_api_key: str = Field(
-        ...,
-        description="User API key (pex_...) to scope the task list to the authenticated user.",
+    user_api_key: str | None = Field(
+        default=None,
+        description="Optional user API key for credits and attribution.",
     )
     limit: int = Field(
         default=10,
         ge=1,
         le=50,
-        description="Maximum number of tasks to return (1–50). Newest tasks are returned first.",
+        description="Maximum number of plans to return (1–50). Newest plans are returned first.",
     )
 
 
 class PlanListItem(BaseModel):
-    task_id: str = Field(..., description="Task UUID.")
+    plan_id: str = Field(..., description="Plan UUID.")
     state: Literal["pending", "processing", "completed", "failed"] = Field(
         ...,
-        description="Current task state.",
+        description="Current plan state.",
     )
     progress_percentage: float = Field(..., description="Progress from 0 to 100.")
     created_at: str = Field(..., description="UTC creation timestamp (ISO 8601).")
@@ -265,8 +265,8 @@ class PlanListItem(BaseModel):
 
 
 class PlanListOutput(BaseModel):
-    tasks: list[PlanListItem] = Field(..., description="Tasks for the authenticated user, newest first.")
-    message: str = Field(..., description="Human-readable summary (e.g. how many tasks were returned).")
+    plans: list[PlanListItem] = Field(..., description="Plans for the authenticated user, newest first.")
+    message: str = Field(..., description="Human-readable summary (e.g. how many plans were returned).")
 
 
 class PlanCreateInput(BaseModel):
@@ -296,25 +296,3 @@ class PlanCreateInput(BaseModel):
         description="Optional user API key for credits and attribution.",
     )
 
-
-# ---------------------------------------------------------------------------
-# Backward-compatible aliases for old Task* names (used internally in app.py)
-# ---------------------------------------------------------------------------
-TaskCreateInput = PlanCreateInput
-TaskCreateOutput = PlanCreateOutput
-TaskStatusInput = PlanStatusInput
-TaskStatusOutput = PlanStatusOutput
-TaskStatusTiming = PlanStatusTiming
-TaskStatusFile = PlanStatusFile
-TaskStatusSuccess = PlanStatusSuccess
-TaskStopInput = PlanStopInput
-TaskStopOutput = PlanStopOutput
-TaskRetryInput = PlanRetryInput
-TaskRetryOutput = PlanRetryOutput
-TaskFileInfoInput = PlanFileInfoInput
-TaskFileInfoOutput = PlanFileInfoOutput
-TaskFileInfoNotReadyOutput = PlanFileInfoNotReadyOutput
-TaskFileInfoReadyOutput = PlanFileInfoReadyOutput
-TaskListInput = PlanListInput
-TaskListItem = PlanListItem
-TaskListOutput = PlanListOutput

@@ -1,0 +1,216 @@
+"""PlanExe MCP Cloud – HTTP fetchers for worker_plan artifacts."""
+import asyncio
+import logging
+import tempfile
+from io import BytesIO
+from typing import Optional
+
+import httpx
+
+from mcp_cloud.db_setup import (
+    BASE_DIR_RUN,
+    REPORT_FILENAME,
+    WORKER_PLAN_URL,
+    ZIP_SNAPSHOT_MAX_BYTES,
+)
+from mcp_cloud.db_queries import get_plan_by_id
+from mcp_cloud.zip_utils import (
+    _sanitize_legacy_zip_snapshot,
+    extract_file_from_zip_file,
+    fetch_file_from_zip_snapshot,
+    fetch_report_from_db,
+    fetch_zip_snapshot,
+    list_files_from_zip_snapshot,
+)
+
+logger = logging.getLogger(__name__)
+
+
+async def fetch_artifact_from_worker_plan(run_id: str, file_path: str) -> Optional[bytes]:
+    """Fetch an artifact file from worker_plan via HTTP."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            # For report.html, use the dedicated report endpoint (most efficient)
+            if (
+                file_path == "report.html"
+                or file_path.endswith("/report.html")
+                or file_path == REPORT_FILENAME
+                or file_path.endswith(f"/{REPORT_FILENAME}")
+            ):
+                report_response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/report")
+                if report_response.status_code == 200:
+                    return report_response.content
+                logger.warning(f"Worker plan returned {report_response.status_code} for report: {run_id}")
+                report_from_db = await asyncio.to_thread(fetch_report_from_db, run_id)
+                if report_from_db is not None:
+                    return report_from_db
+                report_from_zip = await asyncio.to_thread(
+                    fetch_file_from_zip_snapshot, run_id, REPORT_FILENAME
+                )
+                if report_from_zip is not None:
+                    return report_from_zip
+                return None
+
+            # For other files, fetch the zip and extract the file
+            # This is less efficient but works without a file serving endpoint
+            async with client.stream("GET", f"{WORKER_PLAN_URL}/runs/{run_id}/zip") as zip_response:
+                if zip_response.status_code != 200:
+                    logger.warning(f"Worker plan returned {zip_response.status_code} for zip: {run_id}")
+                else:
+                    zip_too_large = False
+                    content_length = zip_response.headers.get("content-length")
+                    if content_length:
+                        try:
+                            if int(content_length) > ZIP_SNAPSHOT_MAX_BYTES:
+                                logger.warning(
+                                    "Zip snapshot too large (%s bytes) for run %s; skipping.",
+                                    content_length,
+                                    run_id,
+                                )
+                                zip_too_large = True
+                        except ValueError:
+                            logger.warning(
+                                "Invalid Content-Length for zip snapshot: %s", content_length
+                            )
+                    if not zip_too_large:
+                        with tempfile.TemporaryFile() as tmp_file:
+                            size = 0
+                            async for chunk in zip_response.aiter_bytes():
+                                size += len(chunk)
+                                if size > ZIP_SNAPSHOT_MAX_BYTES:
+                                    logger.warning(
+                                        "Zip snapshot exceeded max size (%s bytes) for run %s; skipping.",
+                                        ZIP_SNAPSHOT_MAX_BYTES,
+                                        run_id,
+                                    )
+                                    zip_too_large = True
+                                    break
+                                tmp_file.write(chunk)
+                            if not zip_too_large:
+                                tmp_file.seek(0)
+                                file_data = extract_file_from_zip_file(tmp_file, file_path)
+                                if file_data is not None:
+                                    return file_data
+
+            snapshot_file = await asyncio.to_thread(fetch_file_from_zip_snapshot, run_id, file_path)
+            if snapshot_file is not None:
+                return snapshot_file
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching artifact from worker_plan: {e}", exc_info=True)
+        return None
+
+async def fetch_file_list_from_worker_plan(run_id: str) -> Optional[list[str]]:
+    """Fetch the list of files from worker_plan via HTTP."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/files")
+            if response.status_code == 200:
+                data = response.json()
+                files = data.get("files", [])
+                if files:
+                    return files
+                fallback_files = await asyncio.to_thread(list_files_from_zip_snapshot, run_id)
+                if fallback_files:
+                    return fallback_files
+                return files
+            logger.warning(f"Worker plan returned {response.status_code} for files list: {run_id}")
+            fallback_files = await asyncio.to_thread(list_files_from_zip_snapshot, run_id)
+            if fallback_files is not None:
+                return fallback_files
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching file list from worker_plan: {e}", exc_info=True)
+        return None
+
+
+def list_files_from_local_run_dir(run_id: str) -> Optional[list[str]]:
+    """
+    List files from local run directory when this service shares PLANEXE_RUN_DIR
+    with the worker (e.g., Docker compose).
+    """
+    run_dir = (BASE_DIR_RUN / run_id).resolve()
+    try:
+        if not run_dir.is_relative_to(BASE_DIR_RUN):
+            return None
+    except ValueError:
+        return None
+    if not run_dir.exists() or not run_dir.is_dir():
+        return None
+    try:
+        return sorted([path.name for path in run_dir.iterdir() if path.is_file()])
+    except Exception as exc:
+        logger.warning("Unable to list local run dir files for %s: %s", run_id, exc)
+        return None
+
+async def fetch_zip_from_worker_plan(run_id: str) -> Optional[bytes]:
+    """Fetch the zip snapshot from worker_plan via HTTP."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            async with client.stream("GET", f"{WORKER_PLAN_URL}/runs/{run_id}/zip") as response:
+                if response.status_code != 200:
+                    logger.warning("Worker plan returned %s for zip: %s", response.status_code, run_id)
+                else:
+                    zip_too_large = False
+                    content_length = response.headers.get("content-length")
+                    if content_length:
+                        try:
+                            if int(content_length) > ZIP_SNAPSHOT_MAX_BYTES:
+                                logger.warning(
+                                    "Zip snapshot too large (%s bytes) for run %s; skipping.",
+                                    content_length,
+                                    run_id,
+                                )
+                                zip_too_large = True
+                        except ValueError:
+                            logger.warning(
+                                "Invalid Content-Length for zip snapshot: %s", content_length
+                            )
+                    if not zip_too_large:
+                        buffer = BytesIO()
+                        size = 0
+                        async for chunk in response.aiter_bytes():
+                            size += len(chunk)
+                            if size > ZIP_SNAPSHOT_MAX_BYTES:
+                                logger.warning(
+                                    "Zip snapshot exceeded max size (%s bytes) for run %s; skipping.",
+                                    ZIP_SNAPSHOT_MAX_BYTES,
+                                    run_id,
+                                )
+                                zip_too_large = True
+                                break
+                            buffer.write(chunk)
+                        if not zip_too_large:
+                            return buffer.getvalue()
+
+            snapshot_bytes = await asyncio.to_thread(fetch_zip_snapshot, run_id)
+            if snapshot_bytes is not None:
+                return snapshot_bytes
+            return None
+    except Exception as e:
+        logger.error(f"Error fetching zip from worker_plan: {e}", exc_info=True)
+        return None
+
+
+async def fetch_user_downloadable_zip(task_id: str) -> Optional[bytes]:
+    """
+    Fetch a user-downloadable zip for a task.
+    New layout snapshots are served directly from PlanItem.run_zip_snapshot.
+    Legacy/task-dir fallbacks are sanitized to remove track_activity.jsonl.
+    """
+    plan = await asyncio.to_thread(get_plan_by_id, task_id)
+    if plan is None:
+        return None
+
+    snapshot_bytes = plan.run_zip_snapshot if plan.run_zip_snapshot is not None else None
+    layout_version = plan.run_artifact_layout_version or 0
+    if snapshot_bytes is not None:
+        if layout_version >= 2:
+            return snapshot_bytes
+        return _sanitize_legacy_zip_snapshot(snapshot_bytes)
+
+    worker_plan_zip = await fetch_zip_from_worker_plan(str(plan.id))
+    if worker_plan_zip is None:
+        return None
+    return _sanitize_legacy_zip_snapshot(worker_plan_zip)

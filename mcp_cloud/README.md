@@ -34,8 +34,8 @@ Build and run mcp_cloud with HTTP endpoints:
 docker compose up
 ```
 
-Important: `mcp_cloud` enqueues tasks and `worker_plan_database_{n}` executes them.  
-If no `worker_plan_database*` service is running, `plan_create` returns a task id but the task will not progress.
+Important: `mcp_cloud` enqueues plans and `worker_plan_database_{n}` executes them.
+If no `worker_plan_database*` service is running, `plan_create` returns a plan id but the plan will not progress.
 
 mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`). Authentication is controlled by `PLANEXE_MCP_REQUIRE_AUTH`:
 - `false`: no API key needed (local docker default).
@@ -133,30 +133,32 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 
 - `prompt_examples` - Return example prompts. Use these as examples for plan_create.
 - `model_profiles` - List profile options and currently available models in each profile.
-- `plan_create` - Create a new task (returns task_id as UUID; may require user_api_key for credits)
-- `plan_status` - Get task status and progress
-- `plan_stop` - Stop an active task
-- `plan_retry` - Retry a failed task with the same task_id (optional model_profile, default baseline)
+- `plan_create` - Create a new plan (returns plan_id as UUID; may require user_api_key for credits)
+- `plan_status` - Get plan status and progress
+- `plan_stop` - Stop an active plan
+- `plan_retry` - Retry a failed plan with the same plan_id (optional model_profile, default baseline)
 - `plan_file_info` - Get file metadata for report or zip
 
 `plan_status` caller contract:
 - `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
 - `failed`: terminal error.
-- If `failed`, call `plan_retry` to requeue the same task id.
+- If `failed`, call `plan_retry` to requeue the same plan id.
 
 Concurrency semantics:
-- Each `plan_create` call creates a new `task_id`.
-- `plan_retry` reuses the same failed `task_id`.
-- Server does not enforce a global one-task-at-a-time cap per client.
-- Client should track task ids explicitly when running tasks in parallel.
+- Each `plan_create` call creates a new `plan_id`.
+- `plan_retry` reuses the same failed `plan_id`.
+- Server does not enforce a global one-plan-at-a-time cap per client.
+- Client should track plan ids explicitly when running plans in parallel.
 
 Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
-- Common codes: `TASK_NOT_FOUND`, `TASK_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- Common codes: `PLAN_NOT_FOUND`, `PLAN_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
 - `plan_file_info` may return `{}` while output is not ready (not an error payload).
 
 Note: `plan_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `plan_download`, use it to save the report or zip locally; otherwise use `plan_file_info` to get `download_url` and fetch the file yourself.
+
+> **Breaking change (v2026-02-26):** External-facing field names were renamed from `task_id` → `plan_id`, `tasks` → `plans`, and error codes from `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`.
 
 **Tip**: Call `prompt_examples` to get example prompts to use with plan_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
 
@@ -407,5 +409,5 @@ See `railway.md` for Railway-specific deployment instructions. The server automa
   - Other files are fetched by downloading the run zip and extracting the file (less efficient but works without additional endpoints)
 - Artifact writes are not yet supported via HTTP (would require a write endpoint in `worker_plan`).
 - Artifact writes are rejected while a run is active (strict policy per spec).
-- Task IDs use the PlanItem UUID (e.g., `5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1`).
+- Plan IDs use the PlanItem UUID (e.g., `5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1`).
 - **Security**: Authentication is configurable. For production, set `PLANEXE_MCP_REQUIRE_AUTH=true` and use UserApiKey validation (optionally with `PLANEXE_MCP_API_KEY` as a shared secret).

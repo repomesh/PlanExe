@@ -13,7 +13,7 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 `plan_create` - Initiate creation of a plan.
 `plan_status` - Get status and progress about the creation of a plan.
 `plan_stop` - Abort creation of a plan.
-`plan_retry` - Retry a failed task using the same task id (optional model_profile, defaults to baseline).
+`plan_retry` - Retry a failed plan using the same plan id (optional model_profile, defaults to baseline).
 `plan_download` - Download the plan, either html report or a zip with everything, and save it to disk.
 
 `plan_status` caller contract:
@@ -22,15 +22,15 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{tas
 - `failed`: terminal error.
 
 Concurrency semantics:
-- Each `plan_create` call creates a new `task_id`.
-- `plan_retry` reuses the same failed `task_id`.
-- Server does not enforce a global one-task-at-a-time cap per client.
-- Local clients should track task ids explicitly when running tasks in parallel.
+- Each `plan_create` call creates a new `plan_id`.
+- `plan_retry` reuses the same failed `plan_id`.
+- Server does not enforce a global one-plan-at-a-time cap per client.
+- Local clients should track plan ids explicitly when running plans in parallel.
 
 Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
-- Common proxied cloud codes include: `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
-- `plan_retry` may return `TASK_NOT_FAILED` if the task is not currently failed.
+- Common proxied cloud codes include: `PLAN_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
+- `plan_retry` may return `PLAN_NOT_FAILED` if the task is not currently failed.
 - Local proxy specific codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `plan_file_info` (called under the hood by plan_download) may return `{}` while output is not ready.
 
@@ -44,14 +44,14 @@ file locally into `PLANEXE_PATH`.
 - If unset, downloads are saved to the current working directory.
 - If the path does not exist, it is created.
 - If the path points to a file (not a directory), download fails.
-- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip` (with `-1`, `-2`, ... suffixes on collisions).
+- Filenames are `<plan_id>-030-report.html` or `<plan_id>-run.zip` (with `-1`, `-2`, ... suffixes on collisions).
 - `plan_download` returns `saved_path` with the final file location.
 
 ## Run as task (MCP tasks protocol)
 
 Some MCP clients (e.g. the MCP Inspector) show a **"Run as task"** option for tools. That refers to the MCP **tasks** protocol: a separate mechanism where the client runs a tool in the background using RPC methods like `tasks/run`, `tasks/get`, `tasks/result`, and `tasks/cancel`, instead of a single blocking tool call.
 
-**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `prompt_examples` and `model_profiles` for setup, completes a non-tool prompt drafting/approval step, then `plan_create` → gets a `task_id` → polls `plan_status` → optionally calls `plan_retry` if failed → uses `plan_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
+**PlanExe does not use or advertise the MCP tasks protocol.** Our interface is **tool-based** only: the agent calls `prompt_examples` and `model_profiles` for setup, completes a non-tool prompt drafting/approval step, then `plan_create` → gets a `plan_id` → polls `plan_status` → optionally calls `plan_retry` if failed → uses `plan_download`. That flow is defined in `docs/mcp/planexe_mcp_interface.md` and is the intended design.
 
 You should **not** enable "Run as task" for PlanExe. The Python MCP SDK and clients like Cursor do not properly support the tasks protocol (method registration and initialization fail). Use the tools directly: create a task, poll status, then download when done.
 

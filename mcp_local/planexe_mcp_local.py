@@ -37,32 +37,32 @@ ModelProfileInput = Literal[
 ]
 
 
-class TaskCreateRequest(BaseModel):
+class PlanCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
 
 
-class TaskStatusRequest(BaseModel):
-    task_id: str
+class PlanStatusRequest(BaseModel):
+    plan_id: str
 
 
-class TaskStopRequest(BaseModel):
-    task_id: str
+class PlanStopRequest(BaseModel):
+    plan_id: str
 
 
-class TaskRetryRequest(BaseModel):
-    task_id: str
+class PlanRetryRequest(BaseModel):
+    plan_id: str
     model_profile: ModelProfileInput = "baseline"
 
 
-class TaskDownloadRequest(BaseModel):
-    task_id: str
+class PlanDownloadRequest(BaseModel):
+    plan_id: str
     artifact: str = "report"
 
 
-class TaskListRequest(BaseModel):
-    user_api_key: str
+class PlanListRequest(BaseModel):
+    user_api_key: Optional[str] = None
     limit: int = 10
 
 
@@ -365,31 +365,31 @@ PLAN_CREATE_INPUT_SCHEMA = {
 PLAN_STATUS_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {
+        "plan_id": {
             "type": "string",
-            "description": "UUID of the task (returned by plan_create).",
+            "description": "UUID of the plan (returned by plan_create).",
         },
     },
-    "required": ["task_id"],
+    "required": ["plan_id"],
 }
 
 PLAN_STOP_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {
+        "plan_id": {
             "type": "string",
-            "description": "UUID of the task to stop (returned by plan_create).",
+            "description": "UUID of the plan to stop (returned by plan_create).",
         },
     },
-    "required": ["task_id"],
+    "required": ["plan_id"],
 }
 
 PLAN_RETRY_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {
+        "plan_id": {
             "type": "string",
-            "description": "UUID of the failed task to retry.",
+            "description": "UUID of the failed plan to retry.",
         },
         "model_profile": {
             "type": "string",
@@ -398,15 +398,15 @@ PLAN_RETRY_INPUT_SCHEMA = {
             "description": "Model profile used for retry. Defaults to baseline.",
         },
     },
-    "required": ["task_id"],
+    "required": ["plan_id"],
 }
 
 PLAN_DOWNLOAD_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {
+        "plan_id": {
             "type": "string",
-            "description": "UUID of the task (returned by plan_create).",
+            "description": "UUID of the plan (returned by plan_create).",
         },
         "artifact": {
             "type": "string",
@@ -415,15 +415,8 @@ PLAN_DOWNLOAD_INPUT_SCHEMA = {
             "description": "What to download: 'report' = HTML report, 'zip' = full output bundle.",
         },
     },
-    "required": ["task_id"],
+    "required": ["plan_id"],
 }
-
-# Backward-compatible aliases
-TASK_CREATE_INPUT_SCHEMA = PLAN_CREATE_INPUT_SCHEMA
-TASK_STATUS_INPUT_SCHEMA = PLAN_STATUS_INPUT_SCHEMA
-TASK_STOP_INPUT_SCHEMA = PLAN_STOP_INPUT_SCHEMA
-TASK_RETRY_INPUT_SCHEMA = PLAN_RETRY_INPUT_SCHEMA
-TASK_DOWNLOAD_INPUT_SCHEMA = PLAN_DOWNLOAD_INPUT_SCHEMA
 
 PROMPT_EXAMPLES_INPUT_SCHEMA = {
     "type": "object",
@@ -501,16 +494,16 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
 PLAN_CREATE_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {"type": "string"},
+        "plan_id": {"type": "string"},
         "created_at": {"type": "string"},
     },
-    "required": ["task_id", "created_at"],
+    "required": ["plan_id", "created_at"],
 }
 
 PLAN_STATUS_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {"type": ["string", "null"]},
+        "plan_id": {"type": ["string", "null"]},
         "state": {"type": ["string", "null"]},
         "progress_percentage": {"type": ["number", "null"]},
         "timing": {
@@ -545,7 +538,7 @@ PLAN_STOP_OUTPUT_SCHEMA = {
 PLAN_RETRY_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "task_id": {"type": "string"},
+        "plan_id": {"type": "string"},
         "state": {"type": "string"},
         "model_profile": {
             "type": "string",
@@ -576,50 +569,42 @@ PLAN_LIST_INPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "user_api_key": {
-            "type": "string",
-            "description": "User API key (pex_...) to scope the task list to the authenticated user.",
+            "type": ["string", "null"],
+            "default": None,
+            "description": "Optional user API key for credits and attribution.",
         },
         "limit": {
             "type": "integer",
             "default": 10,
             "minimum": 1,
             "maximum": 50,
-            "description": "Maximum number of tasks to return (1-50). Newest tasks are returned first.",
+            "description": "Maximum number of plans to return (1-50). Newest plans are returned first.",
         },
     },
-    "required": ["user_api_key"],
+    "required": [],
 }
 PLAN_LIST_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "tasks": {
+        "plans": {
             "type": "array",
             "items": {
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string"},
+                    "plan_id": {"type": "string"},
                     "state": {"type": "string"},
                     "progress_percentage": {"type": "number"},
                     "created_at": {"type": "string"},
                     "prompt_excerpt": {"type": "string"},
                 },
             },
-            "description": "Tasks for the authenticated user, newest first.",
+            "description": "Plans for the authenticated user, newest first.",
         },
         "message": {"type": "string"},
         "error": ERROR_SCHEMA,
     },
     "additionalProperties": False,
 }
-
-# Backward-compatible aliases
-TASK_CREATE_OUTPUT_SCHEMA = PLAN_CREATE_OUTPUT_SCHEMA
-TASK_STATUS_OUTPUT_SCHEMA = PLAN_STATUS_OUTPUT_SCHEMA
-TASK_STOP_OUTPUT_SCHEMA = PLAN_STOP_OUTPUT_SCHEMA
-TASK_RETRY_OUTPUT_SCHEMA = PLAN_RETRY_OUTPUT_SCHEMA
-TASK_DOWNLOAD_OUTPUT_SCHEMA = PLAN_DOWNLOAD_OUTPUT_SCHEMA
-TASK_LIST_INPUT_SCHEMA = PLAN_LIST_INPUT_SCHEMA
-TASK_LIST_OUTPUT_SCHEMA = PLAN_LIST_OUTPUT_SCHEMA
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
@@ -671,9 +656,9 @@ TOOL_DEFINITIONS = [
             "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
-            "Returns task_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_download. "
-            "If you lose a task_id, call plan_list with your user_api_key to recover it. "
-            "Each plan_create call creates a new task_id (proxied to cloud; no server-side dedup). "
+            "Returns plan_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_download. "
+            "If you lose a plan_id, call plan_list to recover it. "
+            "Each plan_create call creates a new plan_id (proxied to cloud; no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
             "Common proxied error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS, REMOTE_ERROR."
@@ -696,7 +681,7 @@ TOOL_DEFINITIONS = [
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
-            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails). "
+            "Unknown plan_id returns PLAN_NOT_FOUND (or REMOTE_ERROR when transport fails). "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
@@ -713,11 +698,11 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_stop",
         description=(
-            "Request the plan generation to stop. Pass the task_id (the UUID returned by plan_create). "
-            "Stopping is asynchronous: the stop flag is set immediately but the task may continue briefly before halting. "
-            "A stopped task will eventually transition to the failed state. "
-            "If the task is already completed or failed, stop_requested returns false (the task already finished). "
-            "Unknown task_id returns TASK_NOT_FOUND (or REMOTE_ERROR when transport fails)."
+            "Request the plan generation to stop. Pass the plan_id (the UUID returned by plan_create). "
+            "Stopping is asynchronous: the stop flag is set immediately but the plan may continue briefly before halting. "
+            "A stopped plan will eventually transition to the failed state. "
+            "If the plan is already completed or failed, stop_requested returns false (the plan already finished). "
+            "Unknown plan_id returns PLAN_NOT_FOUND (or REMOTE_ERROR when transport fails)."
         ),
         input_schema=PLAN_STOP_INPUT_SCHEMA,
         output_schema=PLAN_STOP_OUTPUT_SCHEMA,
@@ -731,10 +716,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_retry",
         description=(
-            "Retry a task that is currently in failed state. "
-            "Pass the failed task_id and optionally model_profile (defaults to baseline). "
-            "The same task_id is requeued and reset to pending on the cloud service. "
-            "Unknown task_id returns TASK_NOT_FOUND; non-failed tasks return TASK_NOT_FAILED."
+            "Retry a plan that is currently in failed state. "
+            "Pass the failed plan_id and optionally model_profile (defaults to baseline). "
+            "The same plan_id is requeued and reset to pending on the cloud service. "
+            "Unknown plan_id returns PLAN_NOT_FOUND; non-failed plans return PLAN_NOT_FAILED."
         ),
         input_schema=PLAN_RETRY_INPUT_SCHEMA,
         output_schema=PLAN_RETRY_OUTPUT_SCHEMA,
@@ -753,7 +738,7 @@ TOOL_DEFINITIONS = [
             "for collapsible sections and interactive Gantt charts — open in a browser). "
             "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
             "If PLANEXE_PATH is unset, files are saved to the current working directory. "
-            "Filename format is <task_id>-<artifact_name> with numeric suffixes when collisions occur. "
+            "Filename format is <plan_id>-<artifact_name> with numeric suffixes when collisions occur. "
             "Common local error codes: DOWNLOAD_FAILED, REMOTE_ERROR."
         ),
         input_schema=PLAN_DOWNLOAD_INPUT_SCHEMA,
@@ -768,11 +753,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_list",
         description=(
-            "List the most recent tasks for an authenticated user. "
-            "Requires user_api_key (pex_...). "
-            "Returns up to `limit` tasks (default 10, max 50) newest-first, each with task_id, state, "
+            "List the most recent plans for an authenticated user. "
+            "Returns up to `limit` plans (default 10, max 50) newest-first, each with plan_id, state, "
             "progress_percentage, created_at (ISO 8601), and a prompt_excerpt (first 100 chars). "
-            "Use this to recover a lost task_id or to review recent activity."
+            "Use this to recover a lost plan_id or to review recent activity."
         ),
         input_schema=PLAN_LIST_INPUT_SCHEMA,
         output_schema=PLAN_LIST_OUTPUT_SCHEMA,
@@ -803,16 +787,16 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
     "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
     "Only after approval, call plan_create. "
-    "Each plan_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
+    "Each plan_create call creates a new plan_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll plan_status (about every 5 minutes); use plan_download when complete. "
-    "If a run fails, call plan_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
-    "To stop, call plan_stop with the task_id from plan_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If a run fails, call plan_retry with the failed plan_id to requeue it (optional model_profile, defaults to baseline). "
+    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "plan_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
-    "To list recent tasks for a user call plan_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt. "
+    "To list recent plans for a user call plan_list; returns plan_id, state, progress_percentage, created_at, and prompt_excerpt. "
     "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
-    "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the plan was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
@@ -860,10 +844,10 @@ async def handle_call_tool(name: str, arguments: dict[str, Any]) -> CallToolResu
 
 
 async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
-    """Create a task in mcp_cloud via the local HTTP proxy.
+    """Create a plan in mcp_cloud via the local HTTP proxy.
 
     Examples:
-        - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → task_id + created_at
+        - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → plan_id + created_at
 
     Args:
         - prompt: What the plan should cover (goal, context, constraints).
@@ -871,10 +855,10 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
 
     Returns:
         - content: JSON string matching structuredContent.
-        - structuredContent: task_id/created_at payload or error.
+        - structuredContent: plan_id/created_at payload or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskCreateRequest(**arguments)
+    req = PlanCreateRequest(**arguments)
     payload: dict[str, Any] = {"prompt": req.prompt}
     if req.model_profile:
         payload["model_profile"] = req.model_profile
@@ -911,53 +895,53 @@ async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
-    """Fetch status/progress for a task from mcp_cloud.
+    """Fetch status/progress for a plan from mcp_cloud.
 
     Examples:
-        - {"task_id": "uuid"} → state/progress/timing
+        - {"plan_id": "uuid"} → state/progress/timing
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
 
     Returns:
         - content: JSON string matching structuredContent.
         - structuredContent: status payload or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskStatusRequest(**arguments)
-    payload, error = _call_remote_tool("plan_status", {"task_id": req.task_id})
+    req = PlanStatusRequest(**arguments)
+    payload, error = _call_remote_tool("plan_status", {"plan_id": req.plan_id})
     if error:
         return _wrap_response({"error": error}, is_error=True)
     return _wrap_response(payload)
 
 
 async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
-    """Request mcp_cloud to stop an active task.
+    """Request mcp_cloud to stop an active plan.
 
     Examples:
-        - {"task_id": "uuid"} → stop request acknowledged
+        - {"plan_id": "uuid"} → stop request acknowledged
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
 
     Returns:
         - content: JSON string matching structuredContent.
         - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error.
         - isError: True when the remote tool call fails.
     """
-    req = TaskStopRequest(**arguments)
-    payload, error = _call_remote_tool("plan_stop", {"task_id": req.task_id})
+    req = PlanStopRequest(**arguments)
+    payload, error = _call_remote_tool("plan_stop", {"plan_id": req.plan_id})
     if error:
         return _wrap_response({"error": error}, is_error=True)
     return _wrap_response(payload)
 
 
 async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
-    """Request mcp_cloud to retry a failed task."""
-    req = TaskRetryRequest(**arguments)
+    """Request mcp_cloud to retry a failed plan."""
+    req = PlanRetryRequest(**arguments)
     payload, error = _call_remote_tool(
         "plan_retry",
-        {"task_id": req.task_id, "model_profile": req.model_profile},
+        {"plan_id": req.plan_id, "model_profile": req.model_profile},
     )
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -965,14 +949,14 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
-    """Download report/zip for a task from mcp_cloud and save it locally.
+    """Download report/zip for a plan from mcp_cloud and save it locally.
 
     Examples:
-        - {"task_id": "uuid"} → download report (default)
-        - {"task_id": "uuid", "artifact": "zip"} → download zip
+        - {"plan_id": "uuid"} → download report (default)
+        - {"plan_id": "uuid", "artifact": "zip"} → download zip
 
     Args:
-        - task_id: Task UUID returned by plan_create.
+        - plan_id: Plan UUID returned by plan_create.
         - artifact: Optional "report" or "zip".
 
     Returns:
@@ -980,14 +964,17 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
         - structuredContent: metadata + saved_path or error.
         - isError: True when download fails or remote tool errors.
     """
-    req = TaskDownloadRequest(**arguments)
+    req = PlanDownloadRequest(**arguments)
     artifact = (req.artifact or "report").strip().lower()
     if artifact not in ("report", "zip"):
-        artifact = "report"
+        return _wrap_response(
+            {"error": {"code": "INVALID_ARGUMENT", "message": f"Invalid artifact type: {req.artifact!r}. Must be 'report' or 'zip'."}},
+            is_error=True,
+        )
 
     payload, error = _call_remote_tool(
         "plan_file_info",
-        {"task_id": req.task_id, "artifact": artifact},
+        {"plan_id": req.plan_id, "artifact": artifact},
     )
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -998,10 +985,10 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
     if isinstance(download_url, str) and download_url.startswith("/"):
         download_url = urljoin(_get_download_base_url().rstrip("/") + "/", download_url.lstrip("/"))
     if not download_url:
-        download_url = _derive_download_url(req.task_id, artifact)
+        download_url = _derive_download_url(req.plan_id, artifact)
 
     try:
-        destination = _choose_output_path(req.task_id, download_url, artifact)
+        destination = _choose_output_path(req.plan_id, download_url, artifact)
         downloaded_size = _download_to_path(download_url, destination)
     except Exception as exc:
         return _wrap_response(
@@ -1031,9 +1018,11 @@ async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
 
 
 async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
-    """List recent tasks for an authenticated user via mcp_cloud."""
-    req = TaskListRequest(**arguments)
-    payload_args: dict[str, Any] = {"user_api_key": req.user_api_key, "limit": req.limit}
+    """List recent plans for an authenticated user via mcp_cloud."""
+    req = PlanListRequest(**arguments)
+    payload_args: dict[str, Any] = {"limit": req.limit}
+    if req.user_api_key:
+        payload_args["user_api_key"] = req.user_api_key
     payload, error = _call_remote_tool("plan_list", payload_args)
     if error:
         return _wrap_response({"error": error}, is_error=True)
@@ -1050,14 +1039,6 @@ TOOL_HANDLERS = {
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
 }
-
-# Backward-compatible aliases
-handle_task_create = handle_plan_create
-handle_task_status = handle_plan_status
-handle_task_stop = handle_plan_stop
-handle_task_retry = handle_plan_retry
-handle_task_download = handle_plan_download
-handle_task_list = handle_plan_list
 
 
 async def main() -> None:

@@ -15,7 +15,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - MCP tools must follow the specification in `docs/mcp/planexe_mcp_interface.md`:
   - Task management maps to `PlanItem` records (each task = one PlanItem).
   - Events are queried from `EventItem` database records.
-- Use the PlanItem UUID as the MCP `task_id`.
+- Use the PlanItem UUID as the MCP `plan_id`.
 - Public task state contract:
   - `plan_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
   - These values correspond 1:1 with `database_api.model_planitem.PlanState`.
@@ -35,7 +35,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Expose `model_profiles` as the discovery tool for profile selection.
 - `model_profiles` must report profile guidance and currently available models after class whitelist filtering.
 - Keep workflow wording explicit that prompt drafting + user approval is a non-tool step before `plan_create`.
-- Keep concurrency wording explicit: each `plan_create` call creates a new `task_id`; no global per-client concurrency cap is enforced server-side.
+- Keep concurrency wording explicit: each `plan_create` call creates a new `plan_id`; no global per-client concurrency cap is enforced server-side.
 - Visible input schema is intentionally limited to:
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
@@ -45,7 +45,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - The server communicates over stdio (standard input/output) following the MCP protocol.
 - Tools are registered via `@mcp_cloud.list_tools()` and handled via `@mcp_cloud.call_tool()`.
 - All tool responses must be JSON-serializable and follow the error model in the spec.
-- Keep tool error codes/docs aligned with actual runtime payloads (for example `TASK_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `generation_failed`, `content_unavailable`, `INTERNAL_ERROR`).
+- Keep tool error codes/docs aligned with actual runtime payloads (for example `PLAN_NOT_FOUND`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `generation_failed`, `content_unavailable`, `INTERNAL_ERROR`).
 - Event cursors use format `cursor_{event_id}` for incremental polling.
 - **Run as task**: We expose MCP **tools** only (plan_create, plan_status, plan_stop, etc.), not the MCP **tasks** protocol (tasks/get, tasks/result, etc.). Do not advertise the tasks capability or add "Run as task" support; the spec and clients (e.g. Cursor) are aligned on tools-only.
 

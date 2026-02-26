@@ -28,6 +28,7 @@ from mcp_cloud.tool_models import (
     ModelProfilesOutput,
     PlanCreateOutput,
     PlanFileInfoOutput,
+    PlanListOutput,
     PlanRetryOutput,
     PlanStatusOutput,
     PlanStopOutput,
@@ -65,11 +66,13 @@ from mcp_cloud.app import (
     handle_plan_stop,
     handle_plan_file_info,
     handle_prompt_examples,
-    resolve_task_for_task_id,
+    resolve_plan_for_task_id,
     set_download_base_url,
     validate_download_token,
     _resolve_user_from_api_key,
 )
+from mcp_cloud.auth import validate_api_key_secret
+from mcp_cloud.download_tokens import validate_download_token_secret
 
 REQUIRED_API_KEY = os.environ.get("PLANEXE_MCP_API_KEY")
 
@@ -78,6 +81,8 @@ HTTP_PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_MCP_HTTP_PORT"
 MAX_BODY_BYTES = int(os.environ.get("PLANEXE_MCP_MAX_BODY_BYTES", "1048576"))
 RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_RATE_WINDOW_SECONDS", "60"))
+DOWNLOAD_RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_DOWNLOAD_RATE_LIMIT", "10"))
+DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_DOWNLOAD_RATE_WINDOW_SECONDS", "60"))
 GLAMA_MAINTAINER_EMAIL = os.environ.get(
     "PLANEXE_MCP_GLAMA_MAINTAINER_EMAIL",
     "neoneye@gmail.com",
@@ -98,6 +103,10 @@ def _parse_bool_env(name: str, default: bool) -> bool:
 
 
 AUTH_REQUIRED = _parse_bool_env("PLANEXE_MCP_REQUIRE_AUTH", default=True)
+
+if AUTH_REQUIRED:
+    validate_api_key_secret()
+    validate_download_token_secret()
 
 
 def _split_csv_env(value: Optional[str]) -> list[str]:
@@ -136,10 +145,18 @@ def _split_csv_env(value: Optional[str]) -> list[str]:
 
 CORS_ORIGINS = _split_csv_env(os.environ.get("PLANEXE_MCP_CORS_ORIGINS"))
 if not CORS_ORIGINS:
-    # Use wildcard so that browser-based tools (e.g. MCP Inspector at
-    # localhost:6274) can connect directly.  API-key auth is the primary
-    # access control; CORS is defence-in-depth only.
-    CORS_ORIGINS = ["*"]
+    if AUTH_REQUIRED:
+        # Production default: only allow known PlanExe origins.
+        # Override via PLANEXE_MCP_CORS_ORIGINS if additional origins are needed.
+        CORS_ORIGINS = [
+            "https://mcp.planexe.org",
+            "https://home.planexe.org",
+        ]
+    else:
+        # Dev mode: allow any origin so browser-based tools (e.g. MCP Inspector
+        # at localhost:6274) can connect without extra configuration.
+        CORS_ORIGINS = ["*"]
+        logger.info("CORS wildcard enabled (PLANEXE_MCP_REQUIRE_AUTH=false)")
 
 PUBLIC_JSONRPC_METHODS_NO_AUTH = {
     "initialize",
@@ -317,6 +334,7 @@ async def _log_auth_rejection(request: Request, reason: str) -> None:
 
 _rate_lock = asyncio.Lock()
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
+_download_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 _authenticated_user_api_key_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "authenticated_user_api_key", default=None
 )
@@ -448,6 +466,27 @@ async def _enforce_rate_limit(request: Request) -> Optional[JSONResponse]:
     return None
 
 
+async def _enforce_download_rate_limit(request: Request) -> Optional[JSONResponse]:
+    if DOWNLOAD_RATE_LIMIT_REQUESTS <= 0:
+        return None
+    if not request.url.path.startswith("/download"):
+        return None
+
+    identifier = _client_identifier(request)
+    now = monotonic()
+    async with _rate_lock:
+        bucket = _download_rate_buckets[identifier]
+        while bucket and now - bucket[0] > DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS:
+            bucket.popleft()
+        if len(bucket) >= DOWNLOAD_RATE_LIMIT_REQUESTS:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Download rate limit exceeded"},
+            )
+        bucket.append(now)
+    return None
+
+
 async def _sweep_rate_buckets(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
@@ -462,18 +501,30 @@ async def _sweep_rate_buckets(stop_event: asyncio.Event) -> None:
                     bucket.popleft()
                 if not bucket:
                     del _rate_buckets[key]
+            for key in list(_download_rate_buckets):
+                bucket = _download_rate_buckets[key]
+                while bucket and now - bucket[0] > DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS:
+                    bucket.popleft()
+                if not bucket:
+                    del _download_rate_buckets[key]
 
 
 async def _enforce_body_size(request: Request) -> Optional[JSONResponse]:
-    if request.method != "POST" or request.url.path != "/mcp/tools/call":
+    if request.method != "POST":
+        return None
+    if request.url.path not in ("/mcp/tools/call", "/mcp/"):
         return None
 
     content_length = request.headers.get("content-length")
     if not content_length:
-        return JSONResponse(
-            status_code=411,
-            content={"detail": "Length Required"},
-        )
+        # Streamable HTTP (/mcp/) may use chunked encoding without Content-Length.
+        # Only require it on the REST endpoint.
+        if request.url.path == "/mcp/tools/call":
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Length Required"},
+            )
+        return None
 
     try:
         if int(content_length) > MAX_BODY_BYTES:
@@ -597,35 +648,35 @@ async def plan_create(
 
 
 async def plan_status(
-    task_id: str = Field(..., description="Task UUID returned by plan_create."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create."),
 ) -> Annotated[CallToolResult, PlanStatusOutput]:
-    return await handle_plan_status({"task_id": task_id})
+    return await handle_plan_status({"plan_id": plan_id})
 
 
 async def plan_stop(
-    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to stop the plan creation."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to stop the plan creation."),
 ) -> Annotated[CallToolResult, PlanStopOutput]:
-    return await handle_plan_stop({"task_id": task_id})
+    return await handle_plan_stop({"plan_id": plan_id})
 
 
 async def plan_retry(
-    task_id: str = Field(..., description="UUID of the failed task to retry."),
+    plan_id: str = Field(..., description="UUID of the failed plan to retry."),
     model_profile: Annotated[
         ModelProfileInput,
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, PlanRetryOutput]:
-    return await handle_plan_retry({"task_id": task_id, "model_profile": model_profile})
+    return await handle_plan_retry({"plan_id": plan_id, "model_profile": model_profile})
 
 
 async def plan_file_info(
-    task_id: str = Field(..., description="Task UUID returned by plan_create. Use it to download the created plan."),
+    plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to download the created plan."),
     artifact: Annotated[
         ResultArtifactInput,
         Field(description="Download artifact type: report or zip."),
     ] = "report",
 ) -> Annotated[CallToolResult, PlanFileInfoOutput]:
-    return await handle_plan_file_info({"task_id": task_id, "artifact": artifact})
+    return await handle_plan_file_info({"plan_id": plan_id, "artifact": artifact})
 
 
 async def prompt_examples() -> CallToolResult:
@@ -638,6 +689,17 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
     return await handle_model_profiles({})
 
 
+async def plan_list(
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of plans to return (1–50). Newest plans are returned first."),
+) -> Annotated[CallToolResult, PlanListOutput]:
+    """List the most recent plans for an authenticated user."""
+    authenticated_user_api_key = _get_authenticated_user_api_key()
+    arguments: dict[str, Any] = {"limit": limit}
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
+    return await handle_plan_list(arguments)
+
+
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
         "plan_create": plan_create,
@@ -645,6 +707,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_stop": plan_stop,
         "plan_retry": plan_retry,
         "plan_file_info": plan_file_info,
+        "plan_list": plan_list,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,
     }
@@ -769,6 +832,10 @@ async def enforce_api_key(
     if error_response:
         return _append_cors_headers(request, error_response)
 
+    error_response = await _enforce_download_rate_limit(request)
+    if error_response:
+        return _append_cors_headers(request, error_response)
+
     if request.url.path.startswith("/mcp"):
         set_download_base_url(_request_origin(request))
     try:
@@ -845,10 +912,12 @@ async def call_tool(
     This endpoint wraps the stdio-based MCP tool handlers for HTTP access.
     """
     arguments = dict(payload.arguments or {})
-    if payload.tool == "plan_create":
+    if payload.tool in ("plan_create", "plan_list"):
         authenticated_user_api_key = _get_authenticated_user_api_key()
         if authenticated_user_api_key and not arguments.get("user_api_key"):
             arguments["user_api_key"] = authenticated_user_api_key
+
+    if payload.tool == "plan_create":
         if isinstance(payload.metadata, dict):
             arguments["metadata"] = dict(payload.metadata)
 
@@ -905,17 +974,17 @@ async def download_report(
     # Defence-in-depth: if a token was supplied, it must be valid for this artifact.
     if token is not None and not validate_download_token(token, task_id, filename):
         raise HTTPException(status_code=401, detail="Invalid or expired download token")
-    task = await asyncio.to_thread(resolve_task_for_task_id, task_id)
-    if task is None:
+    plan = await asyncio.to_thread(resolve_plan_for_task_id, task_id)
+    if plan is None:
         raise HTTPException(status_code=404, detail="Task not found")
     if filename == ZIP_FILENAME:
-        content_bytes = await fetch_user_downloadable_zip(str(task.id))
+        content_bytes = await fetch_user_downloadable_zip(str(plan.id))
         if content_bytes is None:
             raise HTTPException(status_code=404, detail="Report not found")
         headers = {"Content-Disposition": f'attachment; filename="{task_id}.zip"'}
         return Response(content=content_bytes, media_type=ZIP_CONTENT_TYPE, headers=headers)
 
-    content_bytes = await fetch_artifact_from_worker_plan(str(task.id), REPORT_FILENAME)
+    content_bytes = await fetch_artifact_from_worker_plan(str(plan.id), REPORT_FILENAME)
     if content_bytes is None:
         raise HTTPException(status_code=404, detail="Report not found")
     headers = {"Content-Disposition": f'inline; filename="{REPORT_FILENAME}"'}
@@ -945,7 +1014,7 @@ def root() -> dict[str, Any]:
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
             "glama_connector": "/.well-known/glama.json",
-            "download": f"/download/{{task_id}}/{REPORT_FILENAME}",
+            "download": f"/download/{{plan_id}}/{REPORT_FILENAME}",
             "llms_txt": "/llms.txt",
         },
         "documentation": "See /docs for OpenAPI documentation",

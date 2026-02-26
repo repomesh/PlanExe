@@ -29,18 +29,18 @@ class TestPlanCreateTool(unittest.TestCase):
                 self.parameters = parameters
                 self.timestamp_created = datetime.now(UTC)
 
-        with patch("mcp_cloud.app.app.app_context", return_value=nullcontext()), patch(
-            "mcp_cloud.app.db.session", fake_session
+        with patch("mcp_cloud.db_queries.app.app_context", return_value=nullcontext()), patch(
+            "mcp_cloud.db_queries.db.session", fake_session
         ), patch(
-            "mcp_cloud.app.PlanItem", StubPlanItem
+            "mcp_cloud.db_queries.PlanItem", StubPlanItem
         ):
             result = asyncio.run(handle_plan_create(arguments))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertIsInstance(result.structuredContent, dict)
-        self.assertIn("task_id", result.structuredContent)
+        self.assertIn("plan_id", result.structuredContent)
         self.assertIn("created_at", result.structuredContent)
-        self.assertIsInstance(uuid.UUID(result.structuredContent["task_id"]), uuid.UUID)
+        self.assertIsInstance(uuid.UUID(result.structuredContent["plan_id"]), uuid.UUID)
 
 
 if __name__ == "__main__":

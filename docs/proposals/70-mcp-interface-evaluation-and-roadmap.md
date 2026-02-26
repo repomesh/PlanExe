@@ -117,13 +117,9 @@ Refactored into 10+ focused modules (commit 9f1a7db9). `app.py` is now a thin re
 
 ## 4. What's Broken or Inconsistent
 
-### 4.1 Dev-secret fallback in production
+### ~~4.1 Dev-secret fallback in production~~ (FIXED)
 
-`_hash_user_api_key` in `auth.py` falls back to a hardcoded `"dev-api-key-secret"` when `PLANEXE_API_KEY_SECRET` is unset (line 14). A warning is logged, but the server continues. In production this means all user keys hash with a known default, which is a security risk.
-
-Similarly, `_get_download_token_secret` in `download_tokens.py` falls back to a random per-process secret (line 86–93). This means download tokens expire on server restart and are invalid across processes in a distributed setup.
-
-**Fix:** Fail hard at startup if these secrets are not set when `PLANEXE_MCP_REQUIRE_AUTH` is true (i.e. production mode).
+`auth.py` now exports `validate_api_key_secret()` which raises `RuntimeError` when `PLANEXE_API_KEY_SECRET` is not set. `download_tokens.py` exports `validate_download_token_secret()` which raises when neither `PLANEXE_DOWNLOAD_TOKEN_SECRET` nor `PLANEXE_API_KEY_SECRET` is set. Both are called at module level in `http_server.py` when `AUTH_REQUIRED` is true, so the server fails hard at startup instead of silently falling back to dev secrets. The existing runtime fallbacks (`"dev-api-key-secret"` and random per-process secret) remain for local development with `PLANEXE_MCP_REQUIRE_AUTH=false`.
 
 ### ~~4.2 `/download` endpoint not rate-limited~~ (FIXED)
 
@@ -234,7 +230,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | ~~Signed download tokens~~                                             | —      | DONE   |
 | P1       | ~~Refactor `app.py` into modules~~                                     | —      | DONE   |
 | P1       | ~~Remove `user_api_key` from `plan_list` visible schema~~              | —      | DONE   |
-| P1       | Fail-hard on missing secrets in production (4.1)                       | 1 h    |        |
+| P1       | ~~Fail-hard on missing secrets in production (4.1)~~                   | —      | DONE   |
 | P1       | ~~Rate-limit `/download` endpoint (4.2)~~                              | —      | DONE   |
 | P1       | ~~Add `plan_list` handler tests (4.5)~~                                | —      | DONE   |
 | P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
@@ -259,4 +255,4 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 The MCP surface is functionally solid and ahead of most MCP servers in terms of schema rigour, annotation coverage, and security (signed download tokens, layered auth, auto-injected user keys). The codebase has been significantly improved since rev 1: `app.py` was refactored from a 76 KB monolith into 10+ focused modules, `plan_list` now follows the same auth-injection pattern as `plan_create`, and all P0 issues are resolved.
 
-The main remaining weakness is that production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`). This is not blocking, but addressing it (fail-hard on missing secrets when auth is enabled) would meaningfully tighten the security posture.
+All P1 code-quality issues are now resolved, including fail-hard on missing secrets in production (4.1). The remaining checklist items are promotion/growth tasks (mcp.so submission, README demo) and lower-priority enhancements (CORS tightening, SSE streaming, webhooks, API versioning).

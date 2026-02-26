@@ -72,6 +72,22 @@ DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("PLANEXE_DOWNLOAD_TOKEN_TTL", "9
 _random_token_secret: Optional[bytes] = None
 
 
+def validate_download_token_secret() -> None:
+    """Raise if no stable download-token secret is configured.
+
+    Call at startup when authentication is required so the server
+    fails hard instead of silently using a random per-process secret
+    that invalidates tokens on restart.
+    """
+    for env_var in ("PLANEXE_DOWNLOAD_TOKEN_SECRET", "PLANEXE_API_KEY_SECRET"):
+        if os.environ.get(env_var):
+            return
+    raise RuntimeError(
+        "Neither PLANEXE_DOWNLOAD_TOKEN_SECRET nor PLANEXE_API_KEY_SECRET is set. "
+        "Set at least one or disable auth with PLANEXE_MCP_REQUIRE_AUTH=false."
+    )
+
+
 def _get_download_token_secret() -> bytes:
     """Return the HMAC-SHA256 secret used to sign download tokens.
 

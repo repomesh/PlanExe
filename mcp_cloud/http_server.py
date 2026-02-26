@@ -71,6 +71,8 @@ from mcp_cloud.app import (
     validate_download_token,
     _resolve_user_from_api_key,
 )
+from mcp_cloud.auth import validate_api_key_secret
+from mcp_cloud.download_tokens import validate_download_token_secret
 
 REQUIRED_API_KEY = os.environ.get("PLANEXE_MCP_API_KEY")
 
@@ -101,6 +103,10 @@ def _parse_bool_env(name: str, default: bool) -> bool:
 
 
 AUTH_REQUIRED = _parse_bool_env("PLANEXE_MCP_REQUIRE_AUTH", default=True)
+
+if AUTH_REQUIRED:
+    validate_api_key_secret()
+    validate_download_token_secret()
 
 
 def _split_csv_env(value: Optional[str]) -> list[str]:

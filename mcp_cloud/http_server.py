@@ -496,15 +496,21 @@ async def _sweep_rate_buckets(stop_event: asyncio.Event) -> None:
 
 
 async def _enforce_body_size(request: Request) -> Optional[JSONResponse]:
-    if request.method != "POST" or request.url.path != "/mcp/tools/call":
+    if request.method != "POST":
+        return None
+    if request.url.path not in ("/mcp/tools/call", "/mcp/"):
         return None
 
     content_length = request.headers.get("content-length")
     if not content_length:
-        return JSONResponse(
-            status_code=411,
-            content={"detail": "Length Required"},
-        )
+        # Streamable HTTP (/mcp/) may use chunked encoding without Content-Length.
+        # Only require it on the REST endpoint.
+        if request.url.path == "/mcp/tools/call":
+            return JSONResponse(
+                status_code=411,
+                content={"detail": "Length Required"},
+            )
+        return None
 
     try:
         if int(content_length) > MAX_BODY_BYTES:

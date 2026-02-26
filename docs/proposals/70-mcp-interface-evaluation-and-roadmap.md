@@ -129,11 +129,9 @@ Similarly, `_get_download_token_secret` in `download_tokens.py` falls back to a 
 
 A separate download rate limiter (`_enforce_download_rate_limit`) now covers `/download` paths with its own bucket and configurable limits: `PLANEXE_MCP_DOWNLOAD_RATE_LIMIT` (default 10 req) and `PLANEXE_MCP_DOWNLOAD_RATE_WINDOW_SECONDS` (default 60s). This is deliberately tighter than the MCP rate limit (60 req/60s) since download responses are 700KB–6MB. The sweep task cleans up download buckets alongside MCP buckets.
 
-### 4.3 Body size validation only on REST endpoint
+### ~~4.3 Body size validation only on REST endpoint~~ (FIXED)
 
-`MAX_BODY_BYTES` is only enforced on `/mcp/tools/call` POST (`http_server.py:469`). The Streamable HTTP `/mcp/` endpoint (mounted as a sub-app) bypasses this check, allowing arbitrarily large payloads.
-
-**Fix:** Apply size validation to the `/mcp/` endpoint as well, or add it as middleware.
+`_enforce_body_size` now checks both `/mcp/tools/call` and `/mcp/` POST requests. The `Content-Length` requirement (411) is only enforced on the REST endpoint since Streamable HTTP may use chunked encoding without `Content-Length`; however, when `Content-Length` is present on either endpoint it is validated against `MAX_BODY_BYTES`.
 
 ### 4.4 `plan_file_info` silently defaults invalid artifact to `"report"`
 
@@ -249,7 +247,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | Add `plan_list` handler tests (4.5)                                    | 2 h    |        |
 | P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
 | P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
-| P2       | Body size validation on Streamable HTTP (4.3)                          | 1 h    |        |
+| P2       | ~~Body size validation on Streamable HTTP (4.3)~~                      | —      | DONE   |
 | P2       | Return error for invalid artifact value (4.4)                          | 30 min |        |
 | P2       | Add tool-call audit logging (4.7)                                      | 1 h    |        |
 | P2       | Add `log_lines` to `plan_status` (5.1)                                 | 4 h    |        |

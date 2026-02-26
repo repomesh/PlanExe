@@ -4,16 +4,16 @@ import uuid
 from unittest.mock import patch
 
 from mcp.types import CallToolResult
-from mcp_cloud.app import handle_list_tools, handle_plan_retry as handle_task_retry
+from mcp_cloud.app import handle_list_tools, handle_plan_retry
 
 
-class TestTaskRetryTool(unittest.TestCase):
-    def test_task_retry_tool_listed(self):
+class TestPlanRetryTool(unittest.TestCase):
+    def test_plan_retry_tool_listed(self):
         tools = asyncio.run(handle_list_tools())
         tool_names = {tool.name for tool in tools}
         self.assertIn("plan_retry", tool_names)
 
-    def test_task_retry_returns_structured_content(self):
+    def test_plan_retry_returns_structured_content(self):
         task_id = str(uuid.uuid4())
         payload = {
             "task_id": task_id,
@@ -22,7 +22,7 @@ class TestTaskRetryTool(unittest.TestCase):
             "retried_at": "2026-01-01T00:00:00Z",
         }
         with patch("mcp_cloud.app._retry_failed_task_sync", return_value=payload):
-            result = asyncio.run(handle_task_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertFalse(result.isError)
@@ -30,19 +30,19 @@ class TestTaskRetryTool(unittest.TestCase):
         self.assertEqual(result.structuredContent["state"], "pending")
         self.assertEqual(result.structuredContent["model_profile"], "baseline")
 
-    def test_task_retry_returns_task_not_found(self):
+    def test_plan_retry_returns_task_not_found(self):
         task_id = str(uuid.uuid4())
         with patch("mcp_cloud.app._retry_failed_task_sync", return_value=None):
-            result = asyncio.run(handle_task_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertTrue(result.isError)
         self.assertEqual(result.structuredContent["error"]["code"], "TASK_NOT_FOUND")
 
-    def test_task_retry_returns_task_not_failed(self):
+    def test_plan_retry_returns_task_not_failed(self):
         task_id = str(uuid.uuid4())
         payload = {"error": {"code": "TASK_NOT_FAILED", "message": "Task is not failed."}}
         with patch("mcp_cloud.app._retry_failed_task_sync", return_value=payload):
-            result = asyncio.run(handle_task_retry({"task_id": task_id}))
+            result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertTrue(result.isError)
         self.assertEqual(result.structuredContent["error"]["code"], "TASK_NOT_FAILED")

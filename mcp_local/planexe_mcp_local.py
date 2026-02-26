@@ -3,7 +3,7 @@ PlanExe MCP local proxy.
 
 Runs locally over stdio and forwards tool calls to mcp_cloud, the MCP server
 running in the cloud.
-Downloads artifacts to disk for task_download.
+Downloads artifacts to disk for plan_download.
 """
 import asyncio
 import hashlib
@@ -436,7 +436,7 @@ PROMPT_EXAMPLES_OUTPUT_SCHEMA = {
         "samples": {
             "type": "array",
             "items": {"type": "string"},
-            "description": "Example prompts to copy or adapt when calling task_create.",
+            "description": "Example prompts to copy or adapt when calling plan_create.",
         },
         "message": {"type": "string"},
     },

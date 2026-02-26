@@ -6,18 +6,18 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 from mcp.types import CallToolResult
-from mcp_cloud.app import handle_list_tools, handle_plan_create as handle_task_create
+from mcp_cloud.app import handle_list_tools, handle_plan_create
 
 
-class TestTaskCreateTool(unittest.TestCase):
-    def test_task_create_visible_schema_exposes_prompt_and_model_profile(self):
+class TestPlanCreateTool(unittest.TestCase):
+    def test_plan_create_visible_schema_exposes_prompt_and_model_profile(self):
         tools = asyncio.run(handle_list_tools())
-        task_create_tool = next(tool for tool in tools if tool.name == "plan_create")
-        properties = task_create_tool.inputSchema.get("properties", {})
+        plan_create_tool = next(tool for tool in tools if tool.name == "plan_create")
+        properties = plan_create_tool.inputSchema.get("properties", {})
         self.assertIn("prompt", properties)
         self.assertIn("model_profile", properties)
 
-    def test_task_create_returns_structured_content(self):
+    def test_plan_create_returns_structured_content(self):
         arguments = {"prompt": "xcv", "config": None, "metadata": None}
         fake_session = MagicMock()
         class StubPlanItem:
@@ -34,7 +34,7 @@ class TestTaskCreateTool(unittest.TestCase):
         ), patch(
             "mcp_cloud.app.PlanItem", StubPlanItem
         ):
-            result = asyncio.run(handle_task_create(arguments))
+            result = asyncio.run(handle_plan_create(arguments))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertIsInstance(result.structuredContent, dict)

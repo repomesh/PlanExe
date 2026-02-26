@@ -28,6 +28,7 @@ from mcp_cloud.tool_models import (
     ModelProfilesOutput,
     PlanCreateOutput,
     PlanFileInfoOutput,
+    PlanListOutput,
     PlanRetryOutput,
     PlanStatusOutput,
     PlanStopOutput,
@@ -638,6 +639,14 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
     return await handle_model_profiles({})
 
 
+async def plan_list(
+    user_api_key: str = Field(..., description="User API key (pex_...) to scope the task list to the authenticated user."),
+    limit: int = Field(default=10, ge=1, le=50, description="Maximum number of tasks to return (1–50). Newest tasks are returned first."),
+) -> Annotated[CallToolResult, PlanListOutput]:
+    """List the most recent tasks for an authenticated user."""
+    return await handle_plan_list({"user_api_key": user_api_key, "limit": limit})
+
+
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
         "plan_create": plan_create,
@@ -645,6 +654,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_stop": plan_stop,
         "plan_retry": plan_retry,
         "plan_file_info": plan_file_info,
+        "plan_list": plan_list,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,
     }

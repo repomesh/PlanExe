@@ -11,6 +11,7 @@ An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed
 - **2026-02-26 (rev 1):** Initial version after `task_*` → `plan_*` rename.
 - **2026-02-26 (rev 2):** Updated after `app.py` refactor into modules, `plan_list` `user_api_key` made optional in schema (auto-injected by HTTP layer), and re-evaluation of all open issues.
 - **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_*` to `test_plan_*`.
+- **2026-02-26 (rev 4):** Updated after completing 4.2 — added separate download rate limiter with configurable limits (default 10 req/60s).
 
 ---
 
@@ -124,11 +125,9 @@ Similarly, `_get_download_token_secret` in `download_tokens.py` falls back to a 
 
 **Fix:** Fail hard at startup if these secrets are not set when `PLANEXE_MCP_REQUIRE_AUTH` is true (i.e. production mode).
 
-### 4.2 `/download` endpoint not rate-limited
+### ~~4.2 `/download` endpoint not rate-limited~~ (FIXED)
 
-`_enforce_rate_limit` only covers `/mcp/tools/call`, `/mcp`, and `/mcp/`. The `/download/{task_id}/{filename}` endpoint has no rate limit, allowing repeated large-file downloads that could overload the server.
-
-**Fix:** Add `/download` to the rate-limited paths in `http_server.py`.
+A separate download rate limiter (`_enforce_download_rate_limit`) now covers `/download` paths with its own bucket and configurable limits: `PLANEXE_MCP_DOWNLOAD_RATE_LIMIT` (default 10 req) and `PLANEXE_MCP_DOWNLOAD_RATE_WINDOW_SECONDS` (default 60s). This is deliberately tighter than the MCP rate limit (60 req/60s) since download responses are 700KB–6MB. The sweep task cleans up download buckets alongside MCP buckets.
 
 ### 4.3 Body size validation only on REST endpoint
 
@@ -246,7 +245,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P1       | ~~Refactor `app.py` into modules~~                                     | —      | DONE   |
 | P1       | ~~Remove `user_api_key` from `plan_list` visible schema~~              | —      | DONE   |
 | P1       | Fail-hard on missing secrets in production (4.1)                       | 1 h    |        |
-| P1       | Rate-limit `/download` endpoint (4.2)                                  | 30 min |        |
+| P1       | ~~Rate-limit `/download` endpoint (4.2)~~                              | —      | DONE   |
 | P1       | Add `plan_list` handler tests (4.5)                                    | 2 h    |        |
 | P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
 | P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
@@ -270,4 +269,4 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 The MCP surface is functionally solid and ahead of most MCP servers in terms of schema rigour, annotation coverage, and security (signed download tokens, layered auth, auto-injected user keys). The codebase has been significantly improved since rev 1: `app.py` was refactored from a 76 KB monolith into 10+ focused modules, `plan_list` now follows the same auth-injection pattern as `plan_create`, and all P0 issues are resolved.
 
-The remaining weaknesses are: production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`); the `/download` endpoint lacks rate limiting; and there is no audit trail for successful tool calls. None of these are blocking, but addressing the P1 items (secret validation, download rate limiting, `plan_list` tests) would meaningfully tighten the security and reliability posture.
+The remaining weaknesses are: production deployments can silently fall back to dev-mode secrets (`auth.py`, `download_tokens.py`); and there is no audit trail for successful tool calls. None of these are blocking, but addressing the P1 items (secret validation, `plan_list` tests) would meaningfully tighten the security and reliability posture.

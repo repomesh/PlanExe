@@ -79,6 +79,8 @@ HTTP_PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_MCP_HTTP_PORT"
 MAX_BODY_BYTES = int(os.environ.get("PLANEXE_MCP_MAX_BODY_BYTES", "1048576"))
 RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_RATE_WINDOW_SECONDS", "60"))
+DOWNLOAD_RATE_LIMIT_REQUESTS = int(os.environ.get("PLANEXE_MCP_DOWNLOAD_RATE_LIMIT", "10"))
+DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS = float(os.environ.get("PLANEXE_MCP_DOWNLOAD_RATE_WINDOW_SECONDS", "60"))
 GLAMA_MAINTAINER_EMAIL = os.environ.get(
     "PLANEXE_MCP_GLAMA_MAINTAINER_EMAIL",
     "neoneye@gmail.com",
@@ -318,6 +320,7 @@ async def _log_auth_rejection(request: Request, reason: str) -> None:
 
 _rate_lock = asyncio.Lock()
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
+_download_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 _authenticated_user_api_key_ctx: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
     "authenticated_user_api_key", default=None
 )
@@ -449,6 +452,27 @@ async def _enforce_rate_limit(request: Request) -> Optional[JSONResponse]:
     return None
 
 
+async def _enforce_download_rate_limit(request: Request) -> Optional[JSONResponse]:
+    if DOWNLOAD_RATE_LIMIT_REQUESTS <= 0:
+        return None
+    if not request.url.path.startswith("/download"):
+        return None
+
+    identifier = _client_identifier(request)
+    now = monotonic()
+    async with _rate_lock:
+        bucket = _download_rate_buckets[identifier]
+        while bucket and now - bucket[0] > DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS:
+            bucket.popleft()
+        if len(bucket) >= DOWNLOAD_RATE_LIMIT_REQUESTS:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Download rate limit exceeded"},
+            )
+        bucket.append(now)
+    return None
+
+
 async def _sweep_rate_buckets(stop_event: asyncio.Event) -> None:
     while not stop_event.is_set():
         try:
@@ -463,6 +487,12 @@ async def _sweep_rate_buckets(stop_event: asyncio.Event) -> None:
                     bucket.popleft()
                 if not bucket:
                     del _rate_buckets[key]
+            for key in list(_download_rate_buckets):
+                bucket = _download_rate_buckets[key]
+                while bucket and now - bucket[0] > DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS:
+                    bucket.popleft()
+                if not bucket:
+                    del _download_rate_buckets[key]
 
 
 async def _enforce_body_size(request: Request) -> Optional[JSONResponse]:
@@ -779,6 +809,10 @@ async def enforce_api_key(
         return _append_cors_headers(request, error_response)
 
     error_response = await _enforce_rate_limit(request)
+    if error_response:
+        return _append_cors_headers(request, error_response)
+
+    error_response = await _enforce_download_rate_limit(request)
     if error_response:
         return _append_cors_headers(request, error_response)
 

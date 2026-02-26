@@ -42,7 +42,7 @@ mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`).
 - `true`: provide a valid `X-API-Key`.
 Accepted keys are (1) UserApiKey from home.planexe.org (`pex_...`), or (2) `PLANEXE_MCP_API_KEY` if set (for dev or shared secret).
 OAuth is not supported for the MCP API.
-When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, and `GET /mcp/tools`) are intentionally allowed without API key for connector health checks; tool execution remains protected.
+When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, `GET /mcp/tools`, and probe traffic to `/mcp` for redirect/handshake compatibility) are intentionally allowed without API key for connector health checks; tool execution remains protected.
 
 ### Connecting via HTTP/URL
 
@@ -84,6 +84,7 @@ Use a UserApiKey from [home.planexe.org](https://home.planexe.org/), or set `PLA
 - `POST /mcp/tools/call` - **Call a tool (JSON). No SSE required.**
 - `GET /healthcheck` - Health check endpoint
 - `GET /docs` - OpenAPI documentation (Swagger UI)
+- `GET /robots.txt` - Crawler rules for public metadata discovery
 
 ### "SSE error" or "no Server-SSE stream" from the client
 

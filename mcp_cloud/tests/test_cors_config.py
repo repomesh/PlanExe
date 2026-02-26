@@ -80,6 +80,26 @@ class TestPublicMcpNoAuthRules(unittest.TestCase):
         result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
         self.assertTrue(result)
 
+    def test_public_mcp_get_for_redirect_probe(self):
+        request = _RequestStub(headers={}, method="GET", path="/mcp")
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_mcp_head_for_redirect_probe(self):
+        request = _RequestStub(headers={}, method="HEAD", path="/mcp")
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
+    def test_public_mcp_post_for_redirect_probe(self):
+        request = _RequestStub(
+            headers={},
+            method="POST",
+            path="/mcp",
+            body=b'{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"task_create","arguments":{"prompt":"x"}}}',
+        )
+        result = asyncio.run(http_server._is_public_mcp_request_without_auth(request))
+        self.assertTrue(result)
+
     def test_public_streamable_initialize(self):
         request = _RequestStub(
             headers={},

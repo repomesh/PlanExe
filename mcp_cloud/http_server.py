@@ -207,31 +207,57 @@ def _extract_jsonrpc_methods_from_payload(payload: Any) -> list[str]:
     return methods
 
 
+async def _extract_jsonrpc_methods_from_request(request: Request) -> list[str]:
+    """Best-effort extraction of JSON-RPC method names from request body."""
+    try:
+        body = await request.body()
+    except Exception:
+        return []
+    if not body:
+        return []
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return []
+    return _extract_jsonrpc_methods_from_payload(payload)
+
+
 async def _is_public_mcp_request_without_auth(request: Request) -> bool:
     """Allow unauthenticated MCP handshake/discovery calls."""
     path = request.url.path
     method = request.method.upper()
+
+    # Keep slashless /mcp compatible for probing and redirect handling.
+    if path == "/mcp" and method in {"GET", "HEAD", "POST"}:
+        return True
+    if path == "/mcp/" and method in {"GET", "HEAD"}:
+        return True
 
     # Public HTTP JSON endpoint for tool introspection.
     if path == "/mcp/tools" and method == "GET":
         return True
 
     # Streamable HTTP endpoint: allow only lightweight discovery methods.
-    if path not in ("/mcp", "/mcp/") or method != "POST":
+    if path != "/mcp/" or method != "POST":
         return False
 
-    body = await request.body()
-    if not body:
-        return False
-    try:
-        payload = json.loads(body)
-    except json.JSONDecodeError:
-        return False
-
-    methods = _extract_jsonrpc_methods_from_payload(payload)
+    methods = await _extract_jsonrpc_methods_from_request(request)
     if not methods:
         return False
     return all(item in PUBLIC_JSONRPC_METHODS_NO_AUTH for item in methods)
+
+
+async def _log_auth_rejection(request: Request, reason: str) -> None:
+    methods = await _extract_jsonrpc_methods_from_request(request)
+    logger.info(
+        "Auth rejected: reason=%s method=%s path=%s client=%s ua=%s jsonrpc_methods=%s",
+        reason,
+        request.method,
+        request.url.path,
+        request.client.host if request.client else "unknown",
+        request.headers.get("user-agent", ""),
+        methods,
+    )
 
 _rate_lock = asyncio.Lock()
 _rate_buckets: dict[str, deque[float]] = defaultdict(deque)
@@ -304,6 +330,7 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
 
     provided_key = _extract_api_key(request)
     if not provided_key:
+        await _log_auth_rejection(request, reason="missing_api_key")
         return JSONResponse(
             status_code=401,
             content={
@@ -322,6 +349,7 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
         _authenticated_user_api_key_ctx.set(provided_key)
         return None
 
+    await _log_auth_rejection(request, reason="invalid_api_key")
     return JSONResponse(status_code=403, content={"detail": "Invalid API key"})
 
 
@@ -909,6 +937,17 @@ def llms_txt():
 def llm_txt() -> RedirectResponse:
     """Legacy alias that redirects to canonical /llms.txt."""
     return RedirectResponse(url="/llms.txt", status_code=308)
+
+
+@app.get("/robots.txt")
+def robots_txt() -> Response:
+    """Allow crawler discovery of public MCP metadata endpoints."""
+    content = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Sitemap: https://mcp.planexe.org/llms.txt\n"
+    )
+    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 if __name__ == "__main__":

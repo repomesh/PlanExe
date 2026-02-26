@@ -1,6 +1,7 @@
 ---
 
 ## title: MCP Interface — Evaluation and Roadmap
+
 date: 2026-02-26
 
 # MCP Interface — Evaluation and Roadmap
@@ -8,9 +9,10 @@ date: 2026-02-26
 An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed by concrete improvements and promotion ideas.
 
 **Revision history:**
-- **2026-02-26 (rev 1):** Initial version after `task_*` → `plan_*` rename.
+
+- **2026-02-26 (rev 1):** Initial version after `task_`* → `plan_*` rename.
 - **2026-02-26 (rev 2):** Updated after `app.py` refactor into modules, `plan_list` `user_api_key` made optional in schema (auto-injected by HTTP layer), and re-evaluation of all open issues.
-- **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_*` to `test_plan_*`.
+- **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_`* to `test_plan_*`.
 - **2026-02-26 (rev 4):** Updated after completing 4.2 — added separate download rate limiter with configurable limits (default 10 req/60s).
 - **2026-02-26 (rev 5):** Renamed external-facing fields: `task_id` → `plan_id`, `tasks` → `plans`, error codes `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`. Internal function names and download URL paths unchanged.
 
@@ -46,7 +48,7 @@ Nine tools, split across two transports:
 
 **Clean module structure.** `mcp_cloud/app.py` is now a thin re-export facade (~195 lines). Logic lives in focused modules: `handlers.py` (tool handlers), `schemas.py` (tool definitions), `tool_models.py` (Pydantic models), `db_queries.py` (DB operations), `auth.py` (key hashing/user resolution), `download_tokens.py` (signed tokens), `model_profiles.py`, `worker_fetchers.py`, `zip_utils.py`, `prompt_examples.py`. This makes PRs reviewable and bugs easy to isolate.
 
-**Consistent `plan_*` naming throughout.** The rename from `task_*` to `plan_*` covers the full stack: external tool names, handler functions, request classes (`PlanCreateRequest`, etc.), DB query helpers (`_create_plan_sync`, `get_plan_by_id`, etc.), local variable names, and test file names. No backward-compat aliases remain.
+**Consistent `plan_`* naming throughout.** The rename from `task_`* to `plan_*` covers the full stack: external tool names, handler functions, request classes (`PlanCreateRequest`, etc.), DB query helpers (`_create_plan_sync`, `get_plan_by_id`, etc.), local variable names, and test file names. No backward-compat aliases remain.
 
 **Layered authentication.** Two distinct auth paths — a server-wide `PLANEXE_MCP_API_KEY` for self-hosters, and per-user `pex_…` keys issued by home.planexe.org — are a good design. The key-normalisation helper (`_normalize_api_key_value` in `http_server.py`) handles common copy-paste artefacts (Bearer prefix, surrounding quotes, full header line pasted as value).
 
@@ -56,7 +58,7 @@ Nine tools, split across two transports:
 
 **Tool annotations.** `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint` are set on every tool and tested. This is ahead of most MCP servers.
 
-**`plan_retry` with model_profile selection.** Allowing the caller to re-run a failed task with a stronger model (e.g. upgrade from `baseline` to `premium`) at retry time is genuinely useful.
+`**plan_retry` with model_profile selection.** Allowing the caller to re-run a failed task with a stronger model (e.g. upgrade from `baseline` to `premium`) at retry time is genuinely useful.
 
 **Signed download tokens.** `plan_file_info` returns download URLs with HMAC-SHA256 signed, time-limited tokens (15-min default TTL) scoped to one artifact (`task_id:filename:expiry`). Tokens work in a browser without an API key header. Defence-in-depth: the download endpoint re-validates even after middleware has passed the token. The secret fallback chain is: `PLANEXE_DOWNLOAD_TOKEN_SECRET` → `PLANEXE_API_KEY_SECRET` → per-process random (with warning).
 
@@ -66,7 +68,7 @@ Nine tools, split across two transports:
 
 **Prompt guidance in schema.** The `prompt` field description ("300–800 words … objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria") sets user expectations up front.
 
-**`plan_list` for plan recovery.** Authenticated users can list their most recent plans (up to 50, newest-first) to recover a lost `plan_id`. Each entry includes `plan_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
+`**plan_list` for plan recovery.** Authenticated users can list their most recent plans (up to 50, newest-first) to recover a lost `plan_id`. Each entry includes `plan_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
 
 **Comprehensive test suite.** 12 test files covering tool surface consistency, auth key parsing, CORS config, download tokens, HTTP routing, and individual tool behaviour (`test_plan_create_tool.py`, `test_plan_status_tool.py`, `test_plan_retry_tool.py`, `test_plan_file_info_tool.py`, `test_model_profiles_tool.py`).
 
@@ -86,11 +88,11 @@ The canonical URL (`https://mcp.planexe.org/mcp`, no trailing slash) is used in 
 
 Removed entirely from the MCP interface.
 
-### 3.4 ~~`plan_file_info` returns `{}` on success instead of `isError`~~ (FIXED)
+### 3.4 ~~`plan_file_info` returns `{}` on success instead of `isError~~` (FIXED)
 
 Now returns `{"ready": false, "reason": "processing"}` while running and `{"ready": false, "reason": "failed", "error": {...}}` on failure.
 
-### 3.5 ~~Rate limiting covers REST but not Streamable HTTP `/mcp`~~ (FIXED)
+### 3.5 ~~Rate limiting covers REST but not Streamable HTTP `/mcp~~` (FIXED)
 
 `_enforce_rate_limit` now covers `/mcp`, `/mcp/`, and `/mcp/tools/call`.
 
@@ -102,11 +104,11 @@ Added `plan_list` to both `mcp_cloud` and `mcp_local`. Returns up to 50 tasks ne
 
 HMAC-SHA256 tokens, 15-minute default TTL, scoped per-artifact.
 
-### 3.8 ~~Tools used `task_*` prefix instead of `plan_*`~~ (FIXED)
+### 3.8 ~~Tools used `task_`* prefix instead of `plan_*~~` (FIXED)
 
 All external tool names renamed to `plan_*`.
 
-### 3.9 ~~`app.py` is a 76 KB monolith~~ (FIXED)
+### 3.9 `~~app.py` is a 76 KB monolith~~ (FIXED)
 
 Refactored into 10+ focused modules (commit 9f1a7db9). `app.py` is now a thin re-export facade.
 
@@ -217,35 +219,35 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 ## 7. Quick-win Checklist
 
 
-| Priority | Task                                                                   | Effort | Status |
-| -------- | ---------------------------------------------------------------------- | ------ | ------ |
-| P0       | ~~Fix SKILL.md tool count~~                                            | —      | DONE   |
-| P0       | ~~Standardise URL trailing slash~~                                     | —      | DONE   |
-| P0       | ~~Fix `speed_vs_detail` schema/docs mismatch~~                         | —      | DONE   |
-| P0       | ~~Rename tools from `task_*` to `plan_*`~~                             | —      | DONE   |
-| P1       | ~~Add `plan_list` tool~~                                               | —      | DONE   |
-| P1       | ~~Fix `plan_file_info` empty-dict response~~                           | —      | DONE   |
-| P1       | ~~Add rate limiting to `/mcp` endpoint~~                               | —      | DONE   |
-| P1       | ~~Signed download tokens~~                                             | —      | DONE   |
-| P1       | ~~Refactor `app.py` into modules~~                                     | —      | DONE   |
-| P1       | ~~Remove `user_api_key` from `plan_list` visible schema~~              | —      | DONE   |
-| P1       | ~~Fail-hard on missing secrets in production (4.1)~~                   | —      | DONE   |
-| P1       | ~~Rate-limit `/download` endpoint (4.2)~~                              | —      | DONE   |
-| P1       | ~~Add `plan_list` handler tests (4.5)~~                                | —      | DONE   |
-| P1       | Submit to mcp.so + Smithery                                            | 30 min |        |
-| P1       | Write README demo GIF / YouTube link                                   | 1 h    |        |
-| P2       | ~~Body size validation on Streamable HTTP (4.3)~~                      | —      | DONE   |
-| P2       | ~~Return error for invalid artifact value (4.4)~~                      | —      | DONE   |
-| P2       | ~~Add tool-call audit logging (4.7)~~                                  | —      | DONE   |
-| P2       | Add `log_lines` to `plan_status` (5.1)                                 | 4 h    |        |
-| P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~   | —      | DONE   |
-| P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —  | DONE   |
-| P2       | ~~Rename test files from `test_task_*` to `test_plan_*` (4.9)~~       | —      | DONE   |
-| P2       | ~~Tighten default CORS origins (4.6)~~                                 | —      | DONE   |
-| P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                   | —      | DONE   |
-| P3       | Webhook support (5.2)                                                  | 1 day  |        |
-| P3       | API versioning (5.3)                                                   | 4 h    |        |
-| P3       | GitHub Actions integration (6.3)                                       | 1 day  |        |
+| Priority | Task                                                                      | Effort | Status |
+| -------- | ------------------------------------------------------------------------- | ------ | ------ |
+| P0       | ~~Fix SKILL.md tool count~~                                               | —      | DONE   |
+| P0       | ~~Standardise URL trailing slash~~                                        | —      | DONE   |
+| P0       | ~~Fix `speed_vs_detail` schema/docs mismatch~~                            | —      | DONE   |
+| P0       | ~~Rename tools from `task_`* to `plan_*~~`                                | —      | DONE   |
+| P1       | ~~Add `plan_list` tool~~                                                  | —      | DONE   |
+| P1       | ~~Fix `plan_file_info` empty-dict response~~                              | —      | DONE   |
+| P1       | ~~Add rate limiting to `/mcp` endpoint~~                                  | —      | DONE   |
+| P1       | ~~Signed download tokens~~                                                | —      | DONE   |
+| P1       | ~~Refactor `app.py` into modules~~                                        | —      | DONE   |
+| P1       | ~~Remove `user_api_key` from `plan_list` visible schema~~                 | —      | DONE   |
+| P1       | ~~Fail-hard on missing secrets in production (4.1)~~                      | —      | DONE   |
+| P1       | ~~Rate-limit `/download` endpoint (4.2)~~                                 | —      | DONE   |
+| P1       | ~~Add `plan_list` handler tests (4.5)~~                                   | —      | DONE   |
+| P1       | Submit to mcp.so + Smithery                                               | 30 min |        |
+| P1       | Write README demo GIF / YouTube link                                      | 1 h    |        |
+| P2       | ~~Body size validation on Streamable HTTP (4.3)~~                         | —      | DONE   |
+| P2       | ~~Return error for invalid artifact value (4.4)~~                         | —      | DONE   |
+| P2       | ~~Add tool-call audit logging (4.7)~~                                     | —      | DONE   |
+| P2       | Add `log_lines` to `plan_status` (5.1)                                    | 4 h    |        |
+| P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~      | —      | DONE   |
+| P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —      | DONE   |
+| P2       | ~~Rename test files from `test_task_*` to `test_plan_*` (4.9)~~           | —      | DONE   |
+| P2       | ~~Tighten default CORS origins (4.6)~~                                    | —      | DONE   |
+| P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                      | —      | DONE   |
+| P3       | Webhook support (5.2)                                                     | 1 day  |        |
+| P3       | API versioning (5.3)                                                      | 4 h    |        |
+| P3       | GitHub Actions integration (6.3)                                          | 1 day  |        |
 
 
 ---

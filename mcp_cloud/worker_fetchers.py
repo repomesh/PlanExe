@@ -193,13 +193,13 @@ async def fetch_zip_from_worker_plan(run_id: str) -> Optional[bytes]:
         return None
 
 
-async def fetch_user_downloadable_zip(task_id: str) -> Optional[bytes]:
+async def fetch_user_downloadable_zip(plan_id: str) -> Optional[bytes]:
     """
-    Fetch a user-downloadable zip for a task.
+    Fetch a user-downloadable zip for a plan.
     New layout snapshots are served directly from PlanItem.run_zip_snapshot.
-    Legacy/task-dir fallbacks are sanitized to remove track_activity.jsonl.
+    Legacy fallbacks are sanitized to remove track_activity.jsonl.
     """
-    plan = await asyncio.to_thread(get_plan_by_id, task_id)
+    plan = await asyncio.to_thread(get_plan_by_id, plan_id)
     if plan is None:
         return None
 

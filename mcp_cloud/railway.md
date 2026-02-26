@@ -5,7 +5,11 @@ Deploy mcp_cloud (PlanExe MCP cloud service) to Railway as an HTTP service.
 ```
 PLANEXE_POSTGRES_PASSWORD="${{shared.PLANEXE_POSTGRES_PASSWORD}}"
 PLANEXE_MCP_HTTP_HOST="0.0.0.0"
+PLANEXE_API_KEY_SECRET="${{shared.PLANEXE_API_KEY_SECRET}}"
+PLANEXE_MCP_CORS_ORIGINS=https://mcp.planexe.org,https://home.planexe.org,http://localhost:6274,http://localhost:5173
 ```
+
+The MCP Inspector runs a local web UI, 6274 is the default port, 5173 is an alternative it sometimes uses.
 
 ## Required Environment Variables
 

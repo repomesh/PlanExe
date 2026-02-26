@@ -51,9 +51,9 @@ from mcp_cloud.auth import (  # noqa: F401
 
 # -- db_queries: plan lookup and sync DB operations ----------------------------
 from mcp_cloud.db_queries import (  # noqa: F401
-    find_plan_by_task_id,
+    find_plan_by_id,
     get_plan_by_id,
-    resolve_plan_for_task_id,
+    resolve_plan_by_id,
     _create_plan_sync,
     _get_plan_status_snapshot_sync,
     _request_plan_stop_sync,

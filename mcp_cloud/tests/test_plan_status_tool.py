@@ -11,9 +11,9 @@ from mcp_cloud.app import handle_plan_status
 
 class TestPlanStatusTool(unittest.TestCase):
     def test_plan_status_returns_structured_content(self):
-        task_id = str(uuid.uuid4())
+        plan_id = str(uuid.uuid4())
         plan_snapshot = {
-            "id": task_id,
+            "id": plan_id,
             "state": PlanState.completed,
             "stop_requested": False,
             "progress_percentage": 0.0,
@@ -25,20 +25,20 @@ class TestPlanStatusTool(unittest.TestCase):
         ), patch(
             "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
         ):
-            result = asyncio.run(handle_plan_status({"plan_id": task_id}))
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertIsInstance(result.structuredContent, dict)
-        self.assertEqual(result.structuredContent["plan_id"], task_id)
+        self.assertEqual(result.structuredContent["plan_id"], plan_id)
         self.assertIn("state", result.structuredContent)
         self.assertIn("progress_percentage", result.structuredContent)
         self.assertIsInstance(result.structuredContent["progress_percentage"], float)
         self.assertEqual(result.structuredContent["progress_percentage"], 100.0)
 
     def test_plan_status_falls_back_to_zip_snapshot_files_when_primary_source_empty(self):
-        task_id = str(uuid.uuid4())
+        plan_id = str(uuid.uuid4())
         plan_snapshot = {
-            "id": task_id,
+            "id": plan_id,
             "state": PlanState.processing,
             "stop_requested": False,
             "progress_percentage": 34.23,
@@ -57,16 +57,16 @@ class TestPlanStatusTool(unittest.TestCase):
             "mcp_cloud.handlers.list_files_from_local_run_dir",
             return_value=None,
         ):
-            result = asyncio.run(handle_plan_status({"plan_id": task_id}))
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
 
         files = result.structuredContent["files"]
         self.assertEqual(len(files), 1)
         self.assertEqual(files[0]["path"], "001-2-plan.txt")
 
     def test_plan_status_uses_processing_state_name(self):
-        task_id = str(uuid.uuid4())
+        plan_id = str(uuid.uuid4())
         plan_snapshot = {
-            "id": task_id,
+            "id": plan_id,
             "state": PlanState.processing,
             "stop_requested": True,
             "progress_percentage": 10.0,
@@ -79,14 +79,14 @@ class TestPlanStatusTool(unittest.TestCase):
             "mcp_cloud.handlers.fetch_file_list_from_worker_plan",
             new=AsyncMock(return_value=[]),
         ):
-            result = asyncio.run(handle_plan_status({"plan_id": task_id}))
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
 
         self.assertEqual(result.structuredContent["state"], "processing")
 
     def test_plan_status_returns_plan_not_found_error(self):
-        task_id = str(uuid.uuid4())
+        plan_id = str(uuid.uuid4())
         with patch("mcp_cloud.handlers._get_plan_status_snapshot_sync", return_value=None):
-            result = asyncio.run(handle_plan_status({"plan_id": task_id}))
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
 
         self.assertTrue(result.isError)
         self.assertEqual(result.structuredContent["error"]["code"], "PLAN_NOT_FOUND")

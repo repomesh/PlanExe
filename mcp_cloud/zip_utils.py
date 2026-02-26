@@ -47,30 +47,30 @@ def extract_file_from_zip_file(file_handle: io.BufferedIOBase, file_path: str) -
         logger.warning("Unable to read %s from zip stream: %s", file_path, exc)
         return None
 
-def fetch_report_from_db(task_id: str) -> Optional[bytes]:
+def fetch_report_from_db(plan_id: str) -> Optional[bytes]:
     """Fetch the report HTML stored in the PlanItem."""
-    plan = get_plan_by_id(task_id)
+    plan = get_plan_by_id(plan_id)
     if plan and plan.generated_report_html is not None:
         return plan.generated_report_html.encode("utf-8")
     return None
 
-def fetch_zip_snapshot(task_id: str) -> Optional[bytes]:
+def fetch_zip_snapshot(plan_id: str) -> Optional[bytes]:
     """Fetch the zip snapshot stored in the PlanItem."""
-    plan = get_plan_by_id(task_id)
+    plan = get_plan_by_id(plan_id)
     if plan and plan.run_zip_snapshot is not None:
         return plan.run_zip_snapshot
     return None
 
-def fetch_file_from_zip_snapshot(task_id: str, file_path: str) -> Optional[bytes]:
+def fetch_file_from_zip_snapshot(plan_id: str, file_path: str) -> Optional[bytes]:
     """Fetch a file from the PlanItem zip snapshot."""
-    plan = get_plan_by_id(task_id)
+    plan = get_plan_by_id(plan_id)
     if plan and plan.run_zip_snapshot is not None:
         return extract_file_from_zip_bytes(plan.run_zip_snapshot, file_path)
     return None
 
-def list_files_from_zip_snapshot(task_id: str) -> Optional[list[str]]:
+def list_files_from_zip_snapshot(plan_id: str) -> Optional[list[str]]:
     """List files from the PlanItem zip snapshot."""
-    plan = get_plan_by_id(task_id)
+    plan = get_plan_by_id(plan_id)
     if plan and plan.run_zip_snapshot is not None:
         return list_files_from_zip_bytes(plan.run_zip_snapshot)
     return None

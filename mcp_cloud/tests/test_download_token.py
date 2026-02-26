@@ -23,7 +23,7 @@ class TestGenerateAndValidateDownloadToken(unittest.TestCase):
         token = cloud_app.generate_download_token("task-abc", "030-report.html")
         self.assertTrue(cloud_app.validate_download_token(token, "task-abc", "030-report.html"))
 
-    def test_wrong_task_id_rejected(self):
+    def test_wrong_plan_id_rejected(self):
         token = cloud_app.generate_download_token("task-abc", "030-report.html")
         self.assertFalse(cloud_app.validate_download_token(token, "task-xyz", "030-report.html"))
 

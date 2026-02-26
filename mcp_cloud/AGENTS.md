@@ -85,7 +85,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
   - `mcp_local` exposes `plan_download` and implements it via cloud `plan_file_info`.
 - `plan_file_info` provides download metadata that `mcp_local` uses to download
-  artifacts via `/download/{task_id}/...`.
+  artifacts via `/download/{plan_id}/...`.
 
 ## Troubleshooting guidance (caller-facing text)
 - Keep guidance aligned across server instructions and tool descriptions:

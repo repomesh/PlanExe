@@ -163,7 +163,7 @@ Note: `plan_download` is a synthetic tool provided by `mcp_local`, not by this s
 **Tip**: Call `prompt_examples` to get example prompts to use with plan_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
 
 Download flow: call `plan_file_info` to obtain the `download_url`, then fetch the
-report via `GET /download/{task_id}/030-report.html` (API key required if configured).
+report via `GET /download/{plan_id}/030-report.html` (API key required if configured).
 If `download_url` is missing, configure `PLANEXE_MCP_PUBLIC_BASE_URL` so the server can emit a reachable absolute URL.
 
 ## Debugging with the MCP Inspector

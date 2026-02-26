@@ -54,6 +54,22 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 - Canonical client header is `X-API-Key: pex_...`.
 - OAuth is not supported for the MCP API. Do not document, imply, or advertise OAuth support.
 - In docs and user-facing error/help text, instruct clients to use `X-API-Key` custom headers.
+- Keep the auth split used for connector health checks:
+  - Unauthenticated discovery/handshake is allowed for:
+    - MCP methods: `initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`
+    - Probe compatibility: `GET/HEAD/POST /mcp`, `GET/HEAD /mcp/`, and `GET /mcp/tools`
+  - `tools/call` without API key is allowed **only** for free setup tools:
+    - `model_profiles`
+    - `prompt_examples`
+  - All other tool invocations (for example `task_create`) must remain API-key protected.
+- Keep auth-denial logging explicit (`Auth rejected: ...`) with method/path/user-agent and parsed JSON-RPC methods to make Railway debugging easier.
+
+## HTTP Compatibility and Crawler Endpoints
+- Keep `/mcp` -> `/mcp/` redirect behavior for slashless clients/probers.
+- Keep CORS headers on early error responses (401/403/429/etc.) so browser inspectors do not fail with opaque CORS errors.
+- Keep `PLANEXE_MCP_CORS_ORIGINS` parsing tolerant to quoted CSV and JSON-array env formats.
+- Keep `GET /robots.txt` available (200) for crawler health checks and metadata discovery.
+- FastMCP session lifecycle lines like `Terminating session: None` are expected informational logs; do not treat them as application failures solely based on Railway’s log-level labeling.
 
 ## Download URL environment behavior
 - `task_file_info.download_url` should be built from `PLANEXE_MCP_PUBLIC_BASE_URL` when set.

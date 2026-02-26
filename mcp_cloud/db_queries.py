@@ -216,11 +216,13 @@ def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
             "progress_message": task.progress_message,
         }
 
-def _list_tasks_sync(user_id: str, limit: int) -> list[dict[str, Any]]:
+def _list_tasks_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]:
     with app.app_context():
+        query = db.session.query(PlanItem)
+        if user_id is not None:
+            query = query.filter_by(user_id=user_id)
         tasks = (
-            db.session.query(PlanItem)
-            .filter_by(user_id=user_id)
+            query
             .order_by(PlanItem.timestamp_created.desc())
             .limit(max(1, min(limit, 50)))
             .all()

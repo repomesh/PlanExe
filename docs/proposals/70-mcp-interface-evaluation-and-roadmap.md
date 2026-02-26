@@ -182,11 +182,9 @@ This creates a confusing split where the external API says `plan_*` but reading 
 
 **Fix:** Rename request classes to `PlanCreateRequest`, etc. Rename helper functions from `*_task_*` to `*_plan_*`. Rename test files to match tool names. Remove the backward-compat aliases — nothing external imports them.
 
-### 4.10 `plan_list` auth differs from `plan_create`
+### ~~4.10 `plan_list` auth differs from `plan_create`~~ (FIXED)
 
-`plan_create` (`handlers.py:115`) checks the `PLANEXE_MCP_REQUIRE_USER_KEY` env var before deciding whether a missing `user_api_key` is an error. `plan_list` (`handlers.py:503`) unconditionally returns `USER_API_KEY_REQUIRED` when the key is absent, regardless of that env var. This is arguably correct (you can't list tasks without a user to scope to), but the inconsistency may surprise operators who disable the user-key requirement for development.
-
-**Fix (optional):** Document this intentional difference, or add a comment in the handler explaining why `plan_list` always requires the key.
+`plan_list` now uses the same `PLANEXE_MCP_REQUIRE_USER_KEY` check as `plan_create`. When the key is not required and not provided, `plan_list` returns all tasks (no user scoping). `_list_tasks_sync` accepts `user_id=None` to support this.
 
 ---
 
@@ -272,7 +270,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P2       | Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)  | 1 h    |        |
 | P2       | Rename test files from `test_task_*` to `test_plan_*` (4.9)           | 30 min |        |
 | P2       | Tighten default CORS origins (4.6)                                     | 30 min |        |
-| P2       | Document `plan_list` auth difference from `plan_create` (4.10)         | 15 min |        |
+| P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                   | —      | DONE   |
 | P3       | Webhook support (5.2)                                                  | 1 day  |        |
 | P3       | API versioning (5.3)                                                   | 4 h    |        |
 | P3       | GitHub Actions integration (6.3)                                       | 1 day  |        |

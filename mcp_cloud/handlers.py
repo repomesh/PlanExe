@@ -490,6 +490,8 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
             structuredContent=response,
             isError=True,
         )
+    require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
+    user_context = None
     if req.user_api_key:
         user_context = _resolve_user_from_api_key(req.user_api_key.strip())
         if not user_context:
@@ -499,15 +501,16 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
                 structuredContent=response,
                 isError=True,
             )
-    else:
+    elif require_user_key:
         response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_list."}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
             isError=True,
         )
+    user_id = str(user_context["user_id"]) if user_context else None
     limit = max(1, min(req.limit, 50))
-    tasks = await asyncio.to_thread(_list_tasks_sync, str(user_context["user_id"]), limit)
+    tasks = await asyncio.to_thread(_list_tasks_sync, user_id, limit)
     response = {
         "tasks": tasks,
         "message": f"Returned {len(tasks)} task(s).",

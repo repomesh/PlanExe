@@ -24,14 +24,14 @@ _current_task_id: Optional[str] = None
 _current_user_id: Optional[str] = None
 
 def set_current_task_id(task_id: Optional[str]) -> None:
-    """Set the current TaskItem.id for token tracking."""
+    """Set the current PlanItem.id for token tracking."""
     global _current_task_id
     _current_task_id = task_id
     logger.debug(f"Set current task_id for token tracking: {task_id}")
 
 
 def get_current_task_id() -> Optional[str]:
-    """Get the current TaskItem.id for token tracking."""
+    """Get the current PlanItem.id for token tracking."""
     return _current_task_id
 
 
@@ -60,7 +60,7 @@ def record_llm_tokens(
 
     Args:
         llm_model: The LLM model identifier
-        task_id: Optional TaskItem.id
+        task_id: Optional PlanItem.id
         duration_seconds: Optional duration of the call
 
     Returns:

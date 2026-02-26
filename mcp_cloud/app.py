@@ -59,7 +59,7 @@ if not _dotenv_loaded:
     )
 
 from database_api.planexe_db_singleton import db
-from database_api.model_taskitem import TaskItem, TaskState
+from database_api.model_planitem import PlanItem, PlanState
 from database_api.model_event import EventItem, EventType
 from database_api.model_user_account import UserAccount
 from database_api.model_user_api_key import UserApiKey
@@ -117,7 +117,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 280, 'pool_pre_ping': True}
 db.init_app(app)
 
-def ensure_taskitem_stop_columns() -> None:
+def ensure_planitem_stop_columns() -> None:
     statements = (
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER",
@@ -134,7 +134,7 @@ def ensure_taskitem_stop_columns() -> None:
                 logger.warning("Schema update failed for %s: %s", statement, exc, exc_info=True)
 
 with app.app_context():
-    ensure_taskitem_stop_columns()
+    ensure_planitem_stop_columns()
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (
@@ -230,21 +230,21 @@ class ModelProfilesRequest(BaseModel):
     pass
 
 # Helper functions
-def find_task_by_task_id(task_id: str) -> Optional[TaskItem]:
-    """Find TaskItem by MCP task_id (UUID), with legacy fallback."""
+def find_plan_by_task_id(task_id: str) -> Optional[PlanItem]:
+    """Find PlanItem by MCP task_id (UUID), with legacy fallback."""
     task = get_task_by_id(task_id)
     if task is not None:
         return task
 
-    def _query_legacy() -> Optional[TaskItem]:
-        query = db.session.query(TaskItem)
+    def _query_legacy() -> Optional[PlanItem]:
+        query = db.session.query(PlanItem)
         if db.engine.dialect.name == "postgresql":
             tasks = query.filter(
-                cast(TaskItem.parameters, JSONB).contains({"_mcp_task_id": task_id})
+                cast(PlanItem.parameters, JSONB).contains({"_mcp_task_id": task_id})
             ).all()
         else:
             tasks = query.filter(
-                TaskItem.parameters.contains({"_mcp_task_id": task_id})
+                PlanItem.parameters.contains({"_mcp_task_id": task_id})
             ).all()
         if tasks:
             return tasks[0]
@@ -259,23 +259,23 @@ def find_task_by_task_id(task_id: str) -> Optional[TaskItem]:
         logger.debug("Resolved legacy MCP task id %s to task %s", task_id, legacy_task.id)
     return legacy_task
 
-def get_task_by_id(task_id: str) -> Optional[TaskItem]:
-    """Fetch a TaskItem by its UUID string."""
-    def _query() -> Optional[TaskItem]:
+def get_task_by_id(task_id: str) -> Optional[PlanItem]:
+    """Fetch a PlanItem by its UUID string."""
+    def _query() -> Optional[PlanItem]:
         try:
             task_uuid = uuid.UUID(task_id)
         except ValueError:
             return None
-        return db.session.get(TaskItem, task_uuid)
+        return db.session.get(PlanItem, task_uuid)
 
     if has_app_context():
         return _query()
     with app.app_context():
         return _query()
 
-def resolve_task_for_task_id(task_id: str) -> Optional[TaskItem]:
-    """Resolve a TaskItem from a task_id (UUID), with legacy fallback."""
-    return find_task_by_task_id(task_id)
+def resolve_task_for_task_id(task_id: str) -> Optional[PlanItem]:
+    """Resolve a PlanItem from a task_id (UUID), with legacy fallback."""
+    return find_plan_by_task_id(task_id)
 
 def _hash_user_api_key(raw_key: str) -> str:
     secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
@@ -313,9 +313,9 @@ def _create_task_sync(
         parameters["model_profile"] = normalize_model_profile(parameters.get("model_profile")).value
         parameters["trigger_source"] = "mcp plan_create"
 
-        task = TaskItem(
+        task = PlanItem(
             prompt=prompt,
-            state=TaskState.pending,
+            state=PlanState.pending,
             user_id=metadata.get("user_id", "admin") if metadata else "admin",
             parameters=parameters,
         )
@@ -350,7 +350,7 @@ def _create_task_sync(
 
 def _get_task_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_task_by_task_id(task_id)
+        task = find_plan_by_task_id(task_id)
         if task is None:
             return None
         return {
@@ -363,11 +363,11 @@ def _get_task_status_snapshot_sync(task_id: str) -> Optional[dict[str, Any]]:
 
 def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_task_by_task_id(task_id)
+        task = find_plan_by_task_id(task_id)
         if task is None:
             return None
         stop_requested = False
-        if task.state in (TaskState.pending, TaskState.processing):
+        if task.state in (PlanState.pending, PlanState.processing):
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
             task.progress_message = "Stop requested by user."
@@ -382,10 +382,10 @@ def _request_task_stop_sync(task_id: str) -> Optional[dict[str, Any]]:
 
 def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[str, Any]]:
     with app.app_context():
-        task = find_task_by_task_id(task_id)
+        task = find_plan_by_task_id(task_id)
         if task is None:
             return None
-        if task.state != TaskState.failed:
+        if task.state != PlanState.failed:
             return {
                 "error": {
                     "code": "TASK_NOT_FAILED",
@@ -400,7 +400,7 @@ def _retry_failed_task_sync(task_id: str, model_profile: str) -> Optional[dict[s
         parameters["trigger_source"] = "mcp plan_retry"
 
         # Reset task state and clear prior run artifacts before requeueing.
-        task.state = TaskState.pending
+        task.state = PlanState.pending
         task.timestamp_created = now_utc
         task.progress_percentage = 0.0
         task.progress_message = "Retry requested via MCP."
@@ -452,9 +452,9 @@ def _get_task_for_report_sync(task_id: str) -> Optional[dict[str, Any]]:
 def _list_tasks_sync(user_id: str, limit: int) -> list[dict[str, Any]]:
     with app.app_context():
         tasks = (
-            db.session.query(TaskItem)
+            db.session.query(PlanItem)
             .filter_by(user_id=user_id)
-            .order_by(TaskItem.timestamp_created.desc())
+            .order_by(PlanItem.timestamp_created.desc())
             .limit(max(1, min(limit, 50)))
             .all()
         )
@@ -513,28 +513,28 @@ def extract_file_from_zip_file(file_handle: io.BufferedIOBase, file_path: str) -
         return None
 
 def fetch_report_from_db(task_id: str) -> Optional[bytes]:
-    """Fetch the report HTML stored in the TaskItem."""
+    """Fetch the report HTML stored in the PlanItem."""
     task = get_task_by_id(task_id)
     if task and task.generated_report_html is not None:
         return task.generated_report_html.encode("utf-8")
     return None
 
 def fetch_zip_snapshot(task_id: str) -> Optional[bytes]:
-    """Fetch the zip snapshot stored in the TaskItem."""
+    """Fetch the zip snapshot stored in the PlanItem."""
     task = get_task_by_id(task_id)
     if task and task.run_zip_snapshot is not None:
         return task.run_zip_snapshot
     return None
 
 def fetch_file_from_zip_snapshot(task_id: str, file_path: str) -> Optional[bytes]:
-    """Fetch a file from the TaskItem zip snapshot."""
+    """Fetch a file from the PlanItem zip snapshot."""
     task = get_task_by_id(task_id)
     if task and task.run_zip_snapshot is not None:
         return extract_file_from_zip_bytes(task.run_zip_snapshot, file_path)
     return None
 
 def list_files_from_zip_snapshot(task_id: str) -> Optional[list[str]]:
-    """List files from the TaskItem zip snapshot."""
+    """List files from the PlanItem zip snapshot."""
     task = get_task_by_id(task_id)
     if task and task.run_zip_snapshot is not None:
         return list_files_from_zip_bytes(task.run_zip_snapshot)
@@ -729,7 +729,7 @@ def _sanitize_legacy_zip_snapshot(zip_bytes: bytes) -> Optional[bytes]:
 async def fetch_user_downloadable_zip(task_id: str) -> Optional[bytes]:
     """
     Fetch a user-downloadable zip for a task.
-    New layout snapshots are served directly from TaskItem.run_zip_snapshot.
+    New layout snapshots are served directly from PlanItem.run_zip_snapshot.
     Legacy/task-dir fallbacks are sanitized to remove track_activity.jsonl.
     """
     task = await asyncio.to_thread(get_task_by_id, task_id)
@@ -754,13 +754,13 @@ def compute_sha256(content: str | bytes) -> str:
         content = content.encode('utf-8')
     return hashlib.sha256(content).hexdigest()
 
-def get_task_state_mapping(task_state: TaskState) -> str:
-    """Map TaskState to MCP task state."""
+def get_task_state_mapping(task_state: PlanState) -> str:
+    """Map PlanState to MCP task state."""
     mapping = {
-        TaskState.pending: "pending",
-        TaskState.processing: "processing",
-        TaskState.completed: "completed",
-        TaskState.failed: "failed",
+        PlanState.pending: "pending",
+        PlanState.processing: "processing",
+        PlanState.completed: "completed",
+        PlanState.failed: "failed",
     }
     return mapping.get(task_state, "pending")
 
@@ -1531,7 +1531,7 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
 
     task_state = task_snapshot["state"]
     state = get_task_state_mapping(task_state)
-    if task_state == TaskState.completed:
+    if task_state == PlanState.completed:
         progress_percentage = 100.0
 
     # Collect files from worker_plan
@@ -1693,7 +1693,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
         content_bytes = await fetch_user_downloadable_zip(run_id)
         if content_bytes is None:
             task_state = task_snapshot["state"]
-            if task_state in (TaskState.pending, TaskState.processing) or task_state is None:
+            if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
                 response = {"ready": False, "reason": "processing"}
             else:
                 response = {
@@ -1726,14 +1726,14 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     task_state = task_snapshot["state"]
-    if task_state in (TaskState.pending, TaskState.processing) or task_state is None:
+    if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
         response = {"ready": False, "reason": "processing"}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
             isError=False,
         )
-    if task_state == TaskState.failed:
+    if task_state == PlanState.failed:
         message = task_snapshot["progress_message"] or "Plan generation failed."
         response = {"ready": False, "reason": "failed", "error": {"code": "generation_failed", "message": message}}
         return CallToolResult(

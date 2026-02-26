@@ -44,7 +44,7 @@ My interaction with LM Studio for creating a plan is like this:
 9. download the report
 10. also download the zip
 
-LM Studio cannot autonomously check status, so it's up to the user to ask for it to invoke the `task_status` tool.
+LM Studio cannot autonomously check status, so it's up to the user to ask for it to invoke the `plan_status` tool.
 
 The created plan is here: [AI AgentNet](https://planexe.org/20260131_ai_agentnet_report.html)
 

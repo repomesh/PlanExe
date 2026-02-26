@@ -21,7 +21,7 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
   - `completed`: download is ready.
   - `failed`: terminal error.
 - Do not use legacy public names such as `running`, `stopping`, or `stopped`.
-- Do not expose internal implementation symbols (for example `TaskState.pending`) in
+- Do not expose internal implementation symbols (for example `PlanState.pending`) in
   model-facing text; use plain public strings.
 - Troubleshooting guidance to keep aligned with cloud docs/instructions:
   - `pending` for longer than 5 minutes likely means queued but not picked up by worker.

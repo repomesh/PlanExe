@@ -2,7 +2,7 @@
 
 Subclass of the `worker_plan` service that runs the PlanExe pipeline with a Postgres database.
 
-- Polls `TaskItem` rows, marks them processing, and runs the pipeline.
+- Polls `PlanItem` rows, marks them processing, and runs the pipeline.
 - Reports state/progress back to the DB and posts confirmations to MachAI.
 - Uses the same `worker_plan_internal` code as `worker_plan`, plus the shared `database_api` models.
 - Configure MachAI confirmation endpoints with `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_PRODUCTION_URL` and `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL` (both are required; the worker fails fast if missing).

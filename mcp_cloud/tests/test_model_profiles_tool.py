@@ -30,7 +30,7 @@ class TestModelProfilesTool(unittest.TestCase):
                     ],
                 }
             ],
-            "message": "Use one of these profile values in task_create.model_profile.",
+            "message": "Use one of these profile values in plan_create.model_profile.",
         }
 
         with patch("mcp_cloud.app._get_model_profiles_sync", return_value=payload):
@@ -45,7 +45,7 @@ class TestModelProfilesTool(unittest.TestCase):
         payload = {
             "default_profile": "baseline",
             "profiles": [],
-            "message": "Use one of these profile values in task_create.model_profile.",
+            "message": "Use one of these profile values in plan_create.model_profile.",
         }
 
         with patch("mcp_cloud.app._get_model_profiles_sync", return_value=payload):

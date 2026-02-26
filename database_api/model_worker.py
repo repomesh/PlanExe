@@ -20,7 +20,7 @@ class WorkerItem(db.Model):
     # Timestamp of the last heartbeat received from this worker
     last_heartbeat_at = db.Column(db.DateTime, nullable=False, index=True, default=lambda: datetime.now(UTC))
     
-    # The ID (UUID string) of the TaskItem this worker is currently processing, if any
+    # The ID (UUID string) of the PlanItem this worker is currently processing, if any
     current_task_id = db.Column(db.String(255), nullable=True, index=True) 
 
     def __repr__(self):

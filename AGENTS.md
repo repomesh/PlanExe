@@ -28,7 +28,7 @@ Always check the package-level `AGENTS.md` for file-specific rules
 - Do not add real API keys or passwords to `.env`, `.env.*`, or any `llm_config/*.json` file.
 - Treat `track_activity.jsonl` as sensitive (may contain API keys/tokens).
   Never expose it to end users.
-  Store `track_activity.jsonl` in `TaskItem.run_track_activity_jsonl` and keep
+  Store `track_activity.jsonl` in `PlanItem.run_track_activity_jsonl` and keep
   it out of downloadable zips at artifact creation time. Legacy snapshots may
   be sanitized at download time, but new snapshots should be served directly
   without unzip/recompress.

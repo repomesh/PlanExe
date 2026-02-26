@@ -4,7 +4,7 @@ Shared database models used by multiple PlanExe services (e.g., `frontend_multi_
 
 ## Contents
 - `model_event.py`: `EventType` enum and `EventItem` SQLAlchemy model.
-- `model_taskitem.py`: `TaskState` enum and `TaskItem` SQLAlchemy model.
+- `model_planitem.py`: `PlanState` enum and `PlanItem` SQLAlchemy model.
 - `model_worker.py`: `WorkerItem` SQLAlchemy model for worker heartbeats.
 - `model_nonce.py`: `NonceItem` SQLAlchemy model for nonce tracking.
 - `model_user_account.py`: `UserAccount` for OAuth users, credits, and profile data.
@@ -18,7 +18,7 @@ Add the repo root (containing `database_api/`) to `PYTHONPATH`, then:
 ```python
 from database_api.planexe_db_singleton import db
 from database_api.model_event import EventType, EventItem
-from database_api.model_taskitem import TaskItem, TaskState
+from database_api.model_planitem import PlanItem, PlanState
 from database_api.model_worker import WorkerItem
 from database_api.model_nonce import NonceItem
 from database_api.model_user_account import UserAccount

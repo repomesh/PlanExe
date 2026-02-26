@@ -31,14 +31,16 @@ def _sanitize_utf8_text(value):
         text = text.encode("utf-8", errors="replace").decode("utf-8")
     return text
 
-class TaskState(enum.Enum):
+class PlanState(enum.Enum):
     pending = 1
     processing = 2
     completed = 3
     failed = 4
 
 
-class TaskItem(db.Model):
+class PlanItem(db.Model):
+    __tablename__ = "task_item"
+
     # A unique identifier for the task.
     id = db.Column(UUIDType(binary=False), default=uuid.uuid4, primary_key=True)
 
@@ -49,7 +51,7 @@ class TaskItem(db.Model):
     # When the task is picked up from the queue, the state is set to processing.
     # When the plan has been generated successfully the state is set to completed.
     # If anything fails or the task is aborted, the state is set to failed.
-    state = db.Column(db.Enum(TaskState), nullable=True)
+    state = db.Column(db.Enum(PlanState), nullable=True)
 
     # The prompt that was submitted to the /run endpoint, that PlanExe will attempt to generate a plan for.
     # The limit is 4GB of text.
@@ -108,25 +110,25 @@ class TaskItem(db.Model):
         if not isinstance(self.parameters, dict):
             return False
         return key in self.parameters
-    
+
     @classmethod
-    def demo_items(cls) -> list['TaskItem']:
-        task1 = TaskItem(
-            state=TaskState.failed,
-            prompt="Eurovision 2026 in Austria, following the country’s 2025 victory. Budget of €30-40 million, funded by the European Broadcasting Union (EBU), Austrian broadcaster ORF, and host city contributions. Host city likely to be Vienna. Venue capable of accommodating 10,000-15,000 spectators.",
+    def demo_items(cls) -> list['PlanItem']:
+        task1 = PlanItem(
+            state=PlanState.failed,
+            prompt="Eurovision 2026 in Austria, following the country's 2025 victory. Budget of €30-40 million, funded by the European Broadcasting Union (EBU), Austrian broadcaster ORF, and host city contributions. Host city likely to be Vienna. Venue capable of accommodating 10,000-15,000 spectators.",
             progress_percentage=0.0,
             progress_message="Awaiting server to start…",
             user_id="demo_user_1"
         )
-        task2 = TaskItem(
-            state=TaskState.completed,
+        task2 = PlanItem(
+            state=PlanState.completed,
             prompt="It's 2025 and humanoid robots are entering mainstream society, with China already showcasing robotic athletes in sports events. Plan a 2026 Robot Olympics, outline innovative events, rules, and challenges to test the humanoid robots.",
             progress_percentage=100.0,
             progress_message="Completed",
             user_id="demo_user_1"
         )
-        task3 = TaskItem(
-            state=TaskState.completed,
+        task3 = PlanItem(
+            state=PlanState.completed,
             prompt="It's 2025 and humanoid robots are entering mainstream society, with China already showcasing robotic athletes in sports events. Plan a 2026 Robot Olympics, outline innovative events, rules, and challenges to test the humanoid robots.",
             progress_percentage=100.0,
             progress_message="Completed",
@@ -140,8 +142,8 @@ class TaskItem(db.Model):
         return [task1, task2, task3]
 
 
-@event.listens_for(TaskItem, "before_insert")
-@event.listens_for(TaskItem, "before_update")
-def _sanitize_taskitem_fields(_mapper, _connection, target):
+@event.listens_for(PlanItem, "before_insert")
+@event.listens_for(PlanItem, "before_update")
+def _sanitize_planitem_fields(_mapper, _connection, target):
     # Enforce valid UTF-8-safe prompt text regardless of writer path.
     target.prompt = _sanitize_utf8_text(target.prompt)

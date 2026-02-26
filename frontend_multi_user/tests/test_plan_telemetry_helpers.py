@@ -29,7 +29,7 @@ APP_MODULE_PATH = FRONTEND_SRC / "app.py"
 APP_IMPORT_ERROR = None
 APP_AVAILABLE = False
 MyFlaskApp: Any = object
-TaskState: Any = SimpleNamespace(processing="processing", completed="completed")
+PlanState: Any = SimpleNamespace(processing="processing", completed="completed")
 frontend_app_module = None
 try:
     APP_SPEC = importlib.util.spec_from_file_location("frontend_multi_user_app", APP_MODULE_PATH)
@@ -38,7 +38,7 @@ try:
     frontend_app_module = importlib.util.module_from_spec(APP_SPEC)
     APP_SPEC.loader.exec_module(frontend_app_module)
     MyFlaskApp = frontend_app_module.MyFlaskApp
-    TaskState = frontend_app_module.TaskState
+    PlanState = frontend_app_module.PlanState
     APP_AVAILABLE = True
 except ModuleNotFoundError as exc:
     APP_IMPORT_ERROR = exc
@@ -72,8 +72,8 @@ class TestPlanTelemetryHelpers(unittest.TestCase):
         run_artifact_layout_version: int | None = None,
         state=None,
     ):
-        if state is None and TaskState is not None:
-            state = TaskState.processing
+        if state is None and PlanState is not None:
+            state = PlanState.processing
         return SimpleNamespace(
             id=task_id,
             run_zip_snapshot=run_zip_snapshot,
@@ -258,7 +258,7 @@ class TestPlanTelemetryHelpers(unittest.TestCase):
         task = self._task(
             task_id="task-cache",
             run_zip_snapshot=self._make_zip_snapshot({"total_input_tokens": 3}),
-            state=TaskState.completed,
+            state=PlanState.completed,
         )
 
         with self._patch_token_metrics_rows([]):

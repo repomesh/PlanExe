@@ -13,16 +13,16 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
   - Prefer `SQLALCHEMY_DATABASE_URI` when set.
   - Otherwise build from `PLANEXE_POSTGRES_*` (see root `AGENTS.md` for keys).
 - MCP tools must follow the specification in `docs/mcp/planexe_mcp_interface.md`:
-  - Task management maps to `TaskItem` records (each task = one TaskItem).
+  - Task management maps to `PlanItem` records (each task = one PlanItem).
   - Events are queried from `EventItem` database records.
-- Use the TaskItem UUID as the MCP `task_id`.
+- Use the PlanItem UUID as the MCP `task_id`.
 - Public task state contract:
   - `plan_status.state` must use exactly: `pending`, `processing`, `completed`, `failed`.
-  - These values correspond 1:1 with `database_api.model_taskitem.TaskState`.
+  - These values correspond 1:1 with `database_api.model_planitem.PlanState`.
   - Do not use legacy public names like `running`, `stopping`, or `stopped` for `plan_status`.
-  - Do not expose internal symbol/class names (for example `TaskState.pending`, `TaskItem.state`) in model-facing tool descriptions; use plain public state strings.
+  - Do not expose internal symbol/class names (for example `PlanState.pending`, `PlanItem.state`) in model-facing tool descriptions; use plain public state strings.
 - Download contract:
-  - `track_activity.jsonl` is internal-only (`TaskItem.run_track_activity_jsonl`).
+  - `track_activity.jsonl` is internal-only (`PlanItem.run_track_activity_jsonl`).
   - Downloadable zip artifacts must never include `track_activity.jsonl`.
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
 - `plan_stop` contract:

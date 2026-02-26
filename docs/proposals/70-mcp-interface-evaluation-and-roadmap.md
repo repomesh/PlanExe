@@ -137,11 +137,9 @@ Both `handle_plan_file_info` (cloud) and `handle_plan_download` (local) now retu
 
 Added `mcp_cloud/tests/test_plan_list_tool.py` with 8 tests covering: tool listed, returns tasks, empty result, limit clamping (both directions), invalid API key, `USER_API_KEY_REQUIRED` when env requires key, no-key passthrough when not required (user_id=None), and default limit.
 
-### 4.6 CORS default is wildcard
+### ~~4.6 CORS default is wildcard~~ (FIXED)
 
-`PLANEXE_MCP_CORS_ORIGINS` defaults to `["*"]` when unset (`http_server.py:139–143`). The comment says "API-key auth is the primary access control", but wildcard CORS exposes all endpoints to any origin.
-
-**Fix:** Default to a restrictive origin list (e.g. `["https://mcp.planexe.org", "https://home.planexe.org"]`) and document the `PLANEXE_MCP_CORS_ORIGINS` override in the README.
+When `AUTH_REQUIRED` is true and `PLANEXE_MCP_CORS_ORIGINS` is unset, the default is now `["https://mcp.planexe.org", "https://home.planexe.org"]` instead of `["*"]`. Wildcard CORS is only used in dev mode (`PLANEXE_MCP_REQUIRE_AUTH=false`) so browser-based tools like MCP Inspector work without extra configuration. Operators can override via `PLANEXE_MCP_CORS_ORIGINS`.
 
 ### ~~4.7 No request logging for successful tool calls~~ (FIXED)
 
@@ -242,7 +240,7 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~   | —      | DONE   |
 | P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —  | DONE   |
 | P2       | ~~Rename test files from `test_task_*` to `test_plan_*` (4.9)~~       | —      | DONE   |
-| P2       | Tighten default CORS origins (4.6)                                     | 30 min |        |
+| P2       | ~~Tighten default CORS origins (4.6)~~                                 | —      | DONE   |
 | P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                   | —      | DONE   |
 | P3       | Webhook support (5.2)                                                  | 1 day  |        |
 | P3       | API versioning (5.3)                                                   | 4 h    |        |

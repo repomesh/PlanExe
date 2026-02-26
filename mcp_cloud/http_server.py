@@ -145,10 +145,18 @@ def _split_csv_env(value: Optional[str]) -> list[str]:
 
 CORS_ORIGINS = _split_csv_env(os.environ.get("PLANEXE_MCP_CORS_ORIGINS"))
 if not CORS_ORIGINS:
-    # Use wildcard so that browser-based tools (e.g. MCP Inspector at
-    # localhost:6274) can connect directly.  API-key auth is the primary
-    # access control; CORS is defence-in-depth only.
-    CORS_ORIGINS = ["*"]
+    if AUTH_REQUIRED:
+        # Production default: only allow known PlanExe origins.
+        # Override via PLANEXE_MCP_CORS_ORIGINS if additional origins are needed.
+        CORS_ORIGINS = [
+            "https://mcp.planexe.org",
+            "https://home.planexe.org",
+        ]
+    else:
+        # Dev mode: allow any origin so browser-based tools (e.g. MCP Inspector
+        # at localhost:6274) can connect without extra configuration.
+        CORS_ORIGINS = ["*"]
+        logger.info("CORS wildcard enabled (PLANEXE_MCP_REQUIRE_AUTH=false)")
 
 PUBLIC_JSONRPC_METHODS_NO_AUTH = {
     "initialize",

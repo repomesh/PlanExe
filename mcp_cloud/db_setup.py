@@ -1,0 +1,170 @@
+"""PlanExe MCP Cloud – database setup, Flask app, constants, and request classes."""
+import logging
+import os
+from pathlib import Path
+from typing import Literal, Optional
+from urllib.parse import quote_plus
+
+from flask import Flask
+from mcp.server import Server
+from pydantic import BaseModel
+from sqlalchemy import text
+from worker_plan_api.model_profile import ModelProfileEnum
+
+from mcp_cloud.dotenv_utils import load_planexe_dotenv
+
+_dotenv_loaded, _dotenv_paths = load_planexe_dotenv(Path(__file__).parent)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+if not _dotenv_loaded:
+    logger.warning(
+        "No .env file found; searched: %s",
+        ", ".join(str(path) for path in _dotenv_paths),
+    )
+
+from database_api.planexe_db_singleton import db
+from database_api.model_planitem import PlanItem, PlanState
+from database_api.model_event import EventItem, EventType
+from database_api.model_user_account import UserAccount
+from database_api.model_user_api_key import UserApiKey
+
+app = Flask(__name__)
+app.config.from_pyfile('config.py')
+
+def build_postgres_uri_from_env(env: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """Construct a SQLAlchemy URI for Postgres using environment variables."""
+    host = env.get("PLANEXE_POSTGRES_HOST") or "database_postgres"
+    port = str(env.get("PLANEXE_POSTGRES_PORT") or "5432")
+    dbname = env.get("PLANEXE_POSTGRES_DB") or "planexe"
+    user = env.get("PLANEXE_POSTGRES_USER") or "planexe"
+    password = env.get("PLANEXE_POSTGRES_PASSWORD") or "planexe"
+    uri = f"postgresql+psycopg2://{quote_plus(user)}:{quote_plus(password)}@{host}:{port}/{dbname}"
+    safe_config = {"host": host, "port": port, "dbname": dbname, "user": user}
+    return uri, safe_config
+
+sqlalchemy_database_uri = os.environ.get("SQLALCHEMY_DATABASE_URI")
+if sqlalchemy_database_uri is None:
+    sqlalchemy_database_uri, db_settings = build_postgres_uri_from_env(os.environ)
+    logger.info(f"SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}")
+else:
+    logger.info("Using SQLALCHEMY_DATABASE_URI from environment.")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 280, 'pool_pre_ping': True}
+db.init_app(app)
+
+def ensure_planitem_stop_columns() -> None:
+    statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested_timestamp TIMESTAMP",
+    )
+    with db.engine.begin() as conn:
+        for statement in statements:
+            try:
+                conn.execute(text(statement))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", statement, exc, exc_info=True)
+
+with app.app_context():
+    ensure_planitem_stop_columns()
+
+# Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
+PLANEXE_SERVER_INSTRUCTIONS = (
+    "PlanExe generates strategic project-plan drafts from a natural-language prompt. "
+    "Output is a self-contained interactive HTML report (~700KB) with 20+ sections including "
+    "executive summary, interactive Gantt charts, risk analysis, SWOT, governance, investor pitch, "
+    "team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections "
+    "(premortem, self-audit checklist, premise attacks) that stress-test whether the plan holds up. "
+    "The output is a draft to refine, not final ground truth — but it surfaces hard questions the prompter may not have considered. "
+    "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
+    "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
+    "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
+    "Required interaction order: call prompt_examples first. "
+    "Optional before plan_create: call model_profiles to see profile guidance and available models in each profile. "
+    "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
+    "typically ~300-800 words, and get user approval. "
+    "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+    "Write the prompt as flowing prose — weave specs, constraints, and targets naturally into sentences. "
+    "Only after approval, call plan_create. "
+    "Each plan_create call creates a new task_id; the server does not enforce a global per-client concurrency limit. "
+    "Then poll plan_status (about every 5 minutes); use plan_file_info when complete. "
+    "If a run fails, call plan_retry with the failed task_id to requeue it (optional model_profile, defaults to baseline). "
+    "To stop, call plan_stop with the task_id from plan_create; stopping is asynchronous and the task will eventually transition to failed. "
+    "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
+    "Tool errors use {error:{code,message}}. plan_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
+    "plan_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
+    "To list recent tasks for a user call plan_list with user_api_key; returns task_id, state, progress_percentage, created_at, and prompt_excerpt for each task. "
+    "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the task was likely queued but not picked up by a worker (server issue). "
+    "If plan_status is in processing and output files do not change for longer than 20 minutes, the plan_create likely failed/stalled. "
+    "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
+    "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
+    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report."
+)
+
+mcp_cloud_server = Server("planexe-mcp-cloud", instructions=PLANEXE_SERVER_INSTRUCTIONS)
+
+# Base directory for run artifacts (not used directly, fetched via worker_plan HTTP API)
+BASE_DIR_RUN = Path(os.environ.get("PLANEXE_RUN_DIR", Path(__file__).parent.parent / "run")).resolve()
+
+WORKER_PLAN_URL = os.environ.get("PLANEXE_WORKER_PLAN_URL", "http://worker_plan:8000")
+
+REPORT_FILENAME = "030-report.html"
+REPORT_CONTENT_TYPE = "text/html; charset=utf-8"
+ZIP_FILENAME = "run.zip"
+ZIP_CONTENT_TYPE = "application/zip"
+ZIP_SNAPSHOT_MAX_BYTES = 100_000_000
+
+ModelProfileInput = Literal[
+    "baseline",
+    "premium",
+    "frontier",
+    "custom",
+]
+MODEL_PROFILE_TITLES = {
+    ModelProfileEnum.BASELINE.value: "Baseline",
+    ModelProfileEnum.PREMIUM.value: "Premium",
+    ModelProfileEnum.FRONTIER.value: "Frontier",
+    ModelProfileEnum.CUSTOM.value: "Custom",
+}
+MODEL_PROFILE_SUMMARIES = {
+    ModelProfileEnum.BASELINE.value: "Cheap and fast; recommended default when creating a plan.",
+    ModelProfileEnum.PREMIUM.value: "Higher-cost profile tuned for stronger output quality.",
+    ModelProfileEnum.FRONTIER.value: "Most capable models first; usually slowest/most expensive.",
+    ModelProfileEnum.CUSTOM.value: "User-managed profile file for custom model ordering.",
+}
+
+class TaskCreateRequest(BaseModel):
+    prompt: str
+    model_profile: Optional[ModelProfileInput] = None
+    user_api_key: Optional[str] = None
+
+class TaskStatusRequest(BaseModel):
+    task_id: str
+
+class TaskStopRequest(BaseModel):
+    task_id: str
+
+class TaskRetryRequest(BaseModel):
+    task_id: str
+    model_profile: ModelProfileInput = "baseline"
+
+class TaskFileInfoRequest(BaseModel):
+    task_id: str
+    artifact: Optional[str] = None
+
+class TaskListRequest(BaseModel):
+    user_api_key: str
+    limit: int = 10
+
+class ModelProfilesRequest(BaseModel):
+    """No input parameters."""
+    pass

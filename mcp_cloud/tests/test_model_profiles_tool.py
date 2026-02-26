@@ -33,7 +33,7 @@ class TestModelProfilesTool(unittest.TestCase):
             "message": "Use one of these profile values in plan_create.model_profile.",
         }
 
-        with patch("mcp_cloud.app._get_model_profiles_sync", return_value=payload):
+        with patch("mcp_cloud.handlers._get_model_profiles_sync", return_value=payload):
             result = asyncio.run(handle_model_profiles({}))
 
         self.assertFalse(result.isError)
@@ -48,7 +48,7 @@ class TestModelProfilesTool(unittest.TestCase):
             "message": "Use one of these profile values in plan_create.model_profile.",
         }
 
-        with patch("mcp_cloud.app._get_model_profiles_sync", return_value=payload):
+        with patch("mcp_cloud.handlers._get_model_profiles_sync", return_value=payload):
             result = asyncio.run(handle_model_profiles({}))
 
         self.assertTrue(result.isError)

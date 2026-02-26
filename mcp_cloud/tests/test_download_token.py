@@ -3,13 +3,14 @@ import unittest
 from unittest.mock import patch
 
 import mcp_cloud.app as cloud_app
+import mcp_cloud.download_tokens as _dt_mod
 
 
 class TestGenerateAndValidateDownloadToken(unittest.TestCase):
     def setUp(self):
         # Pin the secret so tests are deterministic regardless of env vars.
         self._secret_patch = patch.object(
-            cloud_app,
+            _dt_mod,
             "_get_download_token_secret",
             return_value=b"test-secret-for-unit-tests",
         )
@@ -69,27 +70,27 @@ class TestGenerateAndValidateDownloadToken(unittest.TestCase):
         self.assertNotEqual(t1, t2)
 
     def test_report_url_contains_token(self):
-        with patch.object(cloud_app, "_get_download_base_url", return_value="https://example.com"):
+        with patch.object(_dt_mod, "_get_download_base_url", return_value="https://example.com"):
             url = cloud_app.build_report_download_url("task-abc")
         self.assertIsNotNone(url)
         self.assertIn("?token=", url)
         self.assertIn("/download/task-abc/030-report.html", url)
 
     def test_zip_url_contains_token(self):
-        with patch.object(cloud_app, "_get_download_base_url", return_value="https://example.com"):
+        with patch.object(_dt_mod, "_get_download_base_url", return_value="https://example.com"):
             url = cloud_app.build_zip_download_url("task-abc")
         self.assertIsNotNone(url)
         self.assertIn("?token=", url)
         self.assertIn("/download/task-abc/run.zip", url)
 
     def test_token_embedded_in_report_url_is_valid(self):
-        with patch.object(cloud_app, "_get_download_base_url", return_value="https://example.com"):
+        with patch.object(_dt_mod, "_get_download_base_url", return_value="https://example.com"):
             url = cloud_app.build_report_download_url("task-abc")
         token = url.split("?token=")[1]
         self.assertTrue(cloud_app.validate_download_token(token, "task-abc", "030-report.html"))
 
     def test_token_embedded_in_zip_url_is_valid(self):
-        with patch.object(cloud_app, "_get_download_base_url", return_value="https://example.com"):
+        with patch.object(_dt_mod, "_get_download_base_url", return_value="https://example.com"):
             url = cloud_app.build_zip_download_url("task-abc")
         token = url.split("?token=")[1]
         self.assertTrue(cloud_app.validate_download_token(token, "task-abc", "run.zip"))

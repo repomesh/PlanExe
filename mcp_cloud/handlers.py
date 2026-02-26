@@ -1,0 +1,531 @@
+"""PlanExe MCP Cloud – MCP tool handlers and dispatch."""
+import asyncio
+import json
+import logging
+import os
+from datetime import UTC, datetime
+from typing import Any
+
+from mcp.types import CallToolResult, Tool, TextContent, ToolAnnotations
+
+from mcp_cloud.db_setup import (
+    PlanState,
+    REPORT_CONTENT_TYPE,
+    REPORT_FILENAME,
+    ZIP_CONTENT_TYPE,
+    ModelProfileInput,
+    TaskCreateRequest,
+    TaskStatusRequest,
+    TaskStopRequest,
+    TaskRetryRequest,
+    TaskFileInfoRequest,
+    TaskListRequest,
+    ModelProfilesRequest,
+    mcp_cloud_server,
+)
+from mcp_cloud.auth import _resolve_user_from_api_key
+from mcp_cloud.db_queries import (
+    _create_task_sync,
+    _get_task_status_snapshot_sync,
+    _request_task_stop_sync,
+    _retry_failed_task_sync,
+    _get_task_for_report_sync,
+    _list_tasks_sync,
+    get_task_state_mapping,
+    _extract_task_create_metadata_overrides,
+    _merge_task_create_config,
+)
+from mcp_cloud.zip_utils import (
+    list_files_from_zip_snapshot,
+    compute_sha256,
+)
+from mcp_cloud.worker_fetchers import (
+    fetch_artifact_from_worker_plan,
+    fetch_file_list_from_worker_plan,
+    list_files_from_local_run_dir,
+    fetch_user_downloadable_zip,
+)
+from mcp_cloud.model_profiles import _get_model_profiles_sync
+from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url
+from mcp_cloud.prompt_examples import _load_mcp_example_prompts
+from mcp_cloud.schemas import TOOL_DEFINITIONS
+
+logger = logging.getLogger(__name__)
+
+
+@mcp_cloud_server.list_tools()
+async def handle_list_tools() -> list[Tool]:
+    """List all available MCP tools."""
+    return [
+        Tool(
+            name=definition.name,
+            description=definition.description,
+            outputSchema=definition.output_schema,
+            inputSchema=definition.input_schema,
+            annotations=ToolAnnotations(**definition.annotations) if definition.annotations else None,
+        )
+        for definition in TOOL_DEFINITIONS
+    ]
+
+@mcp_cloud_server.call_tool()
+async def handle_call_tool(name: str, arguments: dict[str, Any]) -> CallToolResult:
+    """Dispatch MCP tool calls and return structured JSON errors for unknown tools."""
+    try:
+        handler = TOOL_HANDLERS.get(name)
+        if handler is None:
+            response = {"error": {"code": "INVALID_TOOL", "message": f"Unknown tool: {name}"}}
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=True,
+            )
+        return await handler(arguments)
+    except Exception as e:
+        logger.error(f"Error handling tool {name}: {e}", exc_info=True)
+        response = {"error": {"code": "INTERNAL_ERROR", "message": str(e)}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
+    """Create a new PlanExe task and enqueue it for processing.
+
+    Examples:
+        - {"prompt": "Start a dental clinic in Copenhagen with 3 treatment rooms, targeting families and children. Budget 2.5M DKK. Open within 12 months."} → returns task_id (UUID) + created_at
+
+    Args:
+        - prompt: What the plan should cover (goal, context, constraints).
+        - model_profile: Optional profile ("baseline" | "premium" | "frontier" | "custom"). Call model_profiles to inspect options.
+
+    Returns:
+        - content: JSON string matching structuredContent.
+        - structuredContent: {"task_id": "<uuid>", "created_at": ...}
+        - isError: False on success.
+    """
+    req = TaskCreateRequest(**arguments)
+    metadata_overrides = _extract_task_create_metadata_overrides(arguments)
+    metadata_model_profile = metadata_overrides.get("model_profile")
+    model_profile = req.model_profile
+    if model_profile is None and isinstance(metadata_model_profile, str):
+        model_profile = metadata_model_profile
+
+    merged_config = _merge_task_create_config(None, model_profile)
+    require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
+    user_context = None
+    if req.user_api_key:
+        user_context = _resolve_user_from_api_key(req.user_api_key.strip())
+        if not user_context:
+            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=True,
+            )
+    elif require_user_key:
+        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_create."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    if user_context and float(user_context.get("credits_balance", 0.0)) <= 0.0:
+        response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    response = await asyncio.to_thread(
+        _create_task_sync,
+        req.prompt,
+        merged_config,
+        {"user_id": str(user_context["user_id"])} if user_context else None,
+    )
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
+async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
+    """Return curated prompts from the catalog (mcp_example true) so LLMs can see example detail."""
+    samples = _load_mcp_example_prompts()
+    payload = {
+        "samples": samples,
+        "message": (
+            "Next: complete the non-tool step by drafting a detailed prompt (typically ~300-800 words) using these as a baseline (similar structure), then get user approval. "
+            "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
+            "Write the prompt as flowing prose, not structured markdown with headers or bullet lists. "
+            "Weave technical specs, constraints, and targets naturally into sentences. Include banned words/approaches and governance preferences inline. "
+            "The examples demonstrate this prose style — match their tone and density. "
+            "Only after approval, call plan_create. "
+            "Do not use PlanExe for tiny one-shot requests (e.g., rewrite this email, summarize this document). "
+            "PlanExe always runs the full fixed planning pipeline; callers cannot run only selected internal steps."
+        ),
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+        isError=False,
+    )
+
+
+async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
+    """Return model profile options and currently available models in each profile."""
+    _ = ModelProfilesRequest(**(arguments or {}))
+    payload = await asyncio.to_thread(_get_model_profiles_sync)
+    profiles = payload.get("profiles")
+    if not isinstance(profiles, list) or len(profiles) == 0:
+        response = {
+            "error": {
+                "code": "MODEL_PROFILES_UNAVAILABLE",
+                "message": (
+                    "No models are currently configured. "
+                    "Inform the user that the server administrator needs to set up model profiles before plans can be created."
+                ),
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+        isError=False,
+    )
+
+
+async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
+    """Fetch the current task status, progress, and recent files for a task.
+
+    Examples:
+        - {"task_id": "uuid"} → state/progress/timing + recent files
+
+    Args:
+        - task_id: Task UUID returned by plan_create.
+
+    Returns:
+        - content: JSON string matching structuredContent.
+        - structuredContent: status payload or error.
+        - isError: True only when task_id is unknown.
+    """
+    req = TaskStatusRequest(**arguments)
+    task_id = req.task_id
+
+    task_snapshot = await asyncio.to_thread(_get_task_status_snapshot_sync, task_id)
+    if task_snapshot is None:
+        response = {
+            "error": {
+                "code": "TASK_NOT_FOUND",
+                "message": f"Task not found: {task_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    progress_percentage = float(task_snapshot.get("progress_percentage") or 0.0)
+
+    task_state = task_snapshot["state"]
+    state = get_task_state_mapping(task_state)
+    if task_state == PlanState.completed:
+        progress_percentage = 100.0
+
+    # Collect files from worker_plan
+    task_uuid = task_snapshot["id"]
+    files = []
+    if task_uuid:
+        files_list = await fetch_file_list_from_worker_plan(task_uuid)
+        if not files_list:
+            files_list = await asyncio.to_thread(list_files_from_zip_snapshot, task_uuid)
+        if not files_list:
+            files_list = await asyncio.to_thread(list_files_from_local_run_dir, task_uuid)
+        if files_list:
+            for file_name in files_list[:10]:  # Limit to 10 most recent
+                if file_name != "log.txt":
+                    updated_at = datetime.now(UTC).replace(microsecond=0)
+                    files.append({
+                        "path": file_name,
+                        "updated_at": updated_at.isoformat().replace("+00:00", "Z"),  # Approximate
+                    })
+
+    created_at = task_snapshot["timestamp_created"]
+    if created_at and created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=UTC)
+
+    response = {
+        "task_id": task_uuid,
+        "state": state,
+        "progress_percentage": progress_percentage,
+        "timing": {
+            "started_at": (
+                created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+                if created_at
+                else None
+            ),
+            "elapsed_sec": (datetime.now(UTC) - created_at).total_seconds() if created_at else 0,
+        },
+        "files": files[:10],  # Limit to 10 most recent
+    }
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+async def handle_plan_stop(arguments: dict[str, Any]) -> CallToolResult:
+    """Request an active task to stop.
+
+    Examples:
+        - {"task_id": "uuid"} → stop request accepted
+
+    Args:
+        - task_id: Task UUID returned by plan_create.
+
+    Returns:
+        - content: JSON string matching structuredContent.
+        - structuredContent: {"state": "pending|processing|completed|failed", "stop_requested": bool} or error payload.
+        - isError: True only when task_id is unknown.
+    """
+    req = TaskStopRequest(**arguments)
+    task_id = req.task_id
+
+    stop_result = await asyncio.to_thread(_request_task_stop_sync, task_id)
+    if stop_result is None:
+        response = {
+            "error": {
+                "code": "TASK_NOT_FOUND",
+                "message": f"Task not found: {task_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    response = stop_result
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
+async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
+    """Retry a failed task by resetting it back to pending."""
+    req = TaskRetryRequest(**arguments)
+    task_id = req.task_id
+    retry_result = await asyncio.to_thread(_retry_failed_task_sync, task_id, req.model_profile)
+
+    if retry_result is None:
+        response = {
+            "error": {
+                "code": "TASK_NOT_FOUND",
+                "message": f"Task not found: {task_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    if isinstance(retry_result.get("error"), dict):
+        response = retry_result
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    response = retry_result
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
+async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
+    """Return download metadata for a task's report or zip artifact.
+
+    Examples:
+        - {"task_id": "uuid"} → report metadata (default)
+        - {"task_id": "uuid", "artifact": "zip"} → zip metadata
+
+    Args:
+        - task_id: Task UUID returned by plan_create.
+        - artifact: Optional "report" or "zip".
+
+    Returns:
+        - content: JSON string matching structuredContent.
+        - structuredContent: metadata (content_type, sha256, download_size,
+          optional download_url) or {} if not ready, or error payload.
+        - isError: True only when task_id is unknown.
+    """
+    req = TaskFileInfoRequest(**arguments)
+    task_id = req.task_id
+    artifact = req.artifact.strip().lower() if isinstance(req.artifact, str) else "report"
+    if artifact not in ("report", "zip"):
+        artifact = "report"
+    task_snapshot = await asyncio.to_thread(_get_task_for_report_sync, task_id)
+    if task_snapshot is None:
+        response = {
+            "error": {
+                "code": "TASK_NOT_FOUND",
+                "message": f"Task not found: {task_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    run_id = task_snapshot["id"]
+    if artifact == "zip":
+        content_bytes = await fetch_user_downloadable_zip(run_id)
+        if content_bytes is None:
+            task_state = task_snapshot["state"]
+            if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
+                response = {"ready": False, "reason": "processing"}
+            else:
+                response = {
+                    "error": {
+                        "code": "content_unavailable",
+                        "message": "zip content_bytes is None",
+                    },
+                }
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=False,
+            )
+
+        total_size = len(content_bytes)
+        content_hash = compute_sha256(content_bytes)
+        response = {
+            "content_type": ZIP_CONTENT_TYPE,
+            "sha256": content_hash,
+            "download_size": total_size,
+        }
+        download_url = build_zip_download_url(run_id)
+        if download_url:
+            response["download_url"] = download_url
+
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=False,
+        )
+
+    task_state = task_snapshot["state"]
+    if task_state in (PlanState.pending, PlanState.processing) or task_state is None:
+        response = {"ready": False, "reason": "processing"}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=False,
+        )
+    if task_state == PlanState.failed:
+        message = task_snapshot["progress_message"] or "Plan generation failed."
+        response = {"ready": False, "reason": "failed", "error": {"code": "generation_failed", "message": message}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=False,
+        )
+
+    content_bytes = await fetch_artifact_from_worker_plan(run_id, REPORT_FILENAME)
+    if content_bytes is None:
+        response = {
+            "error": {
+                "code": "content_unavailable",
+                "message": "content_bytes is None",
+            },
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=False,
+        )
+
+    total_size = len(content_bytes)
+    content_hash = compute_sha256(content_bytes)
+    response = {
+        "content_type": REPORT_CONTENT_TYPE,
+        "sha256": content_hash,
+        "download_size": total_size,
+    }
+    download_url = build_report_download_url(run_id)
+    if download_url:
+        response["download_url"] = download_url
+
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
+    """Return recent tasks for an authenticated user."""
+    try:
+        req = TaskListRequest(**arguments)
+    except Exception as exc:
+        response = {"error": {"code": "INVALID_ARGUMENTS", "message": str(exc)}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    user_context = _resolve_user_from_api_key(req.user_api_key.strip())
+    if not user_context:
+        response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+    limit = max(1, min(req.limit, 50))
+    tasks = await asyncio.to_thread(_list_tasks_sync, str(user_context["user_id"]), limit)
+    response = {
+        "tasks": tasks,
+        "message": f"Returned {len(tasks)} task(s).",
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
+TOOL_HANDLERS = {
+    "plan_create": handle_plan_create,
+    "plan_status": handle_plan_status,
+    "plan_stop": handle_plan_stop,
+    "plan_retry": handle_plan_retry,
+    "plan_file_info": handle_plan_file_info,
+    "plan_list": handle_plan_list,
+    "prompt_examples": handle_prompt_examples,
+    "model_profiles": handle_model_profiles,
+}
+
+# Backward-compatible aliases so existing imports of handle_task_* still work
+handle_task_create = handle_plan_create
+handle_task_status = handle_plan_status
+handle_task_stop = handle_plan_stop
+handle_task_retry = handle_plan_retry
+handle_task_file_info = handle_plan_file_info
+handle_task_list = handle_plan_list

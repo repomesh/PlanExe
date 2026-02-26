@@ -20,10 +20,10 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
         }
         with patch(
-            "mcp_cloud.app._get_task_status_snapshot_sync",
+            "mcp_cloud.handlers._get_task_status_snapshot_sync",
             return_value=task_snapshot,
         ), patch(
-            "mcp_cloud.app.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
         ):
             result = asyncio.run(handle_plan_status({"task_id": task_id}))
 
@@ -45,16 +45,16 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
         }
         with patch(
-            "mcp_cloud.app._get_task_status_snapshot_sync",
+            "mcp_cloud.handlers._get_task_status_snapshot_sync",
             return_value=task_snapshot,
         ), patch(
-            "mcp_cloud.app.fetch_file_list_from_worker_plan",
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan",
             new=AsyncMock(return_value=[]),
         ), patch(
-            "mcp_cloud.app.list_files_from_zip_snapshot",
+            "mcp_cloud.handlers.list_files_from_zip_snapshot",
             return_value=["001-2-plan.txt", "log.txt"],
         ), patch(
-            "mcp_cloud.app.list_files_from_local_run_dir",
+            "mcp_cloud.handlers.list_files_from_local_run_dir",
             return_value=None,
         ):
             result = asyncio.run(handle_plan_status({"task_id": task_id}))
@@ -73,10 +73,10 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
         }
         with patch(
-            "mcp_cloud.app._get_task_status_snapshot_sync",
+            "mcp_cloud.handlers._get_task_status_snapshot_sync",
             return_value=task_snapshot,
         ), patch(
-            "mcp_cloud.app.fetch_file_list_from_worker_plan",
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan",
             new=AsyncMock(return_value=[]),
         ):
             result = asyncio.run(handle_plan_status({"task_id": task_id}))
@@ -85,7 +85,7 @@ class TestPlanStatusTool(unittest.TestCase):
 
     def test_plan_status_returns_task_not_found_error(self):
         task_id = str(uuid.uuid4())
-        with patch("mcp_cloud.app._get_task_status_snapshot_sync", return_value=None):
+        with patch("mcp_cloud.handlers._get_task_status_snapshot_sync", return_value=None):
             result = asyncio.run(handle_plan_status({"task_id": task_id}))
 
         self.assertTrue(result.isError)

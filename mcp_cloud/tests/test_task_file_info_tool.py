@@ -45,9 +45,9 @@ class TestPlanFileInfoTool(unittest.TestCase):
             "state": PlanState.completed,
             "progress_message": None,
         }
-        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+        with patch("mcp_cloud.handlers._get_task_for_report_sync", return_value=task_snapshot):
             with patch(
-                "mcp_cloud.app.fetch_artifact_from_worker_plan",
+                "mcp_cloud.handlers.fetch_artifact_from_worker_plan",
                 new=AsyncMock(return_value=content_bytes),
             ):
                 result = asyncio.run(handle_plan_file_info({"task_id": task_id}))
@@ -67,9 +67,9 @@ class TestPlanFileInfoTool(unittest.TestCase):
             "state": PlanState.completed,
             "progress_message": None,
         }
-        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+        with patch("mcp_cloud.handlers._get_task_for_report_sync", return_value=task_snapshot):
             with patch(
-                "mcp_cloud.app.fetch_user_downloadable_zip",
+                "mcp_cloud.handlers.fetch_user_downloadable_zip",
                 new=AsyncMock(return_value=content_bytes),
             ):
                 result = asyncio.run(handle_plan_file_info({"task_id": task_id, "artifact": "zip"}))
@@ -86,9 +86,9 @@ class TestPlanFileInfoTool(unittest.TestCase):
             "state": PlanState.failed,
             "progress_message": "Stopped",
         }
-        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+        with patch("mcp_cloud.handlers._get_task_for_report_sync", return_value=task_snapshot):
             with patch(
-                "mcp_cloud.app.fetch_user_downloadable_zip",
+                "mcp_cloud.handlers.fetch_user_downloadable_zip",
                 new=AsyncMock(return_value=content_bytes),
             ):
                 result = asyncio.run(handle_plan_file_info({"task_id": task_id, "artifact": "zip"}))
@@ -104,11 +104,11 @@ class TestPlanFileInfoTool(unittest.TestCase):
             "state": PlanState.pending,
             "progress_message": None,
         }
-        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+        with patch("mcp_cloud.handlers._get_task_for_report_sync", return_value=task_snapshot):
             result = asyncio.run(handle_plan_file_info({"task_id": task_id}))
 
         self.assertFalse(result.isError)
-        self.assertEqual(result.structuredContent, {})
+        self.assertEqual(result.structuredContent, {"ready": False, "reason": "processing"})
 
     def test_plan_file_info_returns_generation_failed_payload(self):
         task_id = str(uuid.uuid4())
@@ -117,7 +117,7 @@ class TestPlanFileInfoTool(unittest.TestCase):
             "state": PlanState.failed,
             "progress_message": "Pipeline failed",
         }
-        with patch("mcp_cloud.app._get_task_for_report_sync", return_value=task_snapshot):
+        with patch("mcp_cloud.handlers._get_task_for_report_sync", return_value=task_snapshot):
             result = asyncio.run(handle_plan_file_info({"task_id": task_id, "artifact": "report"}))
 
         self.assertFalse(result.isError)

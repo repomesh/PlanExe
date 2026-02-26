@@ -21,7 +21,7 @@ class TestPlanRetryTool(unittest.TestCase):
             "model_profile": "baseline",
             "retried_at": "2026-01-01T00:00:00Z",
         }
-        with patch("mcp_cloud.app._retry_failed_task_sync", return_value=payload):
+        with patch("mcp_cloud.handlers._retry_failed_task_sync", return_value=payload):
             result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertIsInstance(result, CallToolResult)
@@ -32,7 +32,7 @@ class TestPlanRetryTool(unittest.TestCase):
 
     def test_plan_retry_returns_task_not_found(self):
         task_id = str(uuid.uuid4())
-        with patch("mcp_cloud.app._retry_failed_task_sync", return_value=None):
+        with patch("mcp_cloud.handlers._retry_failed_task_sync", return_value=None):
             result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertTrue(result.isError)
@@ -41,7 +41,7 @@ class TestPlanRetryTool(unittest.TestCase):
     def test_plan_retry_returns_task_not_failed(self):
         task_id = str(uuid.uuid4())
         payload = {"error": {"code": "TASK_NOT_FAILED", "message": "Task is not failed."}}
-        with patch("mcp_cloud.app._retry_failed_task_sync", return_value=payload):
+        with patch("mcp_cloud.handlers._retry_failed_task_sync", return_value=payload):
             result = asyncio.run(handle_plan_retry({"task_id": task_id}))
 
         self.assertTrue(result.isError)

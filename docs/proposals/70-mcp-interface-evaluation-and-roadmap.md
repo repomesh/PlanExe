@@ -192,6 +192,27 @@ Add an explicit check at server startup that required secrets (`PLANEXE_API_KEY_
 - **awesome-mcp-servers** (GitHub) — submit a PR; maintainers merge quickly
 - **OpenTools** — focus on enterprise MCP discovery
 
+#### 6.1.1 Glama
+
+Already listed, but stuck in an `unclaimed` state, where I can't customize it.
+
+https://glama.ai/mcp/connectors/io.github.PlanExeOrg/planexe
+
+MCP Servers that have been claimed, can alter their profile, and assign an icon.
+
+I'm seing any health `connectors` that have been claimed and customized.
+
+https://glama.ai/blog/2025-10-22-what-are-mcp-connectors
+
+https://glama.ai/mcp/connectors?attributes=status%3Ahealthy&sort=featured%3Adesc
+
+Outstanding issues:
+
+- Claim ownership of PlanExe inside Glama.ai
+- Add a /.well-known/glama.json to claim ownership of planexe. No luck.
+- Add a /glama.json to repo to claim ownership of planexe. No luck.
+- Customize profile text, categories, favicon.
+
 ### 6.2 Content
 
 - **Blog post: "From prompt to project plan in 60 seconds"** — a short walkthrough showing MCP Inspector → `plan_create` → `plan_status` → download. Publish on dev.to, Hacker News (Show HN), and the PlanExe GitHub Discussions.

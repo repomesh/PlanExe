@@ -4,18 +4,18 @@
 
 ### 1.1 What is PlanExe
 
-PlanExe is a service that generates **strategic project-plan drafts** from a natural-language prompt. You describe a large goal (e.g. open a clinic, launch a product, build a moon base)—the kind of project that in reality takes months or years. PlanExe produces a structured draft with 20+ sections: steps, documents, and deliverables. The plan is not executable in its current form; it is a draft to refine and act on. Creating a plan is a long-running task (100+ LLM inference calls): create a task with a prompt, poll status, then download the HTML report and zip when done.
+PlanExe is a service that generates **strategic project-plan drafts** from a natural-language prompt. You describe a large goal (e.g. open a clinic, launch a product, build a moon base)—the kind of project that in reality takes months or years. PlanExe produces a structured draft with 20+ sections: steps, documents, and deliverables. The plan is not executable in its current form; it is a draft to refine and act on. Creating a plan is a long-running operation (100+ LLM inference calls): create a plan with a prompt, poll status, then download the HTML report and zip when done.
 
 ### 1.2 What kind of plan does it create
 
-The plan is a **project plan**: a DAG of steps (Luigi tasks) that produce artifacts including a Gantt chart, risk analysis, and other project management deliverables. The main output is a self-contained interactive HTML report (~700KB) with collapsible sections, interactive Gantt charts, and embedded JavaScript. The report contains 20+ sections including executive summary, investor pitch, project plan with SMART criteria, strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, plan review, Q&A, premortem with failure scenarios, self-audit checklist, and adversarial premise attacks. There is also a zip file containing all intermediary pipeline files (md, json, csv) that fed the report. Plan quality depends on prompt quality; use the prompt_examples tool to see the baseline before calling plan_create.
+The plan is a **project plan**: a DAG of steps (Luigi pipeline stages) that produce artifacts including a Gantt chart, risk analysis, and other project management deliverables. The main output is a self-contained interactive HTML report (~700KB) with collapsible sections, interactive Gantt charts, and embedded JavaScript. The report contains 20+ sections including executive summary, investor pitch, project plan with SMART criteria, strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, SWOT analysis, team role profiles, simulated expert criticism, work breakdown structure, plan review, Q&A, premortem with failure scenarios, self-audit checklist, and adversarial premise attacks. There is also a zip file containing all intermediary pipeline files (md, json, csv) that fed the report. Plan quality depends on prompt quality; use the prompt_examples tool to see the baseline before calling plan_create.
 
 #### 1.2.1 Agent-facing summary (for server instructions / tool descriptions)
 
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
-- **Required interaction order:** Call `prompt_examples` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a task fails and the caller wants another attempt for the same `task_id`, call `plan_retry` (optional `model_profile`, default `baseline`). To stop, call `plan_stop` with the `task_id` from `plan_create`.
+- **Required interaction order:** Call `prompt_examples` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a plan fails and the caller wants another attempt for the same `plan_id`, call `plan_retry` (optional `model_profile`, default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
 - **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
@@ -23,7 +23,7 @@ Implementors should expose the following to agents so they understand what PlanE
 This document specifies a Model Context Protocol (MCP) interface for PlanExe that enables AI agents and client UIs to:
 
 1. Create and run long-running plan generation workflows.
-2. Receive real-time progress updates (task status, log output).
+2. Receive real-time progress updates (plan status, log output).
 3. List, read, and edit artifacts produced in an output directory.
 4. Stop and resume execution with Luigi-aware incremental recomputation.
 
@@ -39,11 +39,11 @@ The interface is designed to support:
 
 ### 2.1 Functional goals
 
-- Task-based orchestration: each run is associated with a task ID.
+- Plan-based orchestration: each run is associated with a plan ID.
 - Long-running execution: starts asynchronously; clients poll or subscribe to events.
 - Artifact-first workflow: outputs are exposed as file-like artifacts.
 - Stop / Resume with minimal recompute:
-  - on resume, only invalidated downstream tasks regenerate.
+  - on resume, only invalidated downstream stages regenerate.
 - Progress reporting:
   - progress_percentage
 - Editable artifacts:
@@ -55,7 +55,7 @@ The interface is designed to support:
 - Idempotency: repeated tool calls should not corrupt state.
 - Observability: logs, state transitions, and artifacts must be inspectable.
 - Concurrency safety: prevent conflicting writes and illegal resume patterns.
-- Extensibility: future versions can add task graph browsing, caching backends, exports.
+- Extensibility: future versions can add plan graph browsing, caching backends, exports.
 
 ---
 
@@ -70,7 +70,7 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives task_id → polls plan_status → optionally calls plan_retry on failed → uses plan_file_info (and optionally plan_download via mcp_local). This document specifies those tools.
+- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_retry on failed → uses plan_file_info (and optionally plan_download via mcp_local). This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
 PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: call `prompt_examples`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed call `plan_retry` (optional); then call `plan_file_info` (or `plan_download` via mcp_local) when completed.
@@ -81,20 +81,20 @@ PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and c
 
 ### 4.1 Core entities
 
-#### Task
+#### Plan
 
 A long-lived container for a PlanExe project run.
 
 **Key properties**
 
-- task_id: UUID returned by plan_create for that task. Each plan_create returns a new UUID. Use that exact UUID for all MCP calls; do not substitute ids from other services.
-- output_dir: artifact root namespace for task
+- plan_id: UUID returned by plan_create for that plan. Each plan_create returns a new UUID. Use that exact UUID for all MCP calls; do not substitute ids from other services.
+- output_dir: artifact root namespace for plan
 - config: immutable run configuration (models, runtime limits, Luigi params)
 - created_at, updated_at
 
 #### Execution
 
-A single execution attempt inside a task.
+A single execution attempt inside a plan.
 
 **Key properties**
 
@@ -108,7 +108,7 @@ A file-like output managed by PlanExe.
 
 **Key properties**
 
-- path: path relative to task output root
+- path: path relative to plan output root
 - size, updated_at
 - content_type: text/markdown, text/html, application/json, etc.
 - sha256: content hash for optimistic locking and invalidation
@@ -146,8 +146,8 @@ The public MCP `state` field is aligned with `PlanItem.state`:
 
 ### 5.3 Invalid transitions
 
-- completed → processing (new run must be triggered by creating a new task)
-- processing → processing is not a state transition on the same task; create separate tasks for parallel work.
+- completed → processing (new run must be triggered by creating a new plan)
+- processing → processing is not a state transition on the same plan; create separate plans for parallel work.
 
 ---
 
@@ -292,38 +292,38 @@ For the full catalog file:
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "created_at": "2026-01-14T12:34:56Z"
 }
 ```
 
 **Important**
 
-- task_id is a UUID returned by plan_create. Use this exact UUID for plan_status/plan_stop/plan_retry/plan_file_info (and plan_download when using mcp_local).
+- plan_id is a UUID returned by plan_create. Use this exact UUID for plan_status/plan_stop/plan_retry/plan_file_info (and plan_download when using mcp_local).
 
 **Behavior**
 
 - Must be idempotent only if client supplies an optional client_request_id (optional extension).
-- Task config is immutable after creation in v1.
-- By default, repeated `plan_create` calls produce new tasks (new `task_id`s).
+- Plan config is immutable after creation in v1.
+- By default, repeated `plan_create` calls produce new plans (new `plan_id`s).
 
 ---
 
 ### 6.3 plan_status
 
-Returns task status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation typically takes 10–20 minutes (baseline profile) and may take longer on higher-quality profiles.
+Returns plan status and progress. Used for progress bars and UI states. **Polling interval:** call at reasonable intervals only (e.g. every 5 minutes); plan generation typically takes 10–20 minutes (baseline profile) and may take longer on higher-quality profiles.
 
 **Request**
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1"
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1"
 }
 ```
 
 **Input**
 
-- task_id: UUID returned by plan_create. Use it to reference the plan being created.
+- plan_id: UUID returned by plan_create. Use it to reference the plan being created.
 
 **Caller contract (state meanings)**
 
@@ -340,7 +340,7 @@ Returns task status and progress. Used for progress bars and UI states. **Pollin
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "state": "processing",
   "progress_percentage": 62.0,
   "timing": {
@@ -364,19 +364,19 @@ Returns task status and progress. Used for progress bars and UI states. **Pollin
 
 ### 6.4 plan_stop
 
-Requests the plan generation to stop. Pass the **task_id** (the UUID returned by plan_create). Call `plan_stop` with that task_id.
+Requests the plan generation to stop. Pass the **plan_id** (the UUID returned by plan_create). Call `plan_stop` with that plan_id.
 
 **Request**
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1"
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1"
 }
 ```
 
 **Input**
 
-- task_id: UUID returned by plan_create. Use this same UUID when calling plan_stop to request the task to stop.
+- plan_id: UUID returned by plan_create. Use this same UUID when calling plan_stop to request the plan to stop.
 
 **Response**
 
@@ -396,27 +396,27 @@ Requests the plan generation to stop. Pass the **task_id** (the UUID returned by
 
 ### 6.5 plan_retry
 
-Retries a task that is currently in `failed` state.
+Retries a plan that is currently in `failed` state.
 
 **Request**
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "model_profile": "baseline"
 }
 ```
 
 **Input**
 
-- task_id: UUID of a failed task.
+- plan_id: UUID of a failed plan.
 - model_profile: optional (`baseline` | `premium` | `frontier` | `custom`), default `baseline`.
 
 **Response**
 
 ```json
 {
-  "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "state": "pending",
   "model_profile": "baseline",
   "retried_at": "2026-02-24T15:20:00Z"
@@ -425,14 +425,14 @@ Retries a task that is currently in `failed` state.
 
 **Required semantics**
 
-- Only failed tasks are retryable.
-- On success, the same task_id is reset to `pending` and requeued.
-- Prior artifacts for that task are cleared before requeue.
+- Only failed plans are retryable.
+- On success, the same plan_id is reset to `pending` and requeued.
+- Prior artifacts for that plan are cleared before requeue.
 
 **Error behavior**
 
-- Unknown task_id: `TASK_NOT_FOUND` (`isError=true`).
-- Task not failed: `TASK_NOT_FAILED` (`isError=true`).
+- Unknown plan_id: `PLAN_NOT_FOUND` (`isError=true`).
+- Plan not failed: `PLAN_NOT_FAILED` (`isError=true`).
 
 ---
 
@@ -440,11 +440,11 @@ Retries a task that is currently in `failed` state.
 
 **If your client exposes plan_download** (e.g. mcp_local): use it to save the report or zip locally; it calls plan_file_info under the hood, then fetches and writes to the local save path (e.g. PLANEXE_PATH).
 
-**If you only have plan_file_info** (e.g. direct connection to mcp_cloud): call it with task_id and artifact ("report" or "zip"); use the returned download_url to fetch the file (e.g. GET with API key if configured).
+**If you only have plan_file_info** (e.g. direct connection to mcp_cloud): call it with plan_id and artifact ("report" or "zip"); use the returned download_url to fetch the file (e.g. GET with API key if configured).
 
 **plan_file_info input**
 
-- task_id: UUID returned by plan_create. Use it to download the created plan.
+- plan_id: UUID returned by plan_create. Use it to download the created plan.
 - artifact: "report" or "zip" (default "report").
 
 **plan_download local path behavior (mcp_local)**
@@ -452,7 +452,7 @@ Retries a task that is currently in `failed` state.
 - Save directory is `PLANEXE_PATH`.
 - If `PLANEXE_PATH` is unset, save to current working directory.
 - If `PLANEXE_PATH` points to a file (not a directory), return an error.
-- Filenames are `<task_id>-030-report.html` or `<task_id>-run.zip`.
+- Filenames are `<plan_id>-030-report.html` or `<plan_id>-run.zip`.
 - If a filename already exists, append `-1`, `-2`, ... before extension.
 - Successful responses include `saved_path`.
 
@@ -480,21 +480,21 @@ Targets map to Luigi "final tasks".
 
 ### 8.1 Client-side concurrency guidance
 
-The server does not enforce a global limit on how many tasks a client can create.
+The server does not enforce a global limit on how many plans a client can create.
 Concurrency is a client-side coordination concern.
 
 Recommended practice for MCP clients:
 
-- Start with 1 active task.
-- If needed, increase to 2 tasks in parallel.
-- Going beyond 4 parallel tasks is usually hard to track; avoid unless necessary.
+- Start with 1 active plan.
+- If needed, increase to 2 plans in parallel.
+- Going beyond 4 parallel plans is usually hard to track; avoid unless necessary.
 
 Additional semantics:
 
-- Every `plan_create` call creates a new independent task with a new `task_id`.
-- `plan_retry` reuses the existing failed `task_id` (it does not create a new task id).
-- The server does not deduplicate “same prompt” requests into a single shared task.
-- Keep your own task registry/client state if you run multiple tasks concurrently.
+- Every `plan_create` call creates a new independent plan with a new `plan_id`.
+- `plan_retry` reuses the existing failed `plan_id` (it does not create a new plan id).
+- The server does not deduplicate “same prompt” requests into a single shared plan.
+- Keep your own plan registry/client state if you run multiple plans concurrently.
 
 ---
 
@@ -513,8 +513,8 @@ Example:
 ```json
 {
   "error": {
-    "code": "TASK_NOT_FOUND",
-    "message": "Task not found: <task_id>"
+    "code": "PLAN_NOT_FOUND",
+    "message": "Plan not found: <plan_id>"
   }
 }
 ```
@@ -526,7 +526,7 @@ Example:
 - `plan_file_info`: uses mixed behavior:
   - returns `{}` (not an error) while artifacts are not ready.
   - may return `{"error": ...}` with `isError=false` for terminal artifact-level problems.
-  - returns `isError=true` for unknown task id (`TASK_NOT_FOUND`).
+  - returns `isError=true` for unknown plan_id (`PLAN_NOT_FOUND`).
 - `mcp_local` may return proxy/transport failures as `REMOTE_ERROR` and local download write failures as `DOWNLOAD_FAILED`.
 
 ### 9.3 Minimal code contract (current)
@@ -535,13 +535,13 @@ Cloud/core tool codes:
 
 - `INVALID_TOOL`: unknown MCP tool name.
 - `INTERNAL_ERROR`: uncaught server error.
-- `TASK_NOT_FOUND`: task id not found.
-- `TASK_NOT_FAILED`: plan_retry called for a task that is not in failed state.
+- `PLAN_NOT_FOUND`: plan_id not found.
+- `PLAN_NOT_FAILED`: plan_retry called for a plan that is not in failed state.
 - `INVALID_USER_API_KEY`: provided user_api_key is invalid.
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for plan_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for plan_create.
 - `MODEL_PROFILES_UNAVAILABLE`: model_profiles found zero available models across all profiles.
-- `generation_failed`: plan_file_info report path when task ended in failed.
+- `generation_failed`: plan_file_info report path when plan ended in failed.
 - `content_unavailable`: plan_file_info cannot read requested artifact bytes.
 
 Local proxy specific codes:
@@ -560,9 +560,9 @@ Local proxy specific codes:
   - `USER_API_KEY_REQUIRED`
   - `INSUFFICIENT_CREDITS`
   - `INVALID_TOOL`
-- For `TASK_NOT_FAILED`: call `plan_retry` only after `plan_status.state == failed`.
-- For `TASK_NOT_FOUND`: verify task_id source and stop polling that id.
-- For `generation_failed`: treat as terminal failure and surface task progress_message to user.
+- For `PLAN_NOT_FAILED`: call `plan_retry` only after `plan_status.state == failed`.
+- For `PLAN_NOT_FOUND`: verify plan_id source and stop polling that id.
+- For `generation_failed`: treat as terminal failure and surface plan progress_message to user.
 
 ---
 
@@ -570,14 +570,14 @@ Local proxy specific codes:
 
 ### 10.1 Sandbox constraints
 
-- All artifacts must live under task-scoped storage.
+- All artifacts must live under plan-scoped storage.
 - Artifact URIs must not permit path traversal.
 
 ### 10.2 Access control
 
 At minimum:
 
-- task must be scoped to a user identity (metadata.user_id)
+- plan must be scoped to a user identity (metadata.user_id)
 - callers without permission must receive PERMISSION_DENIED
 
 ### 10.3 Sensitive data handling
@@ -657,7 +657,7 @@ Clients must ignore unknown fields and unknown event types.
 
 ### 15.3 Load tests (recommended)
 
-- multiple tasks concurrently, one run each
+- multiple plans concurrently, one run each
 - event streaming stability under heavy log output
 
 ---
@@ -668,8 +668,8 @@ PlanExe is artifact-first, and MCP already has a native concept for that: resour
 
 **Proposed resource identifiers**
 
-- planexe://task/<task_id>/report
-- planexe://task/<task_id>/zip
+- planexe://plan/<plan_id>/report
+- planexe://plan/<plan_id>/zip
 
 **Recommended resource metadata**
 
@@ -689,47 +689,47 @@ PlanExe is artifact-first, and MCP already has a native concept for that: resour
 
 The following tools remove common UX friction without expanding the core model.
 
-### 17.1 plan_list (or task_recent)
+### 17.1 plan_list (or plan_recent)
 
-Return a short list of recent tasks so agents can recover if they lost a task_id.
-
-**Notes**
-
-- Default limit: 5–10 tasks.
-- Include task_id, created_at, state, and prompt summary.
-
-### 17.2 task_wait
-
-Blocking helper that polls internally until the task completes or times out. Returns the final plan_status payload plus suggested next steps.
+Return a short list of recent plans so agents can recover if they lost a plan_id.
 
 **Notes**
 
-- Inputs: task_id, timeout_sec (optional), poll_interval_sec (optional).
+- Default limit: 5–10 plans.
+- Include plan_id, created_at, state, and prompt summary.
+
+### 17.2 plan_wait
+
+Blocking helper that polls internally until the plan completes or times out. Returns the final plan_status payload plus suggested next steps.
+
+**Notes**
+
+- Inputs: plan_id, timeout_sec (optional), poll_interval_sec (optional).
 - Outputs: same as plan_status + next_steps (string or list).
 
-### 17.3 task_get_latest
+### 17.3 plan_get_latest
 
-Simplest recovery: return the most recently created task for the caller.
+Simplest recovery: return the most recently created plan for the caller.
 
 **Notes**
 
 - Useful for single-user / single-session flows.
 - Should be scoped to the caller/user_id when available.
 
-### 17.4 task_logs_tail (optional)
+### 17.4 plan_logs_tail (optional)
 
 Return the tail of recent log lines for troubleshooting failures.
 
 **Notes**
 
-- Inputs: task_id, max_lines (optional), since_cursor (optional).
+- Inputs: plan_id, max_lines (optional), since_cursor (optional).
 - Useful when plan_status shows failed but no context.
 
 ---
 
 ## Appendix A — Example End-to-End Flow
 
-**Create task**
+**Create plan**
 
 ```json
 { "prompt": "..." }
@@ -738,13 +738,13 @@ Return the tail of recent log lines for troubleshooting failures.
 **Start run**
 
 ```json
-{ "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1" }
+{ "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1" }
 ```
 
 **Stop**
 
 ```json
-{ "task_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1" }
+{ "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1" }
 ```
 
 ---
@@ -753,8 +753,8 @@ Return the tail of recent log lines for troubleshooting failures.
 
 If you want richer Luigi integration later:
 
-- planexe.task.graph (nodes + edges + states)
-- planexe.task.invalidate (rerun subtree)
+- planexe.plan.graph (nodes + edges + states)
+- planexe.plan.invalidate (rerun subtree)
 - planexe.export.bundle (zip all artifacts)
 - planexe.validate.only (audit without regeneration)
-- planexe.task.archive (freeze task)
+- planexe.plan.archive (freeze plan)

@@ -12,6 +12,12 @@
   <strong>PlanExe is the premier planning tool for AI agents.</strong>
 </p>
 
+<p align="center">
+  <a href="https://home.planexe.org/"><strong>Create an account</strong></a> &nbsp;|&nbsp;
+  <a href="https://app.mach-ai.com/planexe_early_access"><strong>Generate a free plan</strong></a> &nbsp;|&nbsp;
+  <a href="https://docs.planexe.org/getting_started/"><strong>Getting started guide</strong></a>
+</p>
+
 ---
 
 ## Example plans generated with PlanExe
@@ -26,6 +32,7 @@
 PlanExe is an open-source tool and the premier planning tool for AI agents. It turns a single plain-english goal statement into a 40-page, strategic plan in ~15 minutes using local or cloud models. It's an accelerator for outlines, but no silver bullet for polished plans.
 
 Typical output contains:
+
 - Executive summary
 - Gantt chart
 - Governance structure
@@ -34,13 +41,11 @@ Typical output contains:
 - Risk registers
 - SWOT analyses
 
-The technical quality of structure, formatting, and coherence is consistently excellent—often superior to human junior/mid-tier consulting drafts. However, budgets remain headline-only, timelines contain errors, metrics are usually vague, and legal/operational realism is weak on high-stakes topics. A usable, client-ready version still requires weeks to months of skilled human refinement.
+PlanExe produces well-structured, domain-aware output: correct terminology, logical task sequencing, and coherent sections. For technical topics (engineering programs, regulated industries), it often gets the vocabulary and structure right. Think of it as a first-draft scaffold that gives you something concrete to critique and refine.
 
-PlanExe removes 70–90 % of the labor for the planning scaffold on any topic, but the final 10–30 % that separates a polished document from a credible, defensible plan remains human-only work.
+However, the output has consistent weaknesses that matter: budgets are assumed rather than derived, timeline estimates are not grounded in real resource constraints, risk mitigations tend toward generic advice, and legal/regulatory details are plausible-sounding but unverified. The output should be treated as a structured starting point, not a deliverable. How much work it saves depends heavily on the project. For brainstorming or a first outline, it can save hours. For a client-ready plan, expect significant rework on every number, timeline, and risk section.
 
 ---
-
-New to PlanExe? Follow the [Getting Started](https://docs.planexe.org/getting_started/) guide.
 
 ## Model Context Protocol (MCP)
 
@@ -58,7 +63,7 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 6. optional if failed: `plan_retry`
 7. download the result via `plan_download` or via `plan_file_info`
 
-Concurrency note: each `plan_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
+Concurrency note: each `plan_create` call returns a new `plan_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel plans.
 
 ### Option A: Remote MCP (fastest path)
 
@@ -164,16 +169,6 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 - PlanExe MCP interface: [https://docs.planexe.org/mcp/planexe_mcp_interface/](https://docs.planexe.org/mcp/planexe_mcp_interface/)
 - MCP Registry publishing metadata (`server.json`): `mcp_cloud/server.json`
 - `llms.txt`: [https://mcp.planexe.org/llms.txt](https://mcp.planexe.org/llms.txt)
-
-<details>
-<summary><strong> Try it out now (Click to expand)</strong></summary>
-<br>
-
-You can generate 1 plan for free.
-
-[Try it here →](https://app.mach-ai.com/planexe_early_access)
-
-</details>
 
 ---
 

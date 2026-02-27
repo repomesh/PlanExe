@@ -127,14 +127,14 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
     if req.user_api_key:
         user_context = _resolve_user_from_api_key(req.user_api_key.strip())
         if not user_context:
-            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key. Verify your key or create an account at https://home.planexe.org/"}}
             return CallToolResult(
                 content=[TextContent(type="text", text=json.dumps(response))],
                 structuredContent=response,
                 isError=True,
             )
     elif require_user_key:
-        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_create."}}
+        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_create. Create an account at https://home.planexe.org/"}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
@@ -142,7 +142,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     if user_context and float(user_context.get("credits_balance", 0.0)) <= 0.0:
-        response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits."}}
+        response = {"error": {"code": "INSUFFICIENT_CREDITS", "message": "Not enough credits. Top up at https://home.planexe.org/"}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,
@@ -515,14 +515,14 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     if req.user_api_key:
         user_context = _resolve_user_from_api_key(req.user_api_key.strip())
         if not user_context:
-            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key."}}
+            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key. Verify your key or create an account at https://home.planexe.org/"}}
             return CallToolResult(
                 content=[TextContent(type="text", text=json.dumps(response))],
                 structuredContent=response,
                 isError=True,
             )
     elif require_user_key:
-        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_list."}}
+        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for plan_list. Create an account at https://home.planexe.org/"}}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,

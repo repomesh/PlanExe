@@ -408,7 +408,7 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
         return JSONResponse(
             status_code=401,
             content={
-                "detail": "Missing API key. Use X-API-Key."
+                "detail": "Missing API key. Use X-API-Key. Create an account at https://home.planexe.org/"
             },
         )
 
@@ -424,7 +424,7 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
         return None
 
     await _log_auth_rejection(request, reason="invalid_api_key")
-    return JSONResponse(status_code=403, content={"detail": "Invalid API key"})
+    return JSONResponse(status_code=403, content={"detail": "Invalid API key. Verify your key or create an account at https://home.planexe.org/"})
 
 
 def _get_authenticated_user_api_key() -> Optional[str]:

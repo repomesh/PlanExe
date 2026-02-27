@@ -800,7 +800,8 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
-    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report."
+    "The zip contains the intermediary pipeline files (md, json, csv) that fed the report. "
+    "New users: create an account and obtain an API key at https://home.planexe.org/ ."
 )
 
 mcp_local = Server("planexe-mcp-local", instructions=PLANEXE_SERVER_INSTRUCTIONS)

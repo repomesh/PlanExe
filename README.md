@@ -58,7 +58,7 @@ The Tool workflow (tools-only, not MCP tasks protocol)
 6. optional if failed: `plan_retry`
 7. download the result via `plan_download` or via `plan_file_info`
 
-Concurrency note: each `plan_create` call returns a new `task_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel tasks.
+Concurrency note: each `plan_create` call returns a new `plan_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel plans.
 
 ### Option A: Remote MCP (fastest path)
 

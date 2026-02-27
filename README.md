@@ -12,6 +12,12 @@
   <strong>PlanExe is the premier planning tool for AI agents.</strong>
 </p>
 
+<p align="center">
+  <a href="https://home.planexe.org/"><strong>Create an account</strong></a> &nbsp;|&nbsp;
+  <a href="https://app.mach-ai.com/planexe_early_access"><strong>Generate a free plan</strong></a> &nbsp;|&nbsp;
+  <a href="https://docs.planexe.org/getting_started/"><strong>Getting started guide</strong></a>
+</p>
+
 ---
 
 ## Example plans generated with PlanExe
@@ -39,8 +45,6 @@ The technical quality of structure, formatting, and coherence is consistently ex
 PlanExe removes 70–90 % of the labor for the planning scaffold on any topic, but the final 10–30 % that separates a polished document from a credible, defensible plan remains human-only work.
 
 ---
-
-New to PlanExe? Follow the [Getting Started](https://docs.planexe.org/getting_started/) guide.
 
 ## Model Context Protocol (MCP)
 
@@ -164,16 +168,6 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 - PlanExe MCP interface: [https://docs.planexe.org/mcp/planexe_mcp_interface/](https://docs.planexe.org/mcp/planexe_mcp_interface/)
 - MCP Registry publishing metadata (`server.json`): `mcp_cloud/server.json`
 - `llms.txt`: [https://mcp.planexe.org/llms.txt](https://mcp.planexe.org/llms.txt)
-
-<details>
-<summary><strong> Try it out now (Click to expand)</strong></summary>
-<br>
-
-You can generate 1 plan for free.
-
-[Try it here →](https://app.mach-ai.com/planexe_early_access)
-
-</details>
 
 ---
 

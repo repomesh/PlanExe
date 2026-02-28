@@ -54,4 +54,4 @@ For `plan_create`:
 
 - Full tool details: [MCP details](mcp_details.md)
 - Reference schema: [PlanExe MCP interface](planexe_mcp_interface.md)
-- App setup guides: [Cursor](cursor.md), [Codex](codex.md), [LM Studio](lm_studio.md)
+- App setup guides: [Claude](claude.md), [Cursor](cursor.md), [Codex](codex.md), [LM Studio](lm_studio.md)

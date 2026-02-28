@@ -41,6 +41,7 @@ The MCP user chooses which artifact to download:
 - **Setup** — [MCP setup](mcp_setup.md): recommended path to a working integration.
 - **Publish to MCP Registry** — [MCP registry publishing](mcp_registry.md): publish `mcp.planexe.org` metadata so it appears in `github.com/mcp`.
 - **See the tools and a typical flow** — [MCP details](mcp_details.md): tool list, example prompts, and step-by-step flow without heavy protocol detail.
+ - **Set up in Claude** — [Claude](claude.md): Claude desktop app and Claude Code, with cloud and local Docker options.
  - **Set up in Cursor** — [Cursor](cursor.md): video, prerequisites, and how to connect PlanExe to Cursor.
  - **Set up in Windsurf** — [Windsurf](windsurf.md): setup steps and example interaction.
  - **Set up in LM Studio** — [LM Studio](lm_studio.md): setup steps and example interaction.

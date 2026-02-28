@@ -1083,7 +1083,7 @@ def mcp_server_card() -> dict[str, Any]:
             "interactive Gantt charts, risk analysis, SWOT, governance, "
             "investor pitch, and adversarial stress-test sections."
         ),
-        "documentationUrl": "https://github.com/PlanExeOrg/PlanExe",
+        "documentationUrl": "https://docs.planexe.org/",
         "transport": {
             "type": "streamable-http",
             "endpoint": "/mcp",

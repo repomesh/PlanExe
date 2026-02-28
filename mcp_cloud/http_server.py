@@ -1064,16 +1064,17 @@ def _llms_txt_path() -> str:
 @app.get("/.well-known/mcp/server-card.json")
 def mcp_server_card() -> dict[str, Any]:
     """Serve MCP Server Card for discovery (SEP-1649).
+    https://github.com/modelcontextprotocol/modelcontextprotocol/tree/main/schema/2025-06-18
 
     This allows registries like Smithery to discover the server's capabilities
     without performing a full MCP handshake.
     """
     return {
-        "$schema": "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
         "version": "1.0",
+        "protocolVersion": "2025-06-18",
         "serverInfo": {
             "name": "planexe-mcp-server",
-            "title": "PlanExe – AI Project Planning",
+            "title": "PlanExe - AI Project Planning",
             "version": "1.0.0",
         },
         "description": (

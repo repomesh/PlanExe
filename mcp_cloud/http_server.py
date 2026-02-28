@@ -1086,14 +1086,14 @@ def mcp_server_card() -> dict[str, Any]:
         "documentationUrl": "https://docs.planexe.org/",
         "transport": {
             "type": "streamable-http",
-            "endpoint": "/mcp",
+            "endpoint": "/mcp/",
         },
         "capabilities": {
             "tools": {},
         },
         "authentication": {
             "required": AUTH_REQUIRED,
-            "schemes": ["bearer"],
+            "schemes": ["api-key"],
         },
         "tools": ["dynamic"],
         "prompts": ["dynamic"],

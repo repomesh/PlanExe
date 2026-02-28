@@ -195,7 +195,7 @@ def _append_cors_headers(request: Request, response: Response) -> Response:
 
     headers = response.headers
     headers.setdefault("Access-Control-Allow-Origin", allow_origin)
-    headers.setdefault("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    headers.setdefault("Access-Control-Allow-Methods", "GET, HEAD, POST, OPTIONS")
 
     request_headers = request.headers.get("access-control-request-headers")
     if request_headers:
@@ -778,7 +778,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "HEAD", "POST", "OPTIONS"],
     allow_headers=["*"],  # Allow any header (e.g. X-API-Key) for CORS preflight
 )
 
@@ -904,6 +904,20 @@ async def options_mcp() -> Response:
     return Response(status_code=200)
 
 
+@app.head("/mcp/")
+async def head_mcp_trailing_slash() -> Response:
+    """Handle HEAD /mcp/ for health-check probes (e.g. Smithery scanner).
+
+    The mounted FastMCP Streamable HTTP app does not support HEAD and returns
+    405.  This explicit route intercepts the request so scanners get a clean
+    200 instead of bouncing off the sub-app.
+    """
+    return Response(
+        status_code=200,
+        headers={"Content-Type": "application/json"},
+    )
+
+
 @app.api_route("/mcp", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
 async def redirect_mcp_no_trailing_slash() -> RedirectResponse:
     """Normalize '/mcp' to '/mcp/' so streamable HTTP requests avoid 405 mismatches."""
@@ -1022,6 +1036,7 @@ def root() -> dict[str, Any]:
             "tools": "/mcp/tools",
             "call": "/mcp/tools/call",
             "health": "/healthcheck",
+            "mcp_server_card": "/.well-known/mcp/server-card.json",
             "glama_connector": "/.well-known/glama.json",
             "download": f"/download/{{plan_id}}/{REPORT_FILENAME}",
             "llms_txt": "/llms.txt",
@@ -1044,6 +1059,46 @@ def _llms_txt_path() -> str:
     if not os.path.exists(path):
         raise HTTPException(status_code=404, detail="llms.txt not found")
     return path
+
+
+@app.get("/.well-known/mcp/server-card.json")
+def mcp_server_card() -> dict[str, Any]:
+    """Serve MCP Server Card for discovery (SEP-1649).
+
+    This allows registries like Smithery to discover the server's capabilities
+    without performing a full MCP handshake.
+    """
+    return {
+        "$schema": "https://static.modelcontextprotocol.io/schemas/mcp-server-card/v1.json",
+        "version": "1.0",
+        "serverInfo": {
+            "name": "planexe-mcp-server",
+            "title": "PlanExe – AI Project Planning",
+            "version": "1.0.0",
+        },
+        "description": (
+            "MCP server that generates strategic project-plan drafts from a "
+            "natural-language prompt. Output is a self-contained interactive "
+            "HTML report with 20+ sections including executive summary, "
+            "interactive Gantt charts, risk analysis, SWOT, governance, "
+            "investor pitch, and adversarial stress-test sections."
+        ),
+        "documentationUrl": "https://github.com/PlanExeOrg/PlanExe",
+        "transport": {
+            "type": "streamable-http",
+            "endpoint": "/mcp",
+        },
+        "capabilities": {
+            "tools": {},
+        },
+        "authentication": {
+            "required": AUTH_REQUIRED,
+            "schemes": ["bearer"],
+        },
+        "tools": ["dynamic"],
+        "prompts": ["dynamic"],
+        "resources": ["dynamic"],
+    }
 
 
 @app.get("/.well-known/glama.json")

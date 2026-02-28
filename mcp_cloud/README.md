@@ -86,6 +86,13 @@ Use a UserApiKey from [home.planexe.org](https://home.planexe.org/), or set `PLA
 - `GET /docs` - OpenAPI documentation (Swagger UI)
 - `GET /robots.txt` - Crawler rules for public metadata discovery
 
+### Discovery / `.well-known` Endpoints
+
+The `/.well-known/` prefix is an [IETF standard (RFC 8615)](https://www.rfc-editor.org/rfc/rfc8615) for machine-readable metadata. Automated systems (registries, crawlers, AI agents) fetch these to discover what the server offers without performing a full handshake.
+
+- **`GET /.well-known/mcp/server-card.json`** — MCP Server Card ([SEP-1649](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1649)). Lets MCP registries (Smithery, etc.) discover the server's name, description, transport type, capabilities, and auth requirements in a single JSON fetch — no MCP handshake needed.
+- **`GET /.well-known/glama.json`** — Glama ownership verification. When registering at [glama.ai](https://glama.ai), their crawler fetches this to confirm the server maintainer (contains a maintainer email).
+
 ### "SSE error" or "no Server-SSE stream" from the client
 
 Some MCP clients (e.g. OpenClaw/mcporter) connect by doing a **GET** to the server URL and expect a **Server-Sent Events (SSE)** stream (`Content-Type: text/event-stream`). That is the **Streamable HTTP** transport. This server mounts FastMCP at `/mcp`; **GET /mcp** returns a **307 redirect** to `/mcp/`, and the Streamable HTTP handshake may not match what the client expects, so the client reports "SSE error" or "could not fetch … no SSE stream".

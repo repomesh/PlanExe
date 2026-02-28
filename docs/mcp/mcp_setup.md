@@ -23,12 +23,13 @@ This is the shortest path to a working PlanExe MCP integration.
 
 ## 2. Minimal tool usage
 
-1. `prompt_examples`
-2. `model_profiles`
-3. `plan_create`
-4. `plan_status`
-5. `plan_retry` (optional, only for failed plans)
-6. `plan_file_info`
+1. `example_plans` (optional, preview example output)
+2. `example_prompts`
+3. `model_profiles`
+4. `plan_create`
+5. `plan_status`
+6. `plan_retry` (optional, only for failed plans)
+7. `plan_file_info`
 
 Optional local helper:
 - `plan_download` (provided by `mcp_local`, not `mcp_cloud`)

@@ -14,9 +14,25 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 
 ## Tool Catalog, `mcp_cloud`
 
-### prompt_examples
+### example_plans
 
-Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `plan_create`. Shorter or vaguer prompts produce lower-quality plans.
+Returns a curated list of example plans with download links for reports and zip bundles. Use this to preview what PlanExe output looks like before creating your own plan. No API key required.
+
+Example prompt:
+```
+Show me example plans.
+```
+
+Example call:
+```json
+{}
+```
+
+Response includes `plans` (array of objects with `title`, `report_url`, `zip_url`) and `message`.
+
+### example_prompts
+
+Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `example_prompts`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `plan_create`. Shorter or vaguer prompts produce lower-quality plans.
 
 Example prompt:
 ```
@@ -55,22 +71,6 @@ Response includes:
   - `summary`
   - `model_count`
   - `models[]` (`key`, `provider_class`, `model`, `priority`)
-
-### example_plans
-
-Returns a curated list of example plans with download links for reports and zip bundles. Use this to preview what PlanExe output looks like before creating your own plan. No API key required.
-
-Example prompt:
-```
-Show me example plans.
-```
-
-Example call:
-```json
-{}
-```
-
-Response includes `plans` (array of objects with `title`, `report_url`, `zip_url`) and `message`.
 
 ### plan_create
 
@@ -266,9 +266,23 @@ Special case:
 
 ## Typical Flow
 
-### 1. Get example prompts
+### 1. Preview example plans (optional)
 
-The user often starts with a vague idea. The AI calls `prompt_examples` first to see what good prompts look like (around five samples, typically 300-800 words each), then expands the user’s idea into a high-quality prompt using this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
+Call `example_plans` to see curated example plans with download links, so you can preview what PlanExe output looks like before creating your own plan.
+
+Prompt:
+```
+Show me example plans.
+```
+
+Tool call:
+```json
+{}
+```
+
+### 2. Get example prompts
+
+The user often starts with a vague idea. The AI calls `example_prompts` first to see what good prompts look like (around five samples, typically 300-800 words each), then expands the user’s idea into a high-quality prompt using this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 
 Prompt:
 ```
@@ -280,7 +294,7 @@ Tool call:
 {}
 ```
 
-### 2. Inspect model profiles (optional but recommended)
+### 3. Inspect model profiles (optional but recommended)
 
 Prompt:
 ```
@@ -292,11 +306,11 @@ Tool call:
 {}
 ```
 
-### 3. Draft and approve the prompt (non-tool step)
+### 4. Draft and approve the prompt (non-tool step)
 
 At this step, the agent writes a high-quality prompt draft (typically 300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria), shows it to the user, and waits for approval.
 
-### 4. Create a plan
+### 5. Create a plan
 
 The user reviews the prompt and either asks for further changes or confirms it’s good to go. When the user confirms, the agent calls `plan_create` with that prompt.
 
@@ -305,7 +319,7 @@ Tool call:
 {"prompt": "..."}
 ```
 
-### 5. Get status
+### 6. Get status
 
 Prompt:
 ```
@@ -324,7 +338,7 @@ Tool call:
 {"plan_id": "<plan_id_from_plan_create>", "model_profile": "baseline"}
 ```
 
-### 6. Download the report
+### 7. Download the report
 
 Prompt:
 ```

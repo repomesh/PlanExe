@@ -59,9 +59,9 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
     - MCP methods: `initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`
     - Probe compatibility: `GET/HEAD/POST /mcp`, `GET/HEAD /mcp/`, and `GET /mcp/tools`
   - `tools/call` without API key is allowed **only** for free setup tools:
-    - `model_profiles`
-    - `prompt_examples`
     - `example_plans`
+    - `example_prompts`
+    - `model_profiles`
   - All other tool invocations (for example `plan_create`) must remain API-key protected.
 - Keep auth-denial logging explicit (`Auth rejected: ...`) with method/path/user-agent and parsed JSON-RPC methods to make Railway debugging easier.
 

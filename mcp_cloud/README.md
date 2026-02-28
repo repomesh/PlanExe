@@ -14,7 +14,7 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 
 ## Run as task (MCP tasks protocol)
 
-MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `prompt_examples`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_file_info` (or `plan_download` via `mcp_local`). The agent creates a task, polls status, retries on failed when needed, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `example_plans`, `example_prompts`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_file_info` (or `plan_download` via `mcp_local`). The agent creates a task, polls status, retries on failed when needed, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
 Workflow clarity: prompt drafting + user approval is a non-tool step between setup tools and `plan_create`.
 
 ## Client Choice Guide
@@ -42,7 +42,7 @@ mcp_cloud exposes HTTP endpoints on port `8001` (or `${PLANEXE_MCP_HTTP_PORT}`).
 - `true`: provide a valid `X-API-Key`.
 Accepted keys are (1) UserApiKey from home.planexe.org (`pex_...`), or (2) `PLANEXE_MCP_API_KEY` if set (for dev or shared secret).
 OAuth is not supported for the MCP API.
-When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, `GET /mcp/tools`, and probe traffic to `/mcp` for redirect/handshake compatibility) are intentionally allowed without API key for connector health checks. In addition, `tools/call` is open without API key only for `model_profiles` and `prompt_examples`; all other tool calls remain protected.
+When auth is enabled, MCP handshake/discovery calls (`initialize`, `notifications/initialized`, `tools/list`, `prompts/list`, `resources/list`, `resources/templates/list`, `ping`, `GET /mcp/tools`, and probe traffic to `/mcp` for redirect/handshake compatibility) are intentionally allowed without API key for connector health checks. In addition, `tools/call` is open without API key only for `example_plans`, `example_prompts`, and `model_profiles`; all other tool calls remain protected.
 
 ### Connecting via HTTP/URL
 
@@ -138,7 +138,8 @@ mcp_cloud uses the same database configuration as other PlanExe services:
 
 See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 
-- `prompt_examples` - Return example prompts. Use these as examples for plan_create.
+- `example_plans` - Return curated example plans with download links for reports and zip bundles.
+- `example_prompts` - Return example prompts. Use these as examples for plan_create.
 - `model_profiles` - List profile options and currently available models in each profile.
 - `plan_create` - Create a new plan (returns plan_id as UUID; may require user_api_key for credits)
 - `plan_status` - Get plan status and progress
@@ -167,7 +168,7 @@ Note: `plan_download` is a synthetic tool provided by `mcp_local`, not by this s
 
 > **Breaking change (v2026-02-26):** External-facing field names were renamed from `task_id` → `plan_id`, `tasks` → `plans`, and error codes from `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`.
 
-**Tip**: Call `prompt_examples` to get example prompts to use with plan_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
+**Tip**: Call `example_plans` to preview example output, then call `example_prompts` to get example prompts to use with plan_create, then call `model_profiles` to choose `model_profile` based on current runtime availability. The prompt catalog is the same as in the frontends (`worker_plan.worker_plan_api.PromptCatalog`). When running with `PYTHONPATH` set to the repo root (e.g. stdio setup), the catalog is loaded automatically; otherwise built-in examples are returned.
 
 Download flow: call `plan_file_info` to obtain the `download_url`, then fetch the
 report via `GET /download/{plan_id}/030-report.html` (API key required if configured).

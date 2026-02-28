@@ -9,7 +9,7 @@ class ErrorDetail(BaseModel):
     details: dict[str, Any] | None = None
 
 
-class PromptExamplesOutput(BaseModel):
+class ExamplePromptsOutput(BaseModel):
     samples: list[str] = Field(
         ...,
         description=(
@@ -22,7 +22,7 @@ class PromptExamplesOutput(BaseModel):
     message: str
 
 
-class PromptExamplesInput(BaseModel):
+class ExamplePromptsInput(BaseModel):
     """No input parameters."""
     pass
 
@@ -293,7 +293,7 @@ class PlanCreateInput(BaseModel):
         ...,
         description=(
             "What the plan should cover (goal, context, constraints). "
-            "Use prompt_examples to get example prompts; use these as examples for plan_create. "
+            "Use example_prompts to get example prompts; use these as examples for plan_create. "
             "For best results, provide a detailed prompt (typically ~300-800 words). "
             "Good prompt shape: objective, scope, constraints, timeline, stakeholders, "
             "budget/resources, and success criteria. "

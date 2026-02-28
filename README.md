@@ -51,7 +51,7 @@ However, the output has consistent weaknesses that matter: budgets are assumed r
 
 PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/](https://mcp.planexe.org/)
 
-Assuming you have an MCP-compatible client (Claude, Cursor, Codex, LM Studio, Windsurf, OpenClaw, Inspector).
+Assuming you have an MCP-compatible client ([Claude](https://docs.planexe.org/mcp/claude/), [Cursor](https://docs.planexe.org/mcp/cursor/), [Codex](https://docs.planexe.org/mcp/codex/), [LM Studio](https://docs.planexe.org/mcp/lm_studio/), [Windsurf](https://docs.planexe.org/mcp/windsurf/), OpenClaw, [Antigravity](https://docs.planexe.org/mcp/antigravity/)).
 
 The Tool workflow (tools-only, not MCP tasks protocol)
 

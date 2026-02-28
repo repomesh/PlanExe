@@ -1,4 +1,4 @@
-# PlanExe MCP locally - Experimental, likely to be changed a lot!
+# PlanExe MCP locally
 
 Model Context Protocol (MCP) local proxy for PlanExe.
 
@@ -125,3 +125,7 @@ directory where PlanExe is allowed to save files.
   }
 }
 ```
+
+## Ideas
+
+I’m considering dropping `mcp_local`. The benefit of having the `plan_download` is too small, vs. using `plan_file_info` and downloading the url afterwards. It saves 1 reasoning step. Alas the UX of configuring `mcp_local` is terrible. The documentation can be less confusing by not covering `mcp_local`.

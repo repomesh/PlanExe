@@ -1,4 +1,4 @@
-# PlanExe MCP Cloud - Experimental, likely to be changed a lot!
+# PlanExe MCP Cloud
 
 Model Context Protocol (MCP) interface for PlanExe. Implements the MCP specification defined in [docs/mcp/planexe_mcp_interface.md](https://docs.planexe.org/mcp/planexe_mcp_interface/).
 

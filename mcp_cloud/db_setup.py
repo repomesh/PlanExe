@@ -89,6 +89,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: call prompt_examples first. "
     "Optional before plan_create: call model_profiles to see profile guidance and available models in each profile. "
+    "Optional: call example_plans to preview what PlanExe output looks like (curated example reports and zip bundles). "
     "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
     "typically ~300-800 words, and get user approval. "
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "

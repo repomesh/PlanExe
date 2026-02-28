@@ -25,6 +25,7 @@ from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.tool_models import (
+    ExamplePlansOutput,
     ModelProfilesOutput,
     PlanCreateOutput,
     PlanFileInfoOutput,
@@ -66,6 +67,7 @@ from mcp_cloud.app import (
     handle_plan_stop,
     handle_plan_file_info,
     handle_prompt_examples,
+    handle_example_plans,
     resolve_plan_by_id,
     set_download_base_url,
     validate_download_token,
@@ -170,6 +172,7 @@ PUBLIC_JSONRPC_METHODS_NO_AUTH = {
 PUBLIC_TOOL_CALLS_NO_AUTH = {
     "model_profiles",
     "prompt_examples",
+    "example_plans",
 }
 
 
@@ -689,6 +692,11 @@ async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
     return await handle_model_profiles({})
 
 
+async def example_plans() -> Annotated[CallToolResult, ExamplePlansOutput]:
+    """Return curated example plans with download links (no arguments)."""
+    return await handle_example_plans({})
+
+
 async def plan_list(
     limit: int = Field(default=10, ge=1, le=50, description="Maximum number of plans to return (1–50). Newest plans are returned first."),
 ) -> Annotated[CallToolResult, PlanListOutput]:
@@ -710,6 +718,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_list": plan_list,
         "prompt_examples": prompt_examples,
         "model_profiles": model_profiles,
+        "example_plans": example_plans,
     }
     for tool in TOOL_DEFINITIONS:
         handler = handler_map.get(tool.name)

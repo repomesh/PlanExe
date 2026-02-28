@@ -185,6 +185,35 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
+async def handle_example_plans(arguments: dict[str, Any]) -> CallToolResult:
+    """Return a curated list of example plans with download links."""
+    payload = {
+        "plans": [
+            {
+                "title": "CBC Validation",
+                "report_url": "https://planexe.org/20260114_cbc_validation_report.html",
+                "zip_url": "https://planexe.org/20260114_cbc_validation.zip",
+            },
+            {
+                "title": "Minecraft Escape",
+                "report_url": "https://planexe.org/20251016_minecraft_escape_report.html",
+                "zip_url": "https://planexe.org/20251016_minecraft_escape.zip",
+            },
+        ],
+        "message": (
+            "These are curated example plans showing what PlanExe output looks like. "
+            "Open the report URLs in a browser to see the interactive HTML reports with "
+            "collapsible sections and Gantt charts. The zip bundles contain the intermediary "
+            "pipeline files (md, json, csv) that fed each report."
+        ),
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload))],
+        structuredContent=payload,
+        isError=False,
+    )
+
+
 async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
     """Return model profile options and currently available models in each profile."""
     _ = ModelProfilesRequest(**(arguments or {}))
@@ -551,4 +580,5 @@ TOOL_HANDLERS = {
     "plan_list": handle_plan_list,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
+    "example_plans": handle_example_plans,
 }

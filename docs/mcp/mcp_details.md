@@ -56,6 +56,22 @@ Response includes:
   - `model_count`
   - `models[]` (`key`, `provider_class`, `model`, `priority`)
 
+### example_plans
+
+Returns a curated list of example plans with download links for reports and zip bundles. Use this to preview what PlanExe output looks like before creating your own plan. No API key required.
+
+Example prompt:
+```
+Show me example plans.
+```
+
+Example call:
+```json
+{}
+```
+
+Response includes `plans` (array of objects with `title`, `report_url`, `zip_url`) and `message`.
+
 ### plan_create
 
 Create a new plan.

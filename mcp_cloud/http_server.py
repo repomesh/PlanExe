@@ -924,12 +924,22 @@ async def head_mcp_trailing_slash() -> Response:
     )
 
 
-@app.api_route("/mcp", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
-async def redirect_mcp_no_trailing_slash(request: Request) -> RedirectResponse:
-    """Normalize '/mcp' to '/mcp/' so streamable HTTP requests avoid 405 mismatches."""
-    qs = request.url.query
-    target = f"/mcp/?{qs}" if qs else "/mcp/"
-    return RedirectResponse(url=target, status_code=307)
+class _NormalizeMcpPath:
+    """ASGI middleware: rewrite ``/mcp`` → ``/mcp/`` at the scope level.
+
+    Smithery (and possibly other registries) POST to ``/mcp`` but refuse to
+    follow 307 redirects.  By rewriting the path *before* routing, the mounted
+    FastMCP sub-app receives the request directly — no HTTP redirect needed.
+    """
+
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http" and scope.get("path") == "/mcp":
+            scope = dict(scope)
+            scope["path"] = "/mcp/"
+        await self.app(scope, receive, send)
 
 
 @app.post("/mcp/tools/call", response_model=MCPToolCallResponse)
@@ -986,6 +996,11 @@ async def list_tools(fastmcp_server: FastMCP = Depends(_get_fastmcp)) -> dict[st
 # routes in registration order; if the mount were first it would shadow the
 # REST endpoints with a 404 from the sub-app.
 app.mount("/mcp", fastmcp_http_app)
+
+# Rewrite /mcp → /mcp/ at the ASGI level so clients that refuse to follow
+# 307 redirects (e.g. Smithery) still reach the mounted FastMCP app.
+# Added last so it becomes the outermost middleware (runs first).
+app.add_middleware(_NormalizeMcpPath)
 
 @app.get("/download/{plan_id}/{filename}")
 async def download_report(

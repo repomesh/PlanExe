@@ -24,7 +24,7 @@ title: Claude - MCP integration
 ## Success criteria
 
 - You can fetch prompt examples.
-- You can create a plan task.
+- You can create a plan.
 - You can download the report.
 
 ---

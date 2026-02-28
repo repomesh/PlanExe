@@ -58,7 +58,7 @@ Response includes:
 
 ### plan_create
 
-Create a new plan task.
+Create a new plan.
 
 Example prompt:
 > Create a plan for: Weekly meetup for humans where participants are randomly paired every 5 minutes...
@@ -94,16 +94,16 @@ What to do instead:
 
 ### plan_status
 
-Fetch status/progress and recent files for a task.
+Fetch status/progress and recent files for a plan.
 
 Example prompt:
 ```
-Get status for task 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
+Get status for plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
 ```
 
 Example call:
 ```json
-{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
+{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
 ```
 
 State contract:
@@ -115,36 +115,36 @@ State contract:
 
 ### plan_stop
 
-Request an active task to stop.
+Request an active plan to stop.
 
 Example prompt:
 ```
-Stop task 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
+Stop plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
 ```
 
 Example call:
 ```json
-{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
+{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7"}
 ```
 
 ### plan_retry
 
-Retry a failed task by requeueing the same `task_id`.
+Retry a failed plan by requeueing the same `plan_id`.
 
 Example prompt:
 ```
-Retry failed task 2d57a448-1b09-45aa-ad37-e69891ff6ec7 with baseline profile.
+Retry failed plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7 with baseline profile.
 ```
 
 Example call:
 ```json
-{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "model_profile": "baseline"}
+{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "model_profile": "baseline"}
 ```
 
 Notes:
 - `model_profile` is optional and defaults to `baseline`.
-- Only failed tasks can be retried.
-- Non-failed tasks return `TASK_NOT_FAILED`.
+- Only failed plans can be retried.
+- Non-failed plans return `PLAN_NOT_FAILED`.
 
 ### plan_file_info
 
@@ -152,12 +152,12 @@ Return download metadata for report or zip artifacts.
 
 Example prompt:
 ```
-Get report info for task 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
+Get report info for plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
 ```
 
 Example call:
 ```json
-{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
+{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
 ```
 
 Available artifacts:
@@ -171,7 +171,7 @@ Typical successful response:
   "content_type": "application/zip",
   "sha256": "f8ad556b635b14e375222150664e85b426bf7f9209ede2f37f47a8975e286323",
   "download_size": 17262032,
-  "download_url": "https://mcp.planexe.org/download/<task_id>/run.zip"
+  "download_url": "https://mcp.planexe.org/download/<plan_id>/run.zip"
 }
 ```
 
@@ -199,19 +199,19 @@ Download report or zip to a local path.
 
 Example prompt:
 ```
-Download the report for task 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
+Download the report for plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
 ```
 
 Example call:
 ```json
-{"task_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
+{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
 ```
 
 `PLANEXE_PATH` behavior for `plan_download`:
 - Save directory is `PLANEXE_PATH`, or current working directory if unset.
 - Non-existing directories are created automatically.
 - If `PLANEXE_PATH` points to a file, download fails.
-- Filename is prefixed with task id (for example `<task_id>-030-report.html`).
+- Filename is prefixed with plan id (for example `<plan_id>-030-report.html`).
 - Response includes `saved_path` with the exact local file location.
 
 ## Minimal error-handling contract
@@ -222,8 +222,8 @@ Error payload shape:
 ```
 
 Common cloud/core error codes:
-- `TASK_NOT_FOUND`
-- `TASK_NOT_FAILED`
+- `PLAN_NOT_FOUND`
+- `PLAN_NOT_FAILED`
 - `INVALID_USER_API_KEY`
 - `USER_API_KEY_REQUIRED`
 - `INSUFFICIENT_CREDITS`
@@ -241,12 +241,12 @@ Special case:
 
 ## Concurrency semantics (practical)
 
-- Each `plan_create` call creates a new task with a new `task_id`.
-- The server does not enforce a global “one active task per client” cap.
+- Each `plan_create` call creates a new plan with a new `plan_id`.
+- The server does not enforce a global “one active plan per client” cap.
 - Parallelism is a client orchestration concern:
-  - start with 1 task
+  - start with 1 plan
   - scale to 2 in parallel if needed
-  - avoid more than 4 unless you have strong task-tracking UX
+  - avoid more than 4 unless you have strong plan-tracking UX
 
 ## Typical Flow
 
@@ -293,29 +293,29 @@ Tool call:
 
 Prompt:
 ```
-Get status for my latest task.
+Get status for my latest plan.
 ```
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_plan_create>"}
+{"plan_id": "<plan_id_from_plan_create>"}
 ```
 
 If state is `failed`, optional retry:
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_plan_create>", "model_profile": "baseline"}
+{"plan_id": "<plan_id_from_plan_create>", "model_profile": "baseline"}
 ```
 
 ### 6. Download the report
 
 Prompt:
 ```
-Download the report for my task.
+Download the report for my plan.
 ```
 
 Tool call:
 ```json
-{"task_id": "<task_id_from_plan_create>", "artifact": "report"}
+{"plan_id": "<plan_id_from_plan_create>", "artifact": "report"}
 ```

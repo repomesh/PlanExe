@@ -755,6 +755,7 @@ def execute_pipeline_for_job(
     with app.app_context():
         if pipeline_instance.has_report_file:
             update_task_state_with_retry(task_id, PlanState.completed)
+            update_task_progress_with_retry(task_id, 100.0, "Completed")
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=True)
             event_context.update({
                 "billing_usage_cost_usd": str(billing_result["usage_cost_usd"]),

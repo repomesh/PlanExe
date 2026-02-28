@@ -394,6 +394,12 @@ def _extract_api_key(request: Request) -> Optional[str]:
         if value:
             return value
 
+    # Fall back to query parameter (e.g. Smithery passes ?X-API-Key=...).
+    for param_name in ("X-API-Key", "api_key", "api-key"):
+        value = _normalize_api_key_value(request.query_params.get(param_name))
+        if value:
+            return value
+
     return None
 
 
@@ -919,9 +925,11 @@ async def head_mcp_trailing_slash() -> Response:
 
 
 @app.api_route("/mcp", methods=["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"])
-async def redirect_mcp_no_trailing_slash() -> RedirectResponse:
+async def redirect_mcp_no_trailing_slash(request: Request) -> RedirectResponse:
     """Normalize '/mcp' to '/mcp/' so streamable HTTP requests avoid 405 mismatches."""
-    return RedirectResponse(url="/mcp/", status_code=307)
+    qs = request.url.query
+    target = f"/mcp/?{qs}" if qs else "/mcp/"
+    return RedirectResponse(url=target, status_code=307)
 
 
 @app.post("/mcp/tools/call", response_model=MCPToolCallResponse)

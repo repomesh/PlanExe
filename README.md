@@ -55,7 +55,7 @@ Assuming you have an MCP-compatible client ([Claude](https://docs.planexe.org/mc
 
 The Tool workflow (tools-only, not MCP tasks protocol)
 
-1. `prompt_examples`
+1. `example_prompts`
 2. `model_profiles` (optional, helps choose `model_profile`)
 3. non-tool step: draft/approve prompt
 4. `plan_create`

@@ -80,17 +80,17 @@ class TestPlanRetryInputSchemaDefaults(unittest.TestCase):
         self.assertEqual(model_profile.get("default"), "baseline")
 
 
-class TestPromptExamplesAnnotations(unittest.TestCase):
-    def test_cloud_prompt_examples_annotations(self):
-        definition = _tool_def(cloud_app.TOOL_DEFINITIONS, "prompt_examples")
+class TestExamplePromptsAnnotations(unittest.TestCase):
+    def test_cloud_example_prompts_annotations(self):
+        definition = _tool_def(cloud_app.TOOL_DEFINITIONS, "example_prompts")
         annotations = definition.annotations or {}
         self.assertTrue(annotations.get("readOnlyHint"))
         self.assertFalse(annotations.get("destructiveHint"))
         self.assertTrue(annotations.get("idempotentHint"))
         self.assertFalse(annotations.get("openWorldHint"))
 
-    def test_local_prompt_examples_annotations(self):
-        definition = _tool_def(local_app.TOOL_DEFINITIONS, "prompt_examples")
+    def test_local_example_prompts_annotations(self):
+        definition = _tool_def(local_app.TOOL_DEFINITIONS, "example_prompts")
         annotations = definition.annotations or {}
         self.assertTrue(annotations.get("readOnlyHint"))
         self.assertFalse(annotations.get("destructiveHint"))

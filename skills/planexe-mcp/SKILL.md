@@ -85,7 +85,7 @@ PLANEXE_API_KEY=your_api_key
 
 The PlanExe MCP exposes eight core tools via the `/mcp` endpoint:
 
-### Tool 1: `prompt_examples`
+### Tool 1: `example_prompts`
 
 Get example prompts to understand what PlanExe can do.
 
@@ -96,7 +96,7 @@ Get example prompts to understand what PlanExe can do.
   "jsonrpc": "2.0",
   "method": "tools/call",
   "params": {
-    "name": "prompt_examples",
+    "name": "example_prompts",
     "arguments": {}
   }
 }
@@ -283,7 +283,7 @@ Retry a failed task with an optional upgraded model profile.
 
 ## Typical Workflow
 
-1. Call `prompt_examples` to understand available planning scenarios
+1. Call `example_prompts` to understand available planning scenarios
 2. Optionally call `model_profiles` to choose an appropriate `model_profile`
 3. Formulate your planning prompt
 4. Get user approval for the request

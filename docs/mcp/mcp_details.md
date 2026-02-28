@@ -14,9 +14,9 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 
 ## Tool Catalog, `mcp_cloud`
 
-### prompt_examples
+### example_prompts
 
-Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `prompt_examples`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `plan_create`. Shorter or vaguer prompts produce lower-quality plans.
+Returns around five example prompts that show what good prompts look like. Each sample is typically 300-800 words. Usually the AI does the heavy lifting: the user has a vague idea, the agent calls `example_prompts`, then expands that idea into a high-quality prompt (300-800 words). A compact prompt shape works best: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. The prompt is shown to the user, who can ask for further changes or confirm it’s good to go. When the user confirms, the agent then calls `plan_create`. Shorter or vaguer prompts produce lower-quality plans.
 
 Example prompt:
 ```
@@ -268,7 +268,7 @@ Special case:
 
 ### 1. Get example prompts
 
-The user often starts with a vague idea. The AI calls `prompt_examples` first to see what good prompts look like (around five samples, typically 300-800 words each), then expands the user’s idea into a high-quality prompt using this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
+The user often starts with a vague idea. The AI calls `example_prompts` first to see what good prompts look like (around five samples, typically 300-800 words each), then expands the user’s idea into a high-quality prompt using this compact shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 
 Prompt:
 ```

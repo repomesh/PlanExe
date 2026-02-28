@@ -66,7 +66,7 @@ from mcp_cloud.app import (
     handle_plan_retry,
     handle_plan_stop,
     handle_plan_file_info,
-    handle_prompt_examples,
+    handle_example_prompts,
     handle_example_plans,
     resolve_plan_by_id,
     set_download_base_url,
@@ -171,7 +171,7 @@ PUBLIC_JSONRPC_METHODS_NO_AUTH = {
 }
 PUBLIC_TOOL_CALLS_NO_AUTH = {
     "model_profiles",
-    "prompt_examples",
+    "example_prompts",
     "example_plans",
 }
 
@@ -637,7 +637,7 @@ async def plan_create(
         Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, PlanCreateOutput]:
-    """Create a new PlanExe task. Use prompt_examples first for example prompts."""
+    """Create a new PlanExe task. Use example_prompts first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
         "prompt": prompt,
@@ -682,9 +682,9 @@ async def plan_file_info(
     return await handle_plan_file_info({"plan_id": plan_id, "artifact": artifact})
 
 
-async def prompt_examples() -> CallToolResult:
+async def example_prompts() -> CallToolResult:
     """Return curated example prompts from the catalog (no arguments)."""
-    return await handle_prompt_examples({})
+    return await handle_example_prompts({})
 
 
 async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
@@ -716,7 +716,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_retry": plan_retry,
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
-        "prompt_examples": prompt_examples,
+        "example_prompts": example_prompts,
         "model_profiles": model_profiles,
         "example_plans": example_plans,
     }

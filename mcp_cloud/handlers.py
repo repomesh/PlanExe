@@ -48,7 +48,7 @@ from mcp_cloud.worker_fetchers import (
 )
 from mcp_cloud.model_profiles import _get_model_profiles_sync
 from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url
-from mcp_cloud.prompt_examples import _load_mcp_example_prompts
+from mcp_cloud.example_prompts import _load_mcp_example_prompts
 from mcp_cloud.schemas import TOOL_DEFINITIONS
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
-async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
+async def handle_example_prompts(arguments: dict[str, Any]) -> CallToolResult:
     """Return curated prompts from the catalog (mcp_example true) so LLMs can see example detail."""
     samples = _load_mcp_example_prompts()
     payload = {
@@ -578,7 +578,7 @@ TOOL_HANDLERS = {
     "plan_retry": handle_plan_retry,
     "plan_file_info": handle_plan_file_info,
     "plan_list": handle_plan_list,
-    "prompt_examples": handle_prompt_examples,
+    "example_prompts": handle_example_prompts,
     "model_profiles": handle_model_profiles,
     "example_plans": handle_example_plans,
 }

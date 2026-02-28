@@ -25,7 +25,7 @@ Nine tools, split across two transports:
 
 | Tool              | Cloud (`mcp_cloud`) | Local (`mcp_local`) | Auth     | Annotations             |
 | ----------------- | ------------------- | ------------------- | -------- | ----------------------- |
-| `prompt_examples` | yes                 | yes                 | Public   | readOnly, idempotent    |
+| `example_prompts` | yes                 | yes                 | Public   | readOnly, idempotent    |
 | `model_profiles`  | yes                 | yes                 | Public   | readOnly, idempotent    |
 | `plan_create`     | yes                 | yes                 | Required | openWorld               |
 | `plan_status`     | yes                 | yes                 | Required | readOnly, idempotent    |
@@ -46,7 +46,7 @@ Nine tools, split across two transports:
 
 **Dual transport.** `mcp_cloud` (stateless HTTP / Railway) and `mcp_local` (stdio proxy) cover the two major deployment patterns. Most users can pick one without reading source code.
 
-**Clean module structure.** `mcp_cloud/app.py` is now a thin re-export facade (~195 lines). Logic lives in focused modules: `handlers.py` (tool handlers), `schemas.py` (tool definitions), `tool_models.py` (Pydantic models), `db_queries.py` (DB operations), `auth.py` (key hashing/user resolution), `download_tokens.py` (signed tokens), `model_profiles.py`, `worker_fetchers.py`, `zip_utils.py`, `prompt_examples.py`. This makes PRs reviewable and bugs easy to isolate.
+**Clean module structure.** `mcp_cloud/app.py` is now a thin re-export facade (~195 lines). Logic lives in focused modules: `handlers.py` (tool handlers), `schemas.py` (tool definitions), `tool_models.py` (Pydantic models), `db_queries.py` (DB operations), `auth.py` (key hashing/user resolution), `download_tokens.py` (signed tokens), `model_profiles.py`, `worker_fetchers.py`, `zip_utils.py`, `example_prompts.py`. This makes PRs reviewable and bugs easy to isolate.
 
 **Consistent `plan_`* naming throughout.** The rename from `task_`* to `plan_*` covers the full stack: external tool names, handler functions, request classes (`PlanCreateRequest`, etc.), DB query helpers (`_create_plan_sync`, `get_plan_by_id`, etc.), local variable names, and test file names. No backward-compat aliases remain.
 
@@ -227,7 +227,7 @@ Outstanding issues:
 
 ### 6.4 Example prompt gallery
 
-Add 10–15 high-quality example prompts (startup, research paper, home renovation, hiring plan, …) to `prompt_examples`. Agents and users copy-paste these; each successful use is a social proof data point.
+Add 10–15 high-quality example prompts (startup, research paper, home renovation, hiring plan, …) to `example_prompts`. Agents and users copy-paste these; each successful use is a social proof data point.
 
 ### 6.5 Observability / social proof
 

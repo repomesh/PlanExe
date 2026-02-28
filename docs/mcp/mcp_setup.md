@@ -23,7 +23,7 @@ This is the shortest path to a working PlanExe MCP integration.
 
 ## 2. Minimal tool usage
 
-1. `prompt_examples`
+1. `example_prompts`
 2. `model_profiles`
 3. `plan_create`
 4. `plan_status`

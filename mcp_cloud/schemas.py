@@ -5,8 +5,8 @@ from typing import Any, Optional
 from mcp_cloud.tool_models import (
     ModelProfilesInput,
     ModelProfilesOutput,
-    PromptExamplesInput,
-    PromptExamplesOutput,
+    ExamplePromptsInput,
+    ExamplePromptsOutput,
     ExamplePlansInput,
     ExamplePlansOutput,
     PlanCreateInput,
@@ -58,8 +58,8 @@ PLAN_STOP_INPUT_SCHEMA = PlanStopInput.model_json_schema()
 PLAN_RETRY_INPUT_SCHEMA = PlanRetryInput.model_json_schema()
 PLAN_FILE_INFO_INPUT_SCHEMA = PlanFileInfoInput.model_json_schema()
 
-PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
-PROMPT_EXAMPLES_OUTPUT_SCHEMA = PromptExamplesOutput.model_json_schema()
+EXAMPLE_PROMPTS_INPUT_SCHEMA = ExamplePromptsInput.model_json_schema()
+EXAMPLE_PROMPTS_OUTPUT_SCHEMA = ExamplePromptsOutput.model_json_schema()
 MODEL_PROFILES_INPUT_SCHEMA = ModelProfilesInput.model_json_schema()
 MODEL_PROFILES_OUTPUT_SCHEMA = ModelProfilesOutput.model_json_schema()
 EXAMPLE_PLANS_INPUT_SCHEMA = ExamplePlansInput.model_json_schema()
@@ -78,7 +78,7 @@ class ToolDefinition:
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
-        name="prompt_examples",
+        name="example_prompts",
         description=(
             "Call this first. Returns example prompts that define what a good prompt looks like. "
             "Do NOT call plan_create yet. Optional before plan_create: call model_profiles to choose model_profile. "
@@ -90,8 +90,8 @@ TOOL_DEFINITIONS = [
             "Then call plan_create. "
             "PlanExe is not for tiny one-shot outputs like a 5-point checklist; and it does not support selecting only some internal pipeline steps."
         ),
-        input_schema=PROMPT_EXAMPLES_INPUT_SCHEMA,
-        output_schema=PROMPT_EXAMPLES_OUTPUT_SCHEMA,
+        input_schema=EXAMPLE_PROMPTS_INPUT_SCHEMA,
+        output_schema=EXAMPLE_PROMPTS_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -135,7 +135,7 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_create",
         description=(
-            "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
+            "Call only after example_prompts and after you have completed prompt drafting/approval (non-tool step). "
             "PlanExe turns the approved prompt into a strategic project-plan draft (20+ sections) in ~10-20 min. "
             "Sections include: executive summary, interactive Gantt charts, investor pitch, project plan with SMART criteria, "
             "strategic decision analysis, scenario comparison, assumptions with expert review, governance structure, "

@@ -27,6 +27,25 @@ class PromptExamplesInput(BaseModel):
     pass
 
 
+class ExamplePlansInput(BaseModel):
+    """No input parameters."""
+    pass
+
+
+class ExamplePlanItem(BaseModel):
+    title: str = Field(..., description="Short title describing the example plan.")
+    report_url: str = Field(..., description="URL to the static HTML report for this example plan.")
+    zip_url: str = Field(..., description="URL to the zip bundle for this example plan.")
+
+
+class ExamplePlansOutput(BaseModel):
+    plans: list[ExamplePlanItem] = Field(
+        ...,
+        description="Curated example plans with download links for reports and zip bundles.",
+    )
+    message: str
+
+
 class ModelProfilesInput(BaseModel):
     """No input parameters."""
     pass

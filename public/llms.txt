@@ -65,6 +65,7 @@ MCP Inspector setup guide:
 The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - prompt_examples
 - model_profiles
+- example_plans
 - plan_create
 - plan_status
 - plan_stop

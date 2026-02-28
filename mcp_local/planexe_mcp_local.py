@@ -491,6 +491,32 @@ MODEL_PROFILES_OUTPUT_SCHEMA = {
     ],
 }
 
+EXAMPLE_PLANS_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {},
+    "required": [],
+}
+EXAMPLE_PLANS_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "plans": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "Short title describing the example plan."},
+                    "report_url": {"type": "string", "description": "URL to the static HTML report."},
+                    "zip_url": {"type": "string", "description": "URL to the zip bundle."},
+                },
+                "required": ["title", "report_url", "zip_url"],
+            },
+            "description": "Curated example plans with download links for reports and zip bundles.",
+        },
+        "message": {"type": "string"},
+    },
+    "required": ["plans", "message"],
+}
+
 PLAN_CREATE_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -646,6 +672,23 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolDefinition(
+        name="example_plans",
+        description=(
+            "Returns a curated list of example plans with download links for reports and zip bundles. "
+            "Use this to preview what PlanExe output looks like before creating your own plan. "
+            "Especially useful when the user asks what the output looks like before committing to a plan. "
+            "No API key required."
+        ),
+        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
+        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
         name="plan_create",
         description=(
             "Call only after prompt_examples and after you have completed prompt drafting/approval (non-tool step). "
@@ -782,6 +825,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
     "Required interaction order: call prompt_examples first. "
     "Optional before plan_create: call model_profiles to see profile guidance and available models in each profile. "
+    "Optional: call example_plans to preview what PlanExe output looks like (curated example reports and zip bundles). "
     "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
     "typically ~300-800 words, and get user approval. "
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
@@ -890,6 +934,14 @@ async def handle_prompt_examples(arguments: dict[str, Any]) -> CallToolResult:
 async def handle_model_profiles(arguments: dict[str, Any]) -> CallToolResult:
     """Return model_profile options and available models from mcp_cloud."""
     payload, error = _call_remote_tool("model_profiles", arguments or {})
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
+async def handle_example_plans(arguments: dict[str, Any]) -> CallToolResult:
+    """Return curated example plans with download links from mcp_cloud."""
+    payload, error = _call_remote_tool("example_plans", arguments or {})
     if error:
         return _wrap_response({"error": error}, is_error=True)
     return _wrap_response(payload)
@@ -1039,6 +1091,7 @@ TOOL_HANDLERS = {
     "plan_list": handle_plan_list,
     "prompt_examples": handle_prompt_examples,
     "model_profiles": handle_model_profiles,
+    "example_plans": handle_example_plans,
 }
 
 

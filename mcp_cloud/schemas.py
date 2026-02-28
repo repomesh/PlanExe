@@ -7,6 +7,8 @@ from mcp_cloud.tool_models import (
     ModelProfilesOutput,
     PromptExamplesInput,
     PromptExamplesOutput,
+    ExamplePlansInput,
+    ExamplePlansOutput,
     PlanCreateInput,
     PlanCreateOutput,
     PlanRetryInput,
@@ -60,6 +62,8 @@ PROMPT_EXAMPLES_INPUT_SCHEMA = PromptExamplesInput.model_json_schema()
 PROMPT_EXAMPLES_OUTPUT_SCHEMA = PromptExamplesOutput.model_json_schema()
 MODEL_PROFILES_INPUT_SCHEMA = ModelProfilesInput.model_json_schema()
 MODEL_PROFILES_OUTPUT_SCHEMA = ModelProfilesOutput.model_json_schema()
+EXAMPLE_PLANS_INPUT_SCHEMA = ExamplePlansInput.model_json_schema()
+EXAMPLE_PLANS_OUTPUT_SCHEMA = ExamplePlansOutput.model_json_schema()
 PLAN_LIST_INPUT_SCHEMA = PlanListInput.model_json_schema()
 PLAN_LIST_OUTPUT_SCHEMA = PlanListOutput.model_json_schema()
 
@@ -104,6 +108,23 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
+        name="example_plans",
+        description=(
+            "Returns a curated list of example plans with download links for reports and zip bundles. "
+            "Use this to preview what PlanExe output looks like before creating your own plan. "
+            "Especially useful when the user asks what the output looks like before committing to a plan. "
+            "No API key required."
+        ),
+        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
+        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,

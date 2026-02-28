@@ -634,6 +634,23 @@ PLAN_LIST_OUTPUT_SCHEMA = {
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
+        name="example_plans",
+        description=(
+            "Returns a curated list of example plans with download links for reports and zip bundles. "
+            "Use this to preview what PlanExe output looks like before creating your own plan. "
+            "Especially useful when the user asks what the output looks like before committing to a plan. "
+            "No API key required."
+        ),
+        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
+        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
         name="example_prompts",
         description=(
             "Call this first. Returns example prompts that define what a good prompt looks like. "
@@ -664,23 +681,6 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-    ),
-    ToolDefinition(
-        name="example_plans",
-        description=(
-            "Returns a curated list of example plans with download links for reports and zip bundles. "
-            "Use this to preview what PlanExe output looks like before creating your own plan. "
-            "Especially useful when the user asks what the output looks like before committing to a plan. "
-            "No API key required."
-        ),
-        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
-        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,
@@ -823,9 +823,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Use PlanExe for substantial multi-phase projects with constraints, stakeholders, budgets, and timelines. "
     "Do not use PlanExe for tiny one-shot outputs (for example: 'give me a 5-point checklist'); use a normal LLM response for that. "
     "The planning pipeline is fixed end-to-end; callers cannot select individual internal pipeline steps to run. "
-    "Required interaction order: call example_prompts first. "
+    "Required interaction order: call example_plans first (optional, to preview what PlanExe output looks like — curated example reports and zip bundles). "
+    "Then call example_prompts. "
     "Optional before plan_create: call model_profiles to see profile guidance and available models in each profile. "
-    "Optional: call example_plans to preview what PlanExe output looks like (curated example reports and zip bundles). "
     "Then perform a non-tool step: draft a strong prompt as flowing prose (not structured markdown with headers or bullets), "
     "typically ~300-800 words, and get user approval. "
     "Good prompt shape: objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria. "
@@ -1083,15 +1083,15 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
 
 
 TOOL_HANDLERS = {
+    "example_plans": handle_example_plans,
+    "example_prompts": handle_example_prompts,
+    "model_profiles": handle_model_profiles,
     "plan_create": handle_plan_create,
     "plan_status": handle_plan_status,
     "plan_stop": handle_plan_stop,
     "plan_retry": handle_plan_retry,
     "plan_download": handle_plan_download,
     "plan_list": handle_plan_list,
-    "example_prompts": handle_example_prompts,
-    "model_profiles": handle_model_profiles,
-    "example_plans": handle_example_plans,
 }
 
 

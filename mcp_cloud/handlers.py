@@ -572,13 +572,13 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
 
 
 TOOL_HANDLERS = {
+    "example_plans": handle_example_plans,
+    "example_prompts": handle_example_prompts,
+    "model_profiles": handle_model_profiles,
     "plan_create": handle_plan_create,
     "plan_status": handle_plan_status,
     "plan_stop": handle_plan_stop,
     "plan_retry": handle_plan_retry,
     "plan_file_info": handle_plan_file_info,
     "plan_list": handle_plan_list,
-    "example_prompts": handle_example_prompts,
-    "model_profiles": handle_model_profiles,
-    "example_plans": handle_example_plans,
 }

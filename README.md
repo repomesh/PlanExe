@@ -55,13 +55,14 @@ Assuming you have an MCP-compatible client ([Claude](https://docs.planexe.org/mc
 
 The Tool workflow (tools-only, not MCP tasks protocol)
 
-1. `example_prompts`
-2. `model_profiles` (optional, helps choose `model_profile`)
-3. non-tool step: draft/approve prompt
-4. `plan_create`
-5. `plan_status` (poll every 5 minutes until done)
-6. optional if failed: `plan_retry`
-7. download the result via `plan_download` or via `plan_file_info`
+1. `example_plans` (optional, preview what PlanExe output looks like)
+2. `example_prompts`
+3. `model_profiles` (optional, helps choose `model_profile`)
+4. non-tool step: draft/approve prompt
+5. `plan_create`
+6. `plan_status` (poll every 5 minutes until done)
+7. optional if failed: `plan_retry`
+8. download the result via `plan_download` or via `plan_file_info`
 
 Concurrency note: each `plan_create` call returns a new `plan_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel plans.
 

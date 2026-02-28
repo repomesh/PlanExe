@@ -147,10 +147,10 @@ from mcp_cloud.schemas import (  # noqa: F401
 from mcp_cloud.handlers import (  # noqa: F401
     handle_list_tools,
     handle_call_tool,
-    handle_plan_create,
+    handle_example_plans,
     handle_example_prompts,
     handle_model_profiles,
-    handle_example_plans,
+    handle_plan_create,
     handle_plan_status,
     handle_plan_stop,
     handle_plan_retry,

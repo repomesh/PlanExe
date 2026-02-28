@@ -170,9 +170,9 @@ PUBLIC_JSONRPC_METHODS_NO_AUTH = {
     "ping",
 }
 PUBLIC_TOOL_CALLS_NO_AUTH = {
-    "model_profiles",
-    "example_prompts",
     "example_plans",
+    "example_prompts",
+    "model_profiles",
 }
 
 
@@ -710,15 +710,15 @@ async def plan_list(
 
 def _register_tools(server: FastMCP) -> None:
     handler_map = {
+        "example_plans": example_plans,
+        "example_prompts": example_prompts,
+        "model_profiles": model_profiles,
         "plan_create": plan_create,
         "plan_status": plan_status,
         "plan_stop": plan_stop,
         "plan_retry": plan_retry,
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
-        "example_prompts": example_prompts,
-        "model_profiles": model_profiles,
-        "example_plans": example_plans,
     }
     for tool in TOOL_DEFINITIONS:
         handler = handler_map.get(tool.name)

@@ -78,6 +78,23 @@ class ToolDefinition:
 
 TOOL_DEFINITIONS = [
     ToolDefinition(
+        name="example_plans",
+        description=(
+            "Returns a curated list of example plans with download links for reports and zip bundles. "
+            "Use this to preview what PlanExe output looks like before creating your own plan. "
+            "Especially useful when the user asks what the output looks like before committing to a plan. "
+            "No API key required."
+        ),
+        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
+        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": True,
+            "destructiveHint": False,
+            "idempotentHint": True,
+            "openWorldHint": False,
+        },
+    ),
+    ToolDefinition(
         name="example_prompts",
         description=(
             "Call this first. Returns example prompts that define what a good prompt looks like. "
@@ -108,23 +125,6 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=MODEL_PROFILES_INPUT_SCHEMA,
         output_schema=MODEL_PROFILES_OUTPUT_SCHEMA,
-        annotations={
-            "readOnlyHint": True,
-            "destructiveHint": False,
-            "idempotentHint": True,
-            "openWorldHint": False,
-        },
-    ),
-    ToolDefinition(
-        name="example_plans",
-        description=(
-            "Returns a curated list of example plans with download links for reports and zip bundles. "
-            "Use this to preview what PlanExe output looks like before creating your own plan. "
-            "Especially useful when the user asks what the output looks like before committing to a plan. "
-            "No API key required."
-        ),
-        input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,
-        output_schema=EXAMPLE_PLANS_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": True,
             "destructiveHint": False,

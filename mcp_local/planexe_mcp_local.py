@@ -676,6 +676,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Returns a curated list of example plans with download links for reports and zip bundles. "
             "Use this to preview what PlanExe output looks like before creating your own plan. "
+            "Especially useful when the user asks what the output looks like before committing to a plan. "
             "No API key required."
         ),
         input_schema=EXAMPLE_PLANS_INPUT_SCHEMA,

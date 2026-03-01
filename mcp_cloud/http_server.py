@@ -748,6 +748,57 @@ fastmcp_server = FastMCP(
     stateless_http=True,
 )
 _register_tools(fastmcp_server)
+
+
+# ---------------------------------------------------------------------------
+# MCP Prompts — reusable prompt templates discoverable by MCP clients.
+# These improve the Smithery quality score (Server Capabilities → Prompts).
+# ---------------------------------------------------------------------------
+
+@fastmcp_server.prompt()
+def getting_started() -> str:
+    """Quick-start guide for using PlanExe to create a project plan."""
+    return (
+        "You have access to PlanExe, an MCP server that generates strategic "
+        "project-plan drafts from a natural-language prompt.\n\n"
+        "To get started:\n"
+        "1. Call the example_prompts tool to see what good prompts look like.\n"
+        "2. Optionally call model_profiles to see available quality tiers.\n"
+        "3. Draft a detailed prompt (300-800 words) covering: objective, scope, "
+        "constraints, timeline, stakeholders, budget, and success criteria. "
+        "Write it as flowing prose, not bullet lists.\n"
+        "4. Show the draft to the user for approval. Iterate — the user may "
+        "want to refine scope, add constraints, or adjust priorities. "
+        "A few rounds of feedback typically produce the best plans.\n"
+        "5. Once the user is satisfied, call plan_create with the approved prompt.\n"
+        "6. Poll plan_status every 5 minutes until state is completed.\n"
+        "7. Call plan_file_info to get the download URL for the HTML report.\n\n"
+        "The report contains 20+ sections including executive summary, Gantt charts, "
+        "risk analysis, SWOT, governance, investor pitch, and adversarial stress-tests."
+    )
+
+
+@fastmcp_server.prompt()
+def plan_a_project(topic: str, location: str = "") -> str:
+    """Draft a project plan for a given topic. Guides the agent through the full PlanExe workflow."""
+    location_line = f"\nLocation/region: {location}\n" if location else ""
+    return (
+        f"The user wants to create a project plan about: {topic}\n"
+        f"{location_line}\n"
+        "Follow these steps:\n"
+        "1. Call example_prompts to see baseline prompt quality and structure.\n"
+        "2. Using those examples as inspiration, expand the user's topic into a "
+        "detailed prompt of 300-800 words. Include: objective, scope, constraints, "
+        "timeline, stakeholders, budget/resources, and success criteria. Write as "
+        "flowing prose — weave specs and targets naturally into sentences.\n"
+        "3. Present the draft prompt to the user and ask for approval or changes.\n"
+        "4. Once approved, call plan_create with the prompt.\n"
+        "5. Poll plan_status every 5 minutes (plan generation takes 10-20 minutes).\n"
+        "6. When state is completed, call plan_file_info with artifact='report' "
+        "and share the download URL with the user."
+    )
+
+
 fastmcp_http_app = fastmcp_server.streamable_http_app()
 
 

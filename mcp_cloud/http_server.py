@@ -881,7 +881,7 @@ async def enforce_api_key(
 ) -> Response:
     # OPTIONS (CORS preflight) must not require auth; browser does not send custom headers
     if request.method != "OPTIONS" and not await _is_public_mcp_request_without_auth(request) and (
-        request.url.path.startswith("/mcp") or request.url.path.startswith("/download") or request.url.path.startswith("/sse/")
+        request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
     ):
         # /download with a valid signed token is self-authenticating — no API key needed.
         is_tokenized_download = (
@@ -905,13 +905,13 @@ async def enforce_api_key(
     if error_response:
         return _append_cors_headers(request, error_response)
 
-    if request.url.path.startswith("/mcp") or request.url.path.startswith("/sse/"):
+    if request.url.path.startswith("/mcp"):
         set_download_base_url(_request_origin(request))
     try:
         response = await call_next(request)
     finally:
         _authenticated_user_api_key_ctx.set(None)
-        if request.url.path.startswith("/mcp") or request.url.path.startswith("/sse/"):
+        if request.url.path.startswith("/mcp"):
             clear_download_base_url()
     if request.url.path.startswith("/mcp"):
         content_type = response.headers.get("content-type", "")
@@ -1093,6 +1093,15 @@ async def download_report(
 
 # ---------------------------------------------------------------------------
 # SSE endpoint for real-time plan progress monitoring
+#
+# IMPORTANT: This endpoint must NOT go through @app.middleware("http")
+# (Starlette's BaseHTTPMiddleware).  BaseHTTPMiddleware pipes the response
+# body through an internal anyio MemoryObjectStream; for long-lived SSE
+# streams this keeps the middleware's task-group alive indefinitely, which
+# can starve concurrent requests going through the same middleware.
+#
+# We therefore handle auth inline here (reusing _validate_api_key) and
+# excluded /sse/ from the enforce_api_key middleware path check.
 # ---------------------------------------------------------------------------
 
 @app.get("/sse/plan/{plan_id}")
@@ -1103,6 +1112,11 @@ async def sse_plan_progress(plan_id: str, request: Request) -> Response:
         _track_sse_connection,
         plan_progress_stream,
     )
+
+    # Inline auth — bypasses BaseHTTPMiddleware to avoid blocking other requests.
+    auth_error = await _validate_api_key(request)
+    if auth_error:
+        return _append_cors_headers(request, auth_error)
 
     client_ip = request.client.host if request.client else "unknown"
 

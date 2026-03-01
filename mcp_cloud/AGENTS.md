@@ -132,10 +132,15 @@ The middleware in `http_server.py` processes requests in this order:
 1. **`_NormalizeMcpPath`** (ASGI middleware): Rewrites `/mcp` → `/mcp/` at scope level
    (avoids 307 redirect that breaks Smithery)
 2. **`CORSMiddleware`** (FastAPI built-in): Added first, handles OPTIONS preflight
-3. **`enforce_api_key`** (HTTP middleware): Auth, body size, rate limiting, context var setup
-   - Paths requiring auth: `/mcp`, `/download`, `/sse/`
+3. **`enforce_api_key`** (HTTP middleware via `BaseHTTPMiddleware`): Auth, body size,
+   rate limiting, context var setup
+   - Paths requiring auth: `/mcp`, `/download`
+   - **`/sse/` is intentionally excluded** — `BaseHTTPMiddleware` pipes the response
+     body through an internal `anyio.MemoryObjectStream`; for long-lived SSE streams
+     this keeps the middleware's task-group alive indefinitely and starves concurrent
+     requests. The SSE endpoint handles auth inline instead.
    - Download tokens are self-authenticating (signed HMAC, no API key needed)
-   - Sets `_download_base_url_ctx` for `/mcp` and `/sse/` paths
+   - Sets `_download_base_url_ctx` for `/mcp` paths
    - Strips redundant `content` from `/mcp` JSON responses on the way out
 
 ## MCP Protocol
@@ -179,7 +184,8 @@ Implementation in `sse.py`:
 - Connection tracking via `_track_sse_connection(client_id)` async context manager:
   per-client limit (5) and server-wide limit (200). Raises `SSEConnectionLimitError` (HTTP 429).
 
-Auth: `/sse/` paths require API key (handled by `enforce_api_key` middleware).
+Auth: `/sse/` paths require API key (handled inline in the endpoint, NOT via the
+`enforce_api_key` middleware — see HTTP middleware stack section for rationale).
 URL building: `handlers.py` adds `sse_url` to `plan_create` and `plan_status` responses
 using `_get_download_base_url()` from `download_tokens.py`.
 

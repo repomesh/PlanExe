@@ -243,6 +243,71 @@ data: {"plan_id":"abc-123","state":"completed","progress_percentage":100.0,"elap
 - The stream closes automatically on terminal states or after 60 minutes (configurable via `PLANEXE_SSE_MAX_DURATION`).
 - Connection limits: 5 per client IP, 200 server-wide. Exceeding returns HTTP 429.
 
+### Verifying SSE works
+
+The SSE endpoint is a plain REST endpoint — test it with `curl`, not the MCP Inspector. The MCP Inspector's "SSE" transport option is for the MCP protocol transport, which is unrelated to plan progress SSE.
+
+**Quick smoke test** (no worker or real plan needed):
+
+```bash
+curl -N http://localhost:8001/sse/plan/00000000-0000-0000-0000-000000000000
+```
+
+Expected output — an error event followed by the stream closing:
+
+```
+retry: 5000
+
+event: error
+data: {"code":"PLAN_NOT_FOUND","message":"Plan not found: 00000000-0000-0000-0000-000000000000"}
+```
+
+**End-to-end test** (requires a running worker):
+
+1. Create a plan:
+
+```bash
+curl -s -X POST http://localhost:8001/mcp/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{"tool": "plan_create", "arguments": {"prompt": "Open a small coffee shop in Copenhagen"}}' \
+  | python3 -m json.tool
+```
+
+2. Check that the response includes `sse_url`:
+
+```json
+{
+  "plan_id": "abc-123",
+  "created_at": "2026-03-01T14:00:00Z",
+  "sse_url": "http://localhost:8001/sse/plan/abc-123"
+}
+```
+
+3. Connect to the SSE stream (use the `plan_id` from step 1):
+
+```bash
+curl -N http://localhost:8001/sse/plan/abc-123
+```
+
+4. You should see events streaming in as the plan progresses:
+
+```
+retry: 5000
+
+event: status
+data: {"plan_id":"abc-123","state":"pending","progress_percentage":0.0,"elapsed_sec":5.2}
+
+event: status
+data: {"plan_id":"abc-123","state":"processing","progress_percentage":12.0,"elapsed_sec":30.1}
+
+event: complete
+data: {"plan_id":"abc-123","state":"completed","progress_percentage":100.0,"elapsed_sec":720.5}
+```
+
+If auth is enabled, add `-H "X-API-Key: pex_..."` to both curl commands.
+
+**Verifying via the MCP Inspector**: Use **Streamable HTTP** transport (not SSE) pointed at `http://localhost:8001/mcp/`. Call `plan_create` — the response JSON should include the `sse_url` field. Then use `curl -N` on that URL in a separate terminal.
+
 ## Debugging with the MCP Inspector
 
 Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector) to verify tool registration, authentication, and output schemas.

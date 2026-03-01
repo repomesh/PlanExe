@@ -76,6 +76,8 @@ from mcp_cloud.app import (
 from mcp_cloud.auth import validate_api_key_secret
 from mcp_cloud.download_tokens import validate_download_token_secret
 
+SERVER_VERSION = "1.0.1"
+
 REQUIRED_API_KEY = os.environ.get("PLANEXE_MCP_API_KEY")
 
 HTTP_HOST = os.environ.get("PLANEXE_MCP_HTTP_HOST", "127.0.0.1")
@@ -827,7 +829,7 @@ async def _lifespan(app: FastAPI):
 app = FastAPI(
     title="PlanExe – AI Project Planning",
     description="MCP server that generates strategic project-plan drafts from a natural-language prompt",
-    version="1.0.0",
+    version=SERVER_VERSION,
     lifespan=_lifespan,
 )
 
@@ -1104,7 +1106,7 @@ def root() -> dict[str, Any]:
     return {
         "service": "PlanExe – AI Project Planning",
         "description": "MCP server that generates rough-draft project plans from a natural-language prompt",
-        "version": "1.0.0",
+        "version": SERVER_VERSION,
         "endpoints": {
             "mcp": "/mcp",
             "tools": "/mcp/tools",
@@ -1149,7 +1151,7 @@ def mcp_server_card() -> dict[str, Any]:
         "serverInfo": {
             "name": "planexe-mcp-server",
             "title": "PlanExe - AI Project Planning",
-            "version": "1.0.0",
+            "version": SERVER_VERSION,
         },
         "description": (
             "MCP server that generates strategic project-plan drafts from a "

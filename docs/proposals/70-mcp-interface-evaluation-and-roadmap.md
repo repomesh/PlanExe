@@ -217,10 +217,10 @@ Outstanding issues:
 
 https://smithery.ai/servers/planexeorg/planexe
 
-Smithery has problems updating the entry automatically. When I have make mcp interface changes, then I'm not seeing them show up in Smithery's UI.
-When I make changes to the MCP interface. Then I have to go to the `Releases` page, and go through the `Publish` flow.
+Smithery has problems updating the entry automatically. When I have made mcp interface changes, then I'm not seeing them show up in Smithery's UI.
+Syncing is something I have to do manually, by going to the `Releases` page, and go through the `Publish` flow.
 https://smithery.ai/servers/planexeorg/planexe/releases
-That reloads the entry.
+That reloads the PlanExe data entry, by pulling it from the mcp.planexe.org/mcp, IMO something that should happen automatic.
 It may be possible to force reload via CLI. I have not investigated this.
 https://smithery.ai/docs/build/publish#cli-advanced
 

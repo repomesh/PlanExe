@@ -187,8 +187,8 @@ Add an explicit check at server startup that required secrets (`PLANEXE_API_KEY_
 ### 6.1 MCP registries
 
 - **Glama** — already listed
-- **mcp.so** — submit `server.json`; high traffic from Claude desktop users
 - **Smithery** — another fast-growing directory; supports one-click install
+- **mcp.so** — submit `server.json`; high traffic from Claude desktop users
 - **awesome-mcp-servers** (GitHub) — submit a PR; maintainers merge quickly
 - **OpenTools** — focus on enterprise MCP discovery
 
@@ -212,6 +212,26 @@ Outstanding issues:
 - Add a /.well-known/glama.json to claim ownership of planexe. No luck.
 - Add a /glama.json to repo to claim ownership of planexe. No luck.
 - Customize profile text, categories, favicon.
+
+#### 6.1.2 Smithery
+
+https://smithery.ai/servers/planexeorg/planexe
+
+Smithery has problems updating the entry automatically. When I have make mcp interface changes, then I'm not seeing them show up in Smithery's UI.
+When I make changes to the MCP interface. Then I have to go to the `Releases` page, and go through the `Publish` flow.
+https://smithery.ai/servers/planexeorg/planexe/releases
+That reloads the entry.
+It may be possible to force reload via CLI. I have not investigated this.
+https://smithery.ai/docs/build/publish#cli-advanced
+
+Smithery has no filtering. No sort by date or by name.
+
+Smithery's one-click install is neat.
+
+Outstanding issues:
+
+- Automation. Whenever I make changes to MCP, I will have to manually update the PlanExe profile on Smithery. 
+- improve on Smithery’s Quality Score. Currently it’s 81 of 100.
 
 ### 6.2 Content
 

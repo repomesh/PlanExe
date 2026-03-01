@@ -18,7 +18,7 @@ from typing import Annotated, Any, Awaitable, Callable, Literal, Optional, Seque
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
@@ -881,7 +881,7 @@ async def enforce_api_key(
 ) -> Response:
     # OPTIONS (CORS preflight) must not require auth; browser does not send custom headers
     if request.method != "OPTIONS" and not await _is_public_mcp_request_without_auth(request) and (
-        request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
+        request.url.path.startswith("/mcp") or request.url.path.startswith("/download") or request.url.path.startswith("/sse/")
     ):
         # /download with a valid signed token is self-authenticating — no API key needed.
         is_tokenized_download = (
@@ -905,13 +905,13 @@ async def enforce_api_key(
     if error_response:
         return _append_cors_headers(request, error_response)
 
-    if request.url.path.startswith("/mcp"):
+    if request.url.path.startswith("/mcp") or request.url.path.startswith("/sse/"):
         set_download_base_url(_request_origin(request))
     try:
         response = await call_next(request)
     finally:
         _authenticated_user_api_key_ctx.set(None)
-        if request.url.path.startswith("/mcp"):
+        if request.url.path.startswith("/mcp") or request.url.path.startswith("/sse/"):
             clear_download_base_url()
     if request.url.path.startswith("/mcp"):
         content_type = response.headers.get("content-type", "")
@@ -1091,6 +1091,47 @@ async def download_report(
     return Response(content=content_bytes, media_type=REPORT_CONTENT_TYPE, headers=headers)
 
 
+# ---------------------------------------------------------------------------
+# SSE endpoint for real-time plan progress monitoring
+# ---------------------------------------------------------------------------
+
+@app.get("/sse/plan/{plan_id}")
+async def sse_plan_progress(plan_id: str, request: Request) -> Response:
+    """SSE endpoint that streams real-time plan progress updates."""
+    from mcp_cloud.sse import (
+        SSEConnectionLimitError,
+        _track_sse_connection,
+        plan_progress_stream,
+    )
+
+    client_ip = request.client.host if request.client else "unknown"
+
+    try:
+        async def event_generator():
+            async with _track_sse_connection(client_ip):
+                disconnect_event = asyncio.Event()
+                async for event in plan_progress_stream(plan_id, disconnect_event):
+                    if await request.is_disconnected():
+                        disconnect_event.set()
+                        break
+                    yield event
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except SSEConnectionLimitError as exc:
+        return JSONResponse(
+            status_code=429,
+            content={"error": {"code": "SSE_CONNECTION_LIMIT", "message": str(exc)}},
+        )
+
+
 @app.get("/healthcheck")
 def healthcheck() -> dict[str, Any]:
     """Health check endpoint."""
@@ -1116,6 +1157,7 @@ def root() -> dict[str, Any]:
             "mcp_server_card": "/.well-known/mcp/server-card.json",
             "glama_connector": "/.well-known/glama.json",
             "download": f"/download/{{plan_id}}/{REPORT_FILENAME}",
+            "sse": "/sse/plan/{plan_id}",
             "llms_txt": "/llms.txt",
         },
         "documentation": "See /docs for OpenAPI documentation",

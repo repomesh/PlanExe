@@ -134,6 +134,10 @@ class PlanCreateOutput(BaseModel):
         description="Plan UUID returned by plan_create. Stable across plan_status/plan_stop/plan_file_info."
     )
     created_at: str
+    sse_url: str | None = Field(
+        default=None,
+        description="SSE URL for real-time progress monitoring. Connect with the same API key header to receive push updates instead of polling plan_status.",
+    )
 
 
 class PlanStatusTiming(BaseModel):
@@ -171,6 +175,10 @@ class PlanStatusSuccess(BaseModel):
             "These files are included in the zip artifact when the plan completes."
         ),
     )
+    sse_url: str | None = Field(
+        default=None,
+        description="SSE URL for real-time progress monitoring. Available when plan is not in a terminal state.",
+    )
 
 
 class PlanStatusOutput(BaseModel):
@@ -197,6 +205,10 @@ class PlanStatusOutput(BaseModel):
             "Use updated_at timestamps to detect stalls. "
             "These files are included in the zip artifact when the plan completes."
         ),
+    )
+    sse_url: str | None = Field(
+        default=None,
+        description="SSE URL for real-time progress monitoring. Available when plan is not in a terminal state.",
     )
     error: ErrorDetail | None = None
 

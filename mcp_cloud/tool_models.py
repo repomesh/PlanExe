@@ -136,7 +136,13 @@ class PlanCreateOutput(BaseModel):
     created_at: str
     sse_url: str | None = Field(
         default=None,
-        description="SSE URL for real-time progress monitoring. Connect with the same API key header to receive push updates instead of polling plan_status.",
+        description=(
+            "GET endpoint returning text/event-stream with real-time plan progress. "
+            "Usage: `curl -N -H 'X-API-Key: <same key>' <sse_url>`. "
+            "Emits 'status' events on progress changes, 'heartbeat' every ~20 s, "
+            "and a final 'complete' event (state completed/failed) then auto-closes. "
+            "Alternative to polling plan_status."
+        ),
     )
 
 
@@ -177,7 +183,11 @@ class PlanStatusSuccess(BaseModel):
     )
     sse_url: str | None = Field(
         default=None,
-        description="SSE URL for real-time progress monitoring. Available when plan is not in a terminal state.",
+        description=(
+            "GET endpoint (text/event-stream) for real-time progress. "
+            "Available when plan is not in a terminal state. "
+            "See plan_create sse_url description for usage."
+        ),
     )
 
 
@@ -208,7 +218,11 @@ class PlanStatusOutput(BaseModel):
     )
     sse_url: str | None = Field(
         default=None,
-        description="SSE URL for real-time progress monitoring. Available when plan is not in a terminal state.",
+        description=(
+            "GET endpoint (text/event-stream) for real-time progress. "
+            "Available when plan is not in a terminal state. "
+            "See plan_create sse_url description for usage."
+        ),
     )
     error: ErrorDetail | None = None
 

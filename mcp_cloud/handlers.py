@@ -47,7 +47,7 @@ from mcp_cloud.worker_fetchers import (
     fetch_user_downloadable_zip,
 )
 from mcp_cloud.model_profiles import _get_model_profiles_sync
-from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url
+from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url, _get_download_base_url
 from mcp_cloud.example_prompts import _load_mcp_example_prompts
 from mcp_cloud.schemas import TOOL_DEFINITIONS
 
@@ -155,6 +155,9 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         merged_config,
         {"user_id": str(user_context["user_id"])} if user_context else None,
     )
+    base_url = _get_download_base_url()
+    if base_url and response.get("plan_id"):
+        response["sse_url"] = f"{base_url}/sse/plan/{response['plan_id']}"
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],
         structuredContent=response,
@@ -315,6 +318,11 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         },
         "files": files[:10],  # Limit to 10 most recent
     }
+
+    if state not in ("completed", "failed"):
+        base_url = _get_download_base_url()
+        if base_url:
+            response["sse_url"] = f"{base_url}/sse/plan/{plan_uuid}"
 
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],

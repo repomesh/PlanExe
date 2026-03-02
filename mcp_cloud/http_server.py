@@ -18,7 +18,7 @@ from typing import Annotated, Any, Awaitable, Callable, Literal, Optional, Seque
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
@@ -1091,6 +1091,61 @@ async def download_report(
     return Response(content=content_bytes, media_type=REPORT_CONTENT_TYPE, headers=headers)
 
 
+# ---------------------------------------------------------------------------
+# SSE endpoint for real-time plan progress monitoring
+#
+# IMPORTANT: This endpoint must NOT go through @app.middleware("http")
+# (Starlette's BaseHTTPMiddleware).  BaseHTTPMiddleware pipes the response
+# body through an internal anyio MemoryObjectStream; for long-lived SSE
+# streams this keeps the middleware's task-group alive indefinitely, which
+# can starve concurrent requests going through the same middleware.
+#
+# We therefore handle auth inline here (reusing _validate_api_key) and
+# excluded /sse/ from the enforce_api_key middleware path check.
+# ---------------------------------------------------------------------------
+
+@app.get("/sse/plan/{plan_id}")
+async def sse_plan_progress(plan_id: str, request: Request) -> Response:
+    """SSE endpoint that streams real-time plan progress updates."""
+    from mcp_cloud.sse import (
+        SSEConnectionLimitError,
+        _track_sse_connection,
+        plan_progress_stream,
+    )
+
+    # Inline auth — bypasses BaseHTTPMiddleware to avoid blocking other requests.
+    auth_error = await _validate_api_key(request)
+    if auth_error:
+        return _append_cors_headers(request, auth_error)
+
+    client_ip = request.client.host if request.client else "unknown"
+
+    try:
+        async def event_generator():
+            async with _track_sse_connection(client_ip):
+                disconnect_event = asyncio.Event()
+                async for event in plan_progress_stream(plan_id, disconnect_event):
+                    if await request.is_disconnected():
+                        disconnect_event.set()
+                        break
+                    yield event
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except SSEConnectionLimitError as exc:
+        return JSONResponse(
+            status_code=429,
+            content={"error": {"code": "SSE_CONNECTION_LIMIT", "message": str(exc)}},
+        )
+
+
 @app.get("/healthcheck")
 def healthcheck() -> dict[str, Any]:
     """Health check endpoint."""
@@ -1116,6 +1171,7 @@ def root() -> dict[str, Any]:
             "mcp_server_card": "/.well-known/mcp/server-card.json",
             "glama_connector": "/.well-known/glama.json",
             "download": f"/download/{{plan_id}}/{REPORT_FILENAME}",
+            "sse": "/sse/plan/{plan_id}",
             "llms_txt": "/llms.txt",
         },
         "documentation": "See /docs for OpenAPI documentation",

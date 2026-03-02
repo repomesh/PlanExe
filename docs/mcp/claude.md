@@ -6,26 +6,27 @@ title: Claude - MCP integration
 
 [Claude](https://claude.ai/) is available as a desktop app and as [Claude Code](https://docs.anthropic.com/en/docs/claude-code), Anthropic's CLI tool. Both support MCP and are configured the same way.
 
+PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10-20 minutes. The output is a self-contained interactive HTML report you open in a browser.
+
 ## Prerequisites
 
 - Claude desktop app or Claude Code installed.
-- PlanExe MCP server reachable by Claude.
+- One of the following:
+  - An API key from [home.planexe.org](https://home.planexe.org/) (cloud server, no installation needed).
+  - PlanExe running locally via Docker (`docker compose up`, port 8001).
 
 ## Quick setup
 
-1. Configure MCP in Claude (see options below).
-2. Ask for prompt examples.
-3. Create a plan and download the report.
-
-## Sample prompt
-
-> Get example prompts for creating a plan.
+1. Configure MCP in Claude (see connection options below).
+2. Verify the connection with `/mcp` in Claude Code or Settings > MCP in the desktop app.
+3. Ask Claude to create a plan — it handles the full workflow (prompt drafting, creation, status polling, download).
 
 ## Success criteria
 
-- You can fetch prompt examples.
-- You can create a plan.
-- You can download the report.
+- `/mcp` (Claude Code) or Settings > MCP (desktop) shows `planexe` as connected.
+- You can fetch prompt examples (`example_prompts`).
+- You can create a plan (`plan_create`) and poll it to completion (`plan_status`).
+- You can download the report (`plan_file_info` or `plan_download`).
 
 ---
 
@@ -55,7 +56,7 @@ Replace `pex_YOUR_API_KEY` with your actual API key.
 
 Start Claude and check that the server is connected.
 
-In Claude Code, type `/mcp` to see the server status. In the Claude desktop app, go to Settings and check the MCP section. You should see `planexe` listed with its tools.
+In Claude Code, type `/mcp` to see the server status. In the Claude desktop app, go to Settings and check the MCP section. You should see `planexe` listed with its tools (`example_plans`, `example_prompts`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_file_info`, `plan_list`).
 
 ---
 
@@ -87,7 +88,7 @@ Authentication is disabled by default for local Docker (`PLANEXE_MCP_REQUIRE_AUT
 
 In Claude Code, type `/mcp` to see the server status. In the Claude desktop app, check Settings > MCP.
 
-> **Note:** With this option, `plan_file_info` returns a download URL. Claude can fetch the URL content for you, or you can open the URL in your browser.
+> **Note:** With this option, `plan_file_info` returns a `download_url`. Ask Claude to fetch it, or open the URL in your browser. For local disk saves, use Option C instead (adds the `plan_download` tool).
 
 ---
 
@@ -214,20 +215,26 @@ claude mcp remove planexe
 
 ## Interaction
 
-My interaction with Claude for creating a plan is like this:
+A typical conversation for creating a plan looks like this:
 
-1. tell me about the planexe mcp tool you have access to
-2. get the prompt examples
-3. I want a prompt about building a community solar farm in rural Denmark
-4. go ahead create this plan
-5. *wait for 10-20 minutes, Claude polls status automatically*
-6. download the report
+1. **Explore** — "Tell me about the PlanExe MCP tools you have access to."
+2. **Get examples** — "Get the prompt examples."
+3. **Describe your goal** — "I want a prompt about building a community solar farm in rural Denmark."
+   Claude drafts a detailed prompt (~300-800 words) based on the examples and your idea.
+4. **Approve and create** — "Go ahead, create this plan."
+   Claude calls `plan_create`, which returns a `plan_id`.
+5. **Wait** — Plan generation takes ~10-20 minutes. Claude polls `plan_status` automatically every few minutes. Alternatively, `plan_create` returns an `sse_url` — a GET endpoint (text/event-stream) that streams real-time progress events until the plan completes. Claude Code agents can run `curl -N <sse_url>` in a background shell to monitor progress instead of polling.
+6. **Download** — "Download the report." Claude fetches the HTML report via `plan_file_info` (cloud) or `plan_download` (local proxy).
+
+If a plan fails, Claude can retry it with `plan_retry`. If a `plan_id` is lost, `plan_list` recovers recent plans.
 
 ---
 
 ## Troubleshooting
 
-- If `/mcp` shows the server as disconnected, check that Docker is running (`docker compose ps`) or that `mcp.planexe.org` is reachable.
-- If you get authentication errors with the cloud server, verify your API key at [home.planexe.org](https://home.planexe.org/).
-- For stdio transport issues, make sure `uv` is installed and on your PATH.
+- **Server disconnected**: `/mcp` shows disconnected — check that Docker is running (`docker compose ps`) or that `mcp.planexe.org` is reachable.
+- **Authentication errors**: Verify your API key at [home.planexe.org](https://home.planexe.org/). Keys are prefixed with `pex_`.
+- **stdio transport**: Make sure `uv` is installed and on your PATH.
+- **Plan stuck in pending**: If `plan_status` stays `pending` for >5 minutes, the worker likely hasn't picked it up. Check Docker logs or report the issue.
+- **Plan failed**: Call `plan_retry` to requeue the same `plan_id` (defaults to baseline profile).
 - For more help, see the [Troubleshooting guide](mcp_troubleshooting.md) or ask on the [PlanExe Discord](https://planexe.org/discord).

@@ -15,6 +15,7 @@ An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed
 - **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_`* to `test_plan_*`.
 - **2026-02-26 (rev 4):** Updated after completing 4.2 — added separate download rate limiter with configurable limits (default 10 req/60s).
 - **2026-02-26 (rev 5):** Renamed external-facing fields: `task_id` → `plan_id`, `tasks` → `plans`, error codes `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`. Internal function names and download URL paths unchanged.
+- **2026-03-02 (rev 6):** SSE progress streaming implemented (`mcp_cloud/sse.py`, `GET /sse/plan/{plan_id}`). Incorporated feedback from Claude Code agent evaluation of the MCP interface: improved SSE documentation across server instructions, tool descriptions, and field descriptions to be actionable for agents; added new proposed improvements for credit feedback, pipeline stage names, and files array completeness. Discovered and fixed BaseHTTPMiddleware blocking issue with SSE streams.
 
 ---
 
@@ -71,6 +72,12 @@ Nine tools, split across two transports:
 `**plan_list` for plan recovery.** Authenticated users can list their most recent plans (up to 50, newest-first) to recover a lost `plan_id`. Each entry includes `plan_id`, `state`, `progress_percentage`, `created_at`, and `prompt_excerpt`.
 
 **Comprehensive test suite.** 12 test files covering tool surface consistency, auth key parsing, CORS config, download tokens, HTTP routing, and individual tool behaviour (`test_plan_create_tool.py`, `test_plan_status_tool.py`, `test_plan_retry_tool.py`, `test_plan_file_info_tool.py`, `test_model_profiles_tool.py`).
+
+**SSE progress streaming.** `GET /sse/plan/{plan_id}` streams real-time progress as Server-Sent Events (`text/event-stream`). Emits `status` events on state/progress changes, `heartbeat` every ~20s, and a final `complete` event on terminal state. Deduplication avoids sending unchanged state. Connection tracking enforces per-client (5) and server-wide (200) limits. SSE is complementary to polling — both are fully supported. The SSE endpoint bypasses `BaseHTTPMiddleware` and handles auth inline to avoid a Starlette bug where long-lived streaming responses block concurrent requests through the middleware.
+
+**Actionable SSE documentation.** Server instructions, tool descriptions (`plan_create`, `plan_status`), and field descriptions (`sse_url`) explain SSE in concrete terms: it's a GET endpoint returning `text/event-stream`, usable with `curl -N -H 'X-API-Key: <key>' <sse_url>`, and auto-closes on terminal state. This was revised based on feedback from a Claude Code agent evaluation that found the original "if your client supports SSE" phrasing too vague for autonomous agents.
+
+**`example_plans` tool.** Returns curated example plans with download links for reports and zip bundles. Lets users preview what PlanExe output looks like before committing to a plan. No API key required.
 
 ---
 
@@ -164,9 +171,13 @@ All internal naming now uses `plan` consistently. Request classes renamed (`Task
 
 ## 5. Proposed Improvements
 
-### 5.1 SSE progress streaming (UX)
+### ~~5.1 SSE progress streaming (UX)~~ (IMPLEMENTED)
 
-Long-running plans (10–20 minutes) give the user no feedback. A `log_lines` array in the `plan_status` response (last 50 lines of agent output) would dramatically improve perceived responsiveness.
+`GET /sse/plan/{plan_id}` now streams real-time progress via Server-Sent Events. Implementation in `mcp_cloud/sse.py`. `plan_create` and `plan_status` responses include an `sse_url` field pointing to the endpoint. Events: `status` (state/progress changes), `heartbeat` (~20s silence), `complete` (terminal state), `error` (not found / timeout). Stream auto-closes on terminal state or after 60 minutes.
+
+**Feedback note (Claude Code agent evaluation, 2026-03-02):** The original documentation said "if your client supports Server-Sent Events" — this was too vague for autonomous agents. MCP tools are request-response by design, so agents didn't know whether they "support" SSE or how to consume it. Documentation was rewritten to be actionable: SSE is a GET endpoint returning `text/event-stream`, agents can use `curl -N` via their Bash tool, and polling remains the simpler alternative. Both `plan_create` and `plan_status` tool descriptions now mention `sse_url` with usage examples.
+
+**Implementation note:** The SSE endpoint is intentionally excluded from Starlette's `BaseHTTPMiddleware` (`enforce_api_key`). The middleware pipes response bodies through an internal `anyio.MemoryObjectStream`; for long-lived SSE streams this keeps the middleware's task-group alive indefinitely and starves concurrent requests. Auth is handled inline in the SSE endpoint instead.
 
 ### 5.2 Webhook / push notification (power users)
 
@@ -179,6 +190,30 @@ All tool names and schemas are currently unversioned. A future breaking change w
 ### 5.4 Startup environment validation
 
 Add an explicit check at server startup that required secrets (`PLANEXE_API_KEY_SECRET`, `PLANEXE_DOWNLOAD_TOKEN_SECRET`) are set when auth is enabled. Fail loudly instead of falling back to dev defaults.
+
+### 5.5 Credit/cost feedback in `plan_create` response
+
+**Source:** Claude Code agent feedback (2026-03-02).
+
+After `plan_create`, there is no indication of credits consumed or remaining. For a paid service, this transparency builds trust. Consider adding `credits_used` and `credits_remaining` fields to the `plan_create` response (or to `plan_status` on completion).
+
+### 5.6 Pipeline stage names in progress reporting
+
+**Source:** Claude Code agent feedback (2026-03-02).
+
+`progress_percentage` jumps non-linearly (e.g. 80% → 83% over 4 minutes, then straight to 100%). The metric doesn't feel informative. Consider adding a `current_stage` field to `plan_status` (e.g. "generating SWOT analysis", "running premortem") so agents and users can see *what* is happening, not just a number.
+
+### 5.7 Complete files array in `plan_status` for completed plans
+
+**Source:** Claude Code agent feedback (2026-03-02).
+
+The `files` array in `plan_status` only shows early pipeline files (001-, 002-), not the final report or zip. When `state` is `completed`, the full manifest of outputs should be visible. This helps agents verify what was produced before calling `plan_file_info`.
+
+### 5.8 Prompt approval skip for agent-provided prompts
+
+**Source:** Claude Code agent feedback (2026-03-02).
+
+The server instructions mandate that the agent drafts a prompt and gets user approval before calling `plan_create`. When the user hands the agent a polished prompt file and says "use this", the extra ceremony adds friction. Consider a note in the instructions that agent-provided or user-approved prompts can go directly to `plan_create` without the full drafting cycle.
 
 ---
 
@@ -280,15 +315,20 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 | P2       | ~~Body size validation on Streamable HTTP (4.3)~~                         | —      | DONE   |
 | P2       | ~~Return error for invalid artifact value (4.4)~~                         | —      | DONE   |
 | P2       | ~~Add tool-call audit logging (4.7)~~                                     | —      | DONE   |
-| P2       | Add `log_lines` to `plan_status` (5.1)                                    | 4 h    |        |
+| P1       | ~~SSE progress streaming (5.1)~~                                           | —      | DONE   |
+| P2       | Add `log_lines` to `plan_status`                                           | 4 h    |        |
 | P2       | ~~Rename internal `task` variables/classes/helpers to `plan` (4.9)~~      | —      | DONE   |
 | P2       | ~~Remove backward-compat `Task*`/`handle_task_*`/`TASK_*` aliases (4.9)~~ | —      | DONE   |
 | P2       | ~~Rename test files from `test_task_*` to `test_plan_*` (4.9)~~           | —      | DONE   |
 | P2       | ~~Tighten default CORS origins (4.6)~~                                    | —      | DONE   |
 | P2       | ~~Align `plan_list` auth with `plan_create` (4.10)~~                      | —      | DONE   |
-| P3       | Webhook support (5.2)                                                     | 1 day  |        |
-| P3       | API versioning (5.3)                                                      | 4 h    |        |
-| P3       | GitHub Actions integration (6.3)                                          | 1 day  |        |
+| P2       | Credit/cost feedback in `plan_create` response (5.5)                       | 4 h    |        |
+| P2       | Pipeline stage names in progress reporting (5.6)                           | 4 h    |        |
+| P2       | Complete files array in `plan_status` for completed plans (5.7)            | 2 h    |        |
+| P3       | Prompt approval skip for agent-provided prompts (5.8)                      | 1 h    |        |
+| P3       | Webhook support (5.2)                                                      | 1 day  |        |
+| P3       | API versioning (5.3)                                                       | 4 h    |        |
+| P3       | GitHub Actions integration (6.3)                                           | 1 day  |        |
 
 
 ---
@@ -297,4 +337,4 @@ Add 10–15 high-quality example prompts (startup, research paper, home renovati
 
 The MCP surface is functionally solid and ahead of most MCP servers in terms of schema rigour, annotation coverage, and security (signed download tokens, layered auth, auto-injected user keys). The codebase has been significantly improved since rev 1: `app.py` was refactored from a 76 KB monolith into 10+ focused modules, `plan_list` now follows the same auth-injection pattern as `plan_create`, and all P0 issues are resolved.
 
-All P1 code-quality issues are now resolved, including fail-hard on missing secrets in production (4.1). The remaining checklist items are promotion/growth tasks (mcp.so submission, README demo) and lower-priority enhancements (CORS tightening, SSE streaming, webhooks, API versioning).
+All P1 code-quality issues are now resolved, including fail-hard on missing secrets in production (4.1). SSE progress streaming (5.1) is now implemented, providing real-time push updates as an alternative to polling. A Claude Code agent evaluation (2026-03-02) surfaced actionable feedback: SSE documentation was too vague for autonomous agents (now fixed), and four new improvements were identified — credit/cost feedback (5.5), pipeline stage names in progress (5.6), complete files array on completion (5.7), and prompt approval flexibility (5.8). The remaining checklist items are these feedback-driven improvements, promotion/growth tasks (mcp.so submission, README demo), and lower-priority enhancements (webhooks, API versioning).

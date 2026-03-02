@@ -8,6 +8,10 @@ title: Claude - MCP integration
 
 PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10-20 minutes. The output is a self-contained interactive HTML report you open in a browser.
 
+## Video walkthrough
+
+[![How to get Claude to use PlanExe](https://img.youtube.com/vi/dhrgwW-8rl4/maxresdefault.jpg)](https://www.youtube.com/watch?v=dhrgwW-8rl4)
+
 ## Prerequisites
 
 - Claude desktop app or Claude Code installed.

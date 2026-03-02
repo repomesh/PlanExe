@@ -44,9 +44,9 @@ Run this command in your terminal:
 
 ```bash
 claude mcp add --transport http \
-  --header "X-API-Key: pex_YOUR_API_KEY" \
   planexe \
-  https://mcp.planexe.org/mcp
+  https://mcp.planexe.org/mcp \
+  --header "X-API-Key: pex_YOUR_API_KEY"
 ```
 
 Replace `pex_YOUR_API_KEY` with your actual API key.

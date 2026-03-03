@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 try:
-    from app import MyFlaskApp
+    from app import MyFlaskApp  # type: ignore[reportAttributeAccessIssue]
     flask_app_instance = MyFlaskApp()
     app = flask_app_instance.app
 except ValueError as exc:

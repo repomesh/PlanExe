@@ -53,7 +53,7 @@ PlanExe exposes an MCP server for AI agents at [https://mcp.planexe.org/](https:
 
 Assuming you have an MCP-compatible client ([Claude](https://docs.planexe.org/mcp/claude/), [Cursor](https://docs.planexe.org/mcp/cursor/), [Codex](https://docs.planexe.org/mcp/codex/), [LM Studio](https://docs.planexe.org/mcp/lm_studio/), [Windsurf](https://docs.planexe.org/mcp/windsurf/), OpenClaw, [Antigravity](https://docs.planexe.org/mcp/antigravity/)).
 
-The Tool workflow (tools-only, not MCP tasks protocol)
+The Tool workflow
 
 1. `example_plans` (optional, preview what PlanExe output looks like)
 2. `example_prompts`
@@ -164,9 +164,9 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 
 - Setup overview: [https://docs.planexe.org/mcp/mcp_setup/](https://docs.planexe.org/mcp/mcp_setup/)
 - Tool details and flow: [https://docs.planexe.org/mcp/mcp_details/](https://docs.planexe.org/mcp/mcp_details/)
-- MCP Inspector guide: [https://docs.planexe.org/mcp/inspector/](https://docs.planexe.org/mcp/inspector/)
-- Cursor setup: [https://docs.planexe.org/mcp/cursor/](https://docs.planexe.org/mcp/cursor/)
-- Codex setup: [https://docs.planexe.org/mcp/codex/](https://docs.planexe.org/mcp/codex/)
+- Claude: [https://docs.planexe.org/mcp/claude/](https://docs.planexe.org/mcp/claude/)
+- Cursor: [https://docs.planexe.org/mcp/cursor/](https://docs.planexe.org/mcp/cursor/)
+- Codex: [https://docs.planexe.org/mcp/codex/](https://docs.planexe.org/mcp/codex/)
 - PlanExe MCP interface: [https://docs.planexe.org/mcp/planexe_mcp_interface/](https://docs.planexe.org/mcp/planexe_mcp_interface/)
 - MCP Registry publishing metadata (`server.json`): `mcp_cloud/server.json`
 - `llms.txt`: [https://mcp.planexe.org/llms.txt](https://mcp.planexe.org/llms.txt)

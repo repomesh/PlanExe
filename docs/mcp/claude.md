@@ -10,7 +10,7 @@ PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sect
 
 ## Video walkthrough
 
-[![How to get Claude to use PlanExe](https://img.youtube.com/vi/dhrgwW-8rl4/maxresdefault.jpg)](https://www.youtube.com/watch?v=dhrgwW-8rl4)
+<iframe width="560" height="315" src="https://www.youtube.com/embed/dhrgwW-8rl4?si=Hkc_e5onS6xD1Aca" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 ## Prerequisites
 

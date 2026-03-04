@@ -13,6 +13,7 @@ Flask-based multi-user UI for PlanExe. Runs in Docker, uses Postgres (defaults t
 - `PLANEXE_FRONTEND_MULTIUSER_HOST`: bind address inside the container (default 0.0.0.0).
 - `PLANEXE_FRONTEND_MULTIUSER_PORT`: Flask port inside the container (default 5000).
 - `PLANEXE_FRONTEND_MULTIUSER_DEBUG`: set `true` to enable Flask debug.
+- `PLANEXE_API_KEY_SHOW_ONCE`: set `true` to only show API secrets once after creation (default: secrets are always visible with a copy button).
 - `PLANEXE_CONFIG_PATH`: defaults to `/app` so PlanExe picks up `.env` + `llm_config/` that compose mounts.
 
 ## Run locally with a venv

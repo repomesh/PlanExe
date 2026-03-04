@@ -243,6 +243,24 @@
         outline: none;
     }
 
+    /* ── Inline copy button ──────────────────────────── */
+    .key-secret-full {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .key-copy-btn {
+        background: none;
+        border: none;
+        padding: 2px;
+        cursor: pointer;
+        color: var(--color-text-secondary);
+        border-radius: 4px;
+        line-height: 1;
+        transition: color 0.15s;
+    }
+    .key-copy-btn:hover { color: var(--color-text); background: var(--color-bg-muted); }
+
     /* ── API key section ───────────────────────────── */
     .key-display {
         background: var(--color-bg-muted);
@@ -492,7 +510,7 @@
                 <h2>API Keys</h2>
             </div>
             <div class="acct-section-body">
-                {% if new_api_key %}
+                {% if new_api_key and api_key_show_once %}
                     <span class="key-new-badge">New — shown once</span>
                     <div class="key-display" id="new-api-key">{{ new_api_key }}</div>
                     <p class="key-hint">Copy this secret now. You will not be able to see it again.</p>
@@ -545,7 +563,18 @@
                                         </form>
                                     </div>
                                 </td>
-                                <td><span class="key-prefix">{{ key.key_prefix }}...</span></td>
+                                <td>
+                                    {% if key.key_plaintext %}
+                                    <span class="key-secret-full">
+                                        <code class="key-prefix" style="word-break:break-all;">{{ key.key_plaintext }}</code>
+                                        <button type="button" class="key-copy-btn" title="Copy" onclick="copyKeySecret(this, '{{ key.key_plaintext }}')">
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                        </button>
+                                    </span>
+                                    {% else %}
+                                    <span class="key-prefix">{{ key.key_prefix }}...</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ key.created_at.strftime("%Y-%m-%d") if key.created_at else "—" }}</td>
                                 <td>{{ key.last_used_at.strftime("%Y-%m-%d") if key.last_used_at else "Never" }}</td>
                                 <td>{{ plan_counts.get(key.id|string, 0) }}</td>
@@ -689,7 +718,7 @@
     </div>
 </div>
 
-{% if new_api_key %}
+{% if new_api_key and api_key_show_once %}
 <script>
     // clipboard copy handler for the new API key
     (function () {
@@ -722,6 +751,22 @@
 </script>
 {% endif %}
 <script>
+    function copyKeySecret(btn, text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function() {
+                btn.title = 'Copied!';
+                setTimeout(function() { btn.title = 'Copy'; }, 2000);
+            });
+            return;
+        }
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.setAttribute('readonly', '');
+        ta.style.position = 'absolute'; ta.style.left = '-9999px';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); btn.title = 'Copied!'; setTimeout(function() { btn.title = 'Copy'; }, 2000); }
+        catch(e) {}
+        document.body.removeChild(ta);
+    }
     function keyRenameStart(btn) {
         var cell = btn.closest('.key-name-cell');
         cell.querySelector('.key-name-display').style.display = 'none';

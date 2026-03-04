@@ -113,7 +113,7 @@ The `/account` route handles POST actions via a hidden `action` form field:
 
 - `create_api_key` — Create a new API key (with optional name), max 10 active keys
 - `rename_api_key` — Update the name on an existing key (click-to-edit UI with Save/Cancel)
-- `reset_api_key` — Rotate the secret on an existing key (new hash + prefix, same UUID so label/stats are preserved)
+- `reset_api_key` — Rotate the secret on an existing key (new hash + prefix, same UUID so name/stats are preserved)
 - `revoke_api_key` — Soft-delete an API key by setting `revoked_at`
 - `regenerate_api_key` — Legacy action kept for backward compatibility
 - `change_name` — Update display name
@@ -138,6 +138,17 @@ Migration functions are called inside `_create_tables_with_retry()` during app i
 - **Admin login**: Flask-Login with a hardcoded `AdminUser` object. Credentials come from env vars. A `UserAccount` row is lazily created (deterministic UUID) so admin can own API keys.
 - **OAuth login**: Flask-Login with UUID-based user IDs from the `UserAccount` table. OAuth state/tokens are stored in Flask's encrypted session cookie.
 - **Session secret**: `SECRET_KEY` env var. Must be the same across all replicas for sessions to work in a multi-replica deployment.
+
+## API Key Secret Visibility
+
+Controlled by `PLANEXE_API_KEY_SHOW_ONCE`:
+
+| Value | Behavior |
+|-------|----------|
+| unset / `false` (default) | The full secret is stored in `key_plaintext` and always visible in the account table with a copy button. |
+| `true` / `1` / `yes` | The secret is shown once after creation/reset, then only the prefix is displayed. Suitable for production with many users. |
+
+When show-once is off, both `create_api_key` and `reset_api_key` persist the raw key so users can copy it at any time.
 
 ## Open Access Mode
 

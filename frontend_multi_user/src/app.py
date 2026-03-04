@@ -368,6 +368,7 @@ class MyFlaskApp:
         # explicitly true, the app auto-logins every request as admin so Docker
         # localhost users can create plans without setting up Google Console, etc.
         self.open_access = self._determine_open_access()
+        self._api_key_show_once = os.environ.get("PLANEXE_API_KEY_SHOW_ONCE", "").strip().lower() in ("1", "true", "yes")
 
         db_settings: Dict[str, str] = {}
         sqlalchemy_database_uri = self.planexe_dotenv.get("SQLALCHEMY_DATABASE_URI")
@@ -471,6 +472,7 @@ class MyFlaskApp:
             """Add columns for multi-API-key support (idempotent)."""
             statements = (
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
+                "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS key_plaintext VARCHAR(64)",
                 "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
                 "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
             )
@@ -896,6 +898,7 @@ class MyFlaskApp:
             key_hash=key_hash,
             key_prefix=key_prefix,
             name=sanitized_name,
+            key_plaintext=raw_key if not self._api_key_show_once else None,
         )
         self.db.session.add(api_key)
         self.db.session.commit()
@@ -2340,6 +2343,7 @@ class MyFlaskApp:
                                 raw_key = f"pex_{secrets.token_urlsafe(24)}"
                                 target_key.key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
                                 target_key.key_prefix = raw_key[:10]
+                                target_key.key_plaintext = raw_key if not self._api_key_show_once else None
                                 self.db.session.commit()
                                 session["new_api_key"] = raw_key
                 elif action == "regenerate_api_key":
@@ -2442,6 +2446,7 @@ class MyFlaskApp:
                 linked_sign_in_methods=linked_sign_in_methods,
                 stripe_enabled=bool(os.environ.get("PLANEXE_STRIPE_SECRET_KEY")),
                 telegram_enabled=bool(os.environ.get("PLANEXE_TELEGRAM_BOT_TOKEN")),
+                api_key_show_once=self._api_key_show_once,
             )
 
         @self.app.route('/billing/stripe/checkout', methods=['POST'])

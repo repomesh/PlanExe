@@ -159,6 +159,40 @@
         padding: 16px 20px;
     }
 
+    /* ── API key rename ──────────────────────────────── */
+    .key-label-display {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .key-rename-btn {
+        background: none;
+        border: none;
+        padding: 2px;
+        cursor: pointer;
+        color: var(--color-text-secondary);
+        border-radius: 4px;
+        line-height: 1;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
+    }
+    tr:hover .key-rename-btn { opacity: 1; }
+    .key-rename-btn:hover { color: var(--color-text); background: var(--color-bg-muted); }
+    .key-rename-old {
+        font-size: 0.72rem;
+        color: var(--color-text-secondary);
+        margin-bottom: 4px;
+    }
+    .key-rename-input {
+        width: 140px;
+        padding: 3px 6px;
+        border: 1px solid var(--color-primary);
+        border-radius: 4px;
+        font-size: 0.82rem;
+        font-family: var(--font-sans);
+        outline: none;
+    }
+
     /* ── API key section ───────────────────────────── */
     .key-display {
         background: var(--color-bg-muted);
@@ -438,7 +472,29 @@
                         <tbody>
                             {% for key in active_keys %}
                             <tr>
-                                <td>{{ key.label or "Untitled" }}</td>
+                                <td class="key-label-cell">
+                                    {# ── Display mode ── #}
+                                    <span class="key-label-display" data-key-id="{{ key.id }}">
+                                        <span class="key-label-text">{{ key.label or "Untitled" }}</span>
+                                        <button type="button" class="key-rename-btn" title="Rename" onclick="keyRenameStart(this)">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                                        </button>
+                                    </span>
+                                    {# ── Edit mode (hidden by default) ── #}
+                                    <div class="key-label-edit" data-key-id="{{ key.id }}" style="display:none;">
+                                        <div class="key-rename-old">Renaming: <strong>{{ key.label or "Untitled" }}</strong></div>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="action" value="rename_api_key">
+                                            <input type="hidden" name="key_id" value="{{ key.id }}">
+                                            <div style="display:flex; gap:4px; align-items:center;">
+                                                <input type="text" name="label" value="{{ key.label or '' }}" placeholder="Untitled" maxlength="128" class="key-rename-input">
+                                                <button type="submit" class="btn-acct btn-acct-primary" style="padding:4px 10px; font-size:0.75rem;">Save</button>
+                                                <button type="button" class="btn-acct btn-acct-secondary" style="padding:4px 10px; font-size:0.75rem;" onclick="keyRenameCancel(this)">Cancel</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </td>
                                 <td><span class="key-prefix">{{ key.key_prefix }}...</span></td>
                                 <td>{{ key.created_at.strftime("%Y-%m-%d") if key.created_at else "—" }}</td>
                                 <td>{{ key.last_used_at.strftime("%Y-%m-%d") if key.last_used_at else "Never" }}</td>
@@ -597,4 +653,30 @@
     })();
 </script>
 {% endif %}
+<script>
+    function keyRenameStart(btn) {
+        var cell = btn.closest('.key-label-cell');
+        cell.querySelector('.key-label-display').style.display = 'none';
+        var editEl = cell.querySelector('.key-label-edit');
+        editEl.style.display = '';
+        var input = editEl.querySelector('.key-rename-input');
+        input.focus();
+        input.select();
+        input.onkeydown = function(e) {
+            if (e.key === 'Escape') { keyRenameCancel(input); }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (!e.shiftKey) { input.closest('form').submit(); }
+            }
+        };
+    }
+    function keyRenameCancel(btn) {
+        var cell = btn.closest('.key-label-cell');
+        cell.querySelector('.key-label-edit').style.display = 'none';
+        cell.querySelector('.key-label-display').style.display = '';
+        // Reset input to original value
+        var input = cell.querySelector('.key-rename-input');
+        input.value = input.defaultValue;
+    }
+</script>
 {% endblock %}

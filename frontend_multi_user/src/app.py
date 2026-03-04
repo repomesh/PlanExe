@@ -2309,6 +2309,21 @@ class MyFlaskApp:
                             if target_key:
                                 target_key.revoked_at = datetime.now(UTC)
                                 self.db.session.commit()
+                elif action == "rename_api_key":
+                    key_id = request.form.get("key_id", "").strip()
+                    new_label = (request.form.get("label") or "").strip()[:128]
+                    if key_id:
+                        try:
+                            key_uuid = uuid.UUID(key_id)
+                        except ValueError:
+                            key_uuid = None
+                        if key_uuid:
+                            target_key = UserApiKey.query.filter_by(
+                                id=key_uuid, user_id=user.id, revoked_at=None
+                            ).first()
+                            if target_key:
+                                target_key.label = new_label or None
+                                self.db.session.commit()
                 elif action == "regenerate_api_key":
                     # Legacy action: revoke all, create one new key.
                     existing_keys = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).all()

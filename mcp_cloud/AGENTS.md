@@ -124,6 +124,12 @@ auto-update → no manual schema changes needed.
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
   - `user_api_key` (optional)
+- Billing attribution: when `user_api_key` is provided, `handle_plan_create`
+  resolves the user and sets `metadata["user_id"]` (UUID) and
+  `metadata["api_key_id"]` on the PlanItem. Without `user_api_key` (local dev
+  with `PLANEXE_MCP_REQUIRE_AUTH=false`), the plan gets `user_id="admin"` and
+  no `api_key_id` — billing is skipped and per-key stats won't show usage.
+  This is by design; pass `user_api_key` to enable credit tracking via MCP.
 
 ## HTTP middleware stack
 

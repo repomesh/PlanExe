@@ -124,12 +124,37 @@ The `/account` route handles POST actions via a hidden `action` form field:
 
 Each key row has a three-dot overflow menu with "Reset secret" and "Delete". The name column uses a click-to-edit pattern: plain text with a pencil icon on hover, expanding to an edit form showing the old name, an input, Save, and Cancel (Escape key also cancels).
 
+## Billing and Per-Key Stats
+
+Credits Used and Plans count on the account page come from `CreditHistory` and `PlanItem` rows filtered by `api_key_id`. For these stats to work, both fields must be set when creating a plan:
+
+1. **`PlanItem.user_id`** must be a valid `UserAccount` UUID. The worker billing function (`_charge_usage_credits_once` in `worker_plan_database/app.py`) parses it via `uuid.UUID()` — a plain string like `"admin"` fails and billing is silently skipped.
+
+2. **`PlanItem.api_key_id`** must match an active `UserApiKey.id`. The billing copies this to `CreditHistory.api_key_id`. If NULL, the ledger entry won't appear in per-key stats.
+
+### Plan creation paths
+
+| Path | `user_id` | `api_key_id` | Billing works? |
+|------|-----------|-------------|---------------|
+| Frontend `/create_plan` | Admin's UserAccount UUID | First active key | Yes |
+| Frontend `/run` (legacy) | Admin's UserAccount UUID | Not set | Partial (billing works, per-key stats don't) |
+| MCP with `user_api_key` | Resolved from key | Resolved from key | Yes |
+| MCP without `user_api_key` | `"admin"` (string) | NULL | No |
+
+For local MCP development, pass `user_api_key` in `plan_create` calls to enable credit tracking.
+
+### Admin backward compatibility
+
+Old plans have `user_id="admin"` (string). The `_admin_user_ids()` helper returns both the old username and the new UUID, so dashboard and plan list queries find all admin plans.
+
 ## Database Migrations
 
 Schema migrations run at startup using `ALTER TABLE ADD COLUMN IF NOT EXISTS` statements. This pattern is:
 - **Idempotent** — safe to run from multiple services simultaneously
 - **Non-blocking** — PostgreSQL `ADD COLUMN` without a default doesn't lock the table
 - **Backward compatible** — new columns are always nullable
+
+Index creation uses `CREATE INDEX IF NOT EXISTS`. PostgreSQL has a known race condition where concurrent sessions issuing the same `CREATE INDEX IF NOT EXISTS` can throw a `UniqueViolation` on `pg_class_relname_nsp_index`. Each index creation statement must be wrapped in its own try/except to handle this gracefully when multiple gunicorn workers start simultaneously.
 
 Migration functions are called inside `_create_tables_with_retry()` during app initialization.
 

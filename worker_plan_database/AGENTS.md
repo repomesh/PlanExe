@@ -15,6 +15,15 @@ PlanExe pipeline, and updates task state/progress.
   `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_*`).
 - When changing schema usage, add columns in a backward-compatible way and
   ensure `ensure_planitem_artifact_columns()` or related helpers are updated.
+- Billing depends on `PlanItem.user_id` being a valid UUID that maps to a
+  `UserAccount` row. `_charge_usage_credits_once()` parses `user_id` via
+  `uuid.UUID()` — if it's a plain string (e.g. `"admin"`), the lookup fails
+  silently and no `CreditHistory` entry is created. Callers creating PlanItem
+  records must use a real UserAccount UUID.
+- Per-key credit attribution: `CreditHistory.api_key_id` is copied from
+  `PlanItem.api_key_id` during billing. If the PlanItem has no `api_key_id`,
+  the ledger entry will have `NULL` and the account page per-key stats won't
+  include it.
 - Artifact storage model:
   - Persist `track_activity.jsonl` into `PlanItem.run_track_activity_jsonl`
     (+ bytes in `run_track_activity_bytes`).

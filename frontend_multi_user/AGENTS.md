@@ -19,6 +19,9 @@ models. Keep interfaces stable across services.
 - If schema usage changes (e.g., new PlanItem columns), update the
   `_ensure_planitem_artifact_columns()` helper and keep changes backward
   compatible.
+- Index creation (`CREATE INDEX IF NOT EXISTS`) must wrap each statement in
+  its own try/except — PostgreSQL has a race condition when multiple gunicorn
+  workers start simultaneously and all try to create the same index.
 - Artifact storage model:
   - Use `PlanItem.run_activity_overview_json` as primary UI cost/usage source.
   - Keep `PlanItem.run_track_activity_jsonl` internal/admin-only.
@@ -31,6 +34,20 @@ models. Keep interfaces stable across services.
     `Logout` immediately to its left (`Logout`, then `Dashboard`).
 - Do not store run state in module-level globals; fetch state from Postgres or
   `worker_plan` per request.
+- Admin user identity:
+  - Flask-Login stores the admin username string (e.g. `"admin"`) as the
+    session user_id.
+  - The admin's `UserAccount` row uses a deterministic UUID
+    (`uuid5(NAMESPACE_URL, "planexe-admin-pref:{username}")`), created lazily
+    by `_get_current_user_account()`.
+  - When creating PlanItem records, always use the admin's UserAccount UUID as
+    `user_id` (not the username string). The billing system in
+    `worker_plan_database` resolves `user_id` via `uuid.UUID()`, so a plain
+    string like `"admin"` fails silently and skips billing.
+  - Use `_admin_user_ids()` when querying PlanItem rows for admin — it returns
+    both the old username string and the UUID so old and new plans both appear.
+  - When creating plans, set `api_key_id` from the user's first active key so
+    per-key statistics work on the account page.
 - Forbidden imports: `worker_plan_internal`, `worker_plan.app`,
   `frontend_single_user`, `open_dir_server`.
 

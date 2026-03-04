@@ -101,16 +101,28 @@ The active page is highlighted with an underline (`nav-active` class) using `req
 | `/billing/telegram/invoice` | POST — create Telegram Stars invoice |
 | `/billing/telegram/webhook` | POST — Telegram payment webhook |
 
-## Account Page Actions
+## Account Page
 
-The `/account` route handles several POST actions via a hidden `action` form field:
+The `/account` page shows the full API key management UI for both admin and OAuth users. Admin users see API keys but not billing (credits, payments); OAuth users see everything.
+
+Admin gets a `UserAccount` row via `_get_current_user_account()`, which creates one on first visit using a deterministic UUID (`uuid5` of the admin username). This lets admin own API keys in the same table as OAuth users.
+
+### POST Actions
+
+The `/account` route handles POST actions via a hidden `action` form field:
 
 - `create_api_key` — Create a new API key (with optional label), max 10 active keys
+- `rename_api_key` — Update the label on an existing key (click-to-edit UI with Save/Cancel)
+- `reset_api_key` — Rotate the secret on an existing key (new hash + prefix, same UUID so label/stats are preserved)
 - `revoke_api_key` — Soft-delete an API key by setting `revoked_at`
 - `regenerate_api_key` — Legacy action kept for backward compatibility
 - `change_name` — Update display name
 - `change_email` — Update email
 - `delete_data` — Delete all user data (plans, keys, account)
+
+### Key Table UI
+
+Each key row has a three-dot overflow menu with "Reset secret" and "Revoke key". The label column uses a click-to-edit pattern: plain text with a pencil icon on hover, expanding to an edit form showing the old name, an input, Save, and Cancel (Escape key also cancels).
 
 ## Database Migrations
 
@@ -123,7 +135,7 @@ Migration functions are called inside `_create_tables_with_retry()` during app i
 
 ## Session and Login
 
-- **Admin login**: Flask-Login with a hardcoded `AdminUser` object (not stored in DB). Credentials come from env vars.
+- **Admin login**: Flask-Login with a hardcoded `AdminUser` object. Credentials come from env vars. A `UserAccount` row is lazily created (deterministic UUID) so admin can own API keys.
 - **OAuth login**: Flask-Login with UUID-based user IDs from the `UserAccount` table. OAuth state/tokens are stored in Flask's encrypted session cookie.
 - **Session secret**: `SECRET_KEY` env var. Must be the same across all replicas for sessions to work in a multi-replica deployment.
 

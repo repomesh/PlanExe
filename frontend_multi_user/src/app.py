@@ -2324,6 +2324,24 @@ class MyFlaskApp:
                             if target_key:
                                 target_key.label = new_label or None
                                 self.db.session.commit()
+                elif action == "reset_api_key":
+                    key_id = request.form.get("key_id", "").strip()
+                    if key_id:
+                        try:
+                            key_uuid = uuid.UUID(key_id)
+                        except ValueError:
+                            key_uuid = None
+                        if key_uuid:
+                            target_key = UserApiKey.query.filter_by(
+                                id=key_uuid, user_id=user.id, revoked_at=None
+                            ).first()
+                            if target_key:
+                                api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
+                                raw_key = f"pex_{secrets.token_urlsafe(24)}"
+                                target_key.key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
+                                target_key.key_prefix = raw_key[:10]
+                                self.db.session.commit()
+                                session["new_api_key"] = raw_key
                 elif action == "regenerate_api_key":
                     # Legacy action: revoke all, create one new key.
                     existing_keys = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).all()

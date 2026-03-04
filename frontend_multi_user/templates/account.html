@@ -501,15 +501,26 @@
                                 <td>{{ plan_counts.get(key.id|string, 0) }}</td>
                                 <td>{{ credit_usage.get(key.id|string, "0") }}</td>
                                 <td>
-                                    <form method="POST" style="margin:0;">
-                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                        <input type="hidden" name="action" value="revoke_api_key">
-                                        <input type="hidden" name="key_id" value="{{ key.id }}">
-                                        <button class="btn-acct btn-acct-secondary" style="color:#991b1b; padding: 4px 10px; font-size: 0.75rem;"
-                                            onclick="return confirm('Revoke this key? Integrations using it will stop working.')">
-                                            Revoke
-                                        </button>
-                                    </form>
+                                    <div style="display:flex; gap:4px;">
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="action" value="reset_api_key">
+                                            <input type="hidden" name="key_id" value="{{ key.id }}">
+                                            <button class="btn-acct btn-acct-secondary" style="padding: 4px 10px; font-size: 0.75rem;"
+                                                onclick="return confirm('Reset this key? The old secret will stop working immediately. A new secret will be shown once.')">
+                                                Reset
+                                            </button>
+                                        </form>
+                                        <form method="POST" style="margin:0;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                            <input type="hidden" name="action" value="revoke_api_key">
+                                            <input type="hidden" name="key_id" value="{{ key.id }}">
+                                            <button class="btn-acct btn-acct-secondary" style="color:#991b1b; padding: 4px 10px; font-size: 0.75rem;"
+                                                onclick="return confirm('Revoke this key? Integrations using it will stop working.')">
+                                                Revoke
+                                            </button>
+                                        </form>
+                                    </div>
                                 </td>
                             </tr>
                             {% endfor %}

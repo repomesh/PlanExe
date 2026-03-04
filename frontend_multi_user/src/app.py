@@ -485,13 +485,28 @@ class MyFlaskApp:
 
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
-            if "task_item" not in set(insp.get_table_names()):
-                return
-            with self.db.engine.begin() as conn:
-                conn.execute(text(
+            table_names = set(insp.get_table_names())
+            statements: list[str] = []
+            if "task_item" in table_names:
+                statements.append(
                     "CREATE INDEX IF NOT EXISTS idx_task_item_user_id_timestamp_created "
                     "ON task_item (user_id, timestamp_created)"
-                ))
+                )
+                statements.append(
+                    "CREATE INDEX IF NOT EXISTS idx_task_item_api_key_id "
+                    "ON task_item (api_key_id)"
+                )
+            if "credit_history" in table_names:
+                statements.append(
+                    "CREATE INDEX IF NOT EXISTS idx_credit_history_api_key_id "
+                    "ON credit_history (api_key_id)"
+                )
+            for stmt in statements:
+                try:
+                    with self.db.engine.begin() as conn:
+                        conn.execute(text(stmt))
+                except Exception as exc:
+                    logger.warning("Index creation skipped for %s: %s", stmt, exc)
 
         def _seed_initial_records() -> None:
             # Add initial records if the table is empty
@@ -2370,23 +2385,27 @@ class MyFlaskApp:
             plan_counts: dict[str, int] = {}
             credit_usage: dict[str, str] = {}
             if active_key_ids:
-                for row in (
-                    self.db.session.query(PlanItem.api_key_id, func.count(PlanItem.id))
-                    .filter(PlanItem.api_key_id.in_(active_key_ids))
-                    .group_by(PlanItem.api_key_id)
-                    .all()
-                ):
-                    plan_counts[row[0]] = row[1]
-                for row in (
-                    self.db.session.query(CreditHistory.api_key_id, func.sum(CreditHistory.delta))
-                    .filter(
-                        CreditHistory.api_key_id.in_(active_key_ids),
-                        CreditHistory.delta < 0,
-                    )
-                    .group_by(CreditHistory.api_key_id)
-                    .all()
-                ):
-                    credit_usage[row[0]] = self._format_credit_display(abs(row[1]))
+                try:
+                    for row in (
+                        self.db.session.query(PlanItem.api_key_id, func.count(PlanItem.id))
+                        .filter(PlanItem.api_key_id.in_(active_key_ids))
+                        .group_by(PlanItem.api_key_id)
+                        .all()
+                    ):
+                        plan_counts[row[0]] = row[1]
+                    for row in (
+                        self.db.session.query(CreditHistory.api_key_id, func.sum(CreditHistory.delta))
+                        .filter(
+                            CreditHistory.api_key_id.in_(active_key_ids),
+                            CreditHistory.delta < 0,
+                        )
+                        .group_by(CreditHistory.api_key_id)
+                        .all()
+                    ):
+                        credit_usage[row[0]] = self._format_credit_display(abs(row[1]))
+                except Exception as exc:
+                    logger.warning("Per-key stats query failed: %s", exc)
+                    self.db.session.rollback()
 
             payment_rows = (
                 PaymentRecord.query

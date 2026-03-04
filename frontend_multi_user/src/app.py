@@ -1212,6 +1212,19 @@ class MyFlaskApp:
 
         return "[Prompt unavailable]"
 
+    def _admin_user_ids(self) -> list[str]:
+        """Return all possible user_id values for the admin user.
+
+        Old plans used the admin username (e.g. ``"admin"``); new plans use
+        the deterministic UUID.  Returning both lets queries find all admin
+        plans regardless of when they were created.
+        """
+        ids = [self.admin_username]
+        admin_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"planexe-admin-pref:{self.admin_username}"))
+        if admin_uuid not in ids:
+            ids.append(admin_uuid)
+        return ids
+
     def _get_current_user_account(self) -> Optional[UserAccount]:
         if not current_user.is_authenticated:
             return None
@@ -2060,7 +2073,8 @@ class MyFlaskApp:
                 is_admin = current_user.is_admin
                 try:
                     if is_admin:
-                        user_id = self.admin_username
+                        admin_account = self._get_current_user_account()
+                        user_id = str(admin_account.id) if admin_account else self.admin_username
                         user = SimpleNamespace(name="Admin", given_name=None)
                         credits_balance_display = "Full access"
                         can_create_plan = True
@@ -2076,6 +2090,11 @@ class MyFlaskApp:
                     if user_id:
                         # Generate a nonce so the user can start a plan from the dashboard
                         nonce = 'DASH_' + str(uuid.uuid4())
+                        uid_filter = (
+                            PlanItem.user_id.in_(self._admin_user_ids())
+                            if is_admin
+                            else PlanItem.user_id == str(user_id)
+                        )
                         try:
                             recent_task_rows = (
                                 self.db.session.query(
@@ -2083,7 +2102,7 @@ class MyFlaskApp:
                                     PlanItem.state,
                                     func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                                 )
-                                .filter(PlanItem.user_id == str(user_id))
+                                .filter(uid_filter)
                                 .order_by(PlanItem.timestamp_created.desc())
                                 .limit(10)
                                 .all()
@@ -2101,7 +2120,7 @@ class MyFlaskApp:
                                     PlanItem.id,
                                     PlanItem.state,
                                 )
-                                .filter(PlanItem.user_id == str(user_id))
+                                .filter(uid_filter)
                                 .order_by(PlanItem.timestamp_created.desc())
                                 .limit(10)
                                 .all()
@@ -2122,7 +2141,7 @@ class MyFlaskApp:
                             )
                         total_tasks_count = (
                             PlanItem.query
-                            .filter_by(user_id=str(user_id))
+                            .filter(uid_filter)
                             .count()
                         )
                         # Load example prompts for the "Start New Plan" form
@@ -2828,7 +2847,8 @@ class MyFlaskApp:
             logger.info(f"endpoint /run ({request.method}). Size of request: {request_size_bytes} bytes. Starting run with parameters: prompt={log_prompt_info!r}, user_id={user_id_param!r}, nonce={nonce_param!r}, parameters={parameters!r}, prompt_param_bytes={prompt_param_bytes}, prompt_param_characters={prompt_param_characters}")
 
             if current_user.is_admin:
-                user_id_param = self.admin_username
+                admin_account = self._get_current_user_account()
+                user_id_param = str(admin_account.id) if admin_account else self.admin_username
             else:
                 user_id_param = str(current_user.id)
 
@@ -2935,8 +2955,10 @@ class MyFlaskApp:
                 logger.error("endpoint /create_plan. No prompt provided")
                 return jsonify({"error": "No prompt provided"}), 400
 
+            api_key_id_param: Optional[str] = None
             if current_user.is_admin:
-                user_id_param = self.admin_username
+                admin_account = self._get_current_user_account()
+                user_id_param = str(admin_account.id) if admin_account else self.admin_username
             else:
                 user_id_param = str(current_user.id)
 
@@ -2952,12 +2974,30 @@ class MyFlaskApp:
             )
 
             with self.app.app_context():
-                if not current_user.is_admin:
+                if current_user.is_admin:
+                    # Admin skips credit check; resolve api_key_id for stats.
+                    first_key = (
+                        UserApiKey.query
+                        .filter_by(user_id=uuid.UUID(user_id_param), revoked_at=None)
+                        .order_by(UserApiKey.created_at.asc())
+                        .first()
+                    )
+                    if first_key:
+                        api_key_id_param = str(first_key.id)
+                else:
                     user = self.db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
                     if not user:
                         return jsonify({"error": "User not found"}), 400
                     if self._to_credit_decimal(user.credits_balance) < Decimal("2"):
                         return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
+                    first_key = (
+                        UserApiKey.query
+                        .filter_by(user_id=user.id, revoked_at=None)
+                        .order_by(UserApiKey.created_at.asc())
+                        .first()
+                    )
+                    if first_key:
+                        api_key_id_param = str(first_key.id)
 
                 task = _new_model(
                     PlanItem,
@@ -2966,6 +3006,7 @@ class MyFlaskApp:
                     progress_percentage=0.0,
                     progress_message="Awaiting server to start…",
                     user_id=user_id_param,
+                    api_key_id=api_key_id_param,
                     parameters=parameters
                 )
                 self.db.session.add(task)
@@ -3075,6 +3116,11 @@ class MyFlaskApp:
 
             if not run_id:
                 user_id = str(current_user.id)
+                uid_filter = (
+                    PlanItem.user_id.in_(self._admin_user_ids())
+                    if current_user.is_admin
+                    else PlanItem.user_id == user_id
+                )
                 try:
                     tasks = (
                         self.db.session.query(
@@ -3083,7 +3129,7 @@ class MyFlaskApp:
                             PlanItem.state,
                             func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                         )
-                        .filter(PlanItem.user_id == user_id)
+                        .filter(uid_filter)
                         .order_by(PlanItem.timestamp_created.desc())
                         .all()
                     )
@@ -3101,7 +3147,7 @@ class MyFlaskApp:
                             PlanItem.timestamp_created,
                             PlanItem.state,
                         )
-                        .filter(PlanItem.user_id == user_id)
+                        .filter(uid_filter)
                         .order_by(PlanItem.timestamp_created.desc())
                         .all()
                     )

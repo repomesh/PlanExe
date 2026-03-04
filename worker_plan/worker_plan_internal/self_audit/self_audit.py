@@ -19,7 +19,7 @@ I care about what problems I observe in the generated reports.
 
 ISSUE: Violates Known Physics - false positive
 https://planexe.org/20260303_crate_recovery_campaign_report.html
-gemini-2.5-flash-lite-preview-09-2025, though that the laws of physics were violated, because a plan mentioned "CSR driven logistics".
+gemini-2.5-flash-lite-preview-09-2025, thought that the laws of physics were violated, because a plan mentioned "CSR driven logistics".
 corporate social responsibility (CSR), which has nothing to do with faster than light travel, but was flagged as "violates known physics".
 
 PROMPT> python -u -m worker_plan_internal.self_audit.self_audit | tee output.txt

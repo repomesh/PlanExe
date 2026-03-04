@@ -266,6 +266,21 @@ def ensure_fractional_credit_columns() -> None:
                 "USING credits::NUMERIC(18,9)"
             ))
 
+
+def ensure_multi_api_key_columns() -> None:
+    """Add columns for multi-API-key support (idempotent)."""
+    statements = (
+        "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+        "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
 def worker_process_started() -> None:
     planexe_worker_id = os.environ.get("PLANEXE_WORKER_ID")
     event_context = {
@@ -569,6 +584,7 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
                 reason="plan_created_with_usage_cost" if success else "plan_failed_usage_cost",
                 source="usage_billing",
                 external_id=str(task_id),
+                api_key_id=getattr(task, "api_key_id", None),
             )
             db.session.add(ledger)
             db.session.commit()
@@ -991,6 +1007,7 @@ def startup_worker():
             ensure_planitem_artifact_columns()
             ensure_token_metrics_columns()
             ensure_fractional_credit_columns()
+            ensure_multi_api_key_columns()
             logger.debug(f"Ensured database tables exist.")
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)
         except Exception as e:    

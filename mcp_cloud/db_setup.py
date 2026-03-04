@@ -73,8 +73,23 @@ def ensure_planitem_stop_columns() -> None:
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", statement, exc, exc_info=True)
 
+def ensure_multi_api_key_columns() -> None:
+    """Add columns for multi-API-key support (idempotent)."""
+    statements = (
+        "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+        "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
 with app.app_context():
     ensure_planitem_stop_columns()
+    ensure_multi_api_key_columns()
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (

@@ -149,11 +149,16 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
+    metadata = None
+    if user_context:
+        metadata = {"user_id": str(user_context["user_id"])}
+        if user_context.get("api_key_id"):
+            metadata["api_key_id"] = user_context["api_key_id"]
     response = await asyncio.to_thread(
         _create_plan_sync,
         req.prompt,
         merged_config,
-        {"user_id": str(user_context["user_id"])} if user_context else None,
+        metadata,
     )
     base_url = _get_download_base_url()
     if base_url and response.get("plan_id"):

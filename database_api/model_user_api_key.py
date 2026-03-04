@@ -13,6 +13,8 @@ class UserApiKey(db.Model):
     key_hash = db.Column(db.String(128), nullable=False, unique=True)
     # Short prefix for display and audit logs.
     key_prefix = db.Column(db.String(16), nullable=False, index=True)
+    # Optional human-readable label for the key (e.g. "Claude Code", "CI pipeline").
+    label = db.Column(db.String(128), nullable=True)
     # Key lifecycle timestamps.
     created_at = db.Column(db.DateTime, default=lambda: datetime.now(UTC))
     last_used_at = db.Column(db.DateTime, nullable=True)

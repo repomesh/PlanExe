@@ -86,6 +86,7 @@ def _create_plan_sync(
             prompt=prompt,
             state=PlanState.pending,
             user_id=metadata.get("user_id", "admin") if metadata else "admin",
+            api_key_id=metadata.get("api_key_id") if metadata else None,
             parameters=parameters,
         )
         db.session.add(plan)
@@ -97,6 +98,7 @@ def _create_plan_sync(
             "task_handle": plan_id,
             "prompt": plan.prompt,
             "user_id": plan.user_id,
+            "api_key_id": plan.api_key_id,
             "config": config,
             "metadata": metadata,
             "parameters": plan.parameters,

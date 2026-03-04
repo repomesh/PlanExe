@@ -467,6 +467,20 @@ class MyFlaskApp:
                 if "frontend_multi_user_config" not in columns:
                     conn.execute(text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS frontend_multi_user_config JSON"))
 
+        def _ensure_multi_api_key_columns() -> None:
+            """Add columns for multi-API-key support (idempotent)."""
+            statements = (
+                "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
+                "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+                "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+            )
+            with self.db.engine.begin() as conn:
+                for stmt in statements:
+                    try:
+                        conn.execute(text(stmt))
+                    except Exception as exc:
+                        logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
             if "task_item" not in set(insp.get_table_names()):
@@ -507,6 +521,7 @@ class MyFlaskApp:
                         _ensure_token_metrics_columns()
                         _ensure_fractional_credit_columns()
                         _ensure_user_account_columns()
+                        _ensure_multi_api_key_columns()
                         _ensure_planitem_indexes()
                         _seed_initial_records()
                     return
@@ -862,23 +877,25 @@ class MyFlaskApp:
         user.locale = profile.get("locale") or user.locale
         user.avatar_url = self._avatar_url_from_profile(provider, profile) or user.avatar_url
 
-    def _get_or_create_api_key(self, user: UserAccount) -> str:
+    def _get_or_create_api_key(self, user: UserAccount, label: Optional[str] = None) -> str:
         api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
         if api_key_secret == "dev-api-key-secret":
             logger.warning("PLANEXE_API_KEY_SECRET not set. Using dev secret for API key hashing.")
 
-        existing_key = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).first()
-        if existing_key:
+        active_count = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).count()
+        if active_count >= 10:
             return ""
 
         raw_key = f"pex_{secrets.token_urlsafe(24)}"
         key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
         key_prefix = raw_key[:10]
+        sanitized_label = (label or "").strip()[:128] or None
         api_key = _new_model(
             UserApiKey,
             user_id=user.id,
             key_hash=key_hash,
             key_prefix=key_prefix,
+            label=sanitized_label,
         )
         self.db.session.add(api_key)
         self.db.session.commit()
@@ -2215,9 +2232,11 @@ class MyFlaskApp:
                 session.pop("open_access_logged_out", None)
                 session["auth_provider"] = provider
                 login_user(User(user.id, is_admin=user.is_admin))
-                new_api_key = self._get_or_create_api_key(user)
-                if new_api_key:
-                    session["new_api_key"] = new_api_key
+                has_key = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).first() is not None
+                if not has_key:
+                    new_api_key = self._get_or_create_api_key(user, label="Default")
+                    if new_api_key:
+                        session["new_api_key"] = new_api_key
                 return redirect(url_for('account'))
 
             except Exception as e:
@@ -2268,7 +2287,26 @@ class MyFlaskApp:
             new_api_key = session.pop("new_api_key", None)
             if request.method == 'POST':
                 action = request.form.get('action')
-                if action == "regenerate_api_key":
+                if action == "create_api_key":
+                    raw_key = self._get_or_create_api_key(user, label=request.form.get("label"))
+                    if raw_key:
+                        session["new_api_key"] = raw_key
+                elif action == "revoke_api_key":
+                    key_id = request.form.get("key_id", "").strip()
+                    if key_id:
+                        try:
+                            key_uuid = uuid.UUID(key_id)
+                        except ValueError:
+                            key_uuid = None
+                        if key_uuid:
+                            target_key = UserApiKey.query.filter_by(
+                                id=key_uuid, user_id=user.id, revoked_at=None
+                            ).first()
+                            if target_key:
+                                target_key.revoked_at = datetime.now(UTC)
+                                self.db.session.commit()
+                elif action == "regenerate_api_key":
+                    # Legacy action: revoke all, create one new key.
                     existing_keys = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).all()
                     now = datetime.now(UTC)
                     for key in existing_keys:
@@ -2279,7 +2317,36 @@ class MyFlaskApp:
                         session["new_api_key"] = raw_key
                 return redirect(url_for('account'))
 
-            active_key = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).first()
+            active_keys = (
+                UserApiKey.query
+                .filter_by(user_id=user.id, revoked_at=None)
+                .order_by(UserApiKey.created_at.asc())
+                .all()
+            )
+
+            # Per-key plan counts.
+            active_key_ids = [str(k.id) for k in active_keys]
+            plan_counts: dict[str, int] = {}
+            credit_usage: dict[str, str] = {}
+            if active_key_ids:
+                for row in (
+                    self.db.session.query(PlanItem.api_key_id, func.count(PlanItem.id))
+                    .filter(PlanItem.api_key_id.in_(active_key_ids))
+                    .group_by(PlanItem.api_key_id)
+                    .all()
+                ):
+                    plan_counts[row[0]] = row[1]
+                for row in (
+                    self.db.session.query(CreditHistory.api_key_id, func.sum(CreditHistory.delta))
+                    .filter(
+                        CreditHistory.api_key_id.in_(active_key_ids),
+                        CreditHistory.delta < 0,
+                    )
+                    .group_by(CreditHistory.api_key_id)
+                    .all()
+                ):
+                    credit_usage[row[0]] = self._format_credit_display(abs(row[1]))
+
             payment_rows = (
                 PaymentRecord.query
                 .filter_by(user_id=user.id)
@@ -2326,7 +2393,10 @@ class MyFlaskApp:
                 user=user,
                 credits_balance_display=self._format_credit_display(user.credits_balance),
                 credit_price_cents=max(1, int(os.environ.get("PLANEXE_CREDIT_PRICE_CENTS", "100"))),
-                active_key=active_key,
+                active_keys=active_keys,
+                plan_counts=plan_counts,
+                credit_usage=credit_usage,
+                can_create_key=len(active_keys) < 10,
                 new_api_key=new_api_key,
                 recent_payments=recent_payments,
                 signed_in_with=signed_in_with,

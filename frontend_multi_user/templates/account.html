@@ -406,11 +406,11 @@
 
     {# ── Right: content sections ───────────────────────────────── #}
     <div>
-        {# ── API Key ────────────────────────────────────────────── #}
+        {# ── API Keys ───────────────────────────────────────────── #}
         <div class="acct-section">
             <div class="acct-section-header">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-                <h2>API Key</h2>
+                <h2>API Keys</h2>
             </div>
             <div class="acct-section-body">
                 {% if new_api_key %}
@@ -424,23 +424,68 @@
                         </button>
                         <span id="copy-api-key-status" class="copy-status"></span>
                     </div>
-                {% elif active_key %}
-                    <p style="margin: 0 0 4px; font-size: 0.85rem;">Active key: <span class="key-prefix">{{ active_key.key_prefix }}…</span></p>
-                    <p class="key-hint">Use the full key you saved when it was created.</p>
-                {% else %}
-                    <p style="margin: 0 0 4px; font-size: 0.85rem; color: var(--color-text-secondary);">No API key yet. Generate one to use PlanExe via the MCP or HTTP API.</p>
                 {% endif %}
 
-                <div class="key-actions">
-                    <form method="POST" style="margin: 0;">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <input type="hidden" name="action" value="regenerate_api_key">
-                        <button class="btn-acct btn-acct-secondary">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                            {{ "Regenerate key" if active_key else "Generate key" }}
-                        </button>
-                    </form>
+                {% if active_keys %}
+                <div style="overflow-x: auto; margin-top: {% if new_api_key %}16{% else %}0{% endif %}px;">
+                    <table class="payments-table">
+                        <thead>
+                            <tr>
+                                <th>Label</th>
+                                <th>Key</th>
+                                <th>Created</th>
+                                <th>Last Used</th>
+                                <th>Plans</th>
+                                <th>Credits Used</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for key in active_keys %}
+                            <tr>
+                                <td>{{ key.label or "Untitled" }}</td>
+                                <td><span class="key-prefix">{{ key.key_prefix }}...</span></td>
+                                <td>{{ key.created_at.strftime("%Y-%m-%d") if key.created_at else "—" }}</td>
+                                <td>{{ key.last_used_at.strftime("%Y-%m-%d") if key.last_used_at else "Never" }}</td>
+                                <td>{{ plan_counts.get(key.id|string, 0) }}</td>
+                                <td>{{ credit_usage.get(key.id|string, "0") }}</td>
+                                <td>
+                                    <form method="POST" style="margin:0;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="action" value="revoke_api_key">
+                                        <input type="hidden" name="key_id" value="{{ key.id }}">
+                                        <button class="btn-acct btn-acct-secondary" style="color:#991b1b; padding: 4px 10px; font-size: 0.75rem;"
+                                            onclick="return confirm('Revoke this key? Integrations using it will stop working.')">
+                                            Revoke
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
+                {% else %}
+                    <p style="margin: 0 0 4px; font-size: 0.85rem; color: var(--color-text-secondary);">No API keys yet. Create one to use PlanExe via the MCP or HTTP API.</p>
+                {% endif %}
+
+                {% if can_create_key %}
+                <form method="POST" style="margin-top: 12px; display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <input type="hidden" name="action" value="create_api_key">
+                    <div class="billing-input-group">
+                        <label for="key-label">Label (optional)</label>
+                        <input type="text" name="label" id="key-label" maxlength="128" placeholder="e.g. Claude Code"
+                            style="width: 200px; padding: 8px 10px; border: 1px solid var(--color-border); border-radius: var(--radius); font-size: 0.9rem; font-family: var(--font-sans); outline: none;">
+                    </div>
+                    <button class="btn-acct btn-acct-primary">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        Create API Key
+                    </button>
+                </form>
+                {% else %}
+                <p class="key-hint" style="margin-top: 12px;">Maximum of 10 keys reached. Revoke an unused key to create a new one.</p>
+                {% endif %}
             </div>
         </div>
 

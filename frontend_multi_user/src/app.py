@@ -2262,10 +2262,14 @@ class MyFlaskApp:
         @self.app.route('/account', methods=['GET', 'POST'])
         @login_required
         def account():
-            if current_user.is_admin:
-                return render_template('account.html', admin_mode=True)
-            user_uuid = uuid.UUID(str(current_user.id))
-            user = self.db.session.get(UserAccount, user_uuid)
+            is_admin = current_user.is_admin
+            if is_admin:
+                user = self._get_current_user_account()
+                if not user:
+                    return render_template('account.html', admin_mode=True)
+            else:
+                user_uuid = uuid.UUID(str(current_user.id))
+                user = self.db.session.get(UserAccount, user_uuid)
             if not user:
                 return redirect(url_for('logout'))
 
@@ -2386,12 +2390,14 @@ class MyFlaskApp:
             signed_in_with = self._auth_provider_label(auth_provider_session)
             if signed_in_with == "Unknown" and linked_sign_in_methods:
                 signed_in_with = linked_sign_in_methods[0]
+            if is_admin:
+                signed_in_with = "Admin credentials"
 
             return render_template(
                 'account.html',
-                admin_mode=False,
+                admin_mode=is_admin,
                 user=user,
-                credits_balance_display=self._format_credit_display(user.credits_balance),
+                credits_balance_display="Full access" if is_admin else self._format_credit_display(user.credits_balance),
                 credit_price_cents=max(1, int(os.environ.get("PLANEXE_CREDIT_PRICE_CENTS", "100"))),
                 active_keys=active_keys,
                 plan_counts=plan_counts,

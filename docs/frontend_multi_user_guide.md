@@ -143,6 +143,12 @@ Credits Used and Plans count on the account page come from `CreditHistory` and `
 
 For local MCP development, pass `user_api_key` in `plan_create` calls to enable credit tracking.
 
+### Incremental billing
+
+Credits are charged during plan execution, not just at completion. The worker calls `_charge_incremental_usage()` on each progress heartbeat, reading the current `activity_overview.json` and creating `CreditHistory` entries with `source="usage_billing_progress"`. When the plan finishes, `_charge_usage_credits_once()` subtracts what was already charged incrementally and creates a final `source="usage_billing"` entry for the remainder plus the success fee.
+
+This prevents abuse where a user starts many plans and aborts them at the last minute to avoid charges. The account page's Credits Used column sums all `CreditHistory` entries with `delta < 0`, so both incremental and final entries are included.
+
 ### Admin backward compatibility
 
 Old plans have `user_id="admin"` (string). The `_admin_user_ids()` helper returns both the old username and the new UUID, so dashboard and plan list queries find all admin plans.

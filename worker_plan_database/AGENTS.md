@@ -24,6 +24,13 @@ PlanExe pipeline, and updates task state/progress.
   `PlanItem.api_key_id` during billing. If the PlanItem has no `api_key_id`,
   the ledger entry will have `NULL` and the account page per-key stats won't
   include it.
+- Incremental billing: credits are charged during plan execution (not just at
+  the end) via `_charge_incremental_usage()`, called from each progress
+  heartbeat in `_handle_task_completion()`. This uses
+  `source="usage_billing_progress"` entries. The final
+  `_charge_usage_credits_once()` subtracts already-charged incremental amounts
+  and creates a `source="usage_billing"` entry for the remainder + success
+  fee. This prevents abuse where users abort plans to avoid charges.
 - Artifact storage model:
   - Persist `track_activity.jsonl` into `PlanItem.run_track_activity_jsonl`
     (+ bytes in `run_track_activity_bytes`).

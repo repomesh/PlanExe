@@ -20,7 +20,7 @@ from urllib.parse import quote_plus
 import io
 import zipfile
 import requests
-from sqlalchemy import inspect, text, or_
+from sqlalchemy import func, inspect, text, or_
 from worker_plan_database.worker_identity import resolve_and_set_worker_id
 
 
@@ -154,6 +154,7 @@ try:
     from database_api.model_event import EventType, EventItem
     from database_api.model_worker import WorkerItem
     from database_api.model_user_account import UserAccount
+    from database_api.model_user_api_key import UserApiKey
     from database_api.model_credit_history import CreditHistory
     from database_api.model_token_metrics import TokenMetrics
     from worker_plan_database.speedvsdetail import resolve_speedvsdetail
@@ -427,10 +428,16 @@ class ServerExecutePipeline(ExecutePipeline):
 
         with app.app_context():
             update_task_progress_with_retry(
-                task_id=self.task_id, 
-                progress_percentage=parameters.progress.progress_percentage, 
+                task_id=self.task_id,
+                progress_percentage=parameters.progress.progress_percentage,
                 progress_message=parameters.progress.progress_message
             )
+
+        # Charge credits incrementally so usage is visible in real time.
+        try:
+            _charge_incremental_usage(self.task_id, self.run_id_dir)
+        except Exception as exc:
+            logger.warning("Incremental billing failed for task %s: %s", self.task_id, exc)
 
 # Every time a LLM/reasoning model is used, it gets registered in the "track_activity" file.
 # The llm_executor_uuid is written to stdout, and referenced in the "track_activity" file, so it's possible to
@@ -518,11 +525,106 @@ def _credits_for_usd(usd_amount: float) -> Decimal:
     return (usd_decimal / credit_price_usd).quantize(CREDIT_SCALE)
 
 
-def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) -> dict[str, float | Decimal | bool]:
-    """
-    Charge user credits once per task, based on inference cost plus success fee.
+def _resolve_user_for_billing(task_user_id: str) -> Optional[UserAccount]:
+    """Resolve the UserAccount for billing from a PlanItem.user_id.
 
-    Returns diagnostic values for logging and events.
+    Handles both UUID-based user_ids (OAuth users, new admin plans) and
+    legacy string user_ids (e.g. ``"admin"``) by falling back to the first
+    admin UserAccount row.
+    """
+    try:
+        user_uuid = uuid.UUID(str(task_user_id))
+        user = db.session.get(UserAccount, user_uuid)
+        if user is not None:
+            return user
+    except (ValueError, AttributeError):
+        pass
+    # Fallback: legacy admin string → find any admin UserAccount.
+    return UserAccount.query.filter_by(is_admin=True).first()
+
+
+def _sum_already_charged_credits(task_id: str) -> Decimal:
+    """Sum all incremental credit charges already recorded for a task."""
+    rows = (
+        CreditHistory.query
+        .filter_by(source="usage_billing_progress", external_id=str(task_id))
+        .with_entities(func.sum(CreditHistory.delta))
+        .first()
+    )
+    total = rows[0] if rows and rows[0] is not None else Decimal("0")
+    # delta is negative (deduction), return absolute value
+    return abs(Decimal(str(total))).quantize(CREDIT_SCALE)
+
+
+def _charge_incremental_usage(task_id: str, run_id_dir: Path) -> None:
+    """Charge the user for inference cost accumulated so far.
+
+    Called periodically during plan execution so credits are deducted in
+    real time rather than only at completion.  Each call reads the current
+    ``activity_overview.json``, compares against what has already been
+    charged (``source='usage_billing_progress'`` ledger entries), and
+    creates a new entry for the delta.
+    """
+    current_cost_usd = _read_inference_cost_usd_from_run_dir(run_id_dir)
+    if current_cost_usd <= 0:
+        return
+
+    with app.app_context():
+        task = db.session.get(PlanItem, task_id)
+        if task is None:
+            return
+
+        if isinstance(task.parameters, dict) and bool(task.parameters.get("billing_skip_usage_charge")):
+            return
+
+        user = _resolve_user_for_billing(task.user_id)
+        if user is None:
+            return
+
+        # Resolve api_key_id: use task's value, or fall back to user's first active key.
+        api_key_id = getattr(task, "api_key_id", None)
+        if not api_key_id:
+            first_key = (
+                UserApiKey.query
+                .filter_by(user_id=user.id, revoked_at=None)
+                .order_by(UserApiKey.created_at.asc())
+                .first()
+            )
+            if first_key:
+                api_key_id = str(first_key.id)
+
+        already_charged = _sum_already_charged_credits(task_id)
+        total_credits = _credits_for_usd(current_cost_usd)
+        delta = (total_credits - already_charged).quantize(CREDIT_SCALE)
+        if delta <= 0:
+            return
+
+        current_balance = Decimal(str(user.credits_balance or 0)).quantize(CREDIT_SCALE)
+        user.credits_balance = (current_balance - delta).quantize(CREDIT_SCALE)
+        ledger = _new_model(
+            CreditHistory,
+            user_id=user.id,
+            delta=-delta,
+            reason="plan_usage_in_progress",
+            source="usage_billing_progress",
+            external_id=str(task_id),
+            api_key_id=api_key_id,
+        )
+        db.session.add(ledger)
+        db.session.commit()
+        logger.debug(
+            "Incremental billing for task %s: charged %s credits (total so far: %s)",
+            task_id, delta, total_credits,
+        )
+
+
+def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) -> dict[str, float | Decimal | bool]:
+    """Final billing for a completed/failed task.
+
+    Reads the final ``activity_overview.json``, subtracts any incremental
+    charges already recorded (``source='usage_billing_progress'``), and
+    creates one ``source='usage_billing'`` ledger entry for the remainder
+    plus the success fee (if applicable).
     """
     usage_cost_usd = _read_inference_cost_usd_from_run_dir(run_id_dir)
     success_fee_usd = 0.0
@@ -543,15 +645,21 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
         if isinstance(task.parameters, dict) and bool(task.parameters.get("billing_skip_usage_charge")):
             should_charge = False
 
-        user = None
-        try:
-            user_uuid = uuid.UUID(str(task.user_id))
-            user = db.session.get(UserAccount, user_uuid)
-        except Exception:
-            user = None
-
+        user = _resolve_user_for_billing(task.user_id)
         if user is None:
             should_charge = False
+
+        # Resolve api_key_id: use task's value, or fall back to user's first active key.
+        api_key_id = getattr(task, "api_key_id", None)
+        if not api_key_id and user is not None:
+            first_key = (
+                UserApiKey.query
+                .filter_by(user_id=user.id, revoked_at=None)
+                .order_by(UserApiKey.created_at.asc())
+                .first()
+            )
+            if first_key:
+                api_key_id = str(first_key.id)
 
         speed_mode = resolve_speedvsdetail(task.parameters if isinstance(task.parameters, dict) else None)
         is_ping_task = speed_mode == SpeedVsDetailEnum.PING_LLM
@@ -560,7 +668,7 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
             success_fee_usd = float(os.environ.get("PLANEXE_SUCCESS_PLAN_FEE_USD", "1.0"))
 
         total_charge_usd = usage_cost_usd + success_fee_usd
-        charged_credits = _credits_for_usd(total_charge_usd) if should_charge else Decimal("0")
+        total_credits = _credits_for_usd(total_charge_usd) if should_charge else Decimal("0")
 
         existing = CreditHistory.query.filter_by(
             source="usage_billing",
@@ -575,17 +683,21 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
                 "charged": False,
             }
 
-        if user is not None and charged_credits > 0:
+        # Subtract credits already charged incrementally during execution.
+        already_charged = _sum_already_charged_credits(task_id) if should_charge else Decimal("0")
+        remaining_credits = (total_credits - already_charged).quantize(CREDIT_SCALE)
+
+        if user is not None and remaining_credits > 0:
             current_balance = Decimal(str(user.credits_balance or 0)).quantize(CREDIT_SCALE)
-            user.credits_balance = (current_balance - charged_credits).quantize(CREDIT_SCALE)
+            user.credits_balance = (current_balance - remaining_credits).quantize(CREDIT_SCALE)
             ledger = _new_model(
                 CreditHistory,
                 user_id=user.id,
-                delta=-charged_credits,
+                delta=-remaining_credits,
                 reason="plan_created_with_usage_cost" if success else "plan_failed_usage_cost",
                 source="usage_billing",
                 external_id=str(task_id),
-                api_key_id=getattr(task, "api_key_id", None),
+                api_key_id=api_key_id,
             )
             db.session.add(ledger)
             db.session.commit()
@@ -593,7 +705,29 @@ def _charge_usage_credits_once(task_id: str, run_id_dir: Path, success: bool) ->
                 "usage_cost_usd": usage_cost_usd,
                 "success_fee_usd": success_fee_usd,
                 "total_charge_usd": total_charge_usd,
-                "charged_credits": charged_credits,
+                "charged_credits": total_credits,
+                "charged": True,
+            }
+
+        # If remaining_credits <= 0, everything was already charged incrementally.
+        # Still record a zero final entry so the idempotency guard works.
+        if user is not None and should_charge and already_charged > 0:
+            ledger = _new_model(
+                CreditHistory,
+                user_id=user.id,
+                delta=Decimal("0"),
+                reason="plan_created_with_usage_cost" if success else "plan_failed_usage_cost",
+                source="usage_billing",
+                external_id=str(task_id),
+                api_key_id=api_key_id,
+            )
+            db.session.add(ledger)
+            db.session.commit()
+            return {
+                "usage_cost_usd": usage_cost_usd,
+                "success_fee_usd": success_fee_usd,
+                "total_charge_usd": total_charge_usd,
+                "charged_credits": total_credits,
                 "charged": True,
             }
 

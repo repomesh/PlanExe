@@ -4,7 +4,7 @@ Flask UI for PlanExe-server.
 PROMPT> python3 -m src.app
 """
 from datetime import datetime, UTC
-from decimal import Decimal
+from decimal import Decimal, ROUND_CEILING
 import logging
 import os
 import re
@@ -1160,7 +1160,9 @@ class MyFlaskApp:
     @staticmethod
     def _format_credit_display(value: Any) -> str:
         amount = MyFlaskApp._to_credit_decimal(value)
-        return format(amount, ".2f")
+        # Round up to 3 decimal places so small charges are visible.
+        quantized = amount.quantize(Decimal("0.001"), rounding=ROUND_CEILING)
+        return format(quantized, ".3f")
 
     @staticmethod
     def _format_relative_time(value: Any) -> str:

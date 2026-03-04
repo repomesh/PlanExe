@@ -534,10 +534,10 @@
                             <tr>
                                 <th>Name</th>
                                 <th>Secret</th>
-                                <th>Created</th>
-                                <th>Last Used</th>
-                                <th>Plans</th>
-                                <th>Credits Used</th>
+                                <th title="Date the key was created (YYYY-MM-DD)">Created</th>
+                                <th title="Date the key was last used (YYYY-MM-DD)">Last Used</th>
+                                <th title="Number of plans created with this key">Plans</th>
+                                <th title="Total credits consumed by this key">Credits Used</th>
                                 <th></th>
                             </tr>
                         </thead>
@@ -568,16 +568,14 @@
                                     </div>
                                 </td>
                                 <td>
-                                    {% if key.key_plaintext %}
                                     <span class="key-secret-full">
-                                        <code class="key-prefix" style="word-break:break-all;">{{ key.key_plaintext }}</code>
+                                        <code class="key-prefix">{{ key.key_prefix }}...</code>
+                                        {% if key.key_plaintext %}
                                         <button type="button" class="key-copy-btn" title="Copy" onclick="copyKeySecret(this, '{{ key.key_plaintext }}')">
                                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                                         </button>
+                                        {% endif %}
                                     </span>
-                                    {% else %}
-                                    <span class="key-prefix">{{ key.key_prefix }}...</span>
-                                    {% endif %}
                                 </td>
                                 <td>{{ key.created_at.strftime("%Y-%m-%d") if key.created_at else "—" }}</td>
                                 <td>{{ key.last_used_at.strftime("%Y-%m-%d") if key.last_used_at else "Never" }}</td>

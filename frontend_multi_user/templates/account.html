@@ -756,18 +756,21 @@
 {% endif %}
 <script>
     function copyKeySecret(btn, text) {
+        function showCopied() {
+            var orig = btn.innerHTML;
+            btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+            btn.style.opacity = '1';
+            setTimeout(function() { btn.innerHTML = orig; btn.style.opacity = ''; }, 1500);
+        }
         if (navigator.clipboard && window.isSecureContext) {
-            navigator.clipboard.writeText(text).then(function() {
-                btn.title = 'Copied!';
-                setTimeout(function() { btn.title = 'Copy'; }, 2000);
-            });
+            navigator.clipboard.writeText(text).then(showCopied);
             return;
         }
         var ta = document.createElement('textarea');
         ta.value = text; ta.setAttribute('readonly', '');
         ta.style.position = 'absolute'; ta.style.left = '-9999px';
         document.body.appendChild(ta); ta.select();
-        try { document.execCommand('copy'); btn.title = 'Copied!'; setTimeout(function() { btn.title = 'Copy'; }, 2000); }
+        try { document.execCommand('copy'); showCopied(); }
         catch(e) {}
         document.body.removeChild(ta);
     }

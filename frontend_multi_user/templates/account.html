@@ -257,8 +257,10 @@
         color: var(--color-text-secondary);
         border-radius: 4px;
         line-height: 1;
-        transition: color 0.15s;
+        opacity: 0;
+        transition: opacity 0.15s, color 0.15s;
     }
+    tr:hover .key-copy-btn { opacity: 1; }
     .key-copy-btn:hover { color: var(--color-text); background: var(--color-bg-muted); }
 
     /* ── API key section ───────────────────────────── */
@@ -381,13 +383,13 @@
         margin: 14px 0;
     }
 
-    /* ── Payments table ────────────────────────────── */
-    .payments-table {
+    /* ── Data table ───────────────────────────────── */
+    .data-table {
         width: 100%;
         border-collapse: collapse;
         font-size: 0.82rem;
     }
-    .payments-table th {
+    .data-table th {
         text-align: left;
         font-size: 0.7rem;
         font-weight: 700;
@@ -397,14 +399,16 @@
         padding: 8px 10px;
         border-bottom: 2px solid var(--color-border);
     }
-    .payments-table td {
+    .data-table td {
         padding: 8px 10px;
         border-bottom: 1px solid var(--color-border);
         color: var(--color-text);
         vertical-align: middle;
     }
-    .payments-table tr:last-child td { border-bottom: none; }
-    .payments-table code {
+    .data-table tbody tr { transition: background 0.1s; }
+    .data-table tbody tr:hover { background: var(--color-bg-soft); }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table code {
         font-size: 0.75rem;
         background: var(--color-bg-muted);
         padding: 1px 6px;
@@ -525,7 +529,7 @@
 
                 {% if active_keys %}
                 <div style="overflow-x: auto; margin-top: {% if new_api_key %}16{% else %}0{% endif %}px;">
-                    <table class="payments-table">
+                    <table class="data-table">
                         <thead>
                             <tr>
                                 <th>Name</th>
@@ -685,7 +689,7 @@
             </div>
             {% if recent_payments %}
             <div style="overflow-x: auto;">
-                <table class="payments-table">
+                <table class="data-table">
                     <thead>
                         <tr>
                             <th>Date</th>

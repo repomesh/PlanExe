@@ -111,8 +111,8 @@ Admin gets a `UserAccount` row via `_get_current_user_account()`, which creates 
 
 The `/account` route handles POST actions via a hidden `action` form field:
 
-- `create_api_key` — Create a new API key (with optional label), max 10 active keys
-- `rename_api_key` — Update the label on an existing key (click-to-edit UI with Save/Cancel)
+- `create_api_key` — Create a new API key (with optional name), max 10 active keys
+- `rename_api_key` — Update the name on an existing key (click-to-edit UI with Save/Cancel)
 - `reset_api_key` — Rotate the secret on an existing key (new hash + prefix, same UUID so label/stats are preserved)
 - `revoke_api_key` — Soft-delete an API key by setting `revoked_at`
 - `regenerate_api_key` — Legacy action kept for backward compatibility
@@ -122,7 +122,7 @@ The `/account` route handles POST actions via a hidden `action` form field:
 
 ### Key Table UI
 
-Each key row has a three-dot overflow menu with "Reset secret" and "Revoke key". The label column uses a click-to-edit pattern: plain text with a pencil icon on hover, expanding to an edit form showing the old name, an input, Save, and Cancel (Escape key also cancels).
+Each key row has a three-dot overflow menu with "Reset secret" and "Delete". The name column uses a click-to-edit pattern: plain text with a pencil icon on hover, expanding to an edit form showing the old name, an input, Save, and Cancel (Escape key also cancels).
 
 ## Database Migrations
 

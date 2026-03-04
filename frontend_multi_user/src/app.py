@@ -877,7 +877,7 @@ class MyFlaskApp:
         user.locale = profile.get("locale") or user.locale
         user.avatar_url = self._avatar_url_from_profile(provider, profile) or user.avatar_url
 
-    def _get_or_create_api_key(self, user: UserAccount, label: Optional[str] = None) -> str:
+    def _get_or_create_api_key(self, user: UserAccount, name: Optional[str] = None) -> str:
         api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
         if api_key_secret == "dev-api-key-secret":
             logger.warning("PLANEXE_API_KEY_SECRET not set. Using dev secret for API key hashing.")
@@ -889,13 +889,13 @@ class MyFlaskApp:
         raw_key = f"pex_{secrets.token_urlsafe(24)}"
         key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
         key_prefix = raw_key[:10]
-        sanitized_label = (label or "").strip()[:128] or None
+        sanitized_name = (name or "").strip()[:128] or None
         api_key = _new_model(
             UserApiKey,
             user_id=user.id,
             key_hash=key_hash,
             key_prefix=key_prefix,
-            label=sanitized_label,
+            name=sanitized_name,
         )
         self.db.session.add(api_key)
         self.db.session.commit()
@@ -2234,7 +2234,7 @@ class MyFlaskApp:
                 login_user(User(user.id, is_admin=user.is_admin))
                 has_key = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).first() is not None
                 if not has_key:
-                    new_api_key = self._get_or_create_api_key(user, label="Default")
+                    new_api_key = self._get_or_create_api_key(user, name="Default")
                     if new_api_key:
                         session["new_api_key"] = new_api_key
                 return redirect(url_for('account'))
@@ -2292,7 +2292,7 @@ class MyFlaskApp:
             if request.method == 'POST':
                 action = request.form.get('action')
                 if action == "create_api_key":
-                    raw_key = self._get_or_create_api_key(user, label=request.form.get("label"))
+                    raw_key = self._get_or_create_api_key(user, name=request.form.get("name"))
                     if raw_key:
                         session["new_api_key"] = raw_key
                 elif action == "revoke_api_key":
@@ -2311,7 +2311,7 @@ class MyFlaskApp:
                                 self.db.session.commit()
                 elif action == "rename_api_key":
                     key_id = request.form.get("key_id", "").strip()
-                    new_label = (request.form.get("label") or "").strip()[:128]
+                    new_name = (request.form.get("name") or "").strip()[:128]
                     if key_id:
                         try:
                             key_uuid = uuid.UUID(key_id)
@@ -2322,7 +2322,7 @@ class MyFlaskApp:
                                 id=key_uuid, user_id=user.id, revoked_at=None
                             ).first()
                             if target_key:
-                                target_key.label = new_label or None
+                                target_key.name = new_name or None
                                 self.db.session.commit()
                 elif action == "reset_api_key":
                     key_id = request.form.get("key_id", "").strip()

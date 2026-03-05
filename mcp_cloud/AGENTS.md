@@ -124,6 +124,22 @@ auto-update → no manual schema changes needed.
   - `prompt`
   - `model_profile` (`baseline`, `premium`, `frontier`, `custom`)
   - `user_api_key` (optional)
+- Billing attribution: when `user_api_key` is provided, `handle_plan_create`
+  resolves the user and sets `metadata["user_id"]` (UUID) and
+  `metadata["api_key_id"]` on the PlanItem. Without `user_api_key` (local dev
+  with `PLANEXE_MCP_REQUIRE_AUTH=false`), the plan gets `user_id="admin"` and
+  no `api_key_id` — billing is skipped and per-key stats won't show usage.
+  This is by design; pass `user_api_key` to enable credit tracking via MCP.
+- Auth-disabled key resolution: when `PLANEXE_MCP_REQUIRE_AUTH=false`,
+  `_validate_api_key` still resolves any provided API key for attribution
+  (`last_used_at`, per-key billing) — it just never rejects unauthenticated
+  requests. This sets `_authenticated_user_api_key_ctx` so `plan_create` and
+  `plan_retry` can inject the key for billing attribution.
+- Plan retry attribution: `handle_plan_retry` resolves caller identity from
+  `user_api_key` and passes `caller_metadata` to `_retry_failed_plan_sync`,
+  which updates `plan.user_id` and `plan.api_key_id`. Old incremental billing
+  entries are archived (`usage_billing_progress` → `usage_billing_settled`),
+  not deleted, so the previous key's credit history is preserved.
 
 ## HTTP middleware stack
 

@@ -5,7 +5,7 @@ import logging
 import os
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Optional
 
 from mcp.types import CallToolResult, Tool, TextContent, ToolAnnotations
 
@@ -149,11 +149,16 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
             isError=True,
         )
 
+    metadata = None
+    if user_context:
+        metadata = {"user_id": str(user_context["user_id"])}
+        if user_context.get("api_key_id"):
+            metadata["api_key_id"] = user_context["api_key_id"]
     response = await asyncio.to_thread(
         _create_plan_sync,
         req.prompt,
         merged_config,
-        {"user_id": str(user_context["user_id"])} if user_context else None,
+        metadata,
     )
     base_url = _get_download_base_url()
     if base_url and response.get("plan_id"):
@@ -374,7 +379,18 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     """Retry a failed plan by resetting it back to pending."""
     req = PlanRetryRequest(**arguments)
     plan_id = req.plan_id
-    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, plan_id, req.model_profile)
+
+    # Resolve caller identity so the retried plan is attributed to the new key.
+    user_api_key = arguments.get("user_api_key")
+    caller_metadata: Optional[dict[str, str]] = None
+    if user_api_key:
+        user_context = _resolve_user_from_api_key(user_api_key.strip())
+        if user_context:
+            caller_metadata = {"user_id": str(user_context["user_id"])}
+            if user_context.get("api_key_id"):
+                caller_metadata["api_key_id"] = user_context["api_key_id"]
+
+    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, plan_id, req.model_profile, caller_metadata)
 
     if retry_result is None:
         response = {

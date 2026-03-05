@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Implemented (2026-03-05)
 
 ## Origin
 
@@ -407,3 +407,48 @@ Kept as-is (the `new_api_key` session variable pattern already works).
 | Performance of per-key stats queries on large accounts | Queries use indexed `api_key_id` columns and are bounded by the 10-key limit. Stats are computed per page load, not in a hot loop. |
 | `api_key_id` is `VARCHAR(36)` instead of a UUID foreign key | Matches the existing `user_id` pattern on `PlanItem` (also a string, not a FK). Avoids FK constraint complexity across services. Index provides lookup performance. |
 | User accidentally revokes their only key | The UI shows a confirmation dialog. Creating a new key is one click away. |
+
+---
+
+## Current Status (2026-03-05)
+
+**Implemented and working.** All goals from this proposal are complete, plus several enhancements discovered during implementation.
+
+### What was built
+
+**Core multi-key support (as proposed):**
+- Up to 10 active API keys per user with optional names.
+- Click-to-edit key renaming (pencil icon → inline form with Save/Cancel/Escape).
+- Three-dot overflow menu per key with "Reset secret" and "Delete".
+- `api_key_id` tracked on `PlanItem`, `CreditHistory`, and `TokenMetrics`.
+- Per-key stats on the account page: **LLM Calls**, **Credits Used**, **Last Used**.
+- API key secret visibility controlled by `PLANEXE_API_KEY_SHOW_ONCE` env var.
+
+**Enhancements beyond the original proposal:**
+
+| Enhancement | Details |
+|-------------|---------|
+| `TokenMetrics.api_key_id` column | Each LLM call records which API key was active. The account page queries `TokenMetrics.api_key_id` directly (not joined through `PlanItem`), so retrying a plan with a different key does not move historical LLM call counts. |
+| Incremental billing | Credits are charged during plan execution via `_charge_incremental_usage()` on each progress heartbeat, not just at completion. Uses `source="usage_billing_progress"` entries. |
+| Billing archival on retry | When a plan is retried, old incremental billing entries are archived (`source` changed from `"usage_billing_progress"` to `"usage_billing_settled"`), not deleted. This lets the new run charge from zero while preserving the previous key's credit history. |
+| Auth-disabled key resolution | When `PLANEXE_MCP_REQUIRE_AUTH=false` (local dev), the HTTP server still resolves any provided API key for attribution (`last_used_at`, per-key billing) — it just never rejects unauthenticated requests. |
+| Plan retry re-attribution | `plan_retry` via MCP updates `plan.user_id` and `plan.api_key_id` to the caller's key. New LLM calls and billing entries go to the new key. |
+| Worker `api_key_id` context | `set_current_api_key_id()` is set alongside `set_current_task_id()` and `set_current_user_id()` at pipeline start, flowing through to all `TokenMetrics` rows. |
+| Separate per-key stat queries | LLM calls and credit usage queries are in independent try/except blocks so one failure doesn't zero out the other. |
+| PostgreSQL index race condition handling | Each `CREATE INDEX IF NOT EXISTS` statement is wrapped in its own try/except to handle the `UniqueViolation` race when multiple gunicorn workers start simultaneously. |
+| Admin user identity fix | Frontend routes use the admin's `UserAccount` UUID (not the username string) for `PlanItem.user_id`, so billing resolves correctly. `_admin_user_ids()` returns both old and new values for backward-compatible queries. |
+
+### Files changed (beyond original proposal)
+
+| File | Additional changes |
+|------|-------------------|
+| `database_api/model_token_metrics.py` | Added `api_key_id` column |
+| `worker_plan/worker_plan_internal/llm_util/token_instrumentation.py` | Added `set_current_api_key_id` / `get_current_api_key_id` context functions |
+| `worker_plan/worker_plan_internal/llm_util/token_metrics_store.py` | Added `api_key_id` parameter to `record_token_usage()` |
+| `worker_plan/worker_plan_internal/llm_util/track_activity.py` | Passes `api_key_id` to `record_token_usage()` |
+| `mcp_cloud/http_server.py` | Auth-disabled key resolution; `plan_retry` injects authenticated key |
+| `mcp_cloud/db_queries.py` | `_retry_failed_plan_sync` accepts `caller_metadata`, archives old billing entries |
+| `docs/frontend_multi_user_guide.md` | Full billing/per-key stats documentation |
+| `frontend_multi_user/AGENTS.md` | Per-key stats architecture, retry archival |
+| `worker_plan_database/AGENTS.md` | TokenMetrics attribution, billing archival |
+| `mcp_cloud/AGENTS.md` | Auth-disabled resolution, retry attribution |

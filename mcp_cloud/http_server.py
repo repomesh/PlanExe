@@ -411,10 +411,31 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
     Accepts: (1) valid UserApiKey from DB, or (2) PLANEXE_MCP_API_KEY if set.
     Authentication can be disabled with PLANEXE_MCP_REQUIRE_AUTH=false.
     """
+    provided_key = _extract_api_key(request)
+
     if not AUTH_REQUIRED:
+        # Auth disabled — still resolve the key for attribution (last_used_at,
+        # per-key billing).  If a key IS provided but invalid, reject: the
+        # caller clearly intends to authenticate, so silently ignoring a bad
+        # key is worse than telling them.
+        if provided_key:
+            user = await asyncio.to_thread(_resolve_user_from_api_key, provided_key)
+            if user:
+                _authenticated_user_api_key_ctx.set(provided_key)
+            else:
+                await _log_auth_rejection(request, reason="invalid_api_key_local")
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": (
+                            "Invalid API key. "
+                            "Remove the X-API-Key header for local access, "
+                            "or get a valid key at https://home.planexe.org/"
+                        )
+                    },
+                )
         return None
 
-    provided_key = _extract_api_key(request)
     if not provided_key:
         await _log_auth_rejection(request, reason="missing_api_key")
         return JSONResponse(
@@ -678,7 +699,11 @@ async def plan_retry(
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, PlanRetryOutput]:
-    return await handle_plan_retry({"plan_id": plan_id, "model_profile": model_profile})
+    arguments: dict[str, Any] = {"plan_id": plan_id, "model_profile": model_profile}
+    authenticated_user_api_key = _get_authenticated_user_api_key()
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
+    return await handle_plan_retry(arguments)
 
 
 async def plan_file_info(
@@ -880,18 +905,29 @@ async def enforce_api_key(
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
     # OPTIONS (CORS preflight) must not require auth; browser does not send custom headers
-    if request.method != "OPTIONS" and not await _is_public_mcp_request_without_auth(request) and (
+    if request.method != "OPTIONS" and (
         request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
     ):
-        # /download with a valid signed token is self-authenticating — no API key needed.
-        is_tokenized_download = (
-            request.url.path.startswith("/download")
-            and _has_valid_download_token(request)
-        )
-        if not is_tokenized_download:
+        is_public = await _is_public_mcp_request_without_auth(request)
+
+        # Even for public/discovery methods (initialize, tools/list, etc.),
+        # validate the API key if one was provided.  This lets callers discover
+        # a bad key at connection time instead of on the first paid tool call.
+        if is_public and _extract_api_key(request):
             error_response = await _validate_api_key(request)
             if error_response:
                 return _append_cors_headers(request, error_response)
+
+        if not is_public:
+            # /download with a valid signed token is self-authenticating — no API key needed.
+            is_tokenized_download = (
+                request.url.path.startswith("/download")
+                and _has_valid_download_token(request)
+            )
+            if not is_tokenized_download:
+                error_response = await _validate_api_key(request)
+                if error_response:
+                    return _append_cors_headers(request, error_response)
 
     error_response = await _enforce_body_size(request)
     if error_response:

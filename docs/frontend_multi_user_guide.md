@@ -126,11 +126,18 @@ Each key row has a three-dot overflow menu with "Reset secret" and "Delete". The
 
 ## Billing and Per-Key Stats
 
-Credits Used and Plans count on the account page come from `CreditHistory` and `PlanItem` rows filtered by `api_key_id`. For these stats to work, both fields must be set when creating a plan:
+The account page key table shows per-key **LLM Calls** and **Credits Used**:
+
+- **LLM Calls** comes from `TokenMetrics.api_key_id` — each row records which API key was active when the LLM call was made. The query filters directly on `TokenMetrics.api_key_id`, not through `PlanItem`.
+- **Credits Used** comes from `CreditHistory.api_key_id` — each billing entry records which API key incurred the charge. The query sums all `CreditHistory` entries with `delta < 0`.
+
+Both columns are immutable per-row: once a `TokenMetrics` or `CreditHistory` row is created with an `api_key_id`, it never changes. This means retrying a plan with a different key does NOT move historical stats between keys.
+
+For these stats to work, both fields must be set when creating a plan:
 
 1. **`PlanItem.user_id`** must be a valid `UserAccount` UUID. The worker billing function (`_charge_usage_credits_once` in `worker_plan_database/app.py`) parses it via `uuid.UUID()` — a plain string like `"admin"` fails and billing is silently skipped.
 
-2. **`PlanItem.api_key_id`** must match an active `UserApiKey.id`. The billing copies this to `CreditHistory.api_key_id`. If NULL, the ledger entry won't appear in per-key stats.
+2. **`PlanItem.api_key_id`** must match an active `UserApiKey.id`. The worker copies this to `CreditHistory.api_key_id` and `TokenMetrics.api_key_id`. If NULL, entries won't appear in per-key stats.
 
 ### Plan creation paths
 
@@ -145,13 +152,21 @@ For local MCP development, pass `user_api_key` in `plan_create` calls to enable 
 
 ### Plan retry attribution
 
-When `plan_retry` is called via MCP with a user API key, the plan's `user_id` and `api_key_id` are updated to the caller's identity. This allows retrying a plan with a different key and having billing charged to the new key.
+When `plan_retry` is called via MCP with a user API key, the plan's `user_id` and `api_key_id` are updated to the caller's identity. New LLM calls and billing entries are attributed to the new key. Old incremental billing entries are archived (source changed from `usage_billing_progress` to `usage_billing_settled`) so the new run starts fresh without erasing the old key's credit history.
 
 ### Incremental billing
 
 Credits are charged during plan execution, not just at completion. The worker calls `_charge_incremental_usage()` on each progress heartbeat, reading the current `activity_overview.json` and creating `CreditHistory` entries with `source="usage_billing_progress"`. When the plan finishes, `_charge_usage_credits_once()` subtracts what was already charged incrementally and creates a final `source="usage_billing"` entry for the remainder plus the success fee.
 
-This prevents abuse where a user starts many plans and aborts them at the last minute to avoid charges. The account page's Credits Used column sums all `CreditHistory` entries with `delta < 0`, so both incremental and final entries are included.
+This prevents abuse where a user starts many plans and aborts them at the last minute to avoid charges. The account page's Credits Used column sums all `CreditHistory` entries with `delta < 0`, regardless of source — so incremental, settled, and final entries are all included.
+
+### Billing source values
+
+| `source` | Meaning |
+|----------|---------|
+| `usage_billing_progress` | Incremental charge during active plan execution |
+| `usage_billing_settled` | Archived incremental charge from a previous run (created when plan is retried) |
+| `usage_billing` | Final charge at plan completion/failure |
 
 ### Admin backward compatibility
 

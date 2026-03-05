@@ -48,6 +48,17 @@ models. Keep interfaces stable across services.
     both the old username string and the UUID so old and new plans both appear.
   - When creating plans, set `api_key_id` from the user's first active key so
     per-key statistics work on the account page.
+- Per-key stats on the account page:
+  - **LLM Calls**: queries `TokenMetrics.api_key_id` directly (not joined
+    through PlanItem). Each TokenMetrics row records which key was active at
+    LLM call time, so stats are immutable per-row.
+  - **Credits Used**: queries `CreditHistory.api_key_id` with `delta < 0`.
+    Includes all billing sources (incremental, settled, and final).
+  - Both queries are in separate try/except blocks so one failure doesn't
+    zero out the other.
+- Plan retry in the frontend (`/plan/retry`) archives old incremental billing
+  entries (`usage_billing_progress` → `usage_billing_settled`) instead of
+  deleting them, preserving the original key's credit history.
 - Forbidden imports: `worker_plan_internal`, `worker_plan.app`,
   `frontend_single_user`, `open_dir_server`.
 

@@ -2325,8 +2325,6 @@ class MyFlaskApp:
             is_admin = current_user.is_admin
             if is_admin:
                 user = self._get_current_user_account()
-                if not user:
-                    return render_template('account.html', admin_mode=True)
             else:
                 user_uuid = uuid.UUID(str(current_user.id))
                 user = self.db.session.get(UserAccount, user_uuid)

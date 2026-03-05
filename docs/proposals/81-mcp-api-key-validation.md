@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Implemented (2026-03-05)
 
 ## Date
 
@@ -105,9 +105,15 @@ running without a key is fine for local use:
 }
 ```
 
-### Code change
+### Code changes
 
-**File: `mcp_cloud/http_server.py`**, function `_validate_api_key`:
+Two changes in **`mcp_cloud/http_server.py`**:
+
+#### 1. `_validate_api_key` — reject invalid keys in local mode
+
+Previously the `AUTH_REQUIRED=false` branch silently accepted any key.
+Now, if a key is provided but does not resolve to a real user, the request
+is rejected with 403:
 
 ```python
 if not AUTH_REQUIRED:
@@ -116,7 +122,6 @@ if not AUTH_REQUIRED:
         if user:
             _authenticated_user_api_key_ctx.set(provided_key)
         else:
-            # Key was provided but is not valid — reject even in local mode.
             await _log_auth_rejection(request, reason="invalid_api_key_local")
             return JSONResponse(
                 status_code=403,
@@ -131,7 +136,43 @@ if not AUTH_REQUIRED:
     return None  # No key provided, allow anonymous/admin access
 ```
 
-This is the only code change required. ~8 lines added.
+#### 2. `enforce_api_key` middleware — validate at connection time
+
+Previously, the `initialize` and other handshake/discovery JSON-RPC methods
+were in `PUBLIC_JSONRPC_METHODS_NO_AUTH` and skipped validation entirely.
+A junk key sailed through the MCP handshake unchallenged; the user only
+discovered the problem on the first paid tool call.
+
+Now, even for public methods, if a key **is** provided, it is validated
+immediately. This means a bad key is rejected on the very first
+`initialize` request — the MCP connection fails before the client sees any
+tools:
+
+```python
+if request.method != "OPTIONS" and (
+    request.url.path.startswith("/mcp") or request.url.path.startswith("/download")
+):
+    is_public = await _is_public_mcp_request_without_auth(request)
+
+    # Even for public/discovery methods (initialize, tools/list, etc.),
+    # validate the API key if one was provided.
+    if is_public and _extract_api_key(request):
+        error_response = await _validate_api_key(request)
+        if error_response:
+            return _append_cors_headers(request, error_response)
+
+    if not is_public:
+        is_tokenized_download = (
+            request.url.path.startswith("/download")
+            and _has_valid_download_token(request)
+        )
+        if not is_tokenized_download:
+            error_response = await _validate_api_key(request)
+            if error_response:
+                return _append_cors_headers(request, error_response)
+```
+
+Keyless requests still pass through to public methods as before.
 
 ### Interaction with `PLANEXE_MCP_API_KEY` (shared secret)
 
@@ -153,8 +194,10 @@ is needed there.
 1. Start MCP server with `PLANEXE_MCP_REQUIRE_AUTH=false`.
 2. Connect via MCP Inspector **without** `X-API-Key` → should work (anonymous).
 3. Connect with a **valid** `pex_...` key → should work (authenticated, stats tracked).
-4. Connect with `X-API-Key: junk` → should get 403 with clear error message.
+4. Connect with `X-API-Key: junk` → connection should **fail immediately**
+   during the `initialize` handshake with 403 and a clear error message.
+   The client should never see the tool list.
 5. Start MCP server with `PLANEXE_MCP_REQUIRE_AUTH=true`.
-6. Connect without key → 401.
-7. Connect with junk key → 403.
+6. Connect without key → 401 at connection time.
+7. Connect with junk key → 403 at connection time.
 8. Connect with valid key → works.

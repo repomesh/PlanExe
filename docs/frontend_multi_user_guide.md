@@ -141,7 +141,11 @@ Credits Used and Plans count on the account page come from `CreditHistory` and `
 | MCP with `user_api_key` | Resolved from key | Resolved from key | Yes |
 | MCP without `user_api_key` | `"admin"` (string) | NULL | No |
 
-For local MCP development, pass `user_api_key` in `plan_create` calls to enable credit tracking.
+For local MCP development, pass `user_api_key` in `plan_create` calls to enable credit tracking. When `PLANEXE_MCP_REQUIRE_AUTH=false`, the HTTP server still resolves any provided API key for attribution purposes (`last_used_at`, per-key billing) — it just never rejects unauthenticated requests.
+
+### Plan retry attribution
+
+When `plan_retry` is called via MCP with a user API key, the plan's `user_id` and `api_key_id` are updated to the caller's identity. This allows retrying a plan with a different key and having billing charged to the new key.
 
 ### Incremental billing
 

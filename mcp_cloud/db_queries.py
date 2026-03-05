@@ -165,7 +165,7 @@ def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
         }
 
 
-def _retry_failed_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, Any]]:
+def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: Optional[dict[str, str]] = None) -> Optional[dict[str, Any]]:
     with app.app_context():
         plan = find_plan_by_id(plan_id)
         if plan is None:
@@ -198,6 +198,14 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[s
         plan.run_activity_overview_json = None
         plan.run_artifact_layout_version = None
         plan.parameters = parameters
+
+        # Update plan attribution when retried with a different API key.
+        if caller_metadata:
+            if "user_id" in caller_metadata:
+                plan.user_id = caller_metadata["user_id"]
+            if "api_key_id" in caller_metadata:
+                plan.api_key_id = caller_metadata["api_key_id"]
+
         db.session.commit()
 
         event_context = {

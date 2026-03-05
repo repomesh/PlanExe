@@ -379,7 +379,18 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     """Retry a failed plan by resetting it back to pending."""
     req = PlanRetryRequest(**arguments)
     plan_id = req.plan_id
-    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, plan_id, req.model_profile)
+
+    # Resolve caller identity so the retried plan is attributed to the new key.
+    user_api_key = arguments.get("user_api_key")
+    caller_metadata: Optional[dict[str, str]] = None
+    if user_api_key:
+        user_context = _resolve_user_from_api_key(user_api_key.strip())
+        if user_context:
+            caller_metadata = {"user_id": str(user_context["user_id"])}
+            if user_context.get("api_key_id"):
+                caller_metadata["api_key_id"] = user_context["api_key_id"]
+
+    retry_result = await asyncio.to_thread(_retry_failed_plan_sync, plan_id, req.model_profile, caller_metadata)
 
     if retry_result is None:
         response = {

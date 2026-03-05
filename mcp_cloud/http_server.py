@@ -411,10 +411,17 @@ async def _validate_api_key(request: Request) -> Optional[JSONResponse]:
     Accepts: (1) valid UserApiKey from DB, or (2) PLANEXE_MCP_API_KEY if set.
     Authentication can be disabled with PLANEXE_MCP_REQUIRE_AUTH=false.
     """
+    provided_key = _extract_api_key(request)
+
     if not AUTH_REQUIRED:
+        # Auth disabled — still resolve the key for attribution (last_used_at,
+        # per-key billing) but never reject the request.
+        if provided_key:
+            user = await asyncio.to_thread(_resolve_user_from_api_key, provided_key)
+            if user:
+                _authenticated_user_api_key_ctx.set(provided_key)
         return None
 
-    provided_key = _extract_api_key(request)
     if not provided_key:
         await _log_auth_rejection(request, reason="missing_api_key")
         return JSONResponse(
@@ -678,7 +685,11 @@ async def plan_retry(
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
 ) -> Annotated[CallToolResult, PlanRetryOutput]:
-    return await handle_plan_retry({"plan_id": plan_id, "model_profile": model_profile})
+    arguments: dict[str, Any] = {"plan_id": plan_id, "model_profile": model_profile}
+    authenticated_user_api_key = _get_authenticated_user_api_key()
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
+    return await handle_plan_retry(arguments)
 
 
 async def plan_file_info(

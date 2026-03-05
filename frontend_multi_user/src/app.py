@@ -1238,15 +1238,25 @@ class MyFlaskApp:
                 admin_pref_id = uuid.uuid5(uuid.NAMESPACE_URL, f"planexe-admin-pref:{self.admin_username}")
                 user = self.db.session.get(UserAccount, admin_pref_id)
                 if user is None:
-                    user = _new_model(
-                        UserAccount,
-                        id=admin_pref_id,
-                        is_admin=True,
-                        name="Admin",
-                    )
-                    self.db.session.add(user)
-                    self.db.session.commit()
+                    try:
+                        user = _new_model(
+                            UserAccount,
+                            id=admin_pref_id,
+                            is_admin=True,
+                            name="Admin",
+                        )
+                        self.db.session.add(user)
+                        self.db.session.commit()
+                    except Exception:
+                        self.db.session.rollback()
+                        logger.exception("Failed to create admin UserAccount %s", admin_pref_id)
+                        # Another worker may have created it; try fetching again.
+                        user = self.db.session.get(UserAccount, admin_pref_id)
                 return user
+            logger.warning(
+                "_get_current_user_account: admin mismatch current_user.id=%r admin_username=%r is_admin=%s",
+                str(current_user.id), self.admin_username, current_user.is_admin,
+            )
             return None
         return self.db.session.get(UserAccount, user_uuid)
 
@@ -2329,6 +2339,11 @@ class MyFlaskApp:
                 user_uuid = uuid.UUID(str(current_user.id))
                 user = self.db.session.get(UserAccount, user_uuid)
             if not user:
+                logger.warning(
+                    "Account page: no UserAccount found, redirecting to logout. "
+                    "is_admin=%s current_user.id=%r",
+                    is_admin, str(current_user.id),
+                )
                 return redirect(url_for('logout'))
 
             stripe_result = request.args.get("stripe")

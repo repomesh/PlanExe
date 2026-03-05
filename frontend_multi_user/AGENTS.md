@@ -39,7 +39,8 @@ models. Keep interfaces stable across services.
     session user_id.
   - The admin's `UserAccount` row uses a deterministic UUID
     (`uuid5(NAMESPACE_URL, "planexe-admin-pref:{username}")`), created lazily
-    by `_get_current_user_account()`.
+    by `_get_current_user_account()`.  The lazy creation is wrapped in
+    try/except with rollback + re-fetch to handle gunicorn worker races.
   - When creating PlanItem records, always use the admin's UserAccount UUID as
     `user_id` (not the username string). The billing system in
     `worker_plan_database` resolves `user_id` via `uuid.UUID()`, so a plain

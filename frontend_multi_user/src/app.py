@@ -2335,6 +2335,34 @@ class MyFlaskApp:
             is_admin = current_user.is_admin
             if is_admin:
                 user = self._get_current_user_account()
+                if not user:
+                    # Force-create the admin UserAccount directly as a
+                    # fallback — _get_current_user_account may fail on a
+                    # fresh DB or after schema migrations.
+                    logger.warning(
+                        "Account page: _get_current_user_account returned None for admin, "
+                        "attempting inline creation. current_user.id=%r admin_username=%r",
+                        str(current_user.id), self.admin_username,
+                    )
+                    admin_pref_id = uuid.uuid5(
+                        uuid.NAMESPACE_URL, f"planexe-admin-pref:{self.admin_username}"
+                    )
+                    try:
+                        user = self.db.session.get(UserAccount, admin_pref_id)
+                        if not user:
+                            user = _new_model(
+                                UserAccount,
+                                id=admin_pref_id,
+                                is_admin=True,
+                                name="Admin",
+                            )
+                            self.db.session.add(user)
+                            self.db.session.commit()
+                            logger.info("Created admin UserAccount %s via account page fallback", admin_pref_id)
+                    except Exception:
+                        self.db.session.rollback()
+                        logger.exception("Inline admin UserAccount creation failed for %s", admin_pref_id)
+                        user = self.db.session.get(UserAccount, admin_pref_id)
             else:
                 user_uuid = uuid.UUID(str(current_user.id))
                 user = self.db.session.get(UserAccount, user_uuid)

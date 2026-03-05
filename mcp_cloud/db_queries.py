@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from worker_plan_api.model_profile import normalize_model_profile
 
 from mcp_cloud.db_setup import app, db, PlanItem, PlanState, EventItem, EventType
+from database_api.model_credit_history import CreditHistory
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +206,15 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
                 plan.user_id = caller_metadata["user_id"]
             if "api_key_id" in caller_metadata:
                 plan.api_key_id = caller_metadata["api_key_id"]
+
+        # Archive old incremental billing entries so the new run starts fresh.
+        # _sum_already_charged_credits only counts source="usage_billing_progress",
+        # so renaming to "usage_billing_settled" lets the new run charge from zero
+        # while preserving the old entries for per-key credit history.
+        CreditHistory.query.filter_by(
+            source="usage_billing_progress",
+            external_id=str(plan.id),
+        ).update({"source": "usage_billing_settled"})
 
         db.session.commit()
 

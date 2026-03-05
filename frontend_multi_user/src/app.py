@@ -3297,6 +3297,15 @@ class MyFlaskApp:
             task.run_activity_overview_json = None
             task.run_artifact_layout_version = None
             task.last_seen_timestamp = datetime.now(UTC)
+
+            # Archive old incremental billing entries so the new run starts fresh.
+            # Renaming source lets _sum_already_charged_credits start from zero
+            # while preserving old entries for per-key credit history.
+            CreditHistory.query.filter_by(
+                source="usage_billing_progress",
+                external_id=str(task.id),
+            ).update({"source": "usage_billing_settled"})
+
             self.db.session.commit()
             return redirect(url_for('plan', id=run_id))
 

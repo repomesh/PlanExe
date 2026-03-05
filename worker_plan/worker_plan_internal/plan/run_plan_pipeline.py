@@ -4111,7 +4111,7 @@ if __name__ == '__main__':
     if speedvsdetail_value:
         found = False
         for e in SpeedVsDetailEnum:
-            if e.value == speedvsdetail_value:
+            if e.value.lower() == speedvsdetail_value.lower():
                 speedvsdetail = e
                 found = True
                 logger.info(f"Setting Speed vs Detail: {speedvsdetail}")

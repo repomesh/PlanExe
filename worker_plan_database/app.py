@@ -144,7 +144,7 @@ try:
     from worker_plan_internal.plan.filenames import FilenameEnum
     from worker_plan_api.planexe_dotenv import PlanExeDotEnv
     from worker_plan_internal.llm_util.llm_executor import LLMModelFromName, PipelineStopRequested
-    from worker_plan_internal.llm_util.token_instrumentation import set_current_task_id, set_current_user_id
+    from worker_plan_internal.llm_util.token_instrumentation import set_current_task_id, set_current_user_id, set_current_api_key_id
     from worker_plan_internal.llm_util.track_activity import TrackActivity
     from worker_plan_internal.plan.filenames import ExtraFilenameEnum
     from worker_plan_internal.plan.ping_llm import run_ping_llm_report
@@ -275,6 +275,7 @@ def ensure_multi_api_key_columns() -> None:
         "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS key_plaintext VARCHAR(64)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
         "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+        "ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
     )
     with db.engine.begin() as conn:
         for stmt in statements:
@@ -782,6 +783,7 @@ def execute_pipeline_for_job(
     speedvsdetail: SpeedVsDetailEnum,
     model_profile: ModelProfileEnum,
     use_machai_developer_endpoint: bool,
+    api_key_id: Optional[str] = None,
 ):
     start_time = time.time()
     logger.info(
@@ -803,6 +805,7 @@ def execute_pipeline_for_job(
     with app.app_context():
         set_current_task_id(task_id)
         set_current_user_id(user_id)
+        set_current_api_key_id(api_key_id)
         previous_track_activity_path = track_activity.jsonl_file_path
         previous_model_profile = os.environ.get("PLANEXE_MODEL_PROFILE")
         try:
@@ -827,6 +830,7 @@ def execute_pipeline_for_job(
             else:
                 os.environ["PLANEXE_MODEL_PROFILE"] = previous_model_profile
             track_activity.jsonl_file_path = previous_track_activity_path
+            set_current_api_key_id(None)
             set_current_user_id(None)
             set_current_task_id(None)
 
@@ -1005,6 +1009,7 @@ def process_pending_tasks() -> bool:
                 model_profile = resolve_model_profile(parameters)
                 use_machai_developer_endpoint = bool(task_to_claim.has_parameter_key('developer'))
                 user_id = str(task_to_claim.user_id)
+                api_key_id = getattr(task_to_claim, "api_key_id", None)
                 timestamp_created = task_to_claim.timestamp_created
         
                 # Now, modify the task state
@@ -1084,6 +1089,7 @@ def process_pending_tasks() -> bool:
             speedvsdetail=speedvsdetail,
             model_profile=model_profile,
             use_machai_developer_endpoint=use_machai_developer_endpoint,
+            api_key_id=api_key_id,
         )
         with app.app_context():
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)

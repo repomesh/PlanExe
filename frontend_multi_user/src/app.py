@@ -475,6 +475,7 @@ class MyFlaskApp:
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS key_plaintext VARCHAR(64)",
                 "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
                 "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+                "ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
             )
             with self.db.engine.begin() as conn:
                 for stmt in statements:
@@ -2408,13 +2409,16 @@ class MyFlaskApp:
             if active_key_ids:
                 try:
                     for row in (
-                        self.db.session.query(PlanItem.api_key_id, func.count(TokenMetrics.id))
-                        .join(TokenMetrics, TokenMetrics.task_id == PlanItem.id)
-                        .filter(PlanItem.api_key_id.in_(active_key_ids))
-                        .group_by(PlanItem.api_key_id)
+                        self.db.session.query(TokenMetrics.api_key_id, func.count(TokenMetrics.id))
+                        .filter(TokenMetrics.api_key_id.in_(active_key_ids))
+                        .group_by(TokenMetrics.api_key_id)
                         .all()
                     ):
                         llm_call_counts[row[0]] = row[1]
+                except Exception as exc:
+                    logger.warning("Per-key LLM call count query failed: %s", exc)
+                    self.db.session.rollback()
+                try:
                     for row in (
                         self.db.session.query(CreditHistory.api_key_id, func.sum(CreditHistory.delta))
                         .filter(
@@ -2426,7 +2430,7 @@ class MyFlaskApp:
                     ):
                         credit_usage[row[0]] = self._format_credit_display(abs(row[1]))
                 except Exception as exc:
-                    logger.warning("Per-key stats query failed: %s", exc)
+                    logger.warning("Per-key credit usage query failed: %s", exc)
                     self.db.session.rollback()
 
             payment_rows = (

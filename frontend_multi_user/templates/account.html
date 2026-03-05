@@ -536,7 +536,7 @@
                                 <th>Secret</th>
                                 <th title="Date the key was created (YYYY-MM-DD)">Created</th>
                                 <th title="Date the key was last used (YYYY-MM-DD)">Last Used</th>
-                                <th title="Number of plans created with this key">Plans</th>
+                                <th title="Accumulated LLM calls made with this key">LLM Calls</th>
                                 <th title="Total credits consumed by this key">Credits Used</th>
                                 <th></th>
                             </tr>
@@ -579,7 +579,7 @@
                                 </td>
                                 <td>{{ key.created_at.strftime("%Y-%m-%d") if key.created_at else "—" }}</td>
                                 <td>{{ key.last_used_at.strftime("%Y-%m-%d") if key.last_used_at else "Never" }}</td>
-                                <td>{{ plan_counts.get(key.id|string, 0) }}</td>
+                                <td>{{ llm_call_counts.get(key.id|string, 0) }}</td>
                                 <td>{{ credit_usage.get(key.id|string, "0") }}</td>
                                 <td>
                                     <div class="key-overflow">

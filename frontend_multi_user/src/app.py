@@ -2401,19 +2401,20 @@ class MyFlaskApp:
                 .all()
             )
 
-            # Per-key plan counts.
+            # Per-key stats: LLM call counts and credit usage.
             active_key_ids = [str(k.id) for k in active_keys]
-            plan_counts: dict[str, int] = {}
+            llm_call_counts: dict[str, int] = {}
             credit_usage: dict[str, str] = {}
             if active_key_ids:
                 try:
                     for row in (
-                        self.db.session.query(PlanItem.api_key_id, func.count(PlanItem.id))
+                        self.db.session.query(PlanItem.api_key_id, func.count(TokenMetrics.id))
+                        .join(TokenMetrics, TokenMetrics.task_id == PlanItem.id)
                         .filter(PlanItem.api_key_id.in_(active_key_ids))
                         .group_by(PlanItem.api_key_id)
                         .all()
                     ):
-                        plan_counts[row[0]] = row[1]
+                        llm_call_counts[row[0]] = row[1]
                     for row in (
                         self.db.session.query(CreditHistory.api_key_id, func.sum(CreditHistory.delta))
                         .filter(
@@ -2477,7 +2478,7 @@ class MyFlaskApp:
                 credits_balance_display="Full access" if is_admin else self._format_credit_display(user.credits_balance),
                 credit_price_cents=max(1, int(os.environ.get("PLANEXE_CREDIT_PRICE_CENTS", "100"))),
                 active_keys=active_keys,
-                plan_counts=plan_counts,
+                llm_call_counts=llm_call_counts,
                 credit_usage=credit_usage,
                 can_create_key=len(active_keys) < 10,
                 new_api_key=new_api_key,

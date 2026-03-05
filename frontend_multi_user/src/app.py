@@ -1569,11 +1569,30 @@ class MyFlaskApp:
         else:
             partial_output = self._clean_text(partial_output)
 
+        # Build lookup: api_key_id → key name, and resolve plan owner name as fallback.
+        api_key_ids_in_trace = {row.api_key_id for row in token_metrics_rows if row.api_key_id}
+        key_name_lookup: dict[str, str] = {}
+        if api_key_ids_in_trace:
+            for key_row in UserApiKey.query.filter(UserApiKey.id.in_(list(api_key_ids_in_trace))).all():
+                key_name_lookup[str(key_row.id)] = key_row.name or f"{key_row.key_prefix}..."
+        # Fallback for rows without api_key_id (frontend-created plans): show owner name.
+        owner_display_name: Optional[str] = None
+        try:
+            owner_uuid = uuid.UUID(str(task.user_id))
+            owner = self.db.session.get(UserAccount, owner_uuid)
+            if owner:
+                owner_display_name = owner.name or owner.given_name or owner.email or "Account"
+                if getattr(owner, "is_admin", False):
+                    owner_display_name = "Admin"
+        except (ValueError, AttributeError):
+            owner_display_name = str(task.user_id) if task.user_id else None
+
         execution_attempts = []
         for row in token_metrics_rows:
             route_provider = self._clean_text(row.upstream_provider)
             route_model = self._clean_text(row.upstream_model) or self._clean_text(row.llm_model)
             success_state = True if row.success is True else False if row.success is False else None
+            invoked_by = key_name_lookup.get(row.api_key_id) if row.api_key_id else owner_display_name
             execution_attempts.append(
                 {
                     "timestamp": row.timestamp.isoformat() if row.timestamp else None,
@@ -1582,6 +1601,7 @@ class MyFlaskApp:
                     "duration_seconds": self._safe_float(row.duration_seconds),
                     "success": success_state,
                     "error_message": self._clean_text(row.error_message),
+                    "invoked_by": invoked_by,
                 }
             )
 
@@ -2331,68 +2351,72 @@ class MyFlaskApp:
             new_api_key = session.pop("new_api_key", None)
             if request.method == 'POST':
                 action = request.form.get('action')
-                if action == "create_api_key":
-                    raw_key = self._get_or_create_api_key(user, name=request.form.get("name"))
-                    if raw_key:
-                        session["new_api_key"] = raw_key
-                elif action == "revoke_api_key":
-                    key_id = request.form.get("key_id", "").strip()
-                    if key_id:
-                        try:
-                            key_uuid = uuid.UUID(key_id)
-                        except ValueError:
-                            key_uuid = None
-                        if key_uuid:
-                            target_key = UserApiKey.query.filter_by(
-                                id=key_uuid, user_id=user.id, revoked_at=None
-                            ).first()
-                            if target_key:
-                                target_key.revoked_at = datetime.now(UTC)
-                                self.db.session.commit()
-                elif action == "rename_api_key":
-                    key_id = request.form.get("key_id", "").strip()
-                    new_name = (request.form.get("name") or "").strip()[:128]
-                    if key_id:
-                        try:
-                            key_uuid = uuid.UUID(key_id)
-                        except ValueError:
-                            key_uuid = None
-                        if key_uuid:
-                            target_key = UserApiKey.query.filter_by(
-                                id=key_uuid, user_id=user.id, revoked_at=None
-                            ).first()
-                            if target_key:
-                                target_key.name = new_name or None
-                                self.db.session.commit()
-                elif action == "reset_api_key":
-                    key_id = request.form.get("key_id", "").strip()
-                    if key_id:
-                        try:
-                            key_uuid = uuid.UUID(key_id)
-                        except ValueError:
-                            key_uuid = None
-                        if key_uuid:
-                            target_key = UserApiKey.query.filter_by(
-                                id=key_uuid, user_id=user.id, revoked_at=None
-                            ).first()
-                            if target_key:
-                                api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
-                                raw_key = f"pex_{secrets.token_urlsafe(24)}"
-                                target_key.key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
-                                target_key.key_prefix = raw_key[:10]
-                                target_key.key_plaintext = raw_key if not self._api_key_show_once else None
-                                self.db.session.commit()
-                                session["new_api_key"] = raw_key
-                elif action == "regenerate_api_key":
-                    # Legacy action: revoke all, create one new key.
-                    existing_keys = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).all()
-                    now = datetime.now(UTC)
-                    for key in existing_keys:
-                        key.revoked_at = now
-                    self.db.session.commit()
-                    raw_key = self._get_or_create_api_key(user)
-                    if raw_key:
-                        session["new_api_key"] = raw_key
+                try:
+                    if action == "create_api_key":
+                        raw_key = self._get_or_create_api_key(user, name=request.form.get("name"))
+                        if raw_key:
+                            session["new_api_key"] = raw_key
+                    elif action == "revoke_api_key":
+                        key_id = request.form.get("key_id", "").strip()
+                        if key_id:
+                            try:
+                                key_uuid = uuid.UUID(key_id)
+                            except ValueError:
+                                key_uuid = None
+                            if key_uuid:
+                                target_key = UserApiKey.query.filter_by(
+                                    id=key_uuid, user_id=user.id, revoked_at=None
+                                ).first()
+                                if target_key:
+                                    target_key.revoked_at = datetime.now(UTC)
+                                    self.db.session.commit()
+                    elif action == "rename_api_key":
+                        key_id = request.form.get("key_id", "").strip()
+                        new_name = (request.form.get("name") or "").strip()[:128]
+                        if key_id:
+                            try:
+                                key_uuid = uuid.UUID(key_id)
+                            except ValueError:
+                                key_uuid = None
+                            if key_uuid:
+                                target_key = UserApiKey.query.filter_by(
+                                    id=key_uuid, user_id=user.id, revoked_at=None
+                                ).first()
+                                if target_key:
+                                    target_key.name = new_name or None
+                                    self.db.session.commit()
+                    elif action == "reset_api_key":
+                        key_id = request.form.get("key_id", "").strip()
+                        if key_id:
+                            try:
+                                key_uuid = uuid.UUID(key_id)
+                            except ValueError:
+                                key_uuid = None
+                            if key_uuid:
+                                target_key = UserApiKey.query.filter_by(
+                                    id=key_uuid, user_id=user.id, revoked_at=None
+                                ).first()
+                                if target_key:
+                                    api_key_secret = os.environ.get("PLANEXE_API_KEY_SECRET", "dev-api-key-secret")
+                                    raw_key = f"pex_{secrets.token_urlsafe(24)}"
+                                    target_key.key_hash = hashlib.sha256(f"{api_key_secret}:{raw_key}".encode("utf-8")).hexdigest()
+                                    target_key.key_prefix = raw_key[:10]
+                                    target_key.key_plaintext = raw_key if not self._api_key_show_once else None
+                                    self.db.session.commit()
+                                    session["new_api_key"] = raw_key
+                    elif action == "regenerate_api_key":
+                        # Legacy action: revoke all, create one new key.
+                        existing_keys = UserApiKey.query.filter_by(user_id=user.id, revoked_at=None).all()
+                        now = datetime.now(UTC)
+                        for key in existing_keys:
+                            key.revoked_at = now
+                        self.db.session.commit()
+                        raw_key = self._get_or_create_api_key(user)
+                        if raw_key:
+                            session["new_api_key"] = raw_key
+                except Exception:
+                    self.db.session.rollback()
+                    logger.exception("Account POST action=%s failed", action)
                 return redirect(url_for('account'))
 
             active_keys = (

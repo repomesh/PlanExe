@@ -184,6 +184,13 @@ The middleware in `http_server.py` processes requests in this order:
     - `model_profiles`
   - All other tool invocations (for example `plan_create`) must remain API-key protected.
 - Keep auth-denial logging explicit (`Auth rejected: ...`) with method/path/user-agent and parsed JSON-RPC methods to make Railway debugging easier.
+- Auth errors on Streamable HTTP (`/mcp/`) must be returned as JSON-RPC
+  error envelopes (`{"jsonrpc":"2.0","error":{"code":-32001,"message":"..."},"id":...}`)
+  with HTTP 200.  A plain HTTP 401/403 causes the MCP SDK to trigger OAuth
+  discovery (`/.well-known/oauth-authorization-server`), which fails with 404
+  and shows a confusing "Invalid OAuth error response" to the user.  The
+  helper `_make_jsonrpc_auth_error()` handles this wrapping.  REST endpoints
+  (`/mcp/tools/call`, `/download`) keep plain HTTP status codes.
 
 ## SSE endpoint
 

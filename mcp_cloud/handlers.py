@@ -420,6 +420,9 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
         )
 
     response = retry_result
+    base_url = _get_download_base_url()
+    if base_url and response.get("plan_id"):
+        response["sse_url"] = f"{base_url}/sse/plan/{response['plan_id']}"
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],
         structuredContent=response,

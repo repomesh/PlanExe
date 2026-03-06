@@ -156,10 +156,11 @@ The middleware in `http_server.py` processes requests in this order:
 3. **`enforce_api_key`** (HTTP middleware via `BaseHTTPMiddleware`): Auth, body size,
    rate limiting, context var setup
    - Paths requiring auth: `/mcp`, `/download`
-   - **`/sse/` is intentionally excluded** — `BaseHTTPMiddleware` pipes the response
+   - **`/sse/` is intentionally excluded** — the plan_id UUID is unguessable and
+     serves as the access token. Additionally, `BaseHTTPMiddleware` pipes the response
      body through an internal `anyio.MemoryObjectStream`; for long-lived SSE streams
      this keeps the middleware's task-group alive indefinitely and starves concurrent
-     requests. The SSE endpoint handles auth inline instead.
+     requests.
    - Download tokens are self-authenticating (signed HMAC, no API key needed)
    - Sets `_download_base_url_ctx` for `/mcp` paths
    - Strips redundant `content` from `/mcp` JSON responses on the way out
@@ -212,8 +213,9 @@ Implementation in `sse.py`:
 - Connection tracking via `_track_sse_connection(client_id)` async context manager:
   per-client limit (5) and server-wide limit (200). Raises `SSEConnectionLimitError` (HTTP 429).
 
-Auth: `/sse/` paths require API key (handled inline in the endpoint, NOT via the
-`enforce_api_key` middleware — see HTTP middleware stack section for rationale).
+Auth: The SSE endpoint is intentionally unauthenticated — the plan_id UUID is
+unguessable and serves as the access token. `/sse/` paths are excluded from the
+`enforce_api_key` middleware (see HTTP middleware stack section for rationale).
 URL building: `handlers.py` adds `sse_url` to `plan_create` and `plan_status` responses
 using `_get_download_base_url()` from `download_tokens.py`.
 

@@ -73,8 +73,13 @@ http_server.py (top-level entry point)
   - Downloadable zip artifacts must never include `track_activity.jsonl`.
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
 - `plan_stop` contract:
-  - `plan_stop` does not create a separate lifecycle state.
-  - Return current public `state` plus `stop_requested` to acknowledge stop-flag request.
+  - `plan_stop` sets `plan.state = PlanState.failed` immediately so the MCP-facing
+    state transitions right away. The worker is typically still busy with LLM
+    calls; it checks `stop_requested` after each step and removes itself from the queue.
+  - Also sets `stop_requested = True` and `stop_requested_timestamp` for audit.
+  - `progress_message` stays "Stop requested by user." (not "Stopped") because the
+    worker is typically still busy processing and will stop after its current LLM call.
+  - Return current public `state` (now `"failed"`) plus `stop_requested: true`.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.
 
@@ -290,8 +295,11 @@ The same `_get_download_base_url()` function is used to build both `download_url
   1. DB zip snapshot (`list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
   2. Local run directory (`list_files_from_local_run_dir`)
   3. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`)
-- The worker HTTP call has a 30-second timeout. If it runs first, every poll blocks
-  for 30 seconds when the worker is unreachable — even when the data is already in the DB.
+- `fetch_file_list_from_worker_plan` uses `httpx.Timeout(10.0, connect=3.0)` — short
+  connect timeout so unreachable workers fail fast instead of blocking for 30 seconds.
+- `handle_plan_status` wraps the worker fetch in `asyncio.wait_for(..., timeout=5.0)`
+  as an additional safeguard; file lists are optional supplementary data — the core
+  status (state, progress, timing) comes from the DB and is always returned.
 
 ## Testing
 - Automated tests exist under `mcp_cloud/tests/`.

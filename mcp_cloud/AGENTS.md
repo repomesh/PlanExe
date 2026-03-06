@@ -73,8 +73,12 @@ http_server.py (top-level entry point)
   - Downloadable zip artifacts must never include `track_activity.jsonl`.
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
 - `plan_stop` contract:
-  - `plan_stop` sets `plan.state = PlanState.failed` immediately (not just a flag).
+  - `plan_stop` sets `plan.state = PlanState.failed` immediately so the MCP-facing
+    state transitions right away. The worker may still be running its current LLM
+    call; it checks `stop_requested` after each step and removes itself from the queue.
   - Also sets `stop_requested = True` and `stop_requested_timestamp` for audit.
+  - `progress_message` stays "Stop requested by user." (not "Stopped") because the
+    worker may still be finishing its current step.
   - Return current public `state` (now `"failed"`) plus `stop_requested: true`.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.

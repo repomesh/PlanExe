@@ -78,7 +78,7 @@ http_server.py (top-level entry point)
     call; it checks `stop_requested` after each step and removes itself from the queue.
   - Also sets `stop_requested = True` and `stop_requested_timestamp` for audit.
   - `progress_message` stays "Stop requested by user." (not "Stopped") because the
-    worker may still be finishing its current step.
+    worker is typically still busy processing and will stop after its current LLM call.
   - Return current public `state` (now `"failed"`) plus `stop_requested: true`.
 - Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
   `open_dir_server`.

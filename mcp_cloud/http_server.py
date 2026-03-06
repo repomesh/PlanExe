@@ -1182,8 +1182,8 @@ async def download_report(
 # streams this keeps the middleware's task-group alive indefinitely, which
 # can starve concurrent requests going through the same middleware.
 #
-# We therefore handle auth inline here (reusing _validate_api_key) and
-# excluded /sse/ from the enforce_api_key middleware path check.
+# The SSE endpoint is intentionally unauthenticated — the plan_id UUID
+# is unguessable and serves as the access token.
 # ---------------------------------------------------------------------------
 
 @app.get("/sse/plan/{plan_id}")
@@ -1194,11 +1194,6 @@ async def sse_plan_progress(plan_id: str, request: Request) -> Response:
         _track_sse_connection,
         plan_progress_stream,
     )
-
-    # Inline auth — bypasses BaseHTTPMiddleware to avoid blocking other requests.
-    auth_error = await _validate_api_key(request)
-    if auth_error:
-        return _append_cors_headers(request, auth_error)
 
     client_ip = request.client.host if request.client else "unknown"
 

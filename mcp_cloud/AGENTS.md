@@ -74,8 +74,8 @@ http_server.py (top-level entry point)
   - Serve new layout snapshots directly; sanitize only legacy/fallback zips.
 - `plan_stop` contract:
   - `plan_stop` sets `plan.state = PlanState.failed` immediately so the MCP-facing
-    state transitions right away. The worker may still be running its current LLM
-    call; it checks `stop_requested` after each step and removes itself from the queue.
+    state transitions right away. The worker is typically still busy with LLM
+    calls; it checks `stop_requested` after each step and removes itself from the queue.
   - Also sets `stop_requested = True` and `stop_requested_timestamp` for audit.
   - `progress_message` stays "Stop requested by user." (not "Stopped") because the
     worker is typically still busy processing and will stop after its current LLM call.

@@ -171,6 +171,7 @@ class FocusOnVitalFewLevers:
         enriched_levers: list[EnrichedLever],
     ) -> tuple[VitalLeversAssessmentResult, dict, str]:
         """Attempt assessment with full enriched levers in a single LLM call."""
+
         levers_dict = [lever.model_dump() for lever in enriched_levers]
         levers_json = json.dumps(levers_dict, indent=2)
         focus_prompt = (
@@ -212,20 +213,40 @@ class FocusOnVitalFewLevers:
             "conflict_text": lever.conflict_text,
         }
 
-    @classmethod
+    @staticmethod
     def _compute_batch_size(total: int, max_batch: int = 4) -> int:
-        """Compute even batch size so no batch ends up with just 1 item.
-        
+        """Compute an even batch size.
+
         Examples:
-          9 items, max 4 → 3 batches of 3 (not 4+4+1)
-          5 items, max 4 → 2 batches: 3+2 (not 4+1)
-          6 items, max 4 → 2 batches of 3
-          13 items, max 4 → 4 batches: 4+3+3+3
+          9 items, max 4 → batch_size 3 → 3+3+3
+          5 items, max 4 → batch_size 3 → 3+2
+          6 items, max 4 → batch_size 3 → 3+3
+          13 items, max 4 → batch_size 4 → 4+4+5 (singleton 4+4+4+1 merged)
         """
         if total <= max_batch:
             return total
         num_batches = math.ceil(total / max_batch)
         return math.ceil(total / num_batches)
+
+    @staticmethod
+    def _make_batches(items: list, batch_size: int) -> list[list]:
+        """Split items into batches, merging a singleton tail into the previous batch.
+
+        A batch with only 1 lever forces the LLM to rate it as "vital" with
+        no alternatives, producing a biased assessment. When the last slice
+        would contain just 1 item, it is merged into the preceding batch.
+
+        Examples (batch_size=4):
+          13 items → [4, 4, 5]  instead of [4, 4, 4, 1]
+          9 items  → [4, 5]     instead of [4, 4, 1]  (if batch_size were 4)
+        """
+        batches = [items[i:i + batch_size] for i in range(0, len(items), batch_size)]
+        # If the last batch has only 1 item, merge it into the previous batch.
+        last_batch_is_singleton = len(batches) >= 2 and len(batches[-1]) == 1
+        if last_batch_is_singleton:
+            singleton = batches.pop()
+            batches[-1].extend(singleton)
+        return batches
 
     @classmethod
     def _assess_levers_batched(
@@ -246,20 +267,21 @@ class FocusOnVitalFewLevers:
         """
         compressed_levers: list[dict] = [cls._compress_lever(lever) for lever in enriched_levers]
         batch_size = cls._compute_batch_size(len(compressed_levers), max_batch_size)
-        
+        batches = cls._make_batches(compressed_levers, batch_size)
+
         all_assessments: list = []
+        all_summaries: list[str] = []
         all_metadata: list[dict] = []
         last_prompt = ""
 
         logger.info(
-            f"Batching {len(compressed_levers)} levers into groups of ~{batch_size} "
-            f"(max {max_batch_size})."
+            f"Batching {len(compressed_levers)} levers into {len(batches)} groups "
+            f"(target size ~{batch_size}, max {max_batch_size})."
         )
 
-        for i in range(0, len(compressed_levers), batch_size):
-            batch = compressed_levers[i:i + batch_size]
+        for batch_num, batch in enumerate(batches, start=1):
             batch_json = json.dumps(batch, indent=2)
-            
+
             focus_prompt = (
                 f"**Project Context:**\n{project_context}\n\n"
                 f"**Candidate Levers List:**\n"
@@ -286,16 +308,19 @@ class FocusOnVitalFewLevers:
                 result = llm_executor.run(execute_function)
                 batch_response = result["chat_response"].raw
                 all_assessments.extend(batch_response.lever_assessments)
-                all_metadata.append(result["metadata"])
+                all_summaries.append(batch_response.summary)
+                batch_metadata = result["metadata"]
+                batch_metadata["lever_count"] = len(batch)
+                all_metadata.append(batch_metadata)
                 logger.info(
-                    f"Batch {i // batch_size + 1}: assessed "
+                    f"Batch {batch_num}: assessed "
                     f"{len(batch_response.lever_assessments)} levers."
                 )
             except PipelineStopRequested:
                 raise
             except Exception as e:
                 logger.error(
-                    f"Batch {i // batch_size + 1} failed: {e}",
+                    f"Batch {batch_num} failed: {e}",
                     exc_info=True,
                 )
                 # Skip failed batch but continue with remaining
@@ -310,12 +335,7 @@ class FocusOnVitalFewLevers:
         # Merge batch results into a single response
         merged_response = VitalLeversAssessmentResult(
             lever_assessments=all_assessments,
-            summary=(
-                f"Assessment completed via batched processing "
-                f"({len(all_assessments)} levers assessed in "
-                f"{len(all_metadata)} batches). Some fields were "
-                f"compressed to fit context window limits."
-            ),
+            summary="\n\n".join(all_summaries),
         )
 
         # Combine metadata from all batches

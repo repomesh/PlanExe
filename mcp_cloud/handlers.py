@@ -295,7 +295,13 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         if not files_list:
             files_list = await asyncio.to_thread(list_files_from_local_run_dir, plan_uuid)
         if not files_list:
-            files_list = await fetch_file_list_from_worker_plan(plan_uuid)
+            try:
+                files_list = await asyncio.wait_for(
+                    fetch_file_list_from_worker_plan(plan_uuid), timeout=5.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("Worker file list fetch timed out for plan %s", plan_uuid)
+                files_list = None
         if files_list:
             for file_name in files_list[:10]:  # Limit to 10 most recent
                 if file_name != "log.txt":

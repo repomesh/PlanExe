@@ -251,7 +251,27 @@ For model errors (structured output failures), use plan_retry instead.
 
 ---
 
-## 8. Out of Scope
+## 8. Companion improvement: expose current Luigi task in `plan_status`
+
+During the 2026-03-07 HVT infra stall (plan `40ed3a60`), the UI execution trace showed LLM call timestamps and durations but not which Luigi task the pipeline was executing when the worker dropped. Identifying the stalled task required server-side Railway logs — not available to agents or users.
+
+**Proposed addition to `plan_status` response:**
+
+```json
+{
+  "plan_id": "...",
+  "state": "processing",
+  "progress_percentage": 74.0,
+  "current_task": "CreateWBSLevel3Task",  // ← new field
+  "last_llm_call_at": "2026-03-07T16:21:29Z"  // ← new field
+}
+```
+
+This requires the worker to write the current task name to a lightweight status file in `run_id_dir` (e.g. `current_task.json`) that the progress polling endpoint reads. Minimal implementation cost; significant diagnostic value. Particularly useful for `plan_resume` decisions — an agent can see exactly what task it stalled on before deciding whether to resume or retry.
+
+---
+
+## 9. Out of Scope
 
 - Introducing a distinct `stopped` state (separate from `failed`) — deferred
 - Progress scrubbing on resume (reporting accurate % based on remaining tasks) — deferred

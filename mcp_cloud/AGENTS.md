@@ -356,11 +356,15 @@ The same `_get_download_base_url()` function is used to build both `download_url
 
 ## Worker HTTP fallback ordering
 - When resolving file lists or artifacts, try fast local sources first:
-  1. DB zip snapshot (`list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
+  1. DB (`fetch_report_from_db` / `list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
   2. Local run directory (`list_files_from_local_run_dir`)
   3. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`)
-- `fetch_file_list_from_worker_plan` uses `httpx.Timeout(10.0, connect=3.0)` — short
-  connect timeout so unreachable workers fail fast instead of blocking for 30 seconds.
+- The report fallback chain (`_fetch_report_with_fallbacks`) follows this same
+  DB-first convention: DB → zip snapshot → HTTP.  This matches the zip path
+  (`fetch_user_downloadable_zip`) which also tries the DB before HTTP.
+- `fetch_file_list_from_worker_plan` and `_fetch_report_with_fallbacks` both use
+  `httpx.Timeout(10.0, connect=3.0)` — short connect timeout so unreachable workers
+  fail fast instead of blocking the response.
 - `handle_plan_status` wraps the worker fetch in `asyncio.wait_for(..., timeout=5.0)`
   as an additional safeguard; file lists are optional supplementary data — the core
   status (state, progress, timing) comes from the DB and is always returned.

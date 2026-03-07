@@ -31,12 +31,13 @@ async def fetch_artifact_from_worker_plan(run_id: str, file_path: str) -> Option
     """Fetch an artifact file from worker_plan via HTTP.
 
     For report artifacts, three fallback steps are tried independently:
-    1. HTTP request to worker service
-    2. DB lookup (generated_report_html column)
-    3. Zip snapshot extraction
+    1. DB lookup (generated_report_html column)
+    2. Zip snapshot extraction
+    3. HTTP request to worker service (last resort)
 
-    Each step has its own try/except so a failure in one (e.g. worker
-    unreachable) does not skip the remaining fallbacks.
+    Each step has its own try/except so a failure in one does not skip
+    the remaining fallbacks.  Fast local sources are tried first so that
+    a slow/unreachable worker does not block the response.
     """
     is_report = (
         file_path == "report.html"
@@ -104,21 +105,14 @@ async def fetch_artifact_from_worker_plan(run_id: str, file_path: str) -> Option
 async def _fetch_report_with_fallbacks(run_id: str) -> Optional[bytes]:
     """Fetch report HTML using three isolated fallback steps.
 
-    Each step is wrapped in its own try/except so that a failure in one
-    (e.g. worker HTTP connection refused) does not prevent the next
-    fallback from being attempted.
-    """
-    # Step 1: Try HTTP request to worker service
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            report_response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/report")
-            if report_response.status_code == 200:
-                return report_response.content
-            logger.warning(f"Worker plan returned {report_response.status_code} for report: {run_id}")
-    except Exception as e:
-        logger.warning(f"HTTP fetch failed for report {run_id}: {e}")
+    Order: DB first, then zip snapshot, then HTTP (last resort).
+    Fast local sources are tried before the network call so that a
+    slow/unreachable worker does not block the response.
 
-    # Step 2: Try DB lookup (generated_report_html column)
+    Each step is wrapped in its own try/except so that a failure in one
+    does not prevent the next fallback from being attempted.
+    """
+    # Step 1: Try DB lookup (generated_report_html column) — fast
     try:
         report_from_db = await asyncio.to_thread(fetch_report_from_db, run_id)
         if report_from_db is not None:
@@ -126,7 +120,7 @@ async def _fetch_report_with_fallbacks(run_id: str) -> Optional[bytes]:
     except Exception as e:
         logger.warning(f"DB fetch failed for report {run_id}: {e}")
 
-    # Step 3: Try zip snapshot extraction
+    # Step 2: Try zip snapshot extraction — fast
     try:
         report_from_zip = await asyncio.to_thread(
             fetch_file_from_zip_snapshot, run_id, REPORT_FILENAME
@@ -135,6 +129,16 @@ async def _fetch_report_with_fallbacks(run_id: str) -> Optional[bytes]:
             return report_from_zip
     except Exception as e:
         logger.warning(f"Zip snapshot fetch failed for report {run_id}: {e}")
+
+    # Step 3: Try HTTP request to worker service — last resort, short timeout
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=3.0)) as client:
+            report_response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/report")
+            if report_response.status_code == 200:
+                return report_response.content
+            logger.warning(f"Worker plan returned {report_response.status_code} for report: {run_id}")
+    except Exception as e:
+        logger.warning(f"HTTP fetch failed for report {run_id}: {e}")
 
     return None
 

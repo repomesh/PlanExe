@@ -86,10 +86,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
 
 1. **Output Requirements**
    - You must generate EXACTLY 5 levers per response. Do not generate more or fewer than 5 levers.
-   - Format options as discrete JSON list items with 3 QUALITATIVE choices:
-     ```json
-     "options": ["Descriptive Strategic Choice", "Descriptive Strategic Choice", "Descriptive Strategic Choice"]
-     ```
+   - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
 2. **Lever Quality Standards**
    - Consequences MUST:

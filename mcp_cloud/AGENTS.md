@@ -22,7 +22,7 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 | `model_profiles.py` | Load LLM models per profile from `llm_config/*.json` | `_get_model_profiles_sync` |
 | `example_prompts.py` | Load example prompts from catalog or built-in fallbacks | `_load_mcp_example_prompts` |
 | `zip_utils.py` | Zip extraction, legacy sanitization, SHA-256 | `list_files_from_zip_snapshot`, `_sanitize_legacy_zip_snapshot` |
-| `http_utils.py` | Strip redundant `content` when `structuredContent` exists | `strip_redundant_content` |
+| `http_utils.py` | Strip redundant `content` when `structuredContent` exists; guards JSON-RPC envelopes | `strip_redundant_content` |
 | `dotenv_utils.py` | Load `.env` from mcp_cloud/ or repo root | `load_planexe_dotenv` |
 | `config.py` | Flask config (`SQLALCHEMY_TRACK_MODIFICATIONS = False`) | — |
 
@@ -43,7 +43,6 @@ app.py (facade — re-exports everything)
 
 http_server.py (top-level entry point)
 ├── app.py (re-export facade)
-├── tool_models.py (type annotations for FastAPI)
 ├── auth.py (validate_api_key_secret)
 ├── download_tokens.py (validate_download_token_secret)
 ├── sse.py (SSE implementation)
@@ -120,6 +119,57 @@ Two `contextvars.ContextVar` instances are set per-request by the middleware in
 When adding a field to a tool response: update `tool_models.py` model → schemas
 auto-update → no manual schema changes needed.
 
+## FastMCP outputSchema injection (http_server.py)
+
+**Problem**: FastMCP derives `outputSchema` from the Python return-type annotation
+of the tool function. If a tool returns `Annotated[CallToolResult, SomeModel]`,
+FastMCP generates a schema from `SomeModel` — which only covers the success shape.
+Tools like `plan_file_info` and `plan_status` have multiple response shapes
+(`oneOf`: success, not-ready, error). The derived schema misses the other shapes,
+causing MCP clients to see non-conforming responses as empty.
+
+**Solution**: Tool functions return plain `CallToolResult` (no output model
+annotation). After registering tools, `_register_tools()` injects the canonical
+`outputSchema` from `TOOL_DEFINITIONS` by setting an instance attribute on the
+FastMCP Tool that shadows its `output_schema` cached_property:
+
+```python
+fastmcp_tool.__dict__["output_schema"] = tool_def.output_schema
+```
+
+This is intentionally **not** set on `fn_metadata.output_schema`. FastMCP's
+`convert_result()` checks `fn_metadata.output_schema` and asserts that
+`fn_metadata.output_model` is also set. Since our tools return `CallToolResult`
+directly (not a Pydantic model), we must leave `fn_metadata.output_schema` as
+`None` to skip that validation. The instance attribute on the Tool object is
+what `list_tools()` reads for the advertised `outputSchema`.
+
+**Rules**:
+- Never use `Annotated[CallToolResult, OutputModel]` as the return type for
+  tool functions in `http_server.py`. Always use plain `CallToolResult`.
+- Do not import output models from `tool_models.py` into `http_server.py` —
+  they are not needed and the import was removed.
+- Never set `fn_metadata.output_schema` directly — it causes `convert_result()`
+  to fail with "Output model must be set if output schema is defined".
+- The canonical schema source is `TOOL_DEFINITIONS` in `schemas.py`, which
+  builds `oneOf` wrappers covering all response shapes.
+- `oneOf` schemas are **not** advertised via `outputSchema` on the HTTP server.
+  MCP clients (e.g. Inspector) require `outputSchema` to have
+  `"type": "object"` at the top level and reject `oneOf`. Tools with
+  multi-shape responses (`plan_status`, `plan_file_info`) work correctly
+  without an advertised schema — the `structuredContent` is always set.
+- `TestFastMCPCanonicalOutputSchema` in `test_tool_surface_consistency.py`
+  verifies that flat-schema tools get their canonical schema injected and
+  oneOf-schema tools do not advertise one.
+
+**Potential issues**:
+- `_tool_manager` and the `output_schema` cached_property are private FastMCP
+  internals. An `mcp` SDK upgrade could rename or restructure them. If tests
+  in `TestFastMCPCanonicalOutputSchema` break after an SDK upgrade, check
+  whether the internal API changed and update the injection code accordingly.
+- If MCP clients gain support for `oneOf` output schemas, the skip logic in
+  `_register_tools` can be removed to advertise all schemas.
+
 ## plan_create contract
 - Expose `model_profiles` as the discovery tool for profile selection.
 - `model_profiles` must report profile guidance and currently available models after class whitelist filtering.
@@ -163,7 +213,10 @@ The middleware in `http_server.py` processes requests in this order:
      requests.
    - Download tokens are self-authenticating (signed HMAC, no API key needed)
    - Sets `_download_base_url_ctx` for `/mcp` paths
-   - Strips redundant `content` from `/mcp` JSON responses on the way out
+   - Strips redundant `content` from `/mcp` JSON responses on the way out.
+     `strip_redundant_content` skips JSON-RPC envelopes (`"jsonrpc" in payload`)
+     to avoid corrupting MCP protocol responses. Only non-JSON-RPC dicts with
+     both `content` and `structuredContent` at the top level are stripped.
 
 ## MCP Protocol
 - The server communicates over stdio (standard input/output) following the MCP protocol.

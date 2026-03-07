@@ -24,17 +24,6 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 
 from mcp_cloud.http_utils import strip_redundant_content
-from mcp_cloud.tool_models import (
-    ExamplePlansOutput,
-    ModelProfilesOutput,
-    PlanCreateOutput,
-    PlanFileInfoOutput,
-    PlanListOutput,
-    PlanRetryOutput,
-    PlanStatusOutput,
-    PlanStopOutput,
-)
-
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 _dotenv_loaded, _dotenv_paths = load_planexe_dotenv()
 
@@ -696,7 +685,7 @@ async def plan_create(
         ModelProfileInput,
         Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
-) -> Annotated[CallToolResult, PlanCreateOutput]:
+) -> CallToolResult:
     """Create a new PlanExe task. Use example_prompts first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {
@@ -712,13 +701,13 @@ async def plan_create(
 
 async def plan_status(
     plan_id: str = Field(..., description="Plan UUID returned by plan_create."),
-) -> Annotated[CallToolResult, PlanStatusOutput]:
+) -> CallToolResult:
     return await handle_plan_status({"plan_id": plan_id})
 
 
 async def plan_stop(
     plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to stop the plan creation."),
-) -> Annotated[CallToolResult, PlanStopOutput]:
+) -> CallToolResult:
     return await handle_plan_stop({"plan_id": plan_id})
 
 
@@ -728,7 +717,7 @@ async def plan_retry(
         ModelProfileInput,
         Field(description="Model profile used for retry. Defaults to baseline."),
     ] = "baseline",
-) -> Annotated[CallToolResult, PlanRetryOutput]:
+) -> CallToolResult:
     arguments: dict[str, Any] = {"plan_id": plan_id, "model_profile": model_profile}
     authenticated_user_api_key = _get_authenticated_user_api_key()
     if authenticated_user_api_key:
@@ -742,7 +731,7 @@ async def plan_file_info(
         ResultArtifactInput,
         Field(description="Download artifact type: report or zip."),
     ] = "report",
-) -> Annotated[CallToolResult, PlanFileInfoOutput]:
+) -> CallToolResult:
     return await handle_plan_file_info({"plan_id": plan_id, "artifact": artifact})
 
 
@@ -751,19 +740,19 @@ async def example_prompts() -> CallToolResult:
     return await handle_example_prompts({})
 
 
-async def model_profiles() -> Annotated[CallToolResult, ModelProfilesOutput]:
+async def model_profiles() -> CallToolResult:
     """Return model_profile options with currently available models."""
     return await handle_model_profiles({})
 
 
-async def example_plans() -> Annotated[CallToolResult, ExamplePlansOutput]:
+async def example_plans() -> CallToolResult:
     """Return curated example plans with download links (no arguments)."""
     return await handle_example_plans({})
 
 
 async def plan_list(
     limit: int = Field(default=10, ge=1, le=50, description="Maximum number of plans to return (1–50). Newest plans are returned first."),
-) -> Annotated[CallToolResult, PlanListOutput]:
+) -> CallToolResult:
     """List the most recent plans for an authenticated user."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {"limit": limit}
@@ -784,16 +773,40 @@ def _register_tools(server: FastMCP) -> None:
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
     }
-    for tool in TOOL_DEFINITIONS:
-        handler = handler_map.get(tool.name)
+    for tool_def in TOOL_DEFINITIONS:
+        handler = handler_map.get(tool_def.name)
         if handler is None:
-            logger.warning("No HTTP handler registered for tool %s", tool.name)
+            logger.warning("No HTTP handler registered for tool %s", tool_def.name)
             continue
         server.tool(
-            name=tool.name,
-            description=tool.description,
-            annotations=ToolAnnotations(**tool.annotations) if tool.annotations else None,
+            name=tool_def.name,
+            description=tool_def.description,
+            annotations=ToolAnnotations(**tool_def.annotations) if tool_def.annotations else None,
         )(handler)
+
+    # Inject the canonical outputSchema from TOOL_DEFINITIONS into each
+    # FastMCP tool so that list_tools advertises the schema we control.
+    #
+    # We set the schema as an instance attribute on the Tool, which shadows
+    # the cached_property (Tool.output_schema reads fn_metadata.output_schema).
+    # This way list_tools() sees the canonical schema, but fn_metadata stays
+    # untouched so convert_result() does not try to validate against a missing
+    # output_model.
+    #
+    # Skip oneOf schemas: MCP clients (e.g. Inspector) require outputSchema to
+    # be {"type": "object", ...}. Tools with multiple response shapes
+    # (plan_status, plan_file_info) use oneOf which clients reject. These tools
+    # work correctly without an advertised outputSchema.
+    for tool_def in TOOL_DEFINITIONS:
+        schema = tool_def.output_schema
+        if schema is None:
+            continue
+        if "oneOf" in schema:
+            continue
+        fastmcp_tool = server._tool_manager.get_tool(tool_def.name)
+        if fastmcp_tool is None:
+            continue
+        fastmcp_tool.__dict__["output_schema"] = schema
 
 
 fastmcp_server = FastMCP(

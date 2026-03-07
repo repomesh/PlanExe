@@ -1,259 +1,284 @@
-# Pipeline Hardening Roadmap for Local-Model Reliability
+# Pipeline Hardening Roadmap for Local-Model Reliability (Implementation Spec)
 
 Date: 2026-03-07  
 Author: EgonBot  
 Reviewers: neoneye, Bubba
 
-## 1) Executive summary
+---
 
-This proposal defines a practical roadmap to make PlanExe’s pipeline significantly more reliable when using local models (LM Studio/Ollama class), while preserving correctness and auditability.
+## 0) Purpose of this document
 
-Recent runs show a consistent pattern: once one truncation gate is fixed, the next schema-heavy task becomes the new failure point. The system is not failing randomly; it is exposing deterministic weak points where strict structured output meets long responses, multi-part schemas, and repeated LLM calls.
+This is not a high-level vision note. This is an implementation spec for improving local-model reliability in PlanExe’s structured-output pipeline.
 
-The roadmap below focuses on:
-1. **Containment now** (small safe patches that unblock progress),
-2. **Resilience next** (better retry + diagnostics),
-3. **Reliability controls** (preflight gates and profile-based execution),
-4. **Long-term governance** (benchmarks and model scorecards).
+It defines:
+- exactly **what to change**,
+- **where** to change it,
+- **how** to validate each change,
+- **what evidence** is required before merge.
 
-The key rule throughout: **no mega-PRs**. One failure mode per PR, with explicit evidence.
+The target is practical: reduce repeated run failures caused by structured-output truncation/type drift while preserving data quality signals.
 
 ---
 
-## 2) Problem statement and observed failure chain
+## 1) Current state and known facts
 
-### 2.1 What we have observed in real runs
+### 1.1 Confirmed, merged fixes
 
-Across recent local runs:
-- `SelectScenarioTask` failed on missing trailing required fields; raising `num_output` improved it.
-- Later, `PreProjectAssessmentTask` failed on missing tail fields in `ExpertDetails` (`combined_summary`, `go_no_go_recommendation`).
-- Historical testing identified `CreateWBSLevel3Task` as a high-amplification gate due to repeated schema-constrained generations.
-- Separate CLI path produced `KeyError: 'server_iso_utc'`, which is an engineering bug (not model behavior).
+- **PR #153 merged** with two minimal fixes:
+  1) `select_scenario.py`: default for `holistic_profile_of_the_plan` (truncation unblock).  
+  2) `run_plan_pipeline.py`: `start_time_dict.get('server_iso_utc', '')` (CLI KeyError unblock).
 
-### 2.2 Why this matters
+### 1.2 Current top failure after #153
 
-This failure pattern creates three costs:
-- **Operational cost:** long runs die late, leaving many blocked downstream tasks.
-- **Token cost:** retries repeat with limited new information, burning budget.
-- **Engineering cost:** oversized mixed-scope PRs become hard to review/merge.
+- Pipeline now advances beyond `SelectScenarioTask`.
+- Next hard stop: `PreProjectAssessmentTask` with missing required tail fields in `ExpertDetails`:
+  - `combined_summary`
+  - `go_no_go_recommendation`
 
-### 2.3 Root-cause categories
+### 1.3 Root failure classes
 
-Current failures largely cluster into:
-1. **Output truncation** (missing tail fields),
-2. **Schema/type drift** (wrong primitive/list/object type),
-3. **Schema-echo responses** (model restates structure instead of filling values),
-4. **Code-path assumptions** (hard key lookups in non-API paths).
+1. **Tail-field truncation** (required fields at end of schema missing).  
+2. **Type drift** (wrong primitive/list/object type).  
+3. **Schema echo** (model repeats schema shape/descriptions, not values).  
+4. **Code-path assumption bugs** (`KeyError` on non-API path).
 
 ---
 
-## 3) Design principles for hardening
+## 2) Guardrails and merge policy
 
-1. **Safety over convenience:** defaults are only allowed for low-risk summary fields, never core decision fields without explicit warning.
-2. **Determinism over guessing:** each retry should include concrete validation feedback, not blind repetition.
-3. **Small PR discipline:** split by failure mode; avoid combined refactor + bugfix bundles.
-4. **Evidence-first merges:** every patch should include run evidence (task advanced, error signature changed, or failure eliminated).
-5. **No untracked corruption:** if defaults are used, emit telemetry and trace markers. (Note: PR #153 used an immediate empty-string default as a deliberate short-term unblock; follow-up work should add explicit sentinel/trace handling.)
+### 2.1 Scope guard (mandatory)
 
----
+Every PR must include in description:
+- “This PR intentionally changes only X files.”
+- “Failure class targeted: <one class only>.”
+- “Out of scope: <explicit list>.”
 
-## 4) Roadmap
+### 2.2 Evidence guard (mandatory)
 
-## Phase 0 — Immediate containment (same day)
+Before merge, attach:
+- before/after task failure location,
+- exact error signature change,
+- `git diff --name-only` output,
+- resume-run proof (Luigi resume path).
 
-Objective: stop known crashes and unblock forward movement with minimal-risk edits.
+### 2.3 Data integrity guard
 
-### Actions
-
-1. **Merge tiny unblocker patches only**
-   - Keep PR scope to one defect class.
-   - Enforce explicit file-count and diff-size checks before merge.
-
-2. **Harden known truncation points with safe defaults**
-   - `SelectScenarioTask`: default low-risk trailing summary field(s).
-   - `PreProjectAssessmentTask`: default `combined_summary` and `go_no_go_recommendation` with warning markers (empty string sentinel acceptable as first unblock).
-
-3. **Fix deterministic code bug in scheduling path**
-   - Replace hard `start_time_dict['server_iso_utc']` access with safe `.get('server_iso_utc', '')`.
-
-4. **Confirm baseline local config sanity**
-   - `is_function_calling_model: false` for LM Studio local adapters.
-   - `num_output` sized for schema-heavy tasks.
-   - structured response enforcement kept where supported.
-
-### Exit criteria
-- Pipeline resumes and advances beyond `PreProjectAssessmentTask`.
-- No recurrence of `server_iso_utc` crash in CLI path.
-- All containment PRs remain small and independently reviewable.
+Defaults are allowed only for low-risk synthesis fields in containment phase. If default used, add trace marker in logs in Phase 1.
 
 ---
 
-## Phase 1 — Structured-output resilience (1–3 days)
+## 3) Work package sequence (concrete)
 
-Objective: improve recovery from predictable validation failures without hiding true model weaknesses.
+## WP-1 — PreProjectAssessmentTask truncation containment
 
-### 1.1 Failure-intelligent retry path
+### Objective
+Unblock current failure gate with minimal code change.
 
-Current retries often repeat the same prompt/context and predictably fail again. Upgrade retries to include compact, model-readable error context:
-- schema name,
-- missing fields,
-- invalid types,
-- short corrective instruction (regenerate only invalid portions).
+### Files to modify
+- `worker_plan/worker_plan_internal/expert/pre_project_assessment.py`
 
-### 1.2 Attempt-level diagnostics
+### Change
+In `ExpertDetails` model:
+- make `combined_summary` default to `""`
+- make `go_no_go_recommendation` default to `""`
 
-For each failed parse, persist:
-- raw output sample (truncated safely for logs),
-- missing/invalid field map,
-- attempt index,
-- token metrics snapshot,
-- model + config profile used.
+### Example patch shape
+```python
+class ExpertDetails(BaseModel):
+    feedback: list[FeedbackItem]
+    combined_summary: str = Field(default="", description="...")
+    go_no_go_recommendation: str = Field(default="", description="...")
+```
 
-This enables precise postmortems and model comparison.
+### Acceptance criteria
+- Resume run no longer dies at `PreProjectAssessmentTask` with missing-field error.
+- If it fails, error class must be different (e.g., type drift, not missing tail fields).
 
-### 1.3 Field strictness policy
-
-Introduce explicit categories:
-- **Hard-required semantic fields:** no silent defaults.
-- **Soft-required synthesis fields:** defaults allowed with warning + trace.
-
-This balances reliability with data integrity.
-
-### Exit criteria
-- Retry success rate for truncation/type cases improves over baseline.
-- Failure classification is explicit in logs (truncation vs type drift vs schema echo).
-- No increase in silent low-quality outputs.
+### PR constraints
+- One file only.
+- No prompt rewrites in same PR.
+- No config changes in same PR.
 
 ---
 
-## Phase 2 — Pipeline-level reliability controls (3–7 days)
+## WP-2 — Retry behavior upgrade in LLM executor (failure-intelligent retries)
 
-Objective: reduce expensive full-run failures by failing fast when model/profile is unsuitable.
+### Objective
+Replace blind same-input retries with targeted retries informed by validation errors.
 
-### 2.1 Local Reliability Profile
+### Files to modify
+- `worker_plan/worker_plan_internal/llm_util/llm_executor.py`
+- (if needed) small helper module under `worker_plan/worker_plan_internal/llm_util/`
 
-Define a documented profile that ties together:
-- approved local models,
-- context/output defaults,
-- retry strategy,
-- per-task strictness.
+### Current behavior problem
+Retries repeat with nearly identical prompt/context and often produce identical failure.
 
-This converts ad-hoc tuning into repeatable operations.
+### Required behavior
+On parse/validation failure:
+1. Extract compact error summary:
+   - missing fields,
+   - invalid field types,
+   - top-level schema name.
+2. Build a retry suffix instruction:
+   - “Return valid JSON object only.”
+   - “Fix only these fields: …”
+   - “Do not remove valid fields already present.”
+3. Append suffix only for retry attempts (attempt > 1).
 
-### 2.2 Preflight smoke gates
+### Retry instruction template (exact)
+```text
+Validation failed for schema: {schema_name}.
+Fix the JSON by correcting only these issues:
+- Missing fields: {missing_fields_csv}
+- Invalid fields/types: {invalid_fields_csv}
+Return ONE JSON object only, no markdown, no explanation.
+Preserve all previously valid fields.
+```
 
-Before full pipeline execution, run a minimal structured-output smoke suite:
-1. scenario selection parse,
-2. expert assessment parse,
-3. one WBS details parse.
+### Implementation notes
+- Keep max retries unchanged initially.
+- Do not alter model fallback chain in this PR.
+- Keep this patch isolated to retry message construction and logging.
 
-If smoke gate fails, halt early with prescriptive next actions (config adjustment/model switch/strictness notes).
-
-### 2.3 Blast-radius prioritization
-
-Prioritize hardening by dependency impact and call amplification:
-1. `PreProjectAssessmentTask`,
-2. `CreateWBSLevel3Task`,
-3. `EstimateTaskDurationsTask`.
-
-### Exit criteria
-- Fewer late-stage catastrophic run failures.
-- Higher Luigi resume efficiency (fewer repeated crash points).
-- Lower token burn per successful completed pipeline.
-
----
-
-## Phase 3 — Reliability governance and benchmarking (1–2 weeks)
-
-Objective: institutionalize learning so gains persist across models and contributors.
-
-### 3.1 Regression corpus from real failures
-
-Build a benchmark set for:
-- tail-field truncation,
-- schema echoing,
-- primitive type confusion,
-- nested JSON/list truncation.
-
-### 3.2 Model scorecard
-
-Track per model/profile:
-- first failure task,
-- task-level pass rate,
-- retry recovery rate,
-- token cost to completion.
-
-Use this to maintain recommended default local profiles.
-
-### 3.3 Docs and operational runbooks
-
-Update docs with:
-- known-good local profiles,
-- known failure signatures and remediations,
-- preflight protocol,
-- troubleshooting decision tree.
-
-### Exit criteria
-- New local model candidates can be screened predictably.
-- Operations team has stable runbook-driven behavior.
+### Acceptance criteria
+- At least one known truncation/type failure case shows improved recovery rate vs baseline.
+- Logs show per-attempt error summary and retry instruction injection.
 
 ---
 
-## 5) Implementation plan (PR sequencing)
+## WP-3 — Structured failure telemetry
 
-### Already landed
+### Objective
+Make failures diagnosable without guessing.
 
-1. **[MERGED]** Tiny PR: `SelectScenarioTask` truncation resilience.  
-2. **[MERGED]** Tiny PR: `CreateScheduleTask` key access fix (`server_iso_utc`).  
+### Files to modify
+- `worker_plan/worker_plan_internal/llm_util/llm_executor.py`
+- optional: create `worker_plan/worker_plan_internal/llm_util/llm_failure_logging.py`
 
-### Next sequence
+### Required telemetry record (per failed attempt)
+Persist/log fields:
+- `task_name`
+- `schema_name`
+- `attempt_index`
+- `model_id`
+- `missing_fields` (list)
+- `invalid_fields` (list)
+- `raw_response_preview` (bounded char length)
+- `token_metrics_snapshot` (if available)
 
-3. Tiny PR: `PreProjectAssessmentTask` tail-field resilience.  
-4. Small PR: failure-intelligent retries in LLM executor.  
-5. Small PR: preflight smoke gate and local reliability profile docs.  
-6. Follow-up docs PR: benchmark + scorecard framework.
+### Log format
+Prefer structured JSON log line, example:
+```json
+{
+  "event": "structured_parse_failure",
+  "task_name": "PreProjectAssessmentTask",
+  "schema_name": "ExpertDetails",
+  "attempt_index": 2,
+  "missing_fields": ["combined_summary"],
+  "invalid_fields": ["feedback[2].description:type"],
+  "model_id": "qwen/qwen3.5-35b-a3b"
+}
+```
 
-Each PR must include:
-- exact scope statement,
-- evidence from resumed run,
-- rollback note,
-- explicit non-goals.
-
----
-
-## 6) Risks and trade-offs
-
-### Risk A: Over-defaulting hides model quality issues
-Mitigation: defaults only for soft synthesis fields + warning traces.
-
-### Risk B: Retry logic increases complexity
-Mitigation: add in small increments, with isolated tests and telemetry.
-
-### Risk C: Profile divergence across contributors
-Mitigation: central local reliability profile and docs-first process.
-
-### Risk D: Token cost rises with diagnostics
-Mitigation: compact error prompts, bounded log size, and preflight gating to avoid doomed full runs.
-
----
-
-## 7) Success metrics
-
-Primary metrics:
-- completion rate of full local runs,
-- first-failure task moves deeper or disappears,
-- reduced repeated failures at same task after resume,
-- reduced token cost per successful completion.
-
-Secondary metrics:
-- average PR size (files/LOC) for reliability patches,
-- mean time from failure report to merged fix,
-- number of merges reverted due to scope creep.
+### Acceptance criteria
+- Same failure can be categorized instantly as truncation/type/schema-echo.
+- No sensitive full payload dumps; preview length bounded.
 
 ---
 
-## 8) Decision request
+## WP-4 — Task strictness matrix (hard vs soft fields)
 
-Approve this phased roadmap and execute it as a sequence of small, evidence-backed PRs.
+### Objective
+Prevent accidental silent corruption while keeping pipeline progress possible.
 
-Immediate next step after approval: merge/prepare the single-purpose `PreProjectAssessmentTask` resilience patch and validate via Luigi resume that the pipeline clears that gate.
+### Deliverable
+A documented matrix (new doc section or file) listing for each high-risk schema:
+- hard-required fields (must fail if absent)
+- soft-required fields (may default with trace)
+
+### Initial coverage
+- `SelectScenarioTask` schema
+- `PreProjectAssessmentTask` (`ExpertDetails`)
+- `CreateWBSLevel3Task` details schema
+
+### Acceptance criteria
+- Every defaulting decision in code points to matrix rationale.
+- Reviewers can verify why a field is soft/hard.
+
+---
+
+## WP-5 — Local reliability profile + preflight smoke gate
+
+### Objective
+Fail fast before expensive full pipeline if model/profile is incompatible.
+
+### Files (proposed)
+- `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py` (hook)
+- new utility: `worker_plan/worker_plan_internal/llm_util/preflight_smoke.py`
+- docs update in provider docs and/or `docs/proposals` follow-up
+
+### Preflight checks (minimal)
+Run 3 cheap checks before full execution:
+1. Scenario parse check.
+2. Expert assessment parse check.
+3. One WBS detail parse check.
+
+### Behavior
+- If any check fails: stop with explicit action list:
+  - increase `num_output`,
+  - switch model profile,
+  - run with fallback-capable model.
+
+### Acceptance criteria
+- Reduction in long-run failures that die at first schema-heavy stages.
+
+---
+
+## 4) Test plan (must run per work package)
+
+## For WP-1 (PreProjectAssessment containment)
+- Run Luigi resume on previously failing run inputs.
+- Verify `PreProjectAssessmentTask` completes.
+- Capture next failure point (if any).
+
+## For WP-2 and WP-3 (retry + telemetry)
+- Reproduce known validation failure case.
+- Confirm retry prompt contains error guidance.
+- Confirm telemetry line appears with expected keys.
+
+## For WP-5 (preflight)
+- Test failing model profile: preflight must block full run.
+- Test passing profile: preflight must allow run to start.
+
+---
+
+## 5) Rollout and rollback
+
+### Rollout order
+1. WP-1 (containment, unblock)
+2. WP-2 (retry quality)
+3. WP-3 (telemetry)
+4. WP-4 (strictness matrix)
+5. WP-5 (preflight controls)
+
+### Rollback strategy
+- Each WP in separate PR and commit series.
+- If regression appears, revert only that WP PR.
+- Never bundle two WPs in one PR.
+
+---
+
+## 6) Definition of done (program-level)
+
+This roadmap is considered implemented when:
+1. Pipeline clears current truncation gates on local profile in repeated runs.
+2. Failures, when present, are classified and traceable.
+3. Retry path demonstrably outperforms blind retries on at least one known case.
+4. Preflight gate prevents at least one doomed full run class.
+5. Docs include reproducible operator playbook and strictness rationale.
+
+---
+
+## 7) Immediate next action
+
+Create **WP-1 PR now**: `PreProjectAssessmentTask` tail-field default containment only, then rerun via Luigi resume and report whether first-failure location moves downstream.

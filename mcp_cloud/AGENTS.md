@@ -153,17 +153,22 @@ what `list_tools()` reads for the advertised `outputSchema`.
   to fail with "Output model must be set if output schema is defined".
 - The canonical schema source is `TOOL_DEFINITIONS` in `schemas.py`, which
   builds `oneOf` wrappers covering all response shapes.
+- `oneOf` schemas are **not** advertised via `outputSchema` on the HTTP server.
+  MCP clients (e.g. Inspector) require `outputSchema` to have
+  `"type": "object"` at the top level and reject `oneOf`. Tools with
+  multi-shape responses (`plan_status`, `plan_file_info`) work correctly
+  without an advertised schema — the `structuredContent` is always set.
 - `TestFastMCPCanonicalOutputSchema` in `test_tool_surface_consistency.py`
-  verifies that every FastMCP tool's advertised schema matches the canonical
-  `TOOL_DEFINITIONS` schema.
+  verifies that flat-schema tools get their canonical schema injected and
+  oneOf-schema tools do not advertise one.
 
 **Potential issues**:
 - `_tool_manager` and the `output_schema` cached_property are private FastMCP
   internals. An `mcp` SDK upgrade could rename or restructure them. If tests
   in `TestFastMCPCanonicalOutputSchema` break after an SDK upgrade, check
   whether the internal API changed and update the injection code accordingly.
-- If FastMCP adds native support for `oneOf` output schemas or a public API
-  for overriding `outputSchema`, prefer that over the current injection hack.
+- If MCP clients gain support for `oneOf` output schemas, the skip logic in
+  `_register_tools` can be removed to advertise all schemas.
 
 ## plan_create contract
 - Expose `model_profiles` as the discovery tool for profile selection.

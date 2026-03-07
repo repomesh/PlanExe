@@ -25,12 +25,12 @@ Because all prompts come from the existing `simple_plan_prompts.jsonl`, they are
 
 Each selected prompt:
 - Is already present in `simple_plan_prompts.jsonl` (no new content created)
-- Covers a distinct geographic region — no two prompts from the same country
+- Emphasizes geographic diversity across regions while allowing occasional country repeats when the domain differs materially
 - Has an explicit budget, constraints, and success criteria (strong prompt quality)
 - Tests a different domain (infrastructure, healthcare, entertainment, defence, environment, etc.)
 - Is suitable for comparison across model profiles without ethical blockers
 
-Geographic coverage: Denmark, Global/Space, Global (SE Asia/Brazil/Africa), Ghana, India, Uruguay, USA, Singapore, Spain+Morocco, Estonia
+Geographic coverage: Denmark, Global/Space, India (policy + infrastructure), Ghana, Uruguay, USA, Global (SE Asia/Brazil/Africa), Spain+Morocco, Estonia
 
 ---
 
@@ -40,12 +40,12 @@ Geographic coverage: Denmark, Global/Space, Global (SE Asia/Brazil/Africa), Ghan
 |---|------|----------|--------|------|
 | 01 | `ce2fbf38-9700-4ed1-814e-78772f7b7700` | Denmark | CSR / logistics | denmark, plastic, waste, business |
 | 02 | `e6ddd953-939f-4d15-89ec-fd3988f79123` | Global / Space | Defence / research | laser, space, defense, research |
-| 03 | `e9a73d5b-f274-4286-a619-4f0e1303cdc2` | Global (SE Asia / Brazil / Africa) | Food security / supply chain | rubber, disease, supply, global |
+| 03 | `eaed8d7d-461c-48a5-b16c-76dbdba044c4` | India | Labor policy / productivity / public governance | india, work, life, health, family |
 | 04 | `22f35414-c01b-4b52-a229-7dc5a78e2b96` | Accra, Ghana | Healthcare / Africa | healthcare, malaria, accra, ghana |
 | 05 | `a6bef08b-c768-4616-bc28-7503244eff02` | Delhi, India | Infrastructure / water | water, pollution, india, delhi |
 | 06 | `62f48a04-6f2c-4e60-9e65-34686a13c95a` | Uruguay | AI / research / biotech | uruguay, ai, brain, research |
 | 07 | `50c0f31f-d9a3-442a-81b8-1d885db05623` | Yellowstone, USA | Emergency / government | yellowstone, volcano, evacuation |
-| 08 | `28289ed9-0c80-41cf-9d26-714bffe4e498` | Singapore | Health / longevity research | aging, health, singapore, longevity |
+| 08 | `e9a73d5b-f274-4286-a619-4f0e1303cdc2` | Global (SE Asia / Brazil / Africa) | Food security / supply chain | rubber, disease, supply, global |
 | 09 | `b9afce6c-f98d-4e9d-8525-267a9d153b51` | Spain + Morocco | Infrastructure / cross-border | bridge, tunnel, europe, morocco |
 | 10 | `ab700769-c3ba-4f8a-913d-8589fea4624e` | Tallinn, Estonia | Resilience / hardware | prepping, tallinn, estonia |
 
@@ -63,10 +63,10 @@ Geographic coverage: Denmark, Global/Space, Global (SE Asia/Brazil/Africa), Ghan
 - **Drift risk:** Unsupported invention (fabricated specs), confidence inflation, mechanism drift.
 - **Pipeline stress:** `PremiseAttackTask`, `ReviewPlanTask`, structured output under high token load.
 
-### 03 — Global Rubber Supply De-Risking from SALB (Global / SE Asia / Brazil / Africa)
-- **Why:** $30B, 25-year public-private programme to end global rubber supply dependence on a single crop vulnerable to South American Leaf Blight. Explicit Phase 1 deliverable (SALB Containment Protocol), multi-jurisdiction phytosanitary coordination. Real-world food security and supply chain problem.
-- **Drift risk:** Scope expansion, confidence inflation on containment timelines, unsupported invention of containment mechanisms.
-- **Pipeline stress:** `GovernanceTask`, `StakeholderTask`, `WBSTask`, `GanttTask`.
+### 03 — 4-Day Work Week National Program (India)
+- **Why:** National policy programme with explicit governance design (single PMO under NITI Aayog), phased rollout, and measurable productivity/equity outcomes. Real-world labour policy problem with political and implementation constraints.
+- **Drift risk:** Scope expansion (pilot policy → nationwide mandate too quickly), unsupported adoption claims, confidence inflation on productivity gains.
+- **Pipeline stress:** `GovernanceTask`, `StakeholderTask`, `ReviewPlanTask`, `NegativeFeedbackTask`.
 
 ### 04 — Malaria Response Post-USAID (Accra, Ghana)
 - **Why:** Crisis-driven healthcare plan in sub-Saharan Africa with no specified budget. Tests how the pipeline handles resource-constrained plans and whether it fabricates Western-centric solutions.
@@ -88,10 +88,10 @@ Geographic coverage: Denmark, Global/Space, Global (SE Asia/Brazil/Africa), Ghan
 - **Drift risk:** Scope expansion (72-hour response → national recovery plan), confidence inflation on coordination outcomes.
 - **Pipeline stress:** `GovernanceTask`, `StakeholderTask`, `NegativeFeedbackTask`.
 
-### 08 — Reverse Aging Research Lab (Singapore)
-- **Why:** $500M, 10-year state-of-the-art biomedical research initiative in Singapore's progressive regulatory environment. Explicit scientific goals, ethical approval framework, and international collaboration requirements. Real-world longevity and health research problem.
-- **Drift risk:** Confidence inflation on scientific timelines, unsupported medical claims, scope expansion beyond stated research mandate.
-- **Pipeline stress:** `PreProjectAssessmentTask`, `ExpertDetails`, `DistillAssumptionsTask`, `ReviewPlanTask`.
+### 08 — Global Rubber Supply De-Risking from SALB (Global / SE Asia / Brazil / Africa)
+- **Why:** $30B, 25-year public-private programme to end global rubber supply dependence on a single crop vulnerable to South American Leaf Blight. Explicit Phase 1 deliverable (SALB Containment Protocol), multi-jurisdiction phytosanitary coordination. Real-world food security and supply chain problem.
+- **Drift risk:** Scope expansion, confidence inflation on containment timelines, unsupported invention of containment mechanisms.
+- **Pipeline stress:** `GovernanceTask`, `StakeholderTask`, `WBSTask`, `GanttTask`.
 
 ### 09 — Spain–Morocco Transoceanic Tunnel (Europe + Africa)
 - **Why:** Cross-border megaproject (€40B, 20 years, two continents, two regulatory systems). Tests whether the pipeline can handle political, geotechnical, and financial complexity at scale.

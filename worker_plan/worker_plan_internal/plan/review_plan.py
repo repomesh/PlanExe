@@ -50,7 +50,7 @@ Do not include any extra bullet points, header lines, or any additional text out
 
 Do not duplicate issues already identified in previous questions of this review.
 
-Output ONLY the JSON object. Do not include any thinking process, reasoning steps, or analysis before the JSON. Begin your response immediately with the opening brace {.
+Output ONLY the JSON object. Do not include any reasoning, thinking steps, or explanations before or after the JSON.
 """
 
 @dataclass

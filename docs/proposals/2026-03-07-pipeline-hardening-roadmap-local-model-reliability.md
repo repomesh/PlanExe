@@ -53,7 +53,7 @@ Current failures largely cluster into:
 2. **Determinism over guessing:** each retry should include concrete validation feedback, not blind repetition.
 3. **Small PR discipline:** split by failure mode; avoid combined refactor + bugfix bundles.
 4. **Evidence-first merges:** every patch should include run evidence (task advanced, error signature changed, or failure eliminated).
-5. **No silent corruption:** if defaults are used, emit telemetry and trace markers.
+5. **No untracked corruption:** if defaults are used, emit telemetry and trace markers. (Note: PR #153 used an immediate empty-string default as a deliberate short-term unblock; follow-up work should add explicit sentinel/trace handling.)
 
 ---
 
@@ -201,8 +201,13 @@ Update docs with:
 
 ## 5) Implementation plan (PR sequencing)
 
-1. Tiny PR: `SelectScenarioTask` truncation resilience (if not already merged).  
-2. Tiny PR: `CreateScheduleTask` key access fix (if not already merged).  
+### Already landed
+
+1. **[MERGED]** Tiny PR: `SelectScenarioTask` truncation resilience.  
+2. **[MERGED]** Tiny PR: `CreateScheduleTask` key access fix (`server_iso_utc`).  
+
+### Next sequence
+
 3. Tiny PR: `PreProjectAssessmentTask` tail-field resilience.  
 4. Small PR: failure-intelligent retries in LLM executor.  
 5. Small PR: preflight smoke gate and local reliability profile docs.  

@@ -53,9 +53,9 @@ to mcp_cloud, a MCP server running in the cloud, over HTTP.
 
 ## plan_status latency
 - `plan_status` on the cloud side resolves file lists by trying local DB/disk sources
-  first, then falling back to a worker HTTP call (30-second timeout).
+  first, then falling back to a worker HTTP call (10-second timeout, 3-second connect).
 - If the worker is unreachable and no local data exists yet (e.g., plan is still
-  `processing`), `plan_status` may take up to 30 seconds to respond.
+  `processing`), `plan_status` may take up to 10 seconds to respond.
 - The local proxy has its own retry logic with exponential backoff for transient
   server errors. Combined with a slow `plan_status`, a single poll can take
   significantly longer than usual — callers should use generous timeouts.

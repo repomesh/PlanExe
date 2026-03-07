@@ -1,141 +1,254 @@
-# Pipeline Hardening Roadmap (Local Model Reliability)
+# Pipeline Hardening Roadmap for Local-Model Reliability
 
 Date: 2026-03-07  
-Owner: EgonBot (with Bubba + neoneye validation)
+Author: EgonBot  
+Reviewers: neoneye, Bubba
 
-## Why this proposal
+## 1) Executive summary
 
-Recent local-model runs show a repeatable failure pattern:
-- `SelectScenarioTask` initially failed due to missing trailing required fields.
-- After increasing output budget, it passed.
-- `PreProjectAssessmentTask` then failed with missing trailing required fields (`combined_summary`, `go_no_go_recommendation`).
-- Historical runs also show `CreateWBSLevel3Task` as a high-risk structured-output gate.
+This proposal defines a practical roadmap to make PlanExe’s pipeline significantly more reliable when using local models (LM Studio/Ollama class), while preserving correctness and auditability.
 
-This indicates **pipeline fragility under partial/truncated JSON**, especially on large schemas and long outputs.
+Recent runs show a consistent pattern: once one truncation gate is fixed, the next schema-heavy task becomes the new failure point. The system is not failing randomly; it is exposing deterministic weak points where strict structured output meets long responses, multi-part schemas, and repeated LLM calls.
 
-## Goal
+The roadmap below focuses on:
+1. **Containment now** (small safe patches that unblock progress),
+2. **Resilience next** (better retry + diagnostics),
+3. **Reliability controls** (preflight gates and profile-based execution),
+4. **Long-term governance** (benchmarks and model scorecards).
 
-Make PlanExe robust enough to complete full pipelines on capable local models (e.g., Qwen 35B class) without masking real quality problems.
+The key rule throughout: **no mega-PRs**. One failure mode per PR, with explicit evidence.
 
 ---
 
-## Roadmap
+## 2) Problem statement and observed failure chain
+
+### 2.1 What we have observed in real runs
+
+Across recent local runs:
+- `SelectScenarioTask` failed on missing trailing required fields; raising `num_output` improved it.
+- Later, `PreProjectAssessmentTask` failed on missing tail fields in `ExpertDetails` (`combined_summary`, `go_no_go_recommendation`).
+- Historical testing identified `CreateWBSLevel3Task` as a high-amplification gate due to repeated schema-constrained generations.
+- Separate CLI path produced `KeyError: 'server_iso_utc'`, which is an engineering bug (not model behavior).
+
+### 2.2 Why this matters
+
+This failure pattern creates three costs:
+- **Operational cost:** long runs die late, leaving many blocked downstream tasks.
+- **Token cost:** retries repeat with limited new information, burning budget.
+- **Engineering cost:** oversized mixed-scope PRs become hard to review/merge.
+
+### 2.3 Root-cause categories
+
+Current failures largely cluster into:
+1. **Output truncation** (missing tail fields),
+2. **Schema/type drift** (wrong primitive/list/object type),
+3. **Schema-echo responses** (model restates structure instead of filling values),
+4. **Code-path assumptions** (hard key lookups in non-API paths).
+
+---
+
+## 3) Design principles for hardening
+
+1. **Safety over convenience:** defaults are only allowed for low-risk summary fields, never core decision fields without explicit warning.
+2. **Determinism over guessing:** each retry should include concrete validation feedback, not blind repetition.
+3. **Small PR discipline:** split by failure mode; avoid combined refactor + bugfix bundles.
+4. **Evidence-first merges:** every patch should include run evidence (task advanced, error signature changed, or failure eliminated).
+5. **No silent corruption:** if defaults are used, emit telemetry and trace markers.
+
+---
+
+## 4) Roadmap
 
 ## Phase 0 — Immediate containment (same day)
 
-### 0.1 Keep PRs tiny and mergeable
-- Split unrelated fixes into separate PRs.
-- Rule: one failure mode per PR.
+Objective: stop known crashes and unblock forward movement with minimal-risk edits.
 
-### 0.2 Patch known hard failures with safe defaults
-- `SelectScenarioTask`: default optional-safe trailing summary fields.
-- `PreProjectAssessmentTask`: add safe defaults for
-  - `combined_summary`
-  - `go_no_go_recommendation`
-- `CreateScheduleTask`: replace hard key lookup with safe `.get()` for `server_iso_utc` to avoid CLI crash.
+### Actions
 
-### 0.3 Keep local config sane for structured output
-- Use `num_output` high enough for large schemas (8192+ where needed).
-- Keep `is_function_calling_model: false` for local LM Studio models.
-- Keep JSON-structured response enforcement (`force_json`/`response_format`) where supported.
+1. **Merge tiny unblocker patches only**
+   - Keep PR scope to one defect class.
+   - Enforce explicit file-count and diff-size checks before merge.
 
-Success criteria:
-- Pipeline advances beyond `PreProjectAssessmentTask` on resume.
-- No `KeyError: server_iso_utc` in CLI path.
+2. **Harden known truncation points with safe defaults**
+   - `SelectScenarioTask`: default low-risk trailing summary field(s).
+   - `PreProjectAssessmentTask`: default `combined_summary` and `go_no_go_recommendation` with warning markers (empty string sentinel acceptable as first unblock).
+
+3. **Fix deterministic code bug in scheduling path**
+   - Replace hard `start_time_dict['server_iso_utc']` access with safe `.get('server_iso_utc', '')`.
+
+4. **Confirm baseline local config sanity**
+   - `is_function_calling_model: false` for LM Studio local adapters.
+   - `num_output` sized for schema-heavy tasks.
+   - structured response enforcement kept where supported.
+
+### Exit criteria
+- Pipeline resumes and advances beyond `PreProjectAssessmentTask`.
+- No recurrence of `server_iso_utc` crash in CLI path.
+- All containment PRs remain small and independently reviewable.
 
 ---
 
-## Phase 1 — Structured output resilience without silent corruption (1–3 days)
+## Phase 1 — Structured-output resilience (1–3 days)
 
-### 1.1 Add model-output diagnostics per failed attempt
-For each failed structured parse, store:
-- raw model output,
+Objective: improve recovery from predictable validation failures without hiding true model weaknesses.
+
+### 1.1 Failure-intelligent retry path
+
+Current retries often repeat the same prompt/context and predictably fail again. Upgrade retries to include compact, model-readable error context:
 - schema name,
-- missing/invalid fields,
-- retry attempt index,
-- token metrics snapshot.
+- missing fields,
+- invalid types,
+- short corrective instruction (regenerate only invalid portions).
 
-### 1.2 Add targeted retry policy
-Current retries often repeat identical prompt/context. Improve by:
-- feeding compact validation error hints into retry prompt,
-- asking model to regenerate only missing/invalid fields,
-- preserving already-valid fields when safe.
+### 1.2 Attempt-level diagnostics
 
-### 1.3 Add task-level strictness modes
-- **Strict fields**: core semantic fields that must never default silently.
-- **Soft fields**: summary/formatting fields allowed to default with warning.
+For each failed parse, persist:
+- raw output sample (truncated safely for logs),
+- missing/invalid field map,
+- attempt index,
+- token metrics snapshot,
+- model + config profile used.
 
-Success criteria:
-- Retries recover from truncation/type slips more often than baseline.
-- Failures become easier to classify (truncation vs type drift vs schema echo).
+This enables precise postmortems and model comparison.
+
+### 1.3 Field strictness policy
+
+Introduce explicit categories:
+- **Hard-required semantic fields:** no silent defaults.
+- **Soft-required synthesis fields:** defaults allowed with warning + trace.
+
+This balances reliability with data integrity.
+
+### Exit criteria
+- Retry success rate for truncation/type cases improves over baseline.
+- Failure classification is explicit in logs (truncation vs type drift vs schema echo).
+- No increase in silent low-quality outputs.
 
 ---
 
 ## Phase 2 — Pipeline-level reliability controls (3–7 days)
 
-### 2.1 Introduce a "Local Reliability Profile"
-A documented profile that sets:
-- model allowlist,
+Objective: reduce expensive full-run failures by failing fast when model/profile is unsuitable.
+
+### 2.1 Local Reliability Profile
+
+Define a documented profile that ties together:
+- approved local models,
 - context/output defaults,
 - retry strategy,
-- strictness policy per task.
+- per-task strictness.
 
-### 2.2 Add preflight smoke gates
-Before full run, execute a small set of schema-heavy checks:
-- one scenario selection parse,
-- one expert assessment parse,
-- one WBS details parse.
+This converts ad-hoc tuning into repeatable operations.
 
-If smoke fails, stop early with actionable guidance.
+### 2.2 Preflight smoke gates
 
-### 2.3 Failure impact reduction
-Prioritize hardening for high-blast-radius tasks in topological order:
-1. `PreProjectAssessmentTask`
-2. `CreateWBSLevel3Task`
-3. `EstimateTaskDurationsTask`
+Before full pipeline execution, run a minimal structured-output smoke suite:
+1. scenario selection parse,
+2. expert assessment parse,
+3. one WBS details parse.
 
-Success criteria:
-- Fewer full-run failures caused by early schema crashes.
-- Better Luigi resume efficiency due to fewer repeated stop points.
+If smoke gate fails, halt early with prescriptive next actions (config adjustment/model switch/strictness notes).
 
----
+### 2.3 Blast-radius prioritization
 
-## Phase 3 — Long-term quality + governance (1–2 weeks)
+Prioritize hardening by dependency impact and call amplification:
+1. `PreProjectAssessmentTask`,
+2. `CreateWBSLevel3Task`,
+3. `EstimateTaskDurationsTask`.
 
-### 3.1 Structured-output benchmark suite
-Build regression cases from real failures:
-- missing tail fields,
-- schema echo outputs,
-- wrong primitive types,
-- nested array/object truncation.
-
-### 3.2 Reliability scorecard per model
-Track per-task pass rates and first-failure location for each model/config.
-Use this to guide default local-model recommendations.
-
-### 3.3 Documentation updates
-Update provider docs with:
-- known good configs,
-- known failure signatures,
-- preflight checklist,
-- expected fallback behavior.
+### Exit criteria
+- Fewer late-stage catastrophic run failures.
+- Higher Luigi resume efficiency (fewer repeated crash points).
+- Lower token burn per successful completed pipeline.
 
 ---
 
-## Non-goals
+## Phase 3 — Reliability governance and benchmarking (1–2 weeks)
 
-- Hiding genuinely low-quality model outputs behind aggressive defaulting.
-- Merging broad refactors together with urgent reliability patches.
-- Claiming local-model parity with hosted frontier models without benchmark evidence.
+Objective: institutionalize learning so gains persist across models and contributors.
 
-## Proposed PR sequence
+### 3.1 Regression corpus from real failures
 
-1. Tiny PR: `SelectScenarioTask` default-field resilience (if not merged yet).  
-2. Tiny PR: `CreateScheduleTask` safe key access for CLI path.  
-3. Tiny PR: `PreProjectAssessmentTask` missing-tail-field resilience.  
-4. Follow-up PR: retry/error-context improvements in llm executor.  
-5. Docs PR: local reliability profile + smoke gate docs.
+Build a benchmark set for:
+- tail-field truncation,
+- schema echoing,
+- primitive type confusion,
+- nested JSON/list truncation.
 
-## Decision request
+### 3.2 Model scorecard
 
-Approve this phased roadmap and execute in small PRs, each with explicit pass/fail evidence from a resumed pipeline run.
+Track per model/profile:
+- first failure task,
+- task-level pass rate,
+- retry recovery rate,
+- token cost to completion.
+
+Use this to maintain recommended default local profiles.
+
+### 3.3 Docs and operational runbooks
+
+Update docs with:
+- known-good local profiles,
+- known failure signatures and remediations,
+- preflight protocol,
+- troubleshooting decision tree.
+
+### Exit criteria
+- New local model candidates can be screened predictably.
+- Operations team has stable runbook-driven behavior.
+
+---
+
+## 5) Implementation plan (PR sequencing)
+
+1. Tiny PR: `SelectScenarioTask` truncation resilience (if not already merged).  
+2. Tiny PR: `CreateScheduleTask` key access fix (if not already merged).  
+3. Tiny PR: `PreProjectAssessmentTask` tail-field resilience.  
+4. Small PR: failure-intelligent retries in LLM executor.  
+5. Small PR: preflight smoke gate and local reliability profile docs.  
+6. Follow-up docs PR: benchmark + scorecard framework.
+
+Each PR must include:
+- exact scope statement,
+- evidence from resumed run,
+- rollback note,
+- explicit non-goals.
+
+---
+
+## 6) Risks and trade-offs
+
+### Risk A: Over-defaulting hides model quality issues
+Mitigation: defaults only for soft synthesis fields + warning traces.
+
+### Risk B: Retry logic increases complexity
+Mitigation: add in small increments, with isolated tests and telemetry.
+
+### Risk C: Profile divergence across contributors
+Mitigation: central local reliability profile and docs-first process.
+
+### Risk D: Token cost rises with diagnostics
+Mitigation: compact error prompts, bounded log size, and preflight gating to avoid doomed full runs.
+
+---
+
+## 7) Success metrics
+
+Primary metrics:
+- completion rate of full local runs,
+- first-failure task moves deeper or disappears,
+- reduced repeated failures at same task after resume,
+- reduced token cost per successful completion.
+
+Secondary metrics:
+- average PR size (files/LOC) for reliability patches,
+- mean time from failure report to merged fix,
+- number of merges reverted due to scope creep.
+
+---
+
+## 8) Decision request
+
+Approve this phased roadmap and execute it as a sequence of small, evidence-backed PRs.
+
+Immediate next step after approval: merge/prepare the single-purpose `PreProjectAssessmentTask` resilience patch and validate via Luigi resume that the pipeline clears that gate.

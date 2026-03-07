@@ -41,7 +41,7 @@ class TestPlanFileInfoTool(unittest.TestCase):
         plan_id = str(uuid.uuid4())
         content_bytes = b"a" * 10
         plan_snapshot = {
-            "id": "task-id",
+            "id": "plan-id",
             "state": PlanState.completed,
             "progress_message": None,
         }
@@ -63,7 +63,7 @@ class TestPlanFileInfoTool(unittest.TestCase):
         plan_id = str(uuid.uuid4())
         content_bytes = b"zipdata"
         plan_snapshot = {
-            "id": "task-id",
+            "id": "plan-id",
             "state": PlanState.completed,
             "progress_message": None,
         }
@@ -82,7 +82,7 @@ class TestPlanFileInfoTool(unittest.TestCase):
         plan_id = str(uuid.uuid4())
         content_bytes = b"zipdata"
         plan_snapshot = {
-            "id": "task-id",
+            "id": "plan-id",
             "state": PlanState.failed,
             "progress_message": "Stopped",
         }
@@ -100,7 +100,7 @@ class TestPlanFileInfoTool(unittest.TestCase):
     def test_plan_file_info_returns_empty_object_when_pending(self):
         plan_id = str(uuid.uuid4())
         plan_snapshot = {
-            "id": "task-id",
+            "id": "plan-id",
             "state": PlanState.pending,
             "progress_message": None,
         }
@@ -110,10 +110,117 @@ class TestPlanFileInfoTool(unittest.TestCase):
         self.assertFalse(result.isError)
         self.assertEqual(result.structuredContent, {"ready": False, "reason": "processing"})
 
+    def test_plan_file_info_not_ready_preserves_structured_content(self):
+        """Not-ready responses must carry structuredContent so MCP clients see the payload."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": "plan-id",
+            "state": PlanState.processing,
+            "progress_message": None,
+        }
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=plan_snapshot):
+            result = asyncio.run(handle_plan_file_info({"plan_id": plan_id, "artifact": "report"}))
+
+        self.assertFalse(result.isError)
+        sc = result.structuredContent
+        self.assertIsNotNone(sc, "structuredContent must be present for not-ready responses")
+        self.assertFalse(sc["ready"])
+        self.assertEqual(sc["reason"], "processing")
+
+    def test_plan_file_info_pending_zip_preserves_structured_content(self):
+        """Not-ready zip responses must also carry structuredContent."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": "plan-id",
+            "state": PlanState.pending,
+            "progress_message": None,
+        }
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=plan_snapshot):
+            with patch(
+                "mcp_cloud.handlers.fetch_user_downloadable_zip",
+                new=AsyncMock(return_value=None),
+            ):
+                result = asyncio.run(handle_plan_file_info({"plan_id": plan_id, "artifact": "zip"}))
+
+        self.assertFalse(result.isError)
+        sc = result.structuredContent
+        self.assertIsNotNone(sc)
+        self.assertFalse(sc["ready"])
+        self.assertEqual(sc["reason"], "processing")
+
+    def test_plan_file_info_not_found_has_structured_content(self):
+        """PLAN_NOT_FOUND error must include structuredContent with error detail."""
+        plan_id = str(uuid.uuid4())
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=None):
+            result = asyncio.run(handle_plan_file_info({"plan_id": plan_id}))
+
+        self.assertTrue(result.isError)
+        sc = result.structuredContent
+        self.assertIsNotNone(sc, "Error responses must include structuredContent")
+        self.assertEqual(sc["error"]["code"], "PLAN_NOT_FOUND")
+
+    def test_plan_file_info_content_mirrors_structured_content(self):
+        """content text and structuredContent must carry the same data."""
+        import json
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": "plan-id",
+            "state": PlanState.pending,
+            "progress_message": None,
+        }
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=plan_snapshot):
+            result = asyncio.run(handle_plan_file_info({"plan_id": plan_id}))
+
+        sc = result.structuredContent
+        content_text = result.content[0].text
+        self.assertEqual(json.loads(content_text), sc)
+
+    def test_plan_file_info_ready_report_has_structured_content(self):
+        """Successful report response must include structuredContent with download metadata."""
+        plan_id = str(uuid.uuid4())
+        content_bytes = b"<html>report</html>"
+        plan_snapshot = {
+            "id": "plan-id",
+            "state": PlanState.completed,
+            "progress_message": None,
+        }
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=plan_snapshot):
+            with patch(
+                "mcp_cloud.handlers.fetch_artifact_from_worker_plan",
+                new=AsyncMock(return_value=content_bytes),
+            ):
+                result = asyncio.run(handle_plan_file_info({"plan_id": plan_id, "artifact": "report"}))
+
+        self.assertFalse(result.isError)
+        sc = result.structuredContent
+        self.assertIsNotNone(sc)
+        self.assertIn("content_type", sc)
+        self.assertIn("sha256", sc)
+        self.assertIn("download_size", sc)
+        self.assertEqual(sc["download_size"], len(content_bytes))
+
+    def test_plan_file_info_generation_failed_has_structured_content_with_error(self):
+        """generation_failed must include structuredContent with error code and message."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": "plan-id",
+            "state": PlanState.failed,
+            "progress_message": "Out of memory",
+        }
+        with patch("mcp_cloud.handlers._get_plan_for_report_sync", return_value=plan_snapshot):
+            result = asyncio.run(handle_plan_file_info({"plan_id": plan_id, "artifact": "report"}))
+
+        self.assertFalse(result.isError)
+        sc = result.structuredContent
+        self.assertIsNotNone(sc)
+        self.assertEqual(sc["error"]["code"], "generation_failed")
+        self.assertIn("Out of memory", sc["error"]["message"])
+        self.assertFalse(sc["ready"])
+
     def test_plan_file_info_returns_generation_failed_payload(self):
         plan_id = str(uuid.uuid4())
         plan_snapshot = {
-            "id": "task-id",
+            "id": "plan-id",
             "state": PlanState.failed,
             "progress_message": "Pipeline failed",
         }

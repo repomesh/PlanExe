@@ -281,5 +281,118 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
         self.assertIn("MODEL_PROFILES_UNAVAILABLE", instructions)
 
 
+class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
+    """FastMCP tools must advertise the canonical outputSchema from TOOL_DEFINITIONS."""
+
+    def test_fastmcp_tools_use_canonical_output_schema(self):
+        from mcp_cloud.http_server import fastmcp_server
+
+        for tool_def in cloud_app.TOOL_DEFINITIONS:
+            if tool_def.output_schema is None:
+                continue
+            with self.subTest(tool=tool_def.name):
+                fastmcp_tool = fastmcp_server._tool_manager.get_tool(tool_def.name)
+                self.assertIsNotNone(
+                    fastmcp_tool,
+                    f"FastMCP tool {tool_def.name!r} not registered",
+                )
+                self.assertEqual(
+                    fastmcp_tool.output_schema,
+                    tool_def.output_schema,
+                    f"FastMCP tool {tool_def.name!r} outputSchema does not match TOOL_DEFINITIONS",
+                )
+
+    def test_all_tool_definitions_registered_in_fastmcp(self):
+        """Every tool in TOOL_DEFINITIONS must be registered in the FastMCP server."""
+        from mcp_cloud.http_server import fastmcp_server
+
+        for tool_def in cloud_app.TOOL_DEFINITIONS:
+            with self.subTest(tool=tool_def.name):
+                fastmcp_tool = fastmcp_server._tool_manager.get_tool(tool_def.name)
+                self.assertIsNotNone(
+                    fastmcp_tool,
+                    f"TOOL_DEFINITIONS has {tool_def.name!r} but FastMCP does not",
+                )
+
+    def test_plan_file_info_schema_has_three_oneof_variants(self):
+        """plan_file_info must have oneOf with error, not-ready, and ready shapes."""
+        tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, "plan_file_info")
+        schema = tool_def.output_schema
+        self.assertIn("oneOf", schema)
+        self.assertEqual(len(schema["oneOf"]), 3)
+        # Verify the error variant has required: ["error"]
+        error_variant = schema["oneOf"][0]
+        self.assertIn("error", error_variant.get("required", []))
+
+    def test_plan_status_schema_has_two_oneof_variants(self):
+        """plan_status must have oneOf with error and success shapes."""
+        tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, "plan_status")
+        schema = tool_def.output_schema
+        self.assertIn("oneOf", schema)
+        self.assertEqual(len(schema["oneOf"]), 2)
+        error_variant = schema["oneOf"][0]
+        self.assertIn("error", error_variant.get("required", []))
+
+    def test_simple_tools_have_flat_schema(self):
+        """Tools with a single success shape should not have oneOf."""
+        simple_tools = ["example_plans", "example_prompts", "model_profiles",
+                        "plan_create", "plan_list"]
+        for name in simple_tools:
+            with self.subTest(tool=name):
+                tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, name)
+                schema = tool_def.output_schema
+                self.assertNotIn(
+                    "oneOf", schema,
+                    f"{name} should have a flat schema, not oneOf",
+                )
+
+    def test_tool_functions_return_plain_call_tool_result(self):
+        """No tool function should use Annotated return type (regression guard)."""
+        import inspect
+        import typing
+        from mcp_cloud import http_server
+
+        tool_funcs = [
+            http_server.example_plans,
+            http_server.example_prompts,
+            http_server.model_profiles,
+            http_server.plan_create,
+            http_server.plan_status,
+            http_server.plan_stop,
+            http_server.plan_retry,
+            http_server.plan_file_info,
+            http_server.plan_list,
+        ]
+        for func in tool_funcs:
+            with self.subTest(func=func.__name__):
+                hints = typing.get_type_hints(func, include_extras=True)
+                ret = hints.get("return")
+                origin = getattr(ret, "__class__", None)
+                # typing.Annotated has __class__.__name__ == '_AnnotatedAlias'
+                self.assertNotEqual(
+                    getattr(origin, "__name__", ""),
+                    "_AnnotatedAlias",
+                    f"{func.__name__} return type must be plain CallToolResult, "
+                    f"not Annotated[CallToolResult, ...]",
+                )
+
+    def test_fastmcp_plan_file_info_schema_not_derived_from_pydantic(self):
+        """The injected schema must be the canonical oneOf, not a flat Pydantic derivation."""
+        from mcp_cloud.http_server import fastmcp_server
+        from mcp_cloud.tool_models import PlanFileInfoOutput
+
+        fastmcp_tool = fastmcp_server._tool_manager.get_tool("plan_file_info")
+        pydantic_schema = PlanFileInfoOutput.model_json_schema()
+        # The FastMCP schema must NOT equal the flat Pydantic schema.
+        self.assertNotEqual(
+            fastmcp_tool.output_schema,
+            pydantic_schema,
+            "plan_file_info outputSchema looks like it was derived from "
+            "PlanFileInfoOutput instead of the canonical oneOf schema",
+        )
+        # It must have oneOf.
+        self.assertIn("oneOf", fastmcp_tool.output_schema)
+
+
 if __name__ == "__main__":
     unittest.main()

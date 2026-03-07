@@ -19,7 +19,7 @@ class NegativeFeedbackItem(BaseModel):
     feedback_problem_tags: list[str] = Field(description="Short identifiers that describe the problem.")
     feedback_mitigation: str = Field(description="Mitigation plan.")
     feedback_consequence: str = Field(description="Without mitigation what are the consequences.")
-    feedback_root_cause: str = Field(description="Possible root cause.")
+    feedback_root_cause: str = Field(description="Possible root cause.", default="")
 
 class ExpertConsultation(BaseModel):
     """

@@ -262,25 +262,19 @@ class MakeAssumptions:
         metadata["duration"] = duration
         metadata["response_byte_count"] = response_byte_count
 
-        try:
-            json_response = json.loads(chat_response.message.content)
-        except json.JSONDecodeError as e:
-            logger.error("Failed to parse LLM response as JSON.", exc_info=True)
-            raise ValueError("Invalid JSON response from LLM.") from e
+        expert_details: ExpertDetails = chat_response.raw
 
-        # Cleanup the json response from the LLM model.
+        # Build assumption list from structured output (no JSON parsing needed)
         assumption_list = []
-        for item in json_response['question_assumption_list']:
-            question = item.get('question', '')
-            assumptions = item.get('assumptions', '')
-            assessments = item.get('assessments', '')
-
+        for item in expert_details.question_assumption_list:
             assumption_item = {
-                "question": question,
-                "assumptions": assumptions,
-                "assessments": assessments
+                "question": item.question,
+                "assumptions": item.assumptions,
+                "assessments": item.assessments,
             }
             assumption_list.append(assumption_item)
+
+        json_response = expert_details.model_dump()
 
         markdown = cls.convert_to_markdown(chat_response.raw)
 

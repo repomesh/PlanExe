@@ -284,12 +284,15 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
 class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
     """FastMCP tools must advertise the canonical outputSchema from TOOL_DEFINITIONS."""
 
-    def test_fastmcp_tools_use_canonical_output_schema(self):
+    def test_fastmcp_flat_tools_use_canonical_output_schema(self):
+        """Flat-schema tools must have their canonical outputSchema injected."""
         from mcp_cloud.http_server import fastmcp_server
 
         for tool_def in cloud_app.TOOL_DEFINITIONS:
             if tool_def.output_schema is None:
                 continue
+            if "oneOf" in tool_def.output_schema:
+                continue  # oneOf schemas are tested separately
             with self.subTest(tool=tool_def.name):
                 fastmcp_tool = fastmcp_server._tool_manager.get_tool(tool_def.name)
                 self.assertIsNotNone(
@@ -300,6 +303,23 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
                     fastmcp_tool.output_schema,
                     tool_def.output_schema,
                     f"FastMCP tool {tool_def.name!r} outputSchema does not match TOOL_DEFINITIONS",
+                )
+
+    def test_fastmcp_oneof_tools_have_no_output_schema(self):
+        """oneOf schemas must NOT be advertised — MCP clients reject them."""
+        from mcp_cloud.http_server import fastmcp_server
+
+        oneof_tools = [
+            td.name for td in cloud_app.TOOL_DEFINITIONS
+            if td.output_schema and "oneOf" in td.output_schema
+        ]
+        self.assertTrue(len(oneof_tools) > 0, "Expected at least one oneOf tool")
+        for name in oneof_tools:
+            with self.subTest(tool=name):
+                fastmcp_tool = fastmcp_server._tool_manager.get_tool(name)
+                self.assertIsNone(
+                    fastmcp_tool.output_schema,
+                    f"FastMCP tool {name!r} must not advertise oneOf outputSchema",
                 )
 
     def test_all_tool_definitions_registered_in_fastmcp(self):
@@ -314,18 +334,17 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
                     f"TOOL_DEFINITIONS has {tool_def.name!r} but FastMCP does not",
                 )
 
-    def test_plan_file_info_schema_has_three_oneof_variants(self):
-        """plan_file_info must have oneOf with error, not-ready, and ready shapes."""
+    def test_plan_file_info_canonical_schema_has_three_oneof_variants(self):
+        """plan_file_info canonical schema must have oneOf with error, not-ready, and ready shapes."""
         tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, "plan_file_info")
         schema = tool_def.output_schema
         self.assertIn("oneOf", schema)
         self.assertEqual(len(schema["oneOf"]), 3)
-        # Verify the error variant has required: ["error"]
         error_variant = schema["oneOf"][0]
         self.assertIn("error", error_variant.get("required", []))
 
-    def test_plan_status_schema_has_two_oneof_variants(self):
-        """plan_status must have oneOf with error and success shapes."""
+    def test_plan_status_canonical_schema_has_two_oneof_variants(self):
+        """plan_status canonical schema must have oneOf with error and success shapes."""
         tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, "plan_status")
         schema = tool_def.output_schema
         self.assertIn("oneOf", schema)
@@ -348,7 +367,6 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
 
     def test_tool_functions_return_plain_call_tool_result(self):
         """No tool function should use Annotated return type (regression guard)."""
-        import inspect
         import typing
         from mcp_cloud import http_server
 
@@ -368,7 +386,6 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
                 hints = typing.get_type_hints(func, include_extras=True)
                 ret = hints.get("return")
                 origin = getattr(ret, "__class__", None)
-                # typing.Annotated has __class__.__name__ == '_AnnotatedAlias'
                 self.assertNotEqual(
                     getattr(origin, "__name__", ""),
                     "_AnnotatedAlias",
@@ -376,22 +393,21 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
                     f"not Annotated[CallToolResult, ...]",
                 )
 
-    def test_fastmcp_plan_file_info_schema_not_derived_from_pydantic(self):
-        """The injected schema must be the canonical oneOf, not a flat Pydantic derivation."""
+    def test_fastmcp_plan_file_info_not_derived_from_pydantic(self):
+        """plan_file_info must not have a schema derived from PlanFileInfoOutput."""
         from mcp_cloud.http_server import fastmcp_server
         from mcp_cloud.tool_models import PlanFileInfoOutput
 
         fastmcp_tool = fastmcp_server._tool_manager.get_tool("plan_file_info")
         pydantic_schema = PlanFileInfoOutput.model_json_schema()
-        # The FastMCP schema must NOT equal the flat Pydantic schema.
+        # oneOf schemas are not advertised, so output_schema should be None.
+        # Either way, it must NOT equal the flat Pydantic derivation.
         self.assertNotEqual(
             fastmcp_tool.output_schema,
             pydantic_schema,
             "plan_file_info outputSchema looks like it was derived from "
-            "PlanFileInfoOutput instead of the canonical oneOf schema",
+            "PlanFileInfoOutput instead of using the canonical schema",
         )
-        # It must have oneOf.
-        self.assertIn("oneOf", fastmcp_tool.output_schema)
 
 
 if __name__ == "__main__":

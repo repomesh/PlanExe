@@ -785,22 +785,28 @@ def _register_tools(server: FastMCP) -> None:
         )(handler)
 
     # Inject the canonical outputSchema from TOOL_DEFINITIONS into each
-    # FastMCP tool so that list_tools advertises the correct oneOf schemas
-    # (covering success, not-ready, and error shapes) instead of schemas
-    # derived from return-type annotations.
+    # FastMCP tool so that list_tools advertises the schema we control.
     #
     # We set the schema as an instance attribute on the Tool, which shadows
     # the cached_property (Tool.output_schema reads fn_metadata.output_schema).
     # This way list_tools() sees the canonical schema, but fn_metadata stays
     # untouched so convert_result() does not try to validate against a missing
     # output_model.
+    #
+    # Skip oneOf schemas: MCP clients (e.g. Inspector) require outputSchema to
+    # be {"type": "object", ...}. Tools with multiple response shapes
+    # (plan_status, plan_file_info) use oneOf which clients reject. These tools
+    # work correctly without an advertised outputSchema.
     for tool_def in TOOL_DEFINITIONS:
-        if tool_def.output_schema is None:
+        schema = tool_def.output_schema
+        if schema is None:
+            continue
+        if "oneOf" in schema:
             continue
         fastmcp_tool = server._tool_manager.get_tool(tool_def.name)
         if fastmcp_tool is None:
             continue
-        fastmcp_tool.__dict__["output_schema"] = tool_def.output_schema
+        fastmcp_tool.__dict__["output_schema"] = schema
 
 
 fastmcp_server = FastMCP(

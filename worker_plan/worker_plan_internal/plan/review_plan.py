@@ -146,9 +146,21 @@ class ReviewPlan:
                 # Re-raise PipelineStopRequested without wrapping it
                 raise
             except Exception as e:
-                logger.debug(f"Question {index} of {len(title_question_list)}. LLM chat interaction failed: {e}")
-                logger.error(f"Question {index} of {len(title_question_list)}. LLM chat interaction failed.", exc_info=True)
-                raise ValueError("LLM chat interaction failed.") from e
+                logger.warning(f"Question {index} of {len(title_question_list)}. LLM chat interaction failed, using empty answer: {e}")
+                question_answers_list.append({
+                    "title": title,
+                    "question": question,
+                    "answers": [],
+                })
+                metadata_list.append({})
+                durations.append(0)
+                response_byte_counts.append(0)
+                # Add placeholder to maintain conversation structure for subsequent questions
+                chat_message_list.append(ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content='{"bullet_points": []}',
+                ))
+                continue
             if not isinstance(review_plan_run_result, ReviewPlanRunResult):
                 raise ValueError(f"Expected a ReviewPlanRunResult instance. {review_plan_run_result!r}")
 

@@ -194,9 +194,17 @@ class DistillAssumptions:
         metadata["duration"] = duration
         metadata["response_byte_count"] = response_byte_count
 
-        json_response = chat_response.raw.model_dump()
+        assumption_details: AssumptionDetails = chat_response.raw
+        if assumption_details is None:
+            raise ValueError(
+                "Structured LLM returned None for AssumptionDetails. "
+                "The model likely echoed the schema instead of producing values. "
+                "Check model compatibility with structured output."
+            )
 
-        markdown = cls.convert_to_markdown(chat_response.raw)
+        json_response = assumption_details.model_dump()
+
+        markdown = cls.convert_to_markdown(assumption_details)
 
         result = DistillAssumptions(
             system_prompt=system_prompt,

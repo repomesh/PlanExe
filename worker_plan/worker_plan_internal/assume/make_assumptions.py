@@ -263,6 +263,12 @@ class MakeAssumptions:
         metadata["response_byte_count"] = response_byte_count
 
         expert_details: ExpertDetails = chat_response.raw
+        if expert_details is None:
+            raise ValueError(
+                "Structured LLM returned None for ExpertDetails. "
+                "The model likely echoed the schema instead of producing values. "
+                "Check model compatibility with structured output."
+            )
 
         # Build assumption list from structured output (no JSON parsing needed)
         assumption_list = []

@@ -345,6 +345,15 @@ The same `_get_download_base_url()` function is used to build both `download_url
   over loading full ORM objects for read-only endpoints like `plan_status` and `plan_list`.
   This avoids accidentally triggering deferred loads and reduces data transfer.
 
+## Error isolation in fallback chains
+- When a function has multiple fallback steps (e.g. HTTP → DB → zip), wrap each
+  step in its **own** narrow `try/except`. A single broad `try/except` around the
+  whole chain causes early failures (connection refused, timeout) to skip later
+  fallbacks that would have succeeded.
+- Each `except` should log at `warning` level and fall through to the next step.
+- See `_fetch_report_with_fallbacks()` in `worker_fetchers.py` for the canonical
+  example: three isolated try/except blocks for HTTP, DB, and zip snapshot.
+
 ## Worker HTTP fallback ordering
 - When resolving file lists or artifacts, try fast local sources first:
   1. DB zip snapshot (`list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)

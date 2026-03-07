@@ -28,32 +28,30 @@ logger = logging.getLogger(__name__)
 
 
 async def fetch_artifact_from_worker_plan(run_id: str, file_path: str) -> Optional[bytes]:
-    """Fetch an artifact file from worker_plan via HTTP."""
+    """Fetch an artifact file from worker_plan via HTTP.
+
+    For report artifacts, three fallback steps are tried independently:
+    1. HTTP request to worker service
+    2. DB lookup (generated_report_html column)
+    3. Zip snapshot extraction
+
+    Each step has its own try/except so a failure in one (e.g. worker
+    unreachable) does not skip the remaining fallbacks.
+    """
+    is_report = (
+        file_path == "report.html"
+        or file_path.endswith("/report.html")
+        or file_path == REPORT_FILENAME
+        or file_path.endswith(f"/{REPORT_FILENAME}")
+    )
+
+    if is_report:
+        return await _fetch_report_with_fallbacks(run_id)
+
+    # For other files, fetch the zip and extract the file.
+    # This is less efficient but works without a file serving endpoint.
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            # For report.html, use the dedicated report endpoint (most efficient)
-            if (
-                file_path == "report.html"
-                or file_path.endswith("/report.html")
-                or file_path == REPORT_FILENAME
-                or file_path.endswith(f"/{REPORT_FILENAME}")
-            ):
-                report_response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/report")
-                if report_response.status_code == 200:
-                    return report_response.content
-                logger.warning(f"Worker plan returned {report_response.status_code} for report: {run_id}")
-                report_from_db = await asyncio.to_thread(fetch_report_from_db, run_id)
-                if report_from_db is not None:
-                    return report_from_db
-                report_from_zip = await asyncio.to_thread(
-                    fetch_file_from_zip_snapshot, run_id, REPORT_FILENAME
-                )
-                if report_from_zip is not None:
-                    return report_from_zip
-                return None
-
-            # For other files, fetch the zip and extract the file
-            # This is less efficient but works without a file serving endpoint
             async with client.stream("GET", f"{WORKER_PLAN_URL}/runs/{run_id}/zip") as zip_response:
                 if zip_response.status_code != 200:
                     logger.warning(f"Worker plan returned {zip_response.status_code} for zip: {run_id}")
@@ -93,14 +91,52 @@ async def fetch_artifact_from_worker_plan(run_id: str, file_path: str) -> Option
                                 if file_data is not None:
                                     return file_data
 
-            snapshot_file = await asyncio.to_thread(fetch_file_from_zip_snapshot, run_id, file_path)
-            if snapshot_file is not None:
-                return snapshot_file
-            return None
+        snapshot_file = await asyncio.to_thread(fetch_file_from_zip_snapshot, run_id, file_path)
+        if snapshot_file is not None:
+            return snapshot_file
+        return None
 
     except Exception as e:
         logger.error(f"Error fetching artifact from worker_plan: {e}", exc_info=True)
         return None
+
+
+async def _fetch_report_with_fallbacks(run_id: str) -> Optional[bytes]:
+    """Fetch report HTML using three isolated fallback steps.
+
+    Each step is wrapped in its own try/except so that a failure in one
+    (e.g. worker HTTP connection refused) does not prevent the next
+    fallback from being attempted.
+    """
+    # Step 1: Try HTTP request to worker service
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            report_response = await client.get(f"{WORKER_PLAN_URL}/runs/{run_id}/report")
+            if report_response.status_code == 200:
+                return report_response.content
+            logger.warning(f"Worker plan returned {report_response.status_code} for report: {run_id}")
+    except Exception as e:
+        logger.warning(f"HTTP fetch failed for report {run_id}: {e}")
+
+    # Step 2: Try DB lookup (generated_report_html column)
+    try:
+        report_from_db = await asyncio.to_thread(fetch_report_from_db, run_id)
+        if report_from_db is not None:
+            return report_from_db
+    except Exception as e:
+        logger.warning(f"DB fetch failed for report {run_id}: {e}")
+
+    # Step 3: Try zip snapshot extraction
+    try:
+        report_from_zip = await asyncio.to_thread(
+            fetch_file_from_zip_snapshot, run_id, REPORT_FILENAME
+        )
+        if report_from_zip is not None:
+            return report_from_zip
+    except Exception as e:
+        logger.warning(f"Zip snapshot fetch failed for report {run_id}: {e}")
+
+    return None
 
 async def fetch_file_list_from_worker_plan(run_id: str) -> Optional[list[str]]:
     """Fetch the list of files from worker_plan via HTTP."""

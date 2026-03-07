@@ -430,9 +430,10 @@ Client → FastAPI (http_server.py)
 
 When fetching plan files (reports, zips), `worker_fetchers.py` tries sources in priority order:
 
-1. **DB zip snapshot** (`PlanItem.run_zip_snapshot`) — fastest, always available for completed plans
-2. **Local run directory** (`PLANEXE_RUN_DIR/{run_id}/`) — low latency if co-located
-3. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — remote fallback (30s timeout)
+1. **DB** (`PlanItem.generated_report_html` / `PlanItem.run_zip_snapshot`) — fastest, always available for completed plans
+2. **Zip snapshot extraction** — extracts individual files from the DB zip snapshot
+3. **Local run directory** (`PLANEXE_RUN_DIR/{run_id}/`) — low latency if co-located
+4. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — last-resort fallback (10s timeout, 3s connect)
 
 This layered approach avoids blocking on the worker HTTP API when the data is already available locally or in the database.
 

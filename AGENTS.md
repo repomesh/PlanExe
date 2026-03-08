@@ -89,6 +89,21 @@ Always check the package-level `AGENTS.md` for file-specific rules
 - Formatting/linting: no repo-wide formatter is configured; follow existing
   file style and do not add new lint tools unless requested.
 
+## LLM structured-output schemas (Literal vs Enum)
+- In Pydantic models used for LLM structured output, use `Literal["a", "b"]`
+  instead of an `Enum` type for field annotations.
+- Reason: `Enum` fields cause `model_json_schema()` to emit `$defs`/`$ref`
+  indirection. Some structured-output backends (e.g. MLX Outlines for local
+  inference) cannot resolve `$defs`/`$ref` and fail silently or error out.
+  `Literal` produces a flat schema with an inline `enum` array, which is
+  universally supported.
+- Keep the canonical `str(Enum)` class in the same module as the single source
+  of truth for valid values; the `Literal` duplicates those values in the
+  schema annotation only.
+- A CI parity test (`test_enum_literal_parity.py`) asserts that every `Literal`
+  field stays in sync with its corresponding `Enum`. If you add or rename an
+  Enum member, update the matching `Literal` and vice versa.
+
 ## Python version
 - Canonical version is defined in each package `pyproject.toml`.
 

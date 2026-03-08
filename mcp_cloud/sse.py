@@ -140,12 +140,16 @@ async def plan_progress_stream(
 
         # Check if state is terminal
         if state in TERMINAL_STATES:
-            yield _format_sse_event("complete", {
+            payload = {
                 "plan_id": plan_id,
                 "state": state,
                 "progress_percentage": progress,
                 "elapsed_sec": round(elapsed_sec, 1),
-            })
+            }
+            if state == "failed":
+                message = snapshot.get("progress_message") or "Plan generation failed."
+                payload["error"] = {"code": "generation_failed", "message": message}
+            yield _format_sse_event("complete", payload)
             return
 
         # Dedup: only send status when something changed

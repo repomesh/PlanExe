@@ -25,6 +25,9 @@ Always check the package-level `AGENTS.md` for file-specific rules
   `worker_plan/worker_plan_api/prompt/data/*.jsonl`.
 
 ## Hard rules (agent safety)
+- **Never commit directly to `main`.** Always create a feature branch
+  (e.g. `feat/short-description`, `fix/short-description`) and commit there.
+  Push the branch and open a PR so CI can verify the changes.
 - Do not add real API keys or passwords to `.env`, `.env.*`, or any `llm_config/*.json` file.
 - Treat `track_activity.jsonl` as sensitive (may contain API keys/tokens).
   Never expose it to end users.

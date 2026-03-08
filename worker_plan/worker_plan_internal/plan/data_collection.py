@@ -240,7 +240,7 @@ class DataCollection:
             responsible_parties = DataCollection._format_bullet_list(data_collection_item.responsible_parties)
             rows.append(f"\n### Responsible Parties\n\n{responsible_parties}")
 
-            assumption_list = [f"**{item.sensitivity_score.human_readable()}:** {item.assumption}" for item in data_collection_item.assumptions]
+            assumption_list = [f"**{item.sensitivity_score.capitalize()}:** {item.assumption}" for item in data_collection_item.assumptions]
             assumptions = DataCollection._format_bullet_list(assumption_list)
             rows.append(f"\n### Assumptions\n\n{assumptions}")
 

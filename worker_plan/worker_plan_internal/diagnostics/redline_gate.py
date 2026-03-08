@@ -656,11 +656,11 @@ class RedlineGate:
         # --- Main Verdict and Rationale ---
         
         # Color-code the verdict with emojis for quick visual scanning
-        if decision.verdict == "ALLOW":
+        if decision.verdict == Verdict.ALLOW:
             verdict_display = "🟢 ALLOW"
-        elif decision.verdict == "ALLOW_WITH_SAFETY_FRAMING":
+        elif decision.verdict == Verdict.ALLOW_WITH_SAFETY_FRAMING:
             verdict_display = "🟡 ALLOW WITH SAFETY FRAMING"
-        elif decision.verdict == "REFUSE":
+        elif decision.verdict == Verdict.REFUSE:
             verdict_display = "🔴 REFUSE"
         else:
             verdict_display = f"❓ {decision.verdict}"

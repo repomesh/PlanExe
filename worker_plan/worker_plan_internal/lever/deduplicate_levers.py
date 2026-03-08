@@ -242,7 +242,7 @@ class DeduplicateLevers:
                 continue
 
             # Check if this is a keeper
-            if decision.classification != "keep":
+            if decision.classification != LeverClassification.keep:
                 # This is not a keeper
                 continue
 

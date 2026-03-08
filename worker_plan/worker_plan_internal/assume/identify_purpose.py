@@ -12,6 +12,7 @@ import logging
 import json
 from enum import Enum
 from dataclasses import dataclass
+from typing import Literal
 from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
@@ -31,7 +32,7 @@ class PlanPurposeInfo(BaseModel):
     purpose_detailed: str = Field(
         description="Detailed purpose of the plan, such as: health, healthier habits, product, market trend, strategic planning, project management."
     )
-    purpose: PlanPurpose = Field(
+    purpose: Literal["personal", "business", "other"] = Field(
         description="Purpose of the plan."
     )
 

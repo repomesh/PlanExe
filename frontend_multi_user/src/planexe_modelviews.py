@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, cast
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.actions import action
 from flask_admin import expose
@@ -309,7 +309,7 @@ class UserAccountView(AdminOnlyModelView):
             next_balance = max(Decimal("0"), current_balance + delta).quantize(credit_scale)
             user.credits_balance = next_balance
 
-            ledger = CreditHistory(
+            ledger = cast(Any, CreditHistory)(
                 user_id=user.id,
                 delta=delta,
                 reason=reason,

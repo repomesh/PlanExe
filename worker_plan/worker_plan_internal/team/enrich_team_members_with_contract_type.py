@@ -166,7 +166,7 @@ class EnrichTeamMembersWithContractType:
             id = team_member['id']
             enriched_team_member = id_to_enriched_team_member.get(id)
             if enriched_team_member:
-                team_member['contract_type'] = enriched_team_member.contract_type.value
+                team_member['contract_type'] = enriched_team_member.contract_type
                 team_member['contract_type_justification'] = enriched_team_member.justification
         return result_team_member_list
 

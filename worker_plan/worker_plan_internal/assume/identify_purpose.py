@@ -108,7 +108,7 @@ class IdentifyPurpose:
         if plan_purpose_instance is None:
             raise ValueError("LLM returned empty structured response (chat_response.raw is None).")
         json_response = plan_purpose_instance.model_dump()
-        purpose_value = plan_purpose_instance.purpose.value
+        purpose_value = plan_purpose_instance.purpose
         json_response['purpose'] = purpose_value
 
         metadata = dict(llm.metadata)

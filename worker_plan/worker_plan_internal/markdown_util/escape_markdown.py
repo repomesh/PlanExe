@@ -1,4 +1,4 @@
-"""
+r"""
 Escape special markdown characters to prevent syntax interference.
 
 This module provides functionality to escape markdown special characters that

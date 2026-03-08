@@ -4,13 +4,9 @@ This script deduplicates the list.
 
 PROMPT> python -m worker_plan_internal.lever.deduplicate_levers
 
-PROBLEM: A frequent problem is that the deduplicated levers is an empty list, despite having multiple input levers.
-002-11-deduplicated_levers_raw.json
-I often see output like this:
-"deduplicated_levers": []
-It's never supposed to be an empty list. It's supposed to be a list of multiple levers. I need to fix this.
 """
 from enum import Enum
+import functools
 import json
 import logging
 import os
@@ -43,9 +39,6 @@ class LeverDecision(BaseModel):
     classification: Literal["keep", "absorb", "remove"]
     justification: str
 
-class DeduplicationAnalysis(BaseModel):
-    decisions: List[LeverDecision]
-
 class InputLever(BaseModel):
     """Represents a single lever loaded from the initial brainstormed file."""
     lever_id: str
@@ -76,6 +69,13 @@ def _build_compact_history(
     ]
 
 
+def _call_llm(chat_message_list: List[ChatMessage], llm: LLM) -> dict:
+    """Execute a structured LLM call for a single lever classification."""
+    sllm = llm.as_structured_llm(LeverClassificationDecision)
+    chat_response = sllm.chat(chat_message_list)
+    return {"chat_response": chat_response, "metadata": dict(llm.metadata)}
+
+
 DEDUPLICATE_SYSTEM_PROMPT = """
 Evaluate each of the provided strategic levers individually. Classify every lever explicitly into one of:
 
@@ -104,7 +104,7 @@ class DeduplicateLevers:
     """Holds the results of the deduplication."""
     user_prompt: str
     system_prompt: str
-    response: DeduplicationAnalysis
+    response: List[LeverDecision]
     deduplicated_levers: List[OutputLever]
     metadata: List[Dict[str, Any]]
 
@@ -165,10 +165,7 @@ class DeduplicateLevers:
             decision: LeverClassificationDecision | None = None
             result = None
 
-            def execute_function(llm: LLM) -> dict:
-                sllm = llm.as_structured_llm(LeverClassificationDecision)
-                chat_response = sllm.chat(chat_message_list)
-                return {"chat_response": chat_response, "metadata": dict(llm.metadata)}
+            execute_function = functools.partial(_call_llm, chat_message_list)
 
             # First attempt with full conversation history.
             try:
@@ -181,6 +178,7 @@ class DeduplicateLevers:
                 logger.warning(f"Lever {lever.lever_id}: call failed ({e}). Compacting history and retrying.")
                 chat_message_list = _build_compact_history(system_message_with_context, decisions)
                 chat_message_list.append(ChatMessage(role=MessageRole.USER, content=lever_prompt))
+                execute_function = functools.partial(_call_llm, chat_message_list)
 
             # Second attempt with compacted history (only reached if first attempt failed).
             if result is None:
@@ -210,6 +208,10 @@ class DeduplicateLevers:
                     classification=LeverClassification.keep,
                     justification="Classification failed after retries. Keeping this lever to avoid data loss."
                 )
+                chat_message_list.append(ChatMessage(
+                    role=MessageRole.ASSISTANT,
+                    content=json.dumps({"classification": decision.classification, "justification": decision.justification}),
+                ))
 
             decisions.append(LeverDecision(
                 lever_id=lever.lever_id,
@@ -217,21 +219,12 @@ class DeduplicateLevers:
                 justification=decision.justification,
             ))
 
-        analysis_result = DeduplicationAnalysis(decisions=decisions)
-
-        # The LLM may have been unable to classify some levers. Missing decisions default to keep.
-        # Code assembles DeduplicationAnalysis from per-lever results; LLM never sees lever_id in the schema.
-
         # Perform the deduplication.
+        decisions_by_id = {d.lever_id: d for d in decisions}
         output_levers = []
         for lever in input_levers:
-            # Find the decision for this lever
-            decision = None
-            for decision_item in analysis_result.decisions:
-                if decision_item.lever_id == lever.lever_id:
-                    decision = decision_item
-                    break
-            if not decision:
+            lever_decision = decisions_by_id.get(lever.lever_id)
+            if not lever_decision:
                 # Missing decision for this lever. Keep it.
                 deduplication_justification = "Missing deduplication justification. Keeping this lever."
                 output_lever = OutputLever(
@@ -242,12 +235,12 @@ class DeduplicateLevers:
                 continue
 
             # Check if this is a keeper
-            if decision.classification != LeverClassification.keep:
+            if lever_decision.classification != LeverClassification.keep:
                 # This is not a keeper
                 continue
 
             # This is a keeper
-            deduplication_justification = decision.justification.strip()
+            deduplication_justification = lever_decision.justification.strip()
             if len(deduplication_justification) == 0:
                 deduplication_justification = "Empty explanation. Keeping this lever."
 
@@ -260,7 +253,7 @@ class DeduplicateLevers:
         return cls(
             user_prompt=levers_json,
             system_prompt=system_prompt,
-            response=analysis_result,
+            response=decisions,
             deduplicated_levers=output_levers,
             metadata=metadata_list
         )
@@ -268,7 +261,7 @@ class DeduplicateLevers:
     def to_dict(self, include_response=True, include_deduplicated_levers=True, include_metadata=True, include_system_prompt=True, include_user_prompt=True) -> dict:
         d = {}
         if include_response:
-            d["response"] = self.response.model_dump()
+            d["response"] = [item.model_dump() for item in self.response]
         if include_deduplicated_levers:
             d['deduplicated_levers'] = [lever.model_dump() for lever in self.deduplicated_levers]
         if include_metadata:

@@ -330,6 +330,10 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         "files": files[:10],  # Limit to 10 most recent
     }
 
+    if state == "failed":
+        message = plan_snapshot.get("progress_message") or "Plan generation failed."
+        response["error"] = {"code": "generation_failed", "message": message}
+
     if state not in ("completed", "failed"):
         base_url = _get_download_base_url()
         if base_url:

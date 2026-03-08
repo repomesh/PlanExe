@@ -132,6 +132,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
                 PlanItem.state,
                 PlanItem.stop_requested,
                 PlanItem.progress_percentage,
+                PlanItem.progress_message,
                 PlanItem.timestamp_created,
             )
             .filter(PlanItem.id == plan_uuid)
@@ -144,6 +145,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
             "state": row.state,
             "stop_requested": bool(row.stop_requested),
             "progress_percentage": row.progress_percentage,
+            "progress_message": row.progress_message,
             "timestamp_created": row.timestamp_created,
         }
 

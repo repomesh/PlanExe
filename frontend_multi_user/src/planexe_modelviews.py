@@ -11,8 +11,9 @@ from enum import Enum
 from typing import Any
 from flask_admin.contrib.sqla import ModelView
 from flask_admin.actions import action
+from flask_admin import expose
 from markupsafe import Markup
-from flask import url_for, abort, redirect, Response
+from flask import url_for, abort, redirect, Response, request, flash
 from flask_login import current_user
 from sqlalchemy.orm import defer
 from wtforms import FileField, BooleanField
@@ -252,6 +253,118 @@ class NonceItemView(AdminOnlyModelView):
         form = self.scaffold_form()
         delattr(form, 'id')
         return form
+
+
+class UserAccountView(AdminOnlyModelView):
+    """Custom ModelView for UserAccount with admin credit management."""
+
+    column_default_sort = ('created_at', True)
+    column_searchable_list = ['email', 'name']
+    column_filters = ['is_admin', 'created_at', 'last_login_at']
+    column_formatters = {
+        'credits_balance': lambda v, c, m, p: _ceil_decimal(m.credits_balance, 3),
+    }
+
+    @expose('/add-credits/', methods=['GET', 'POST'])
+    def add_credits_view(self):
+        from database_api.model_credit_history import CreditHistory
+
+        if not self.is_accessible():
+            return self.inaccessible_callback('add_credits_view')
+
+        user_id = request.args.get('id') or request.form.get('id')
+        if not user_id:
+            flash('No user selected.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        try:
+            user_uuid = uuid.UUID(str(user_id))
+        except ValueError:
+            flash('Invalid user ID.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        from database_api.model_user_account import UserAccount
+        user = self.session.get(UserAccount, user_uuid)
+        if not user:
+            flash('User not found.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        if request.method == 'POST':
+            try:
+                credits_str = request.form.get('credits', '').strip()
+                if not credits_str:
+                    raise ValueError('Credits amount is required.')
+                credits_amount = Decimal(credits_str)
+                if credits_amount <= 0:
+                    raise ValueError('Credits must be a positive number.')
+            except Exception as e:
+                flash(f'Invalid credits value: {e}', 'error')
+                return redirect(self.get_url('.add_credits_view', id=user_id))
+
+            reason = request.form.get('reason', '').strip() or 'admin_grant'
+            credit_scale = Decimal("0.000000001")
+
+            current_balance = Decimal(str(user.credits_balance or 0)).quantize(credit_scale)
+            delta = Decimal(str(credits_amount)).quantize(credit_scale)
+            next_balance = max(Decimal("0"), current_balance + delta).quantize(credit_scale)
+            user.credits_balance = next_balance
+
+            ledger = CreditHistory(
+                user_id=user.id,
+                delta=delta,
+                reason=reason,
+                source='admin',
+            )
+            self.session.add(ledger)
+            self.session.commit()
+
+            flash(f'Added {credits_amount} credits to {user.email or user.name or user.id}. '
+                  f'New balance: {next_balance}', 'success')
+            return redirect(self.get_url('.index_view'))
+
+        # GET: render the form
+        current_balance = _ceil_decimal(user.credits_balance, 3)
+        user_display = user.email or user.name or str(user.id)
+        html = f'''
+        {{% extends "admin/master.html" %}}
+        {{% block body %}}
+        <h2>Add Credits</h2>
+        <table class="table" style="max-width:400px">
+            <tr><th>User</th><td>{Markup.escape(user_display)}</td></tr>
+            <tr><th>Current Balance</th><td>{current_balance}</td></tr>
+        </table>
+        <form method="POST" action="{self.get_url('.add_credits_view', id=user_id)}">
+            <input type="hidden" name="id" value="{user_id}">
+            <input type="hidden" name="csrf_token" value="{{{{ csrf_token() }}}}">
+            <div class="form-group">
+                <label for="credits">Credits to Add</label>
+                <input type="number" step="0.001" min="0.001" name="credits" id="credits"
+                       class="form-control" style="max-width:200px" required value="1">
+            </div>
+            <div class="form-group" style="margin-top:10px">
+                <label for="reason">Reason</label>
+                <input type="text" name="reason" id="reason" class="form-control"
+                       style="max-width:400px" value="admin_grant"
+                       placeholder="e.g. admin_grant, bonus, refund">
+            </div>
+            <div style="margin-top:15px">
+                <button type="submit" class="btn btn-primary">Add Credits</button>
+                <a href="{self.get_url('.index_view')}" class="btn btn-default" style="margin-left:10px">Cancel</a>
+            </div>
+        </form>
+        {{% endblock %}}
+        '''
+        from flask import render_template_string
+        return render_template_string(html)
+
+    column_extra_row_actions = None  # will be set in __init__
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from flask_admin.model.template import EndpointLinkRowAction
+        self.column_extra_row_actions = [
+            EndpointLinkRowAction('glyphicon glyphicon-plus', '.add_credits_view', title='Add Credits'),
+        ]
 
 
 class TokenMetricsView(AdminOnlyModelView):

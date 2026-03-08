@@ -48,7 +48,7 @@ from database_api.model_user_api_key import UserApiKey
 from database_api.model_credit_history import CreditHistory
 from database_api.model_payment_record import PaymentRecord
 from database_api.model_token_metrics import TokenMetrics, TokenMetricsSummary
-from planexe_modelviews import WorkerItemView, PlanItemView, NonceItemView, TokenMetricsView, AdminOnlyModelView
+from planexe_modelviews import WorkerItemView, PlanItemView, NonceItemView, TokenMetricsView, AdminOnlyModelView, UserAccountView
 logger = logging.getLogger(__name__)
 
 from worker_plan_api.planexe_dotenv import DotEnvKeyEnum, PlanExeDotEnv
@@ -595,7 +595,7 @@ class MyFlaskApp:
         self.admin.add_view(AdminOnlyModelView(model=EventItem, session=self.db.session, name="Event"))
         self.admin.add_view(WorkerItemView(model=WorkerItem, session=self.db.session, name="Worker"))
         self.admin.add_view(NonceItemView(model=NonceItem, session=self.db.session, name="Nonce"))
-        self.admin.add_view(AdminOnlyModelView(model=UserAccount, session=self.db.session, name="User"))
+        self.admin.add_view(UserAccountView(model=UserAccount, session=self.db.session, name="User"))
         self.admin.add_view(AdminOnlyModelView(model=UserProvider, session=self.db.session, name="User Provider"))
         self.admin.add_view(AdminOnlyModelView(model=UserApiKey, session=self.db.session, name="User API Key"))
         self.admin.add_view(AdminOnlyModelView(model=CreditHistory, session=self.db.session, name="Credit History"))

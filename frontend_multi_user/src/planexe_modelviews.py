@@ -325,37 +325,14 @@ class UserAccountView(AdminOnlyModelView):
         # GET: render the form
         current_balance = _ceil_decimal(user.credits_balance, 3)
         user_display = user.email or user.name or str(user.id)
-        html = f'''
-        {{% extends "admin/master.html" %}}
-        {{% block body %}}
-        <h2>Add Credits</h2>
-        <table class="table" style="max-width:400px">
-            <tr><th>User</th><td>{Markup.escape(user_display)}</td></tr>
-            <tr><th>Current Balance</th><td>{current_balance}</td></tr>
-        </table>
-        <form method="POST" action="{self.get_url('.add_credits_view', id=user_id)}">
-            <input type="hidden" name="id" value="{user_id}">
-            <input type="hidden" name="csrf_token" value="{{{{ csrf_token() }}}}">
-            <div class="form-group">
-                <label for="credits">Credits to Add</label>
-                <input type="number" step="0.001" min="0.001" name="credits" id="credits"
-                       class="form-control" style="max-width:200px" required value="1">
-            </div>
-            <div class="form-group" style="margin-top:10px">
-                <label for="reason">Reason</label>
-                <input type="text" name="reason" id="reason" class="form-control"
-                       style="max-width:400px" value="admin_grant"
-                       placeholder="e.g. admin_grant, bonus, refund">
-            </div>
-            <div style="margin-top:15px">
-                <button type="submit" class="btn btn-primary">Add Credits</button>
-                <a href="{self.get_url('.index_view')}" class="btn btn-default" style="margin-left:10px">Cancel</a>
-            </div>
-        </form>
-        {{% endblock %}}
-        '''
-        from flask import render_template_string
-        return render_template_string(html)
+        return self.render(
+            'admin/add_credits.html',
+            user_display=user_display,
+            current_balance=current_balance,
+            form_action=self.get_url('.add_credits_view', id=user_id),
+            user_id=user_id,
+            cancel_url=self.get_url('.index_view'),
+        )
 
     column_extra_row_actions = None  # will be set in __init__
 

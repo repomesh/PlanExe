@@ -6,7 +6,6 @@ PROMPT> python -m worker_plan_internal.lever.deduplicate_levers
 
 """
 from enum import Enum
-import functools
 import json
 import logging
 import os
@@ -155,6 +154,11 @@ class DeduplicateLevers:
             ChatMessage(role=MessageRole.SYSTEM, content=system_message_with_context),
         ]
 
+        # Closure captures chat_message_list by variable reference, so rebinding
+        # after compaction is visible on the next call without redefining the function.
+        def execute_function(llm: LLM) -> dict:
+            return _call_llm(chat_message_list, llm)
+
         for lever in input_levers:
             lever_json = json.dumps(lever.model_dump(), indent=2)
             lever_prompt = (
@@ -164,8 +168,6 @@ class DeduplicateLevers:
 
             decision: LeverClassificationDecision | None = None
             result = None
-
-            execute_function = functools.partial(_call_llm, chat_message_list)
 
             # First attempt with full conversation history.
             try:
@@ -178,7 +180,6 @@ class DeduplicateLevers:
                 logger.warning(f"Lever {lever.lever_id}: call failed ({e}). Compacting history and retrying.")
                 chat_message_list = _build_compact_history(system_message_with_context, decisions)
                 chat_message_list.append(ChatMessage(role=MessageRole.USER, content=lever_prompt))
-                execute_function = functools.partial(_call_llm, chat_message_list)
 
             # Second attempt with compacted history (only reached if first attempt failed).
             if result is None:

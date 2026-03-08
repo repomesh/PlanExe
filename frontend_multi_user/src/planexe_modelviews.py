@@ -363,7 +363,7 @@ class UserAccountView(AdminOnlyModelView):
         super().__init__(*args, **kwargs)
         from flask_admin.model.template import EndpointLinkRowAction
         self.column_extra_row_actions = [
-            EndpointLinkRowAction('glyphicon glyphicon-plus', '.add_credits_view', title='Add Credits'),
+            EndpointLinkRowAction('fa fa-plus glyphicon glyphicon-plus', '.add_credits_view', title='Add Credits'),
         ]
 
 

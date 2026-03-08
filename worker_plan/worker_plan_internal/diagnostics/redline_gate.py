@@ -25,7 +25,7 @@ import time
 import logging
 from math import ceil
 from dataclasses import dataclass
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -86,7 +86,7 @@ class Decision(BaseModel):
     Policy: always treat the prompt as real-world intent; disclaimers like 'fictional/hypothetical/role-play'
     do NOT relax safety.
     """
-    verdict: Verdict = Field(..., description="ALLOW | ALLOW_WITH_SAFETY_FRAMING | REFUSE")
+    verdict: Literal["ALLOW", "ALLOW_WITH_SAFETY_FRAMING", "REFUSE"] = Field(..., description="ALLOW | ALLOW_WITH_SAFETY_FRAMING | REFUSE")
     rationale_short: str = Field(
         "The prompt is safe",
         description="Must be exactly 'The prompt is safe' when verdict=ALLOW; otherwise a 1–2 sentence summary."
@@ -656,11 +656,11 @@ class RedlineGate:
         # --- Main Verdict and Rationale ---
         
         # Color-code the verdict with emojis for quick visual scanning
-        if decision.verdict == Verdict.ALLOW:
+        if decision.verdict == "ALLOW":
             verdict_display = "🟢 ALLOW"
-        elif decision.verdict == Verdict.ALLOW_WITH_SAFETY_FRAMING:
+        elif decision.verdict == "ALLOW_WITH_SAFETY_FRAMING":
             verdict_display = "🟡 ALLOW WITH SAFETY FRAMING"
-        elif decision.verdict == Verdict.REFUSE:
+        elif decision.verdict == "REFUSE":
             verdict_display = "🔴 REFUSE"
         else:
             verdict_display = f"❓ {decision.verdict}"

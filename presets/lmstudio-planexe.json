@@ -4,20 +4,23 @@
   "operation": {
     "fields": [
       {
+        "key": "llm.prediction.structured",
+        "value": {
+          "type": "json",
+          "jsonSchema": ""
+        }
+      },
+      {
         "key": "llm.prediction.temperature",
-        "value": 0.2
-      },
-      {
-        "key": "llm.prediction.contextLength",
-        "value": 32768
-      },
-      {
-        "key": "llm.prediction.maxTokens",
-        "value": 4096
+        "value": 0.55
       },
       {
         "key": "llm.prediction.systemPrompt",
         "value": "You are a structured planning assistant embedded in the PlanExe pipeline. Every response you produce is parsed directly by automated code — a human will not read it first.\n\nRules (follow all of them, always):\n1. Return ONLY valid JSON that exactly matches the schema you are given. No markdown code fences, no preamble, no trailing text, no explanation.\n2. Every field in the schema is required. Do not omit fields. Do not add fields not in the schema.\n3. Fill each field with specific, concrete, actionable content. Never echo back the field name or the schema description as a value.\n4. Vague filler phrases such as \"various factors\", \"multiple options\", \"relevant considerations\", or \"as needed\" are not acceptable — be precise.\n5. Your output feeds downstream pipeline tasks. Incomplete or non-JSON output will cause the entire pipeline to fail."
+      },
+      {
+        "key": "ext.virtualModel.customField.qwen.qwen3.535bA3b.enableThinking",
+        "value": false
       },
       {
         "key": "ext.virtualModel.customField.qwen.qwen3.59b.enableThinking",

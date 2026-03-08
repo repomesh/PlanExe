@@ -93,6 +93,16 @@ def _is_basemodel_subclass(node: ast.ClassDef) -> bool:
     return False
 
 
+def _enum_name_from_annotation(annotation: ast.expr, enum_names: set[str]) -> Optional[str]:
+    """
+    If `annotation` is a bare `ast.Name` referencing one of the known
+    str(Enum) class names, return that name.  Returns None otherwise.
+    """
+    if isinstance(annotation, ast.Name) and annotation.id in enum_names:
+        return annotation.id
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Gather parity cases from all source files
 # ---------------------------------------------------------------------------
@@ -193,4 +203,97 @@ def test_literal_matches_enum(case):
         f"Literal{sorted(literal_vals)} does not match "
         f"{enum_name}{sorted(enum_vals)}. "
         f"Update the Literal or the Enum to keep them in sync."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Bare-Enum detection: find BaseModel fields annotated with a raw Enum type
+# ---------------------------------------------------------------------------
+
+def _gather_bare_enum_cases_from_file(path: Path) -> list[tuple]:
+    """
+    Parse one .py file and return a list of:
+      (file, enum_name, model_name, field_name)
+    for every BaseModel field whose annotation is a bare str(Enum) class
+    instead of Literal[...].
+    """
+    try:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source, filename=str(path))
+    except (SyntaxError, UnicodeDecodeError):
+        return []
+
+    # Collect str(Enum) class names from top-level definitions only
+    # (skips classes inside `if __name__ == "__main__":` blocks)
+    enum_names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            vals = _enum_values_from_classdef(node)
+            if vals is not None:
+                enum_names.add(node.name)
+
+    if not enum_names:
+        return []
+
+    cases = []
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        if not _is_basemodel_subclass(node):
+            continue
+        for item in node.body:
+            if not isinstance(item, ast.AnnAssign):
+                continue
+            enum_name = _enum_name_from_annotation(item.annotation, enum_names)
+            if enum_name is None:
+                continue
+            field_name = (
+                item.target.id
+                if isinstance(item.target, ast.Name)
+                else ast.dump(item.target)
+            )
+            cases.append((
+                str(path.relative_to(Path(__file__).parent.parent.parent.parent)),
+                enum_name,
+                node.name,
+                field_name,
+            ))
+    return cases
+
+
+def _gather_all_bare_enum_cases() -> list[tuple]:
+    package_root = Path(__file__).parent.parent  # worker_plan_internal/
+    cases = []
+    for path in sorted(package_root.rglob("*.py")):
+        if "__pycache__" in path.parts or "test" in path.name:
+            continue
+        if "proof_of_concepts" in path.parts:
+            continue
+        cases.extend(_gather_bare_enum_cases_from_file(path))
+    return cases
+
+
+_BARE_ENUM_CASES = _gather_all_bare_enum_cases()
+
+
+def _bare_enum_case_id(case):
+    file, enum_name, model, field = case
+    short = Path(file).stem
+    return f"{short}::{model}.{field}→{enum_name}"
+
+
+@pytest.mark.parametrize(
+    "case", _BARE_ENUM_CASES,
+    ids=[_bare_enum_case_id(c) for c in _BARE_ENUM_CASES],
+)
+def test_no_bare_enum_in_basemodel(case):
+    """
+    Fail if a BaseModel field is annotated with a bare str(Enum) type.
+    LLM-facing schemas should use Literal[...] instead for better
+    small-model compatibility.
+    """
+    file, enum_name, model_name, field_name = case
+    pytest.fail(
+        f"{file} — {model_name}.{field_name} uses bare Enum type "
+        f"'{enum_name}'. Use Literal[...] instead for LLM-facing schemas."
     )

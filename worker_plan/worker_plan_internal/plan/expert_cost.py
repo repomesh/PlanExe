@@ -4,7 +4,7 @@ Ask a specific expert about estimating cost.
 import json
 import time
 from math import ceil
-from typing import Optional
+from typing import Literal, Optional
 from enum import Enum
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
@@ -30,7 +30,7 @@ class CostUnit(str, Enum):
 
 class CostComponent(BaseModel):
     name: str = Field(description="Human-readable name of the cost component.")
-    unit: CostUnit = Field(description="Indicates how costs are measured.")
+    unit: Literal["hour", "day", "lumpsum", "item", "other"] = Field(description="Indicates how costs are measured.")
     quantity: float = Field(description="Number of units, if applicable.")
     currency: str = Field(description="What currency used in this cost component, such as: USD, EUR.")
     unit_cost: float = Field(description="Cost per unit, if applicable.")

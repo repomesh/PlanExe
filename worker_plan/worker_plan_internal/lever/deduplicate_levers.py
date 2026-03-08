@@ -16,7 +16,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Literal
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
 from pydantic import BaseModel, Field, ValidationError
@@ -31,7 +31,7 @@ class LeverClassification(str, Enum):
 
 class LeverClassificationDecision(BaseModel):
     """Minimal per-lever schema. lever_id is assigned by code, not the LLM."""
-    classification: LeverClassification = Field(
+    classification: Literal["keep", "absorb", "remove"] = Field(
         description="What should happen to this lever: keep (distinct), absorb (overlaps another), or remove (fully redundant)."
     )
     justification: str = Field(
@@ -40,7 +40,7 @@ class LeverClassificationDecision(BaseModel):
 
 class LeverDecision(BaseModel):
     lever_id: str
-    classification: LeverClassification
+    classification: Literal["keep", "absorb", "remove"]
     justification: str
 
 class DeduplicationAnalysis(BaseModel):
@@ -65,7 +65,7 @@ def _build_compact_history(
 ) -> List[ChatMessage]:
     """Option C: replace full conversation history with a compact summary in the system message."""
     summary = "\n".join(
-        f"- [{d.lever_id}] {d.classification.value}: {d.justification[:80]}..."
+        f"- [{d.lever_id}] {d.classification}: {d.justification[:80]}..."
         for d in prior_decisions
     )
     return [
@@ -199,7 +199,7 @@ class DeduplicateLevers:
                     decision = raw
                     chat_message_list.append(ChatMessage(
                         role=MessageRole.ASSISTANT,
-                        content=json.dumps({"classification": decision.classification.value, "justification": decision.justification}),
+                        content=json.dumps({"classification": decision.classification, "justification": decision.justification}),
                     ))
                 else:
                     logger.warning(f"Lever {lever.lever_id}: returned None raw.")

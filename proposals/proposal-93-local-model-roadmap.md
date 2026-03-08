@@ -16,7 +16,10 @@ PlanExe achieved its first complete pipeline run on local hardware using Qwen 3.
 ## Milestone Achieved: March 7, 2026
 
 ### The Run
-- **Model:** Qwen 3.5-9B (quantized, via LM Studio)
+- **Model:** Qwen 3.5-9B — `lmstudio-community/Qwen3.5-9B-GGUF`, Q4_K_M quantization, 6.1 GB
+  - HuggingFace: https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF
+  - LM Studio key: `qwen/qwen3.5-9b@q4_k_m`
+  - Max context: 262,144 tokens
 - **Hardware:** Mac Mini M4 Pro (14-core CPU, 64GB unified memory)
 - **Tasks:** 63-task PlanExe pipeline
 - **Result:** 0 failures, 100% task completion rate
@@ -189,7 +192,7 @@ Scan all 63 task definitions for:
 
 ## References
 
-- **Qwen 3.5-9B:** https://huggingface.co/Qwen/Qwen2.5-9B
+- **Qwen 3.5-9B:** https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF (Q4_K_M, 6.1 GB)
 - **GLM 4.7 Flash:** https://huggingface.co/THUDM/glm-4-9b
 - **LM Studio:** https://lmstudio.ai/
 - **Outlines Grammar:** https://github.com/outlines-ai/outlines

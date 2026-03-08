@@ -1,6 +1,6 @@
 {
     "lmstudio-qwen-2.5-7b": {
-        "comment": "Local Qwen 2.5 7B (PRIMARY). Uses OpenAILike with should_use_structured_outputs=true so llama_index sends response_format:json_schema (grammar-enforced) instead of injecting the schema as prompt text.",
+        "comment": "Local Qwen 2.5 7B (DEFAULT). Lightweight, compatible with most consumer hardware. Uses OpenAILike with should_use_structured_outputs=true so llama_index sends response_format:json_schema (grammar-enforced) instead of injecting the schema as prompt text.",
         "priority": 0,
         "luigi_workers": 1,
         "class": "OpenAILike",
@@ -18,9 +18,28 @@
         },
         "pricing_kind": "free"
     },
+    "lmstudio-qwen3.5-9b": {
+        "comment": "Local Qwen 3.5-9B (RECOMMENDED for capable hardware, e.g. Apple M4 Pro 64GB). Model: lmstudio-community/Qwen3.5-9B-GGUF (Qwen3.5-9B-Q4_K_M.gguf), 6.1 GB (https://huggingface.co/lmstudio-community/Qwen3.5-9B-GGUF). Verified: 63/63 tasks, 0 failures on Mac Mini M4 Pro 64GB. context_window 32768 required \u2014 default 3900 causes silent prompt truncation on longer tasks. Requires LM Studio planexe-agents preset (or equivalent) to suppress Qwen3 thinking tokens; without it, thinking output breaks structured JSON parsing.",
+        "priority": 1,
+        "luigi_workers": 1,
+        "class": "OpenAILike",
+        "arguments": {
+            "model": "qwen/qwen3.5-9b",
+            "api_base": "http://127.0.0.1:1234/v1",
+            "api_key": "lm-studio",
+            "temperature": 0.55,
+            "timeout": 600.0,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "context_window": 32768,
+            "max_tokens": 4096,
+            "should_use_structured_outputs": true
+        },
+        "pricing_kind": "free"
+    },
     "lmstudio-fallback": {
         "comment": "Local LM Studio fallback model. Uses OpenAILike with should_use_structured_outputs=true for grammar-enforced structured output.",
-        "priority": 1,
+        "priority": 2,
         "luigi_workers": 1,
         "class": "OpenAILike",
         "arguments": {

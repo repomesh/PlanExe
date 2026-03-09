@@ -891,7 +891,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call plan_create. "
     "Each plan_create call creates a new plan_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll plan_status (about every 5 minutes); use plan_download when complete. "
-    "If a run fails before completing all steps, call plan_resume to continue from where it left off without discarding completed tasks. "
+    "If plan generation fails before completing all steps, call plan_resume to continue from where it left off without discarding completed work. "
     "Use plan_retry instead for a full restart. "
     "Both accept the failed plan_id and optional model_profile (defaults to baseline). "
     "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "

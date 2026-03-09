@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi pipeline stages) that prod
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
-- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a plan fails mid-pipeline, call `plan_resume` to continue from where it left off without discarding completed tasks. Use `plan_retry` for a full restart. Both accept the failed `plan_id` and optional `model_profile` (default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
+- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a plan fails before completing all steps, call `plan_resume` to continue from where it left off without discarding completed tasks. Use `plan_retry` for a full restart (plan must be in failed state). Both accept the failed `plan_id` and optional `model_profile` (default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
 - **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
@@ -438,9 +438,9 @@ Retries a plan that is currently in `failed` state.
 
 ### 6.6 plan_resume
 
-Resume a failed plan without discarding completed pipeline outputs. The pipeline restarts from the first incomplete task, skipping all tasks that already produced output files.
+Resume a failed plan without discarding completed intermediary files. The run restarts from the first incomplete step, skipping all steps that already produced output files.
 
-Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted mid-pipeline (network drop, timeout, `plan_stop`, worker crash). For a full restart or to change `model_profile`, use `plan_retry` instead.
+Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted before completing all steps (network drop, timeout, `plan_stop`, worker crash). For a full restart or to change `model_profile`, use `plan_retry` instead.
 
 **Request**
 
@@ -479,7 +479,7 @@ Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted 
 
 | Scenario | Use |
 |----------|-----|
-| Run interrupted mid-pipeline (network drop, timeout, stop, crash) | `plan_resume` |
+| Interrupted before completing all steps (network drop, timeout, stop, crash) | `plan_resume` |
 | Full restart from scratch | `plan_retry` |
 | Change model_profile for a fresh run | `plan_retry` |
 | Continue where you left off, preserving completed work | `plan_resume` |

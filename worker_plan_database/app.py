@@ -522,7 +522,7 @@ def create_zip_bytes(run_dir: Path) -> bytes:
     return buffer.read()
 
 
-def restore_run_dir_from_zip_snapshot(plan_id: str, run_id_dir: Path) -> bool:
+def restore_output_dir_from_zip_snapshot(plan_id: str, run_id_dir: Path) -> bool:
     """Restore the output directory from the zip snapshot stored in the database.
 
     Used by plan_resume to reconstruct the output directory so Luigi can skip
@@ -1143,7 +1143,7 @@ def process_pending_tasks() -> bool:
 
     if is_resume:
         logger.info("Resume requested for plan %s; restoring output directory from zip snapshot.", task_id)
-        restored = restore_run_dir_from_zip_snapshot(task_id, run_id_dir)
+        restored = restore_output_dir_from_zip_snapshot(task_id, run_id_dir)
         if restored:
             # Verify the snapshot was produced by a compatible pipeline version.
             metadata_path = run_id_dir / FilenameEnum.PLANEXE_METADATA.value

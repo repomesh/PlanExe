@@ -470,10 +470,9 @@ Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted 
 
 **Required semantics**
 
-- Only failed plans are resumable.
+- The MCP tool only accepts plans in `failed` state. However, the underlying Luigi mechanism is more general: Luigi skips any task whose output file already exists and re-executes any task whose output file is missing. This means a completed plan can be partially re-run by deleting `999-pipeline_complete.txt` and the output files of the tasks you want to regenerate — Luigi will re-execute those tasks and all their downstream dependents. The MCP API does not yet expose this capability; it is available when running the pipeline locally via `run_plan_pipeline.py`.
 - On success, the same plan_id is reset to `pending` and requeued.
 - Prior artifacts are **preserved** — the worker restores the run directory from the stored zip snapshot.
-- Luigi skips tasks whose output files already exist; only incomplete tasks are re-executed.
 - `resume_count` tracks how many times the plan has been resumed.
 
 **When to use plan_resume vs plan_retry**

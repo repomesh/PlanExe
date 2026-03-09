@@ -20,6 +20,7 @@ from mcp_cloud.db_setup import (
     PlanStatusRequest,
     PlanStopRequest,
     PlanRetryRequest,
+    PlanResumeRequest,
     PlanFileInfoRequest,
     PlanListRequest,
     ModelProfilesRequest,
@@ -31,6 +32,7 @@ from mcp_cloud.db_queries import (
     _get_plan_status_snapshot_sync,
     _request_plan_stop_sync,
     _retry_failed_plan_sync,
+    _resume_plan_sync,
     _get_plan_for_report_sync,
     _list_plans_sync,
     get_plan_state_mapping,
@@ -442,6 +444,45 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
+async def handle_plan_resume(arguments: dict[str, Any]) -> CallToolResult:
+    """Resume a failed plan without discarding completed pipeline outputs."""
+    req = PlanResumeRequest(**arguments)
+    plan_id = req.plan_id
+
+    resume_result = await asyncio.to_thread(_resume_plan_sync, plan_id, req.model_profile)
+
+    if resume_result is None:
+        response = {
+            "error": {
+                "code": "PLAN_NOT_FOUND",
+                "message": f"Plan not found: {plan_id}",
+            }
+        }
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    if isinstance(resume_result.get("error"), dict):
+        response = resume_result
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    response = resume_result
+    base_url = _get_download_base_url()
+    if base_url and response.get("plan_id"):
+        response["sse_url"] = f"{base_url}/sse/plan/{response['plan_id']}"
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
 async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     """Return download metadata for a plan's report or zip artifact.
 
@@ -626,6 +667,7 @@ TOOL_HANDLERS = {
     "plan_status": handle_plan_status,
     "plan_stop": handle_plan_stop,
     "plan_retry": handle_plan_retry,
+    "plan_resume": handle_plan_resume,
     "plan_file_info": handle_plan_file_info,
     "plan_list": handle_plan_list,
 }

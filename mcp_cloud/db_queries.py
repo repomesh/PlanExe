@@ -251,6 +251,65 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
         }
 
 
+def _resume_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, Any]]:
+    with app.app_context():
+        plan = find_plan_by_id(plan_id)
+        if plan is None:
+            return None
+        if plan.state != PlanState.failed:
+            return {
+                "error": {
+                    "code": "PLAN_NOT_RESUMABLE",
+                    "message": f"Plan is not in failed state: {plan_id}",
+                }
+            }
+
+        normalized_profile = normalize_model_profile(model_profile).value
+        now_utc = datetime.now(UTC)
+        parameters = dict(plan.parameters) if isinstance(plan.parameters, dict) else {}
+        parameters["model_profile"] = normalized_profile
+        parameters["trigger_source"] = "mcp plan_resume"
+        parameters["resume"] = True
+        parameters["resume_count"] = parameters.get("resume_count", 0) + 1
+
+        # Reset state to pending but preserve artifacts and progress.
+        plan.state = PlanState.pending
+        plan.progress_message = "Resume requested via MCP."
+        plan.stop_requested = False
+        plan.stop_requested_timestamp = None
+        plan.parameters = parameters
+        # Keep: timestamp_created, progress_percentage, steps_completed,
+        # steps_total, current_step, generated_report_html, run_zip_snapshot,
+        # run_track_activity_jsonl, run_track_activity_bytes,
+        # run_activity_overview_json, run_artifact_layout_version.
+
+        db.session.commit()
+
+        event_context = {
+            "plan_id": str(plan.id),
+            "task_handle": str(plan.id),
+            "resume_of_plan_id": plan_id,
+            "model_profile": normalized_profile,
+            "resume_count": parameters["resume_count"],
+            "parameters": plan.parameters,
+        }
+        event = EventItem(
+            event_type=EventType.TASK_PENDING,
+            message="Resumed failed task via MCP",
+            context=event_context,
+        )
+        db.session.add(event)
+        db.session.commit()
+
+        return {
+            "plan_id": str(plan.id),
+            "state": get_plan_state_mapping(plan.state),
+            "model_profile": normalized_profile,
+            "resume_count": parameters["resume_count"],
+            "resumed_at": format_datetime_utc(now_utc),
+        }
+
+
 def _get_plan_for_report_sync(plan_id: str) -> Optional[dict[str, Any]]:
     with app.app_context():
         try:

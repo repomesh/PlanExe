@@ -516,6 +516,39 @@ def create_zip_bytes(run_dir: Path) -> bytes:
     return buffer.read()
 
 
+def restore_run_dir_from_zip_snapshot(task_id: str, run_id_dir: Path) -> bool:
+    """Restore a run directory from the zip snapshot stored in the database.
+
+    Used by plan_resume to reconstruct the run directory so Luigi can skip
+    completed tasks and pick up where it left off.
+
+    Returns True on success, False if snapshot is None or extraction fails.
+    """
+    try:
+        plan_uuid = uuid.UUID(task_id)
+    except ValueError:
+        logger.warning("Invalid task_id for zip restore: %s", task_id)
+        return False
+
+    with app.app_context():
+        plan = db.session.get(PlanItem, plan_uuid)
+        if plan is None or plan.run_zip_snapshot is None:
+            logger.warning("No zip snapshot found for task %s", task_id)
+            return False
+        zip_bytes = plan.run_zip_snapshot
+
+    try:
+        run_id_dir.mkdir(parents=True, exist_ok=True)
+        buffer = io.BytesIO(zip_bytes)
+        with zipfile.ZipFile(buffer, "r") as zipf:
+            zipf.extractall(run_id_dir)
+        logger.info("Restored run directory from zip snapshot for task %s (%d bytes)", task_id, len(zip_bytes))
+        return True
+    except Exception as exc:
+        logger.warning("Failed to restore run directory from zip snapshot for task %s: %s", task_id, exc)
+        return False
+
+
 def read_activity_artifacts(run_id_dir: Path) -> tuple[Optional[str], Optional[int], Optional[dict[str, object]]]:
     """Read track/activity artifacts from a run directory for PlanItem persistence."""
     track_activity_path = run_id_dir / ExtraFilenameEnum.TRACK_ACTIVITY_JSONL.value
@@ -1098,10 +1131,27 @@ def process_pending_tasks() -> bool:
     duration_between_pending_and_processing = (datetime.now(UTC) - timestamp).total_seconds()
     logger.debug(f"Duration between pending and processing: {duration_between_pending_and_processing} seconds")
 
-    # Create a run_id_dir for the task
+    # Create a run_id_dir for the task (or restore from zip snapshot on resume)
     run_id_dir = BASE_DIR_RUN / task_id
-    logger.debug(f"creating run_id_dir: {run_id_dir!r}")
-    run_id_dir.mkdir(parents=True, exist_ok=True)
+    is_resume = bool(parameters and parameters.get("resume", False))
+
+    if is_resume:
+        logger.info("Resume requested for task %s; restoring run directory from zip snapshot.", task_id)
+        restored = restore_run_dir_from_zip_snapshot(task_id, run_id_dir)
+        if restored:
+            # Remove pipeline completion markers so Luigi re-evaluates what to run
+            for marker_name in ("999-pipeline_complete.txt", "pipeline_stop_requested.txt"):
+                marker_path = run_id_dir / marker_name
+                if marker_path.exists():
+                    marker_path.unlink()
+                    logger.info("Removed pipeline marker %s for resumed task %s", marker_name, task_id)
+        else:
+            logger.warning("Zip snapshot restore failed for task %s; falling back to fresh run.", task_id)
+            is_resume = False  # fall through to fresh setup below
+
+    if not is_resume:
+        logger.debug(f"creating run_id_dir: {run_id_dir!r}")
+        run_id_dir.mkdir(parents=True, exist_ok=True)
 
     # write the start time to the run_id_dir
     start_time: datetime = datetime.now().astimezone()

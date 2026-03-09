@@ -15,6 +15,8 @@ from mcp_cloud.tool_models import (
     PlanCreateOutput,
     PlanRetryInput,
     PlanRetryOutput,
+    PlanResumeInput,
+    PlanResumeOutput,
     PlanStopOutput,
     PlanStatusInput,
     PlanStopInput,
@@ -42,6 +44,7 @@ PLAN_STATUS_OUTPUT_SCHEMA = {
 }
 PLAN_STOP_OUTPUT_SCHEMA = PlanStopOutput.model_json_schema()
 PLAN_RETRY_OUTPUT_SCHEMA = PlanRetryOutput.model_json_schema()
+PLAN_RESUME_OUTPUT_SCHEMA = PlanResumeOutput.model_json_schema()
 PLAN_FILE_INFO_READY_OUTPUT_SCHEMA = PlanFileInfoReadyOutput.model_json_schema()
 PLAN_FILE_INFO_NOT_READY_OUTPUT_SCHEMA = PlanFileInfoNotReadyOutput.model_json_schema()
 PLAN_FILE_INFO_OUTPUT_SCHEMA = {
@@ -58,6 +61,7 @@ PLAN_FILE_INFO_OUTPUT_SCHEMA = {
 PLAN_STATUS_INPUT_SCHEMA = PlanStatusInput.model_json_schema()
 PLAN_STOP_INPUT_SCHEMA = PlanStopInput.model_json_schema()
 PLAN_RETRY_INPUT_SCHEMA = PlanRetryInput.model_json_schema()
+PLAN_RESUME_INPUT_SCHEMA = PlanResumeInput.model_json_schema()
 PLAN_FILE_INFO_INPUT_SCHEMA = PlanFileInfoInput.model_json_schema()
 
 EXAMPLE_PROMPTS_INPUT_SCHEMA = ExamplePromptsInput.model_json_schema()
@@ -220,6 +224,26 @@ TOOL_DEFINITIONS = [
         ),
         input_schema=PLAN_RETRY_INPUT_SCHEMA,
         output_schema=PLAN_RETRY_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    ),
+    ToolDefinition(
+        name="plan_resume",
+        description=(
+            "Resume a failed plan without discarding completed pipeline outputs. "
+            "The pipeline restarts from the first incomplete task, skipping all tasks that already produced output files. "
+            "Use plan_resume when plan_status shows 'failed' and the run was interrupted mid-pipeline "
+            "(network drop, timeout, plan_stop, worker crash). "
+            "For a full restart or to change model_profile, use plan_retry instead. "
+            "Only failed plans can be resumed. "
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state."
+        ),
+        input_schema=PLAN_RESUME_INPUT_SCHEMA,
+        output_schema=PLAN_RESUME_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,

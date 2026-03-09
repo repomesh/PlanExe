@@ -53,6 +53,7 @@ from mcp_cloud.app import (
     handle_model_profiles,
     handle_plan_status,
     handle_plan_retry,
+    handle_plan_resume,
     handle_plan_stop,
     handle_plan_file_info,
     handle_example_prompts,
@@ -725,6 +726,16 @@ async def plan_retry(
     return await handle_plan_retry(arguments)
 
 
+async def plan_resume(
+    plan_id: str = Field(..., description="UUID of the failed plan to resume."),
+    model_profile: Annotated[
+        ModelProfileInput,
+        Field(description="Model profile used for the resumed run. Defaults to baseline."),
+    ] = "baseline",
+) -> CallToolResult:
+    return await handle_plan_resume({"plan_id": plan_id, "model_profile": model_profile})
+
+
 async def plan_file_info(
     plan_id: str = Field(..., description="Plan UUID returned by plan_create. Use it to download the created plan."),
     artifact: Annotated[
@@ -770,6 +781,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_status": plan_status,
         "plan_stop": plan_stop,
         "plan_retry": plan_retry,
+        "plan_resume": plan_resume,
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
     }

@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi pipeline stages) that prod
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
-- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a plan fails and the caller wants another attempt for the same `plan_id`, call `plan_retry` (optional `model_profile`, default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
+- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal). If a plan fails mid-pipeline, call `plan_resume` to continue from where it left off without discarding completed tasks. Use `plan_retry` for a full restart. Both accept the failed `plan_id` and optional `model_profile` (default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
 - **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
@@ -70,10 +70,10 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_retry on failed → uses plan_file_info (and optionally plan_download via mcp_local). This document specifies those tools.
+- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry, plan_resume): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_resume or plan_retry on failed → uses plan_file_info (and optionally plan_download via mcp_local). This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: optionally call `example_plans`; call `example_prompts`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed call `plan_retry` (optional); then call `plan_file_info` (or `plan_download` via mcp_local) when completed.
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: optionally call `example_plans`; call `example_prompts`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed call `plan_resume` to continue or `plan_retry` for a full restart (optional); then call `plan_file_info` (or `plan_download` via mcp_local) when completed.
 
 ---
 
@@ -142,7 +142,7 @@ The public MCP `state` field is aligned with `PlanItem.state`:
 - pending → processing when picked up by a worker
 - processing → completed via normal success
 - processing → failed via error
-- failed → pending when `plan_retry` is accepted
+- failed → pending when `plan_retry` or `plan_resume` is accepted
 
 ### 5.3 Invalid transitions
 
@@ -436,7 +436,63 @@ Retries a plan that is currently in `failed` state.
 
 ---
 
-### 6.6 Download flow (plan_download vs plan_file_info)
+### 6.6 plan_resume
+
+Resume a failed plan without discarding completed pipeline outputs. The pipeline restarts from the first incomplete task, skipping all tasks that already produced output files.
+
+Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted mid-pipeline (network drop, timeout, `plan_stop`, worker crash). For a full restart or to change `model_profile`, use `plan_retry` instead.
+
+**Request**
+
+```json
+{
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "model_profile": "baseline"
+}
+```
+
+**Input**
+
+- plan_id: UUID of a failed plan.
+- model_profile: optional (`baseline` | `premium` | `frontier` | `custom`), default `baseline`.
+
+**Response**
+
+```json
+{
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "state": "pending",
+  "model_profile": "baseline",
+  "resume_count": 1,
+  "resumed_at": "2026-03-09T15:20:00Z"
+}
+```
+
+**Required semantics**
+
+- Only failed plans are resumable.
+- On success, the same plan_id is reset to `pending` and requeued.
+- Prior artifacts are **preserved** — the worker restores the run directory from the stored zip snapshot.
+- Luigi skips tasks whose output files already exist; only incomplete tasks are re-executed.
+- `resume_count` tracks how many times the plan has been resumed.
+
+**When to use plan_resume vs plan_retry**
+
+| Scenario | Use |
+|----------|-----|
+| Run interrupted mid-pipeline (network drop, timeout, stop, crash) | `plan_resume` |
+| Full restart from scratch | `plan_retry` |
+| Change model_profile for a fresh run | `plan_retry` |
+| Continue where you left off, preserving completed work | `plan_resume` |
+
+**Error behavior**
+
+- Unknown plan_id: `PLAN_NOT_FOUND` (`isError=true`).
+- Plan not failed: `PLAN_NOT_RESUMABLE` (`isError=true`).
+
+---
+
+### 6.7 Download flow (plan_download vs plan_file_info)
 
 **If your client exposes plan_download** (e.g. mcp_local): use it to save the report or zip locally; it calls plan_file_info under the hood, then fetches and writes to the local save path (e.g. PLANEXE_PATH).
 
@@ -492,7 +548,7 @@ Recommended practice for MCP clients:
 Additional semantics:
 
 - Every `plan_create` call creates a new independent plan with a new `plan_id`.
-- `plan_retry` reuses the existing failed `plan_id` (it does not create a new plan id).
+- `plan_retry` and `plan_resume` reuse the existing failed `plan_id` (they do not create a new plan id).
 - The server does not deduplicate “same prompt” requests into a single shared plan.
 - Keep your own plan registry/client state if you run multiple plans concurrently.
 
@@ -521,7 +577,7 @@ Example:
 
 ### 9.2 isError behavior
 
-- `plan_create`, `plan_status`, `plan_stop`, `plan_retry`: unknown/invalid requests return `isError=true` with `error`.
+- `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_resume`: unknown/invalid requests return `isError=true` with `error`.
 - `model_profiles`: returns `isError=true` with `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
 - `plan_file_info`: uses mixed behavior:
   - returns `{}` (not an error) while artifacts are not ready.
@@ -537,6 +593,7 @@ Cloud/core tool codes:
 - `INTERNAL_ERROR`: uncaught server error.
 - `PLAN_NOT_FOUND`: plan_id not found.
 - `PLAN_NOT_FAILED`: plan_retry called for a plan that is not in failed state.
+- `PLAN_NOT_RESUMABLE`: plan_resume called for a plan that is not in failed state.
 - `INVALID_USER_API_KEY`: provided user_api_key is invalid.
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for plan_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for plan_create.
@@ -561,6 +618,7 @@ Local proxy specific codes:
   - `INSUFFICIENT_CREDITS`
   - `INVALID_TOOL`
 - For `PLAN_NOT_FAILED`: call `plan_retry` only after `plan_status.state == failed`.
+- For `PLAN_NOT_RESUMABLE`: call `plan_resume` only after `plan_status.state == failed`.
 - For `PLAN_NOT_FOUND`: verify plan_id source and stop polling that id.
 - For `generation_failed`: treat as terminal failure and surface plan progress_message to user.
 

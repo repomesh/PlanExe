@@ -485,6 +485,29 @@ Use `plan_resume` when `plan_status` shows `failed` and the run was interrupted 
 | Change model_profile for a fresh run | `plan_retry` |
 | Continue where you left off, preserving completed work | `plan_resume` |
 
+**Pipeline compatibility caveat**
+
+Resuming restores the run directory from a stored zip snapshot and relies on Luigi's file-based task skipping: if an output file exists, the task is skipped. This works reliably when the running code matches the code that produced the snapshot. It can break when the pipeline has changed between the original run and the resume attempt:
+
+- **Renamed or removed filenames** (`FilenameEnum` in `filenames.py`): if a task's output filename changes, Luigi won't find the old file and will re-execute the task — but downstream tasks that already ran may reference the old filename's content, producing inconsistencies.
+- **New pipeline steps added**: new tasks may expect upstream outputs that don't exist in the snapshot.
+- **Changed task dependencies**: if the DAG wiring changes, Luigi may execute tasks in a different order or skip tasks that should re-run.
+- **Changed JSON schemas**: resumed tasks may read snapshot files whose internal structure no longer matches what the current code expects.
+
+In practice, resuming a plan that failed minutes or hours ago on the same deployment is safe. Resuming a plan that is weeks or months old — after the server has been updated with pipeline changes — may produce errors or inconsistent output. When in doubt, use `plan_retry` for a clean restart.
+
+**Future mitigation (not yet implemented)**
+
+To detect incompatible snapshots automatically, a pipeline version identifier could be stored alongside the snapshot at creation time and checked on resume. Options under consideration:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Monotonic version integer** (e.g. `pipeline_version = 42`, bumped manually on breaking changes) | Simple to compare; cheap to store | Relies on developers remembering to bump; no automatic detection of breaking changes |
+| **Content hash of `filenames.py`** (e.g. SHA-256 of the file) | Automatically detects filename changes — the most common breaking change | Doesn't capture DAG wiring or schema changes; any cosmetic edit (comments, whitespace) changes the hash |
+| **Manifest JSON** (records `FilenameEnum` values, task dependency graph, and a schema version per task) | Comprehensive; can do fine-grained compatibility checks | More complex to generate and maintain; needs updating when tasks change |
+
+A practical first step would be to store a `pipeline_version` integer in the snapshot metadata and in the worker code, and reject resume when they differ with a clear error (e.g. `PIPELINE_VERSION_MISMATCH`). This catches the vast majority of cases — stale plans after a deployment update — with minimal implementation effort. Finer-grained approaches (manifest, per-task schema versions) can be layered on later if needed.
+
 **Error behavior**
 
 - Unknown plan_id: `PLAN_NOT_FOUND` (`isError=true`).

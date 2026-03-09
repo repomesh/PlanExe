@@ -819,7 +819,8 @@ TOOL_DEFINITIONS = [
             "(network drop, timeout, plan_stop, worker crash). "
             "For a full restart or to change model_profile, use plan_retry instead. "
             "Only failed plans can be resumed. "
-            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state."
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state. "
+            "Returns PIPELINE_VERSION_MISMATCH when the snapshot was created by a different pipeline version; use plan_retry instead."
         ),
         input_schema=PLAN_RESUME_INPUT_SCHEMA,
         output_schema=PLAN_RESUME_OUTPUT_SCHEMA,

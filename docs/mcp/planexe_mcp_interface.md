@@ -495,22 +495,17 @@ Resuming restores the run directory from a stored zip snapshot and relies on Lui
 
 In practice, resuming a plan that failed minutes or hours ago on the same deployment is safe. Resuming a plan that is weeks or months old — after the server has been updated with pipeline changes — may produce errors or inconsistent output. When in doubt, use `plan_retry` for a clean restart.
 
-**Future mitigation (not yet implemented)**
+**Pipeline version check**
 
-To detect incompatible snapshots automatically, a pipeline version identifier could be stored alongside the snapshot at creation time and checked on resume. Options under consideration:
+A `PIPELINE_VERSION` integer constant (in `worker_plan_api/pipeline_version.py`) is stamped into the plan's `parameters` on every `plan_create`, `plan_retry`, and `plan_resume`. On `plan_resume`, the stored version is compared to the current constant using strict equality. If they differ, resume is rejected with error code `PIPELINE_VERSION_MISMATCH` and the caller should use `plan_retry` for a clean restart. Legacy plans with no stored version are treated as incompatible.
 
-| Approach | Pros | Cons |
-|----------|------|------|
-| **Monotonic version integer** (e.g. `pipeline_version = 42`, bumped manually on breaking changes) | Simple to compare; cheap to store | Relies on developers remembering to bump; no automatic detection of breaking changes |
-| **Content hash of `filenames.py`** (e.g. SHA-256 of the file) | Automatically detects filename changes — the most common breaking change | Doesn't capture DAG wiring or schema changes; any cosmetic edit (comments, whitespace) changes the hash |
-| **Manifest JSON** (records `FilenameEnum` values, task dependency graph, and a schema version per task) | Comprehensive; can do fine-grained compatibility checks | More complex to generate and maintain; needs updating when tasks change |
-
-A practical first step would be to store a `pipeline_version` integer in the snapshot metadata and in the worker code, and reject resume when they differ with a clear error (e.g. `PIPELINE_VERSION_MISMATCH`). This catches the vast majority of cases — stale plans after a deployment update — with minimal implementation effort. Finer-grained approaches (manifest, per-task schema versions) can be layered on later if needed.
+Bump `PIPELINE_VERSION` whenever the pipeline changes in a way that would break resume from an older snapshot (renamed filenames, new tasks, changed DAG wiring, changed JSON schemas). Finer-grained approaches (manifest, per-task schema versions) can be layered on later if needed.
 
 **Error behavior**
 
 - Unknown plan_id: `PLAN_NOT_FOUND` (`isError=true`).
 - Plan not failed: `PLAN_NOT_RESUMABLE` (`isError=true`).
+- Pipeline version mismatch: `PIPELINE_VERSION_MISMATCH` (`isError=true`). Use `plan_retry` instead.
 
 ---
 
@@ -616,6 +611,7 @@ Cloud/core tool codes:
 - `PLAN_NOT_FOUND`: plan_id not found.
 - `PLAN_NOT_FAILED`: plan_retry called for a plan that is not in failed state.
 - `PLAN_NOT_RESUMABLE`: plan_resume called for a plan that is not in failed state.
+- `PIPELINE_VERSION_MISMATCH`: plan_resume snapshot was created by a different pipeline version; use plan_retry instead.
 - `INVALID_USER_API_KEY`: provided user_api_key is invalid.
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for plan_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for plan_create.
@@ -641,6 +637,7 @@ Local proxy specific codes:
   - `INVALID_TOOL`
 - For `PLAN_NOT_FAILED`: call `plan_retry` only after `plan_status.state == failed`.
 - For `PLAN_NOT_RESUMABLE`: call `plan_resume` only after `plan_status.state == failed`.
+- For `PIPELINE_VERSION_MISMATCH`: the snapshot is incompatible with the current pipeline; use `plan_retry` for a clean restart.
 - For `PLAN_NOT_FOUND`: verify plan_id source and stop polling that id.
 - For `generation_failed`: treat as terminal failure and surface plan progress_message to user.
 

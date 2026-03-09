@@ -56,6 +56,7 @@ The interface is designed to support:
 - Observability: logs, state transitions, and artifacts must be inspectable.
 - Concurrency safety: prevent conflicting writes and illegal resume patterns.
 - Extensibility: future versions can add plan graph browsing, caching backends, exports.
+- Agent-native: the interface is designed for autonomous AI agents as the primary consumer. See the [Autonomous Agent Guide](autonomous_agent_guide.md) for the complete agent workflow.
 
 ---
 

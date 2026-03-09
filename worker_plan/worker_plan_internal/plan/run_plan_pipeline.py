@@ -105,20 +105,22 @@ class PlanTask(luigi.Task):
     # PLANEXE_OUTPUTS_DIR: Configurable pipeline outputs directory
     # ============================================================
     # WHY IT EXISTS:
-    #   A critical incident occurred where `git reset --hard` was run on the repo while a
-    #   live pipeline run was writing to the 'run/' directory. This destroyed all pipeline
-    #   output data (hours of computation work), since 'run/' was git-tracked at the time.
-    #   This design decouples pipeline outputs from the git repository to prevent this
-    #   class of data loss.
+    #   Pipeline outputs were previously stored in a directory that was not covered
+    #   by .gitignore. A `git clean` operation destroyed hours of live pipeline
+    #   computation data. The default `run/` directory is now gitignored, which
+    #   prevents accidental git-related data loss. This env var adds optional
+    #   flexibility for operators who want outputs on a separate filesystem
+    #   (e.g., an external drive or mounted volume for performance/backup).
     #
     # WHAT IT DOES:
-    #   Allows pipeline operators to place pipeline outputs (run directories, logs, results)
-    #   outside the git repository using the PLANEXE_OUTPUTS_DIR environment variable.
-    #   This prevents accidental destruction of live pipeline work via git operations.
+    #   Allows pipeline operators to place pipeline outputs (run directories, logs,
+    #   results) outside the git repository using the PLANEXE_OUTPUTS_DIR environment
+    #   variable. Useful for large/long-running pipelines where output isolation or
+    #   separate storage is desired.
     #
     # DEFAULT BEHAVIOR:
-    #   Falls back to 'run/' (the existing relative path) for backward compatibility.
-    #   No action required from existing operators unless they want isolation.
+    #   Falls back to 'run/' (gitignored, safe by default). No action required
+    #   from existing operators unless they want a different output location.
     #
     # EXAMPLE:
     #   export PLANEXE_OUTPUTS_DIR=/mnt/fast-storage/planexe-runs

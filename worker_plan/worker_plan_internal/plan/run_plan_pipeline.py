@@ -3947,6 +3947,7 @@ class ExecutePipeline:
             ExtraFilenameEnum.EXPECTED_FILENAMES1_JSON.value,
             ExtraFilenameEnum.LOG_TXT.value,
             ExtraFilenameEnum.PIPELINE_STOP_REQUESTED_FLAG.value,
+            ExtraFilenameEnum.USAGE_METRICS_JSONL.value,
             '.DS_Store',
         ]
         files = [f for f in files if f not in ignore_files]
@@ -4028,6 +4029,12 @@ class ExecutePipeline:
             logger.debug(f"Removing pre-existing stop flag file: {stop_flag_path!r}")
             stop_flag_path.unlink()
 
+        # Enable file-based usage metrics for this run.
+        from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
+        usage_metrics_path = self.run_id_dir / ExtraFilenameEnum.USAGE_METRICS_JSONL.value
+        set_usage_metrics_path(usage_metrics_path)
+        logger.info(f"Usage metrics will be written to {usage_metrics_path}")
+
         # create a json file with the expected filenames. Save it to the run/run_id/expected_filenames1.json
         expected_filenames_path = self.run_id_dir / ExtraFilenameEnum.EXPECTED_FILENAMES1_JSON.value
         with open(expected_filenames_path, "w") as f:
@@ -4041,6 +4048,9 @@ class ExecutePipeline:
             local_scheduler=True,
             workers=luigi_workers
         )
+
+        # Clear the usage metrics path after the run.
+        set_usage_metrics_path(None)
 
         # After the pipeline finishes (or fails), check for the stop flag.
         if self.has_stop_flag_file:

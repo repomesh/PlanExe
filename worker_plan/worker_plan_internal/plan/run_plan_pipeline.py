@@ -104,7 +104,10 @@ REPORT_EXECUTE_PLAN_SECTION_HIDDEN = True
 class PlanTask(luigi.Task):
     # Default it to the current timestamp, eg. 19841231_235959
     # Path to the 'run/{run_id}' directory
-    run_id_dir = luigi.Parameter(default=Path('run') / datetime.now().strftime("%Y%m%d_%H%M%S"))
+    # Configurable via PLANEXE_OUTPUTS_DIR environment variable for backward compatibility
+    # Defaults to 'run' for backward compatibility
+    _default_outputs_dir = os.getenv('PLANEXE_OUTPUTS_DIR', 'run')
+    run_id_dir = luigi.Parameter(default=Path(_default_outputs_dir) / datetime.now().strftime("%Y%m%d_%H%M%S"))
 
     # By default, run everything but it's slow.
     # This can be overridden in developer mode, where a quick turnaround is needed, and the details are not important.

@@ -3,6 +3,7 @@ venv/
 build/
 *.egg-info/
 run/
+planexe-outputs/
 __pycache__/
 .mcpregistry_github_token
 .mcpregistry_registry_token

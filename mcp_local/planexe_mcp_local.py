@@ -813,9 +813,9 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_resume",
         description=(
-            "Resume a failed plan without discarding completed pipeline outputs. "
-            "The pipeline restarts from the first incomplete task, skipping all tasks that already produced output files. "
-            "Use plan_resume when plan_status shows 'failed' and the run was interrupted mid-pipeline "
+            "Resume a failed plan without discarding completed intermediary files. "
+            "The run restarts from the first incomplete task, skipping all tasks that already produced output files. "
+            "Use plan_resume when plan_status shows 'failed' and the run was interrupted "
             "(network drop, timeout, plan_stop, worker crash). "
             "For a full restart or to change model_profile, use plan_retry instead. "
             "Only failed plans can be resumed. "

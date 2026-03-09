@@ -814,8 +814,8 @@ TOOL_DEFINITIONS = [
         name="plan_resume",
         description=(
             "Resume a failed plan without discarding completed intermediary files. "
-            "The run restarts from the first incomplete task, skipping all tasks that already produced output files. "
-            "Use plan_resume when plan_status shows 'failed' and the run was interrupted before completing all steps "
+            "Plan generation restarts from the first incomplete step, skipping all steps that already produced output files. "
+            "Use plan_resume when plan_status shows 'failed' and plan generation was interrupted before completing all steps "
             "(network drop, timeout, plan_stop, worker crash). "
             "For a full restart or to change model_profile, use plan_retry instead. "
             "Only failed plans can be resumed. "

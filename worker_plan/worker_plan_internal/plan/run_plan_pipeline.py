@@ -102,10 +102,30 @@ REPORT_EXECUTE_PLAN_SECTION_HIDDEN = True
 # REPORT_EXECUTE_PLAN_SECTION_HIDDEN = False
 
 class PlanTask(luigi.Task):
+    # PLANEXE_OUTPUTS_DIR: Configurable pipeline outputs directory
+    # ============================================================
+    # WHY IT EXISTS:
+    #   A critical incident occurred where `git reset --hard` was run on the repo while a
+    #   live pipeline run was writing to the 'run/' directory. This destroyed all pipeline
+    #   output data (hours of computation work), since 'run/' was git-tracked at the time.
+    #   This design decouples pipeline outputs from the git repository to prevent this
+    #   class of data loss.
+    #
+    # WHAT IT DOES:
+    #   Allows pipeline operators to place pipeline outputs (run directories, logs, results)
+    #   outside the git repository using the PLANEXE_OUTPUTS_DIR environment variable.
+    #   This prevents accidental destruction of live pipeline work via git operations.
+    #
+    # DEFAULT BEHAVIOR:
+    #   Falls back to 'run/' (the existing relative path) for backward compatibility.
+    #   No action required from existing operators unless they want isolation.
+    #
+    # EXAMPLE:
+    #   export PLANEXE_OUTPUTS_DIR=/mnt/fast-storage/planexe-runs
+    #   python -m worker_plan_internal.plan.run_plan_pipeline
+    #
     # Default it to the current timestamp, eg. 19841231_235959
     # Path to the 'run/{run_id}' directory
-    # Configurable via PLANEXE_OUTPUTS_DIR environment variable for backward compatibility
-    # Defaults to 'run' for backward compatibility
     _default_outputs_dir = os.getenv('PLANEXE_OUTPUTS_DIR', 'run')
     run_id_dir = luigi.Parameter(default=Path(_default_outputs_dir) / datetime.now().strftime("%Y%m%d_%H%M%S"))
 

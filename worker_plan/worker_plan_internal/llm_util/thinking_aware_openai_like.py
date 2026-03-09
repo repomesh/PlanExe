@@ -48,7 +48,10 @@ This subclass detects this situation and falls back to reasoning_content when ne
 import logging
 from typing import Any
 from llama_index.llms.openai_like import OpenAILike
-from llama_index.core.llms.types import ChatResponse, CompletionResponse
+try:
+    from llama_index.core.llms.types import ChatResponse, CompletionResponse
+except ImportError:
+    from llama_index.core.base.llms.types import ChatResponse, CompletionResponse
 
 logger = logging.getLogger(__name__)
 

@@ -102,9 +102,34 @@ REPORT_EXECUTE_PLAN_SECTION_HIDDEN = True
 # REPORT_EXECUTE_PLAN_SECTION_HIDDEN = False
 
 class PlanTask(luigi.Task):
+    # PLANEXE_OUTPUTS_DIR: Configurable pipeline outputs directory
+    # ============================================================
+    # WHY IT EXISTS:
+    #   Pipeline outputs were previously stored in a directory that was not covered
+    #   by .gitignore. A `git clean` operation destroyed hours of live pipeline
+    #   computation data. The default `run/` directory is now gitignored, which
+    #   prevents accidental git-related data loss. This env var adds optional
+    #   flexibility for operators who want outputs on a separate filesystem
+    #   (e.g., an external drive or mounted volume for performance/backup).
+    #
+    # WHAT IT DOES:
+    #   Allows pipeline operators to place pipeline outputs (run directories, logs,
+    #   results) outside the git repository using the PLANEXE_OUTPUTS_DIR environment
+    #   variable. Useful for large/long-running pipelines where output isolation or
+    #   separate storage is desired.
+    #
+    # DEFAULT BEHAVIOR:
+    #   Falls back to 'run/' (gitignored, safe by default). No action required
+    #   from existing operators unless they want a different output location.
+    #
+    # EXAMPLE:
+    #   export PLANEXE_OUTPUTS_DIR=/mnt/fast-storage/planexe-runs
+    #   python -m worker_plan_internal.plan.run_plan_pipeline
+    #
     # Default it to the current timestamp, eg. 19841231_235959
     # Path to the 'run/{run_id}' directory
-    run_id_dir = luigi.Parameter(default=Path('run') / datetime.now().strftime("%Y%m%d_%H%M%S"))
+    _default_outputs_dir = os.getenv('PLANEXE_OUTPUTS_DIR', 'run')
+    run_id_dir = luigi.Parameter(default=Path(_default_outputs_dir) / datetime.now().strftime("%Y%m%d_%H%M%S"))
 
     # By default, run everything but it's slow.
     # This can be overridden in developer mode, where a quick turnaround is needed, and the details are not important.

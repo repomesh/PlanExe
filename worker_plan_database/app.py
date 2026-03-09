@@ -3,6 +3,11 @@ This project monitors the database for pending PlanItems and automatically chang
 when found. It then executes the pipeline for each task.
 
 PROMPT> PLANEXE_WORKER_ID=1 python -m app.py
+
+Naming migration (in progress):
+- task_id -> plan_id: New code should use "plan_id" for the plan UUID.
+- run -> plan: New code should use "plan" when referring to a single plan (e.g. "for plan %s" not "for run %s").
+  The base output directory is still named "run/" for legacy reasons and will likely be renamed in the future.
 """
 from datetime import UTC, datetime
 from decimal import Decimal

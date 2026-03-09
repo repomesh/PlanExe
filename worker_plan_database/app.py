@@ -141,6 +141,7 @@ try:
     from worker_plan_internal.plan.speedvsdetail import SpeedVsDetailEnum
     from worker_plan_api.start_time import StartTime
     from worker_plan_api.plan_file import PlanFile
+    from worker_plan_api.pipeline_version import PIPELINE_VERSION
     from worker_plan_internal.plan.filenames import FilenameEnum
     from worker_plan_api.planexe_dotenv import PlanExeDotEnv
     from worker_plan_internal.llm_util.llm_executor import LLMModelFromName, PipelineStopRequested
@@ -1139,6 +1140,28 @@ def process_pending_tasks() -> bool:
         logger.info("Resume requested for task %s; restoring run directory from zip snapshot.", task_id)
         restored = restore_run_dir_from_zip_snapshot(task_id, run_id_dir)
         if restored:
+            # Verify the snapshot was produced by a compatible pipeline version.
+            metadata_path = run_id_dir / FilenameEnum.PLANEXE_METADATA.value
+            snapshot_version = None
+            try:
+                if metadata_path.exists():
+                    with open(metadata_path, "r") as f:
+                        snapshot_metadata = json.load(f)
+                    snapshot_version = snapshot_metadata.get("pipeline_version")
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.error("Failed to read pipeline metadata for task %s: %s", task_id, exc)
+
+            if snapshot_version != PIPELINE_VERSION:
+                logger.error(
+                    "Pipeline version mismatch for task %s: snapshot=%s, current=%s",
+                    task_id, snapshot_version, PIPELINE_VERSION,
+                )
+                with app.app_context():
+                    update_task_state_with_retry(task_id, PlanState.failed)
+                return False
+
+            logger.info("Pipeline version check passed for task %s (version=%s)", task_id, PIPELINE_VERSION)
+
             # Remove pipeline completion markers so Luigi re-evaluates what to run
             for marker_name in ("999-pipeline_complete.txt", "pipeline_stop_requested.txt"):
                 marker_path = run_id_dir / marker_name

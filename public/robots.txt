@@ -1,0 +1,38 @@
+# PlanExe robots.txt
+# For standard web crawlers and AI agents
+
+User-agent: *
+Allow: /
+Allow: /llms.txt
+
+# AI agent discovery
+# AI agents should read /llms.txt for service metadata, MCP tools, and endpoints.
+# See also: public/AGENTS.md for governance details.
+
+# Crawl-delay for all bots to be polite
+Crawl-delay: 10
+
+# AI-specific user agents — welcome to discover PlanExe
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+User-agent: Anthropic-AI
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Cohere-AI
+Allow: /
+
+# Sitemap (if deployed)
+# Sitemap: https://home.planexe.org/sitemap.xml

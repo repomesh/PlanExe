@@ -137,12 +137,9 @@ class PlanCreateOutput(BaseModel):
     sse_url: str | None = Field(
         default=None,
         description=(
-            "GET endpoint returning text/event-stream with real-time plan progress. "
-            "No API key required — the plan_id UUID serves as the access token. "
-            "Usage: `curl -N <sse_url>`. "
-            "Emits 'status' events on progress changes, 'heartbeat' every ~20 s, "
-            "and a final 'complete' event (state completed/failed) then auto-closes. "
-            "Alternative to polling plan_status."
+            "Optional completion detector. Run `curl -N <sse_url>` in a background shell — "
+            "the stream auto-closes when the plan reaches a terminal state (completed/failed). "
+            "For structured progress data, use plan_status instead."
         ),
     )
 
@@ -171,13 +168,33 @@ class PlanStatusSuccess(BaseModel):
     )
     progress_percentage: float = Field(
         ...,
-        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+        description=(
+            "Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed. "
+            "Steps vary in duration (early steps are fast, later steps like review and report generation are slower), "
+            "so do not use this to estimate time remaining."
+        ),
+    )
+    steps_completed: int | None = Field(
+        default=None,
+        description="Number of plan generation steps completed so far. Steps vary in duration.",
+    )
+    steps_total: int | None = Field(
+        default=None,
+        description="Total number of plan generation steps expected. Not all steps take equal time.",
+    )
+    current_step: str | None = Field(
+        default=None,
+        description="Human-readable label of the most recently completed step, e.g. 'SWOT Analysis'.",
     )
     timing: PlanStatusTiming
+    files_count: int = Field(
+        ...,
+        description="Total number of output files produced so far (files list is capped at 10).",
+    )
     files: list[PlanStatusFile] = Field(
         ...,
         description=(
-            "Intermediate output files produced so far. "
+            "Intermediate output files produced so far (most recent 10). "
             "Use updated_at timestamps to detect stalls. "
             "These files are included in the zip artifact when the plan completes."
         ),
@@ -185,9 +202,8 @@ class PlanStatusSuccess(BaseModel):
     sse_url: str | None = Field(
         default=None,
         description=(
-            "GET endpoint (text/event-stream) for real-time progress. "
-            "Available when plan is not in a terminal state. "
-            "See plan_create sse_url description for usage."
+            "Optional completion detector URL. Available when plan is not in a terminal state. "
+            "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
 
@@ -206,13 +222,33 @@ class PlanStatusOutput(BaseModel):
     )
     progress_percentage: float | None = Field(
         default=None,
-        description="Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed.",
+        description=(
+            "Completion progress from 0 to 100. Monotonically increasing; 100 when state is completed. "
+            "Steps vary in duration (early steps are fast, later steps like review and report generation are slower), "
+            "so do not use this to estimate time remaining."
+        ),
+    )
+    steps_completed: int | None = Field(
+        default=None,
+        description="Number of plan generation steps completed so far. Steps vary in duration.",
+    )
+    steps_total: int | None = Field(
+        default=None,
+        description="Total number of plan generation steps expected. Not all steps take equal time.",
+    )
+    current_step: str | None = Field(
+        default=None,
+        description="Human-readable label of the most recently completed step, e.g. 'SWOT Analysis'.",
     )
     timing: PlanStatusTiming | None = None
+    files_count: int | None = Field(
+        default=None,
+        description="Total number of output files produced so far (files list is capped at 10).",
+    )
     files: list[PlanStatusFile] | None = Field(
         default=None,
         description=(
-            "Intermediate output files produced so far. "
+            "Intermediate output files produced so far (most recent 10). "
             "Use updated_at timestamps to detect stalls. "
             "These files are included in the zip artifact when the plan completes."
         ),
@@ -220,9 +256,8 @@ class PlanStatusOutput(BaseModel):
     sse_url: str | None = Field(
         default=None,
         description=(
-            "GET endpoint (text/event-stream) for real-time progress. "
-            "Available when plan is not in a terminal state. "
-            "See plan_create sse_url description for usage."
+            "Optional completion detector URL. Available when plan is not in a terminal state. "
+            "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
     error: ErrorDetail | None = None
@@ -260,12 +295,9 @@ class PlanRetryOutput(BaseModel):
     sse_url: str | None = Field(
         default=None,
         description=(
-            "GET endpoint returning text/event-stream with real-time plan progress. "
-            "No API key required — the plan_id UUID serves as the access token. "
-            "Usage: `curl -N <sse_url>`. "
-            "Emits 'status' events on progress changes, 'heartbeat' every ~20 s, "
-            "and a final 'complete' event (state completed/failed) then auto-closes. "
-            "Alternative to polling plan_status."
+            "Optional completion detector. Run `curl -N <sse_url>` in a background shell — "
+            "the stream auto-closes when the plan reaches a terminal state (completed/failed). "
+            "For structured progress data, use plan_status instead."
         ),
     )
     error: ErrorDetail | None = None
@@ -284,6 +316,10 @@ class PlanFileInfoReadyOutput(BaseModel):
         default=None,
         description="Absolute URL where the requested artifact can be downloaded.",
     )
+    expires_at: str | None = Field(
+        default=None,
+        description="ISO 8601 UTC timestamp when the download_url expires. Present only when download_url is set.",
+    )
 
 
 class PlanFileInfoOutput(BaseModel):
@@ -293,6 +329,10 @@ class PlanFileInfoOutput(BaseModel):
     download_url: str | None = Field(
         default=None,
         description="Absolute URL where the requested artifact can be downloaded.",
+    )
+    expires_at: str | None = Field(
+        default=None,
+        description="ISO 8601 UTC timestamp when the download_url expires. Present only when download_url is set.",
     )
     error: ErrorDetail | None = None
 

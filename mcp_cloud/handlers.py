@@ -4,10 +4,11 @@ import json
 import logging
 import os
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 from mcp.types import CallToolResult, Tool, TextContent, ToolAnnotations
+from worker_plan_api.format_datetime import format_datetime_utc
 
 from mcp_cloud.db_setup import (
     PlanState,
@@ -47,7 +48,7 @@ from mcp_cloud.worker_fetchers import (
     fetch_user_downloadable_zip,
 )
 from mcp_cloud.model_profiles import _get_model_profiles_sync
-from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url, _get_download_base_url
+from mcp_cloud.download_tokens import build_report_download_url, build_zip_download_url, _get_download_base_url, DOWNLOAD_TOKEN_TTL_SECONDS
 from mcp_cloud.example_prompts import _load_mcp_example_prompts
 from mcp_cloud.schemas import TOOL_DEFINITIONS
 
@@ -284,6 +285,8 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
 
     plan_state = plan_snapshot["state"]
     state = get_plan_state_mapping(plan_state)
+    # Normalize completed plans: state is the source of truth, so progress
+    # fields must agree even if the final progress DB write was lost.
     if plan_state == PlanState.completed:
         progress_percentage = 100.0
 
@@ -303,13 +306,18 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
                 logger.warning("Worker file list fetch timed out for plan %s", plan_uuid)
                 files_list = None
         if files_list:
-            for file_name in files_list[:10]:  # Limit to 10 most recent
+            for file_name, updated_at in files_list:
                 if file_name != "log.txt":
-                    updated_at = datetime.now(UTC).replace(microsecond=0)
                     files.append({
                         "path": file_name,
-                        "updated_at": updated_at.isoformat().replace("+00:00", "Z"),  # Approximate
+                        "updated_at": updated_at,
                     })
+
+    steps_completed = plan_snapshot.get("steps_completed")
+    steps_total = plan_snapshot.get("steps_total")
+    current_step = plan_snapshot.get("current_step")
+    if plan_state == PlanState.completed and steps_total is not None:
+        steps_completed = steps_total
 
     created_at = plan_snapshot["timestamp_created"]
     if created_at and created_at.tzinfo is None:
@@ -319,15 +327,15 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         "plan_id": plan_uuid,
         "state": state,
         "progress_percentage": progress_percentage,
+        "steps_completed": steps_completed,
+        "steps_total": steps_total,
+        "current_step": current_step,
         "timing": {
-            "started_at": (
-                created_at.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-                if created_at
-                else None
-            ),
+            "started_at": format_datetime_utc(created_at) if created_at else None,
             "elapsed_sec": (datetime.now(UTC) - created_at).total_seconds() if created_at else 0,
         },
-        "files": files[:10],  # Limit to 10 most recent
+        "files_count": len(files),
+        "files": files[:10],
     }
 
     if state == "failed":
@@ -510,6 +518,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
         download_url = build_zip_download_url(run_id)
         if download_url:
             response["download_url"] = download_url
+            response["expires_at"] = (datetime.now(UTC) + timedelta(seconds=DOWNLOAD_TOKEN_TTL_SECONDS)).isoformat()
 
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
@@ -558,6 +567,7 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     download_url = build_report_download_url(run_id)
     if download_url:
         response["download_url"] = download_url
+        response["expires_at"] = (datetime.now(UTC) + timedelta(seconds=DOWNLOAD_TOKEN_TTL_SECONDS)).isoformat()
 
     return CallToolResult(
         content=[TextContent(type="text", text=json.dumps(response))],

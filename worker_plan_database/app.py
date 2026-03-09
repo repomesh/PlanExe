@@ -268,6 +268,19 @@ def ensure_fractional_credit_columns() -> None:
             ))
 
 
+def ensure_step_count_columns() -> None:
+    """Add steps_completed, steps_total, and current_step columns to task_item (idempotent)."""
+    insp = inspect(db.engine)
+    columns = {col["name"] for col in insp.get_columns("task_item")}
+    with db.engine.begin() as conn:
+        if "steps_completed" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS steps_completed INTEGER"))
+        if "steps_total" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS steps_total INTEGER"))
+        if "current_step" not in columns:
+            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
+
+
 def ensure_multi_api_key_columns() -> None:
     """Add columns for multi-API-key support (idempotent)."""
     statements = (
@@ -332,17 +345,43 @@ def update_task_state_with_retry(task_id: str, new_state: PlanState, max_retries
                 return False
     return False
 
-def update_task_progress_with_retry(task_id: str, progress_percentage: float, progress_message: str, max_retries: int = 3, retry_delay: int = 5) -> bool:
-    """Helper function to update task progress with retry logic for database operations."""
+def update_task_progress_with_retry(
+    task_id: str,
+    progress_percentage: float,
+    progress_message: str,
+    steps_completed: Optional[int] = None,
+    steps_total: Optional[int] = None,
+    current_step: Optional[str] = None,
+    max_retries: int = 3,
+    retry_delay: int = 5,
+) -> bool:
+    """Update task progress in the database, retrying on transient failures.
+
+    Args:
+        task_id: PlanItem primary key (UUID as string).
+        progress_percentage: Completion progress from 0.0 to 100.0.
+        progress_message: Human-readable status, e.g. ``"23 of 30"``.
+        steps_completed: Number of plan generation steps completed so far.
+        steps_total: Total number of plan generation steps expected.
+        current_step: Human-readable label of the most recently completed step.
+        max_retries: Number of attempts before giving up.
+        retry_delay: Seconds to wait between retries.
+
+    Returns:
+        True if the update was committed, False on persistent failure or missing task.
+    """
     for attempt in range(max_retries):
         try:
             task = db.session.get(PlanItem, task_id)
             if task is None:
                 logger.error(f"Task with ID {task_id!r} not found in database. Cannot update task progress.")
                 return False
-            
+
             task.progress_percentage = progress_percentage
             task.progress_message = progress_message
+            task.steps_completed = steps_completed
+            task.steps_total = steps_total
+            task.current_step = current_step
             db.session.commit()
             logger.debug(f"Updated task {task_id!r} progress to {progress_percentage}%: {progress_message}")
             return True
@@ -402,6 +441,9 @@ class ServerExecutePipeline(ExecutePipeline):
                     task_id=self.task_id,
                     progress_percentage=parameters.progress.progress_percentage,
                     progress_message="Stop requested by user.",
+                    steps_completed=parameters.progress.steps_completed,
+                    steps_total=parameters.progress.steps_total,
+                    current_step=parameters.progress.current_step,
                 )
             raise PipelineStopRequested(f"Stopping task {self.task_id!r} because a stop was requested.")
 
@@ -431,7 +473,10 @@ class ServerExecutePipeline(ExecutePipeline):
             update_task_progress_with_retry(
                 task_id=self.task_id,
                 progress_percentage=parameters.progress.progress_percentage,
-                progress_message=parameters.progress.progress_message
+                progress_message=parameters.progress.progress_message,
+                steps_completed=parameters.progress.steps_completed,
+                steps_total=parameters.progress.steps_total,
+                current_step=parameters.progress.current_step,
             )
 
         # Charge credits incrementally so usage is visible in real time.
@@ -907,10 +952,16 @@ def execute_pipeline_for_job(
         machai_error_message = 'Error. Unable to generate the report. Likely reasons: censorship, restricted content.'
 
     # Update the PlanItem state to completed or failed
+    final_progress = pipeline_instance.get_progress_percentage()
     with app.app_context():
         if pipeline_instance.has_report_file:
             update_task_state_with_retry(task_id, PlanState.completed)
-            update_task_progress_with_retry(task_id, 100.0, "Completed")
+            update_task_progress_with_retry(
+                task_id, 100.0, "Completed",
+                steps_completed=final_progress.steps_total,
+                steps_total=final_progress.steps_total,
+                current_step="Completed",
+            )
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=True)
             event_context.update({
                 "billing_usage_cost_usd": str(billing_result["usage_cost_usd"]),
@@ -1146,6 +1197,7 @@ def startup_worker():
         try:
             db.create_all()
             ensure_planitem_artifact_columns()
+            ensure_step_count_columns()
             ensure_token_metrics_columns()
             ensure_fractional_credit_columns()
             ensure_multi_api_key_columns()

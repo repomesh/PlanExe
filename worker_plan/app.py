@@ -9,7 +9,7 @@ import time
 import zipfile
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Dict, Literal, Optional
 
@@ -22,6 +22,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
+from worker_plan_api.format_datetime import format_datetime_utc
 from worker_plan_api.generate_run_id import generate_run_id
 from worker_plan_api.llm_info import LLMInfo
 from worker_plan_api.model_profile import ModelProfileEnum, DEFAULT_MODEL_PROFILE, normalize_model_profile
@@ -95,10 +96,15 @@ class RunStatusResponse(BaseModel):
     last_update_seconds_ago: Optional[float]
 
 
+class RunFileEntry(BaseModel):
+    name: str
+    updated_at: str
+
 class RunFilesResponse(BaseModel):
     run_id: str
     run_dir: str
     files: list[str] = Field(default_factory=list)
+    files_with_timestamps: list[RunFileEntry] = Field(default_factory=list)
 
 
 class PurgeRunsRequest(BaseModel):
@@ -324,14 +330,21 @@ def run_files(run_id: str) -> RunFilesResponse:
         raise HTTPException(status_code=404, detail=f"Run directory does not exist: {run_dir}")
 
     try:
-        files = sorted(os.listdir(run_dir))
+        entries = []
+        for name in sorted(os.listdir(run_dir)):
+            path = run_dir / name
+            if path.is_file():
+                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+                mtime_str = format_datetime_utc(mtime)
+                entries.append(RunFileEntry(name=name, updated_at=mtime_str))
+        files = [e.name for e in entries]
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Run directory does not exist: {run_dir}")
     except Exception as exc:
         logger.warning("Unable to list files for run %s: %s", run_id, exc)
         raise HTTPException(status_code=500, detail=f"Unable to list files: {exc}") from exc
 
-    return RunFilesResponse(run_id=run_id, run_dir=str(run_dir), files=files)
+    return RunFilesResponse(run_id=run_id, run_dir=str(run_dir), files=files, files_with_timestamps=entries)
 
 
 @app.get("/runs/{run_id}/report")

@@ -2,6 +2,8 @@
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from mcp_cloud.download_tokens import DOWNLOAD_TOKEN_TTL_SECONDS
+
 from mcp_cloud.tool_models import (
     ModelProfilesInput,
     ModelProfilesOutput,
@@ -143,10 +145,10 @@ TOOL_DEFINITIONS = [
             "plan review (critical issues, KPIs, financial strategy, automation opportunities), Q&A, "
             "premortem with failure scenarios, self-audit checklist, and adversarial premise attacks that argue against the project. "
             "The adversarial sections (premortem, self-audit, premise attacks) surface risks and questions the prompter may not have considered. "
-            "Returns plan_id (UUID) and sse_url; use plan_id for plan_status, plan_stop, plan_retry, and plan_file_info. "
-            "sse_url is a GET endpoint (text/event-stream) for real-time progress — "
-            "e.g. `curl -N <sse_url>` in a background shell. "
-            "The stream emits status/complete events and auto-closes on terminal state. Polling plan_status also works. "
+            "Returns plan_id (UUID); use it for plan_status, plan_stop, plan_retry, and plan_file_info. "
+            "To track progress, poll plan_status at reasonable intervals (e.g. every 5 minutes). "
+            "Optionally, run `curl -N <sse_url>` in a background shell as a completion detector — "
+            "the stream auto-closes on terminal state (completed/failed). "
             "If you lose a plan_id, call plan_list to recover it. "
             "Each plan_create call creates a new plan_id (no server-side dedup). "
             "If you are unsure which model_profile to choose, call model_profiles first. "
@@ -166,12 +168,15 @@ TOOL_DEFINITIONS = [
         name="plan_status",
         description=(
             "Returns status and progress of the plan currently being created. "
-            "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
+            "This is the primary way to check progress — it returns structured JSON with all progress fields. "
+            "Poll at reasonable intervals (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
             "(baseline profile) and may take longer on higher-quality profiles. "
-            "Alternative to polling: the response includes sse_url (when not terminal) — a GET endpoint streaming "
-            "real-time events; see plan_create description or server instructions for usage. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
+            "Note: steps vary in duration — early steps complete quickly while later steps (review, report generation) "
+            "take longer. Do not use progress_percentage to estimate time remaining. "
+            "steps_completed and steps_total give the number of plan generation steps completed and expected (both nullable). "
+            "current_step is the human-readable label of the most recently completed step (e.g. 'SWOT Analysis'). "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
             "Unknown plan_id returns error code PLAN_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
@@ -225,13 +230,15 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_file_info",
         description=(
-            "Returns file metadata (content_type, download_url, download_size) for the report or zip artifact. "
+            "Returns file metadata (content_type, download_url, download_size, expires_at) for the report or zip artifact. "
             "Use artifact='report' (default) for the interactive HTML report (~700KB, self-contained with embedded JS "
             "for collapsible sections and interactive Gantt charts — open in a browser). "
             "Use artifact='zip' for the full pipeline output bundle (md, json, csv intermediary files that fed the report). "
             "While the task is still pending or processing, returns {ready:false,reason:\"processing\"}. "
             "Check readiness by testing whether download_url is present in the response. "
             "Once ready, present download_url to the user or fetch and save the file locally. "
+            f"Download URLs expire after {DOWNLOAD_TOKEN_TTL_SECONDS // 60} minutes (see expires_at); "
+            "call plan_file_info again to get a fresh URL if needed. "
             "If your client exposes plan_download (e.g. mcp_local), prefer that to save the file locally. "
             "Terminal error codes: generation_failed (plan failed), content_unavailable (artifact missing). "
             "Unknown plan_id returns error code PLAN_NOT_FOUND."

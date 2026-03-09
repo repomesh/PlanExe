@@ -517,24 +517,24 @@ def create_zip_bytes(run_dir: Path) -> bytes:
     return buffer.read()
 
 
-def restore_run_dir_from_zip_snapshot(task_id: str, run_id_dir: Path) -> bool:
-    """Restore a run directory from the zip snapshot stored in the database.
+def restore_run_dir_from_zip_snapshot(plan_id: str, run_id_dir: Path) -> bool:
+    """Restore the output directory from the zip snapshot stored in the database.
 
-    Used by plan_resume to reconstruct the run directory so Luigi can skip
-    completed tasks and pick up where it left off.
+    Used by plan_resume to reconstruct the output directory so Luigi can skip
+    completed steps and pick up where it left off.
 
     Returns True on success, False if snapshot is None or extraction fails.
     """
     try:
-        plan_uuid = uuid.UUID(task_id)
+        plan_uuid = uuid.UUID(plan_id)
     except ValueError:
-        logger.warning("Invalid task_id for zip restore: %s", task_id)
+        logger.warning("Invalid plan_id for zip restore: %s", plan_id)
         return False
 
     with app.app_context():
         plan = db.session.get(PlanItem, plan_uuid)
         if plan is None or plan.run_zip_snapshot is None:
-            logger.warning("No zip snapshot found for task %s", task_id)
+            logger.warning("No zip snapshot found for plan %s", plan_id)
             return False
         zip_bytes = plan.run_zip_snapshot
 
@@ -543,10 +543,10 @@ def restore_run_dir_from_zip_snapshot(task_id: str, run_id_dir: Path) -> bool:
         buffer = io.BytesIO(zip_bytes)
         with zipfile.ZipFile(buffer, "r") as zipf:
             zipf.extractall(run_id_dir)
-        logger.info("Restored run directory from zip snapshot for task %s (%d bytes)", task_id, len(zip_bytes))
+        logger.info("Restored output directory from zip snapshot for plan %s (%d bytes)", plan_id, len(zip_bytes))
         return True
     except Exception as exc:
-        logger.warning("Failed to restore run directory from zip snapshot for task %s: %s", task_id, exc)
+        logger.warning("Failed to restore output directory from zip snapshot for plan %s: %s", plan_id, exc)
         return False
 
 
@@ -1137,7 +1137,7 @@ def process_pending_tasks() -> bool:
     is_resume = bool(parameters and parameters.get("resume", False))
 
     if is_resume:
-        logger.info("Resume requested for task %s; restoring run directory from zip snapshot.", task_id)
+        logger.info("Resume requested for plan %s; restoring output directory from zip snapshot.", task_id)
         restored = restore_run_dir_from_zip_snapshot(task_id, run_id_dir)
         if restored:
             # Verify the snapshot was produced by a compatible pipeline version.
@@ -1149,7 +1149,7 @@ def process_pending_tasks() -> bool:
                         snapshot_metadata = json.load(f)
                     snapshot_version = snapshot_metadata.get("pipeline_version")
             except (json.JSONDecodeError, OSError) as exc:
-                logger.error("Failed to read pipeline metadata for task %s: %s", task_id, exc)
+                logger.error("Failed to read pipeline metadata for plan %s: %s", task_id, exc)
 
             if snapshot_version != PIPELINE_VERSION:
                 mismatch_msg = (
@@ -1157,25 +1157,25 @@ def process_pending_tasks() -> bool:
                     f"(snapshot={snapshot_version}, current={PIPELINE_VERSION}). "
                     f"Use plan_retry for a clean restart."
                 )
-                logger.error("Task %s: %s", task_id, mismatch_msg)
+                logger.error("Plan %s: %s", task_id, mismatch_msg)
                 with app.app_context():
-                    task = db.session.get(PlanItem, task_id)
-                    if task is not None:
-                        task.state = PlanState.failed
-                        task.progress_message = mismatch_msg
+                    plan = db.session.get(PlanItem, task_id)
+                    if plan is not None:
+                        plan.state = PlanState.failed
+                        plan.progress_message = mismatch_msg
                         db.session.commit()
                 return False
 
-            logger.info("Pipeline version check passed for task %s (version=%s)", task_id, PIPELINE_VERSION)
+            logger.info("Pipeline version check passed for plan %s (version=%s)", task_id, PIPELINE_VERSION)
 
-            # Remove pipeline completion markers so Luigi re-evaluates what to run
+            # Remove completion markers so Luigi re-evaluates what steps to execute
             for marker_name in ("999-pipeline_complete.txt", "pipeline_stop_requested.txt"):
                 marker_path = run_id_dir / marker_name
                 if marker_path.exists():
                     marker_path.unlink()
-                    logger.info("Removed pipeline marker %s for resumed task %s", marker_name, task_id)
+                    logger.info("Removed completion marker %s for resumed plan %s", marker_name, task_id)
         else:
-            logger.warning("Zip snapshot restore failed for task %s; falling back to fresh run.", task_id)
+            logger.warning("Zip snapshot restore failed for plan %s; falling back to fresh start.", task_id)
             is_resume = False  # fall through to fresh setup below
 
     if not is_resume:

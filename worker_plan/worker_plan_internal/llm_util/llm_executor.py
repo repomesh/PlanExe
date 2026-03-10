@@ -287,7 +287,7 @@ class LLMExecutor:
                 cost_usd=token_count.cost_usd if token_count else None,
             )
         except Exception as exc:
-            logger.debug("Failed to record file-based usage metric: %s", exc)
+            logger.warning("Failed to record file-based usage metric: %s", exc)
 
     def _check_stop_callback(self, last_attempt: LLMAttempt, start_time: float, attempt_index: int) -> None:
         """Checks the callback, if it exists, to see if execution should stop."""

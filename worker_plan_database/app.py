@@ -245,6 +245,16 @@ def ensure_token_metrics_columns() -> None:
             conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS upstream_model VARCHAR(255)"))
         if "cost_usd" not in columns:
             conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS cost_usd DOUBLE PRECISION"))
+        if "thinking_tokens" not in columns:
+            conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS thinking_tokens INTEGER"))
+        if "duration_seconds" not in columns:
+            conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS duration_seconds DOUBLE PRECISION"))
+        if "success" not in columns:
+            conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS success BOOLEAN"))
+        if "error_message" not in columns:
+            conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS error_message TEXT"))
+        if "raw_usage_data" not in columns:
+            conn.execute(text("ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS raw_usage_data JSON"))
 
 
 def ensure_fractional_credit_columns() -> None:
@@ -421,18 +431,25 @@ class ServerExecutePipeline(ExecutePipeline):
         self.task_id = task_id
 
     def _handle_task_completion(self, parameters: HandleTaskCompletionParameters) -> None:
+        """Called after each Luigi step completes.
+
+        NOTE: This callback runs inside the app.app_context() opened by
+        execute_pipeline_for_job().  Do NOT open nested app contexts here —
+        nested contexts cause Flask-SQLAlchemy to tear down the scoped session
+        on exit, corrupting the outer context's session and triggering
+        psycopg2 / SQLAlchemy errors in subsequent db operations (e.g. token
+        metrics recording).
+        """
         logger.debug(f"ServerExecutePipeline._handle_task_completion")
 
-        with app.app_context():
-            WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=self.task_id)
+        WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=self.task_id)
 
         # Lookup the taskitem in the database by self.task_id
-        with app.app_context():
-            task = db.session.get(PlanItem, self.task_id)
-            if task is None:
-                logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
-                raise Exception(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
-            stop_requested = bool(task.stop_requested)
+        task = db.session.get(PlanItem, self.task_id)
+        if task is None:
+            logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
+            raise Exception(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
+        stop_requested = bool(task.stop_requested)
 
         if task.last_seen_timestamp is None:
             # A new PlanItem is supposed to have a last_seen_timestamp.
@@ -442,15 +459,14 @@ class ServerExecutePipeline(ExecutePipeline):
 
         if stop_requested:
             logger.info("Stopping task %s because a stop was requested.", self.task_id)
-            with app.app_context():
-                update_task_progress_with_retry(
-                    task_id=self.task_id,
-                    progress_percentage=parameters.progress.progress_percentage,
-                    progress_message="Stop requested by user.",
-                    steps_completed=parameters.progress.steps_completed,
-                    steps_total=parameters.progress.steps_total,
-                    current_step=parameters.progress.current_step,
-                )
+            update_task_progress_with_retry(
+                task_id=self.task_id,
+                progress_percentage=parameters.progress.progress_percentage,
+                progress_message="Stop requested by user.",
+                steps_completed=parameters.progress.steps_completed,
+                steps_total=parameters.progress.steps_total,
+                current_step=parameters.progress.current_step,
+            )
             raise PipelineStopRequested(f"Stopping task {self.task_id!r} because a stop was requested.")
 
         # Detect if the browser has been inactive for N seconds.
@@ -458,11 +474,11 @@ class ServerExecutePipeline(ExecutePipeline):
         last_seen_aware = task.last_seen_timestamp
         if last_seen_aware.tzinfo is None:
             last_seen_aware = last_seen_aware.replace(tzinfo=UTC)
-        
+
         limit = BROWSER_INACTIVE_AFTER_N_SECONDS
         time_since_last_seen = (datetime.now(UTC) - last_seen_aware).total_seconds()
         if time_since_last_seen > limit:
-            # The browser has been inactive for more than N seconds. 
+            # The browser has been inactive for more than N seconds.
             # The user appears to have navigated away from the progress bar page, or closed the browser.
             if CONTINUE_GENERATING_PLAN_DESPITE_BROWSER_INACTIVE:
                 logger.debug(f"Task {self.task_id!r} has been inactive for {time_since_last_seen} seconds. Continuing to generate the plan.")
@@ -470,20 +486,19 @@ class ServerExecutePipeline(ExecutePipeline):
                 # Optimization: Stop generating the plan and save resources. So other users can use the server.
                 logger.info(f"Stopping task {self.task_id!r} because it the browser has not been active for {limit} seconds")
                 raise PipelineStopRequested(f"Stopping task {self.task_id!r} because it the browser has not been active for {limit} seconds")
-        
-        # The browser is still open and the progress bar is visible. 
+
+        # The browser is still open and the progress bar is visible.
         # The user is still interested in continuing generating the plan.
         logger.info(f"Task {self.task_id!r} is still active. The user is still interested in continuing generating the plan.")
 
-        with app.app_context():
-            update_task_progress_with_retry(
-                task_id=self.task_id,
-                progress_percentage=parameters.progress.progress_percentage,
-                progress_message=parameters.progress.progress_message,
-                steps_completed=parameters.progress.steps_completed,
-                steps_total=parameters.progress.steps_total,
-                current_step=parameters.progress.current_step,
-            )
+        update_task_progress_with_retry(
+            task_id=self.task_id,
+            progress_percentage=parameters.progress.progress_percentage,
+            progress_message=parameters.progress.progress_message,
+            steps_completed=parameters.progress.steps_completed,
+            steps_total=parameters.progress.steps_total,
+            current_step=parameters.progress.current_step,
+        )
 
         # Charge credits incrementally so usage is visible in real time.
         try:

@@ -133,7 +133,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "steps_completed/steps_total, and current_step. "
     "Optionally, run `curl -N <sse_url>` in a background shell as a completion detector — "
     "the stream auto-closes when the plan reaches a terminal state (completed/failed). "
-    "If a run fails, call plan_retry with the failed plan_id to requeue it (optional model_profile, defaults to baseline). "
+    "If plan generation fails before completing all steps, call plan_resume to continue from where it left off without discarding completed work. "
+    "Use plan_retry instead for a full restart (plan must be in failed state). "
+    "Both accept a failed plan_id and optional model_profile (defaults to baseline). "
     "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
@@ -192,6 +194,10 @@ class PlanStopRequest(BaseModel):
     plan_id: str
 
 class PlanRetryRequest(BaseModel):
+    plan_id: str
+    model_profile: ModelProfileInput = "baseline"
+
+class PlanResumeRequest(BaseModel):
     plan_id: str
     model_profile: ModelProfileInput = "baseline"
 

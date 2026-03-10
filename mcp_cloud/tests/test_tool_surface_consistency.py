@@ -80,6 +80,20 @@ class TestPlanRetryInputSchemaDefaults(unittest.TestCase):
         self.assertEqual(model_profile.get("default"), "baseline")
 
 
+class TestPlanResumeInputSchemaDefaults(unittest.TestCase):
+    """plan_resume should default model_profile to baseline."""
+
+    def test_cloud_plan_resume_schema_defaults_model_profile(self):
+        props = cloud_app.PLAN_RESUME_INPUT_SCHEMA.get("properties", {})
+        model_profile = props.get("model_profile", {})
+        self.assertEqual(model_profile.get("default"), "baseline")
+
+    def test_local_plan_resume_schema_defaults_model_profile(self):
+        props = local_app.PLAN_RESUME_INPUT_SCHEMA.get("properties", {})
+        model_profile = props.get("model_profile", {})
+        self.assertEqual(model_profile.get("default"), "baseline")
+
+
 class TestExamplePromptsAnnotations(unittest.TestCase):
     def test_cloud_example_prompts_annotations(self):
         definition = _tool_def(cloud_app.TOOL_DEFINITIONS, "example_prompts")
@@ -123,6 +137,7 @@ class TestRemainingToolAnnotations(unittest.TestCase):
             "plan_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
             "plan_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
             "plan_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_resume": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "plan_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
             "plan_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
@@ -137,6 +152,7 @@ class TestRemainingToolAnnotations(unittest.TestCase):
             "plan_status": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
             "plan_stop": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": False},
             "plan_retry": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+            "plan_resume": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "plan_download": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "plan_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
@@ -176,6 +192,10 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
     def test_cloud_exposes_plan_retry_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("plan_retry", cloud_tool_names)
+
+    def test_cloud_exposes_plan_resume_tool(self):
+        cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
+        self.assertIn("plan_resume", cloud_tool_names)
 
     def test_cloud_exposes_plan_file_info_not_plan_download(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
@@ -237,6 +257,10 @@ class TestLocalToolSurfaceConsistency(unittest.TestCase):
     def test_local_exposes_plan_retry_tool(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
         self.assertIn("plan_retry", local_tool_names)
+
+    def test_local_exposes_plan_resume_tool(self):
+        local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
+        self.assertIn("plan_resume", local_tool_names)
 
     def test_local_exposes_plan_download_not_plan_file_info(self):
         local_tool_names = {definition.name for definition in local_app.TOOL_DEFINITIONS}
@@ -355,7 +379,7 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
     def test_simple_tools_have_flat_schema(self):
         """Tools with a single success shape should not have oneOf."""
         simple_tools = ["example_plans", "example_prompts", "model_profiles",
-                        "plan_create", "plan_list"]
+                        "plan_create", "plan_resume", "plan_list"]
         for name in simple_tools:
             with self.subTest(tool=name):
                 tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, name)
@@ -378,6 +402,7 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
             http_server.plan_status,
             http_server.plan_stop,
             http_server.plan_retry,
+            http_server.plan_resume,
             http_server.plan_file_info,
             http_server.plan_list,
         ]

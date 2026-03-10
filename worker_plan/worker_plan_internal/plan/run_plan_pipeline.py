@@ -25,6 +25,7 @@ from worker_plan_internal.lever.deduplicate_levers import DeduplicateLevers
 from worker_plan_internal.lever.scenarios_markdown import ScenariosMarkdown
 from worker_plan_internal.lever.strategic_decisions_markdown import StrategicDecisionsMarkdown
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
+from worker_plan_api.pipeline_version import PIPELINE_VERSION
 from worker_plan_api.speedvsdetail import SpeedVsDetailEnum
 from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
 from worker_plan_internal.assume.identify_purpose import IdentifyPurpose
@@ -4058,6 +4059,12 @@ class ExecutePipeline:
         with open(expected_filenames_path, "w") as f:
             json.dump(self.all_expected_filenames, f, indent=2)
         logger.info(f"Saved {len(self.all_expected_filenames)} expected filenames to {expected_filenames_path}")
+
+        # Write pipeline metadata so the version is preserved in the zip snapshot.
+        metadata_path = self.run_id_dir / FilenameEnum.PLANEXE_METADATA.value
+        with open(metadata_path, "w") as f:
+            json.dump({"pipeline_version": PIPELINE_VERSION}, f, indent=2)
+        logger.info(f"Wrote pipeline metadata (pipeline_version={PIPELINE_VERSION}) to {metadata_path}")
 
         luigi_workers = self.resolve_luigi_workers()
         logger.info(f"Luigi workers: {luigi_workers}")

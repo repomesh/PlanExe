@@ -56,6 +56,11 @@ class PlanRetryRequest(BaseModel):
     model_profile: ModelProfileInput = "baseline"
 
 
+class PlanResumeRequest(BaseModel):
+    plan_id: str
+    model_profile: ModelProfileInput = "baseline"
+
+
 class PlanDownloadRequest(BaseModel):
     plan_id: str
     artifact: str = "report"
@@ -575,6 +580,38 @@ PLAN_RETRY_OUTPUT_SCHEMA = {
     },
 }
 
+PLAN_RESUME_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "plan_id": {
+            "type": "string",
+            "description": "UUID of the failed plan to resume.",
+        },
+        "model_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+            "default": "baseline",
+            "description": "Model profile used for the resumed run. Defaults to baseline.",
+        },
+    },
+    "required": ["plan_id"],
+}
+
+PLAN_RESUME_OUTPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "plan_id": {"type": "string"},
+        "state": {"type": "string"},
+        "model_profile": {
+            "type": "string",
+            "enum": ["baseline", "premium", "frontier", "custom"],
+        },
+        "resume_count": {"type": "integer"},
+        "resumed_at": {"type": "string"},
+        "error": ERROR_SCHEMA,
+    },
+}
+
 PLAN_DOWNLOAD_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -774,6 +811,27 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolDefinition(
+        name="plan_resume",
+        description=(
+            "Resume a failed plan without discarding completed intermediary files. "
+            "Plan generation restarts from the first incomplete step, skipping all steps that already produced output files. "
+            "Use plan_resume when plan_status shows 'failed' and plan generation was interrupted before completing all steps "
+            "(network drop, timeout, plan_stop, worker crash). "
+            "For a full restart or to change model_profile, use plan_retry instead. "
+            "Only failed plans can be resumed. "
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state. "
+            "Returns PIPELINE_VERSION_MISMATCH when the snapshot was created by a different pipeline version; use plan_retry instead."
+        ),
+        input_schema=PLAN_RESUME_INPUT_SCHEMA,
+        output_schema=PLAN_RESUME_OUTPUT_SCHEMA,
+        annotations={
+            "readOnlyHint": False,
+            "destructiveHint": False,
+            "idempotentHint": False,
+            "openWorldHint": True,
+        },
+    ),
+    ToolDefinition(
         name="plan_download",
         description=(
             "Download the plan output and save it locally to PLANEXE_PATH. "
@@ -833,7 +891,9 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "Only after approval, call plan_create. "
     "Each plan_create call creates a new plan_id; the server does not enforce a global per-client concurrency limit. "
     "Then poll plan_status (about every 5 minutes); use plan_download when complete. "
-    "If a run fails, call plan_retry with the failed plan_id to requeue it (optional model_profile, defaults to baseline). "
+    "If plan generation fails before completing all steps, call plan_resume to continue from where it left off without discarding completed work. "
+    "Use plan_retry instead for a full restart. "
+    "Both accept the failed plan_id and optional model_profile (defaults to baseline). "
     "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
@@ -1001,6 +1061,18 @@ async def handle_plan_retry(arguments: dict[str, Any]) -> CallToolResult:
     return _wrap_response(payload)
 
 
+async def handle_plan_resume(arguments: dict[str, Any]) -> CallToolResult:
+    """Request mcp_cloud to resume a failed plan without discarding completed outputs."""
+    req = PlanResumeRequest(**arguments)
+    payload, error = _call_remote_tool(
+        "plan_resume",
+        {"plan_id": req.plan_id, "model_profile": req.model_profile},
+    )
+    if error:
+        return _wrap_response({"error": error}, is_error=True)
+    return _wrap_response(payload)
+
+
 async def handle_plan_download(arguments: dict[str, Any]) -> CallToolResult:
     """Download report/zip for a plan from mcp_cloud and save it locally.
 
@@ -1090,6 +1162,7 @@ TOOL_HANDLERS = {
     "plan_status": handle_plan_status,
     "plan_stop": handle_plan_stop,
     "plan_retry": handle_plan_retry,
+    "plan_resume": handle_plan_resume,
     "plan_download": handle_plan_download,
     "plan_list": handle_plan_list,
 }

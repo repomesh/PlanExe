@@ -303,6 +303,51 @@ class PlanRetryOutput(BaseModel):
     error: ErrorDetail | None = None
 
 
+class PlanResumeInput(BaseModel):
+    plan_id: str = Field(
+        ...,
+        description="UUID of the failed plan to resume.",
+    )
+    model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
+        default="baseline",
+        description=(
+            "Model profile used for the resumed run. Defaults to baseline if omitted."
+        ),
+    )
+
+
+class PlanResumeOutput(BaseModel):
+    plan_id: str | None = Field(
+        default=None,
+        description="Plan UUID that was resumed (same ID as the failed plan).",
+    )
+    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+        default=None,
+        description="Current plan state after resume request.",
+    )
+    model_profile: Literal["baseline", "premium", "frontier", "custom"] | None = Field(
+        default=None,
+        description="Model profile assigned to the resumed run.",
+    )
+    resume_count: int | None = Field(
+        default=None,
+        description="Number of times this plan has been resumed.",
+    )
+    resumed_at: str | None = Field(
+        default=None,
+        description="UTC timestamp when the resume request was accepted.",
+    )
+    sse_url: str | None = Field(
+        default=None,
+        description=(
+            "Optional completion detector. Run `curl -N <sse_url>` in a background shell — "
+            "the stream auto-closes when the plan reaches a terminal state (completed/failed). "
+            "For structured progress data, use plan_status instead."
+        ),
+    )
+    error: ErrorDetail | None = None
+
+
 class PlanFileInfoNotReadyOutput(BaseModel):
     ready: bool = Field(False, description="Always False; indicates the artifact is not yet available.")
     reason: str = Field(..., description="Human-readable explanation, e.g. 'processing' or 'failed'.")

@@ -3405,9 +3405,13 @@ class MyFlaskApp:
                 return redirect(url_for('plan', id=run_id))
 
             # Reject resume if the snapshot was created by a different pipeline version.
+            # Plans created before pipeline_version was stamped have no stored version;
+            # allow those through — the worker-side check in worker_plan_database/app.py
+            # reads pipeline_version from the actual snapshot metadata file
+            # (001-3-planexe_metadata.json) and rejects incompatible versions there.
             stored_params = task.parameters if isinstance(task.parameters, dict) else {}
             stored_version = stored_params.get("pipeline_version")
-            if stored_version != PIPELINE_VERSION:
+            if stored_version is not None and stored_version != PIPELINE_VERSION:
                 return redirect(url_for(
                     'plan', id=run_id,
                     resume_error="version_mismatch",

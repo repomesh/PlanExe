@@ -442,7 +442,14 @@ class ServerExecutePipeline(ExecutePipeline):
         """
         logger.debug(f"ServerExecutePipeline._handle_task_completion")
 
-        WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=self.task_id)
+        try:
+            WorkerItem.upsert_heartbeat(worker_id=WORKER_ID, current_task_id=self.task_id)
+        except Exception as exc:
+            logger.warning("Heartbeat upsert failed (non-fatal): %s", exc)
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
 
         # Lookup the taskitem in the database by self.task_id
         task = db.session.get(PlanItem, self.task_id)

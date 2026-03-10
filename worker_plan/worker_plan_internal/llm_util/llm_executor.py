@@ -284,6 +284,8 @@ class LLMExecutor:
             output_tokens=token_count.output_tokens if token_count else None,
             thinking_tokens=token_count.thinking_tokens if token_count else None,
             cost_usd=token_count.cost_usd if token_count else None,
+            upstream_provider=token_count.upstream_provider if token_count else None,
+            upstream_model=token_count.upstream_model if token_count else None,
         )
 
     def _check_stop_callback(self, last_attempt: LLMAttempt, start_time: float, attempt_index: int) -> None:

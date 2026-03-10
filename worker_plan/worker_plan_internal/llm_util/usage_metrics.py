@@ -12,6 +12,9 @@ Usage:
 
     # Called automatically by LLMExecutor._record_attempt_token_metrics()
     record_usage_metric(model="gpt-4", duration=1.23, success=True, input_tokens=100, output_tokens=50)
+
+    # Clear after pipeline completes to avoid stale state
+    set_usage_metrics_path(None)
 """
 import json
 import logging

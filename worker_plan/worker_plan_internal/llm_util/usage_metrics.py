@@ -51,6 +51,7 @@ def record_usage_metric(
     """
     path = _usage_metrics_path
     if path is None:
+        logger.warning("record_usage_metric called but no usage metrics path is set")
         return
 
     record = {
@@ -74,4 +75,4 @@ def record_usage_metric(
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
     except Exception as exc:
-        logger.debug("Failed to write usage metric: %s", exc)
+        logger.warning("Failed to write usage metric: %s", exc)

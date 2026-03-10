@@ -39,6 +39,8 @@ from dataclasses import dataclass
 from llama_index.core.llms.llm import LLM
 from llama_index.core.instrumentation.dispatcher import instrument_tags
 from worker_plan_internal.llm_factory import get_llm
+from worker_plan_internal.llm_util.usage_metrics import record_usage_metric
+from worker_plan_internal.llm_util.token_counter import extract_token_count
 
 logger = logging.getLogger(__name__)
 
@@ -273,9 +275,6 @@ class LLMExecutor:
 
         # File-based metrics for local runs (no database required)
         try:
-            from worker_plan_internal.llm_util.usage_metrics import record_usage_metric
-            from worker_plan_internal.llm_util.token_counter import extract_token_count
-
             token_count = extract_token_count(response) if response else None
             record_usage_metric(
                 model=llm_model_name,

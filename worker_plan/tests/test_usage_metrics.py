@@ -99,5 +99,61 @@ def test_record_usage_metric_no_error_field_when_none(tmp_path: Path) -> None:
 
         record = json.loads(metrics_file.read_text().strip())
         assert "error" not in record
+        assert "error_detail" not in record
+    finally:
+        set_usage_metrics_path(None)
+
+
+def test_record_usage_metric_unknown_includes_error_detail(tmp_path: Path) -> None:
+    metrics_file = tmp_path / "usage_metrics.jsonl"
+    set_usage_metrics_path(metrics_file)
+    try:
+        record_usage_metric(
+            model="openrouter-model",
+            duration_seconds=19.6,
+            success=False,
+            error_message="Something completely unexpected happened",
+        )
+
+        record = json.loads(metrics_file.read_text().strip())
+        assert record["error"] == "unknown"
+        assert record["error_detail"] == "Something completely unexpected happened"
+    finally:
+        set_usage_metrics_path(None)
+
+
+def test_record_usage_metric_known_category_no_error_detail(tmp_path: Path) -> None:
+    metrics_file = tmp_path / "usage_metrics.jsonl"
+    set_usage_metrics_path(metrics_file)
+    try:
+        record_usage_metric(
+            model="gpt-4",
+            duration_seconds=1.0,
+            success=False,
+            error_message="Connection refused",
+        )
+
+        record = json.loads(metrics_file.read_text().strip())
+        assert record["error"] == "connection_error"
+        assert "error_detail" not in record
+    finally:
+        set_usage_metrics_path(None)
+
+
+def test_record_usage_metric_unknown_truncates_long_error(tmp_path: Path) -> None:
+    metrics_file = tmp_path / "usage_metrics.jsonl"
+    set_usage_metrics_path(metrics_file)
+    try:
+        long_msg = "x" * 500
+        record_usage_metric(
+            model="gpt-4",
+            duration_seconds=1.0,
+            success=False,
+            error_message=long_msg,
+        )
+
+        record = json.loads(metrics_file.read_text().strip())
+        assert record["error"] == "unknown"
+        assert len(record["error_detail"]) == 200
     finally:
         set_usage_metrics_path(None)

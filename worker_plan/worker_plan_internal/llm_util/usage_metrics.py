@@ -90,7 +90,10 @@ def record_usage_metric(
         "duration_seconds": round(duration_seconds, 3),
     }
     if error_message:
-        record["error"] = classify_error(error_message)
+        category = classify_error(error_message)
+        record["error"] = category
+        if category == "unknown":
+            record["error_detail"] = error_message[:200]
     if input_tokens is not None:
         record["input_tokens"] = input_tokens
     if output_tokens is not None:

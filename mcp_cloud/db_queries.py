@@ -269,7 +269,9 @@ def _resume_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, An
 
         # Reject resume if the snapshot was created by a different pipeline version.
         # Plans created before pipeline_version was stamped have no stored version;
-        # allow those through — the worker-side metadata check is the real safety gate.
+        # allow those through — the worker-side check in worker_plan_database/app.py
+        # reads pipeline_version from the actual snapshot metadata file
+        # (001-3-planexe_metadata.json) and rejects incompatible versions there.
         stored_params = plan.parameters if isinstance(plan.parameters, dict) else {}
         stored_version = stored_params.get("pipeline_version")
         if stored_version is not None and stored_version != PIPELINE_VERSION:

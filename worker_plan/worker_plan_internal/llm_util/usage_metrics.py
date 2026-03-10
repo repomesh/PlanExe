@@ -47,8 +47,6 @@ def record_usage_metric(
     output_tokens: Optional[int] = None,
     thinking_tokens: Optional[int] = None,
     cost_usd: Optional[float] = None,
-    upstream_provider: Optional[str] = None,
-    upstream_model: Optional[str] = None,
 ) -> None:
     """Append a single usage metric record to the JSONL file.
 
@@ -75,10 +73,6 @@ def record_usage_metric(
         record["thinking_tokens"] = thinking_tokens
     if cost_usd is not None:
         record["cost_usd"] = cost_usd
-    if upstream_provider is not None:
-        record["upstream_provider"] = upstream_provider
-    if upstream_model is not None:
-        record["upstream_model"] = upstream_model
 
     try:
         with open(path, "a", encoding="utf-8") as f:

@@ -26,6 +26,32 @@ logger = logging.getLogger(__name__)
 
 _usage_metrics_path: Optional[Path] = None
 
+# Ordered list: first match wins, so more specific patterns come before broad ones.
+_ERROR_CATEGORIES: list[tuple[str, list[str]]] = [
+    ("rate_limit", ["rate limit", "429", "too many requests"]),
+    ("auth_error", ["unauthorized", "forbidden", "auth", "401", "403"]),
+    ("server_error", ["500", "502", "503", "504", "server error", "internal server"]),
+    ("timeout", ["timeout", "timed out"]),
+    ("empty_response", ["empty", "no response", "none"]),
+    ("connection_error", ["connection", "connect", "dns", "network"]),
+    ("invalid_json", ["json", "validation error", "pydantic"]),
+    ("model_not_found", ["model not found", "not found", "404"]),
+]
+
+
+def classify_error(error_message: str) -> str:
+    """Map a raw exception message to a short category string.
+
+    Uses case-insensitive keyword matching against *_ERROR_CATEGORIES*.
+    Returns ``"unknown"`` if no pattern matches.
+    """
+    lowered = error_message.lower()
+    for category, keywords in _ERROR_CATEGORIES:
+        for keyword in keywords:
+            if keyword in lowered:
+                return category
+    return "unknown"
+
 
 def set_usage_metrics_path(path: Optional[Path]) -> None:
     """Set the JSONL file path for recording usage metrics."""
@@ -64,7 +90,7 @@ def record_usage_metric(
         "duration_seconds": round(duration_seconds, 3),
     }
     if error_message:
-        record["error"] = error_message
+        record["error"] = classify_error(error_message)
     if input_tokens is not None:
         record["input_tokens"] = input_tokens
     if output_tokens is not None:

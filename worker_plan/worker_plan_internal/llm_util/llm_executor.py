@@ -274,20 +274,17 @@ class LLMExecutor:
             logger.debug("Failed to record token metrics for attempt: %s", exc)
 
         # File-based metrics for local runs (no database required)
-        try:
-            token_count = extract_token_count(response) if response else None
-            record_usage_metric(
-                model=llm_model_name,
-                duration_seconds=duration,
-                success=success,
-                error_message=error_message,
-                input_tokens=token_count.input_tokens if token_count else None,
-                output_tokens=token_count.output_tokens if token_count else None,
-                thinking_tokens=token_count.thinking_tokens if token_count else None,
-                cost_usd=token_count.cost_usd if token_count else None,
-            )
-        except Exception as exc:
-            logger.warning("Failed to record file-based usage metric: %s", exc)
+        token_count = extract_token_count(response) if response else None
+        record_usage_metric(
+            model=llm_model_name,
+            duration_seconds=duration,
+            success=success,
+            error_message=error_message,
+            input_tokens=token_count.input_tokens if token_count else None,
+            output_tokens=token_count.output_tokens if token_count else None,
+            thinking_tokens=token_count.thinking_tokens if token_count else None,
+            cost_usd=token_count.cost_usd if token_count else None,
+        )
 
     def _check_stop_callback(self, last_attempt: LLMAttempt, start_time: float, attempt_index: int) -> None:
         """Checks the callback, if it exists, to see if execution should stop."""

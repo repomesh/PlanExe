@@ -86,7 +86,8 @@ def _find_recent_duplicate_plan(
     """Return an existing pending/processing plan with the same prompt if created recently.
 
     Only fetches ``id``, ``timestamp_created``, and ``parameters`` to avoid
-    loading heavy columns (prompt can be up to 4 GB).
+    loading heavy columns (generated_report_html, run_zip_snapshot,
+    run_track_activity_jsonl).
 
     Comparison of *model_profile* is done in Python to avoid JSON column
     dialect differences between SQLite and PostgreSQL.

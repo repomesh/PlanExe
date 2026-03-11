@@ -134,6 +134,14 @@ class PlanCreateOutput(BaseModel):
         description="Plan UUID returned by plan_create. Stable across plan_status/plan_stop/plan_file_info."
     )
     created_at: str
+    deduplicated: bool | None = Field(
+        default=None,
+        description=(
+            "True when this response returns an existing plan instead of creating a new one "
+            "(duplicate prompt + model_profile by the same user within the dedup window). "
+            "Absent or None for newly created plans."
+        ),
+    )
     sse_url: str | None = Field(
         default=None,
         description=(

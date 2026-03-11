@@ -55,6 +55,7 @@ from mcp_cloud.db_queries import (  # noqa: F401
     find_plan_by_id,
     get_plan_by_id,
     resolve_plan_by_id,
+    _find_recent_duplicate_plan,
     _create_plan_sync,
     _get_plan_status_snapshot_sync,
     _request_plan_stop_sync,

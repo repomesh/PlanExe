@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 **Author:** Bubba + Egon
-**Related PRs:** #198 (DeduplicateLeversTask per-lever decomposition), #220 (implementation)
+**Related PRs:** #198 (DeduplicateLeversTask per-lever decomposition), #220 (transient retries), #221 (validation error feedback retries)
 
 ---
 
@@ -46,6 +46,7 @@ If all LLM attempts and retries are exhausted, the task raises and Luigi marks i
 - **LLMChatError (#237):** Tasks wrap LLM exceptions in `LLMChatError` with unique `error_id` for traceability. `is_transient_error()` works through the wrapper because `LLMChatError.__str__()` preserves the original cause text.
 - **Usage metrics (#110):** Failed attempts are recorded to `usage_metrics.jsonl` with error classification and `error_id`. Successful attempts are recorded by `TrackActivity` instrumentation.
 - **Pipeline stop:** `PipelineStopRequested` is never retried — it propagates immediately.
+- **Validation error feedback (#102, PR #221):** `max_validation_retries` parameter enables retrying the *same* model on Pydantic validation errors. Before each retry, `_extract_validation_feedback()` walks the exception chain to extract structured error details (missing fields, type mismatches) and stores them in `executor.validation_feedback`. The caller's `execute_function` can read this property and inject correction feedback into the prompt. Validation retries run *after* transient retries are exhausted — if the last error is a validation error rather than transient, the validation retry loop fires. This converts blind retries into self-correcting dialogue (see proposal #102).
 
 ---
 
@@ -62,6 +63,7 @@ If all LLM attempts and retries are exhausted, the task raises and Luigi marks i
 
 - Config-driven retry settings via `llm_config/custom.json` (currently hardcoded defaults).
 - Remove remaining per-task retry loops as each task is updated (follow-on PRs).
+- Wire individual tasks to read `executor.validation_feedback` and append correction messages to prompts (see proposal #102).
 
 ---
 

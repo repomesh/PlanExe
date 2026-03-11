@@ -18,7 +18,17 @@ This proposal is about giving the pipeline a real feedback loop.
 
 ## 1. Error-Feedback Retries
 
-### Current behavior
+**Status:** Foundation implemented (PR #221). `LLMExecutor` now extracts structured
+Pydantic validation feedback and exposes it via `validation_feedback` so callers
+can inject it into the next prompt. The `max_validation_retries` parameter
+controls how many times the same model is retried on validation errors before
+falling through to the next model.
+
+**Remaining work:** Individual tasks need to read `executor.validation_feedback`
+inside their `execute_function` and append the correction message to the prompt.
+The infrastructure is ready; the per-task wiring is not yet done.
+
+### Current behavior (before PR #221)
 
 ```
 Attempt 1: send prompt → model omits holistic_profile_of_the_plan → Pydantic fails

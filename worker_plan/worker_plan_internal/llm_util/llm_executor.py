@@ -31,6 +31,7 @@ from typing import Any, Callable, Optional, List
 from dataclasses import dataclass, field
 from llama_index.core.llms.llm import LLM
 from llama_index.core.instrumentation.dispatcher import instrument_tags
+from pydantic import ValidationError
 from worker_plan_internal.llm_factory import get_llm
 from worker_plan_internal.llm_util.usage_metrics import record_usage_metric
 
@@ -50,6 +51,27 @@ def is_transient_error(error: Exception) -> bool:
     """Return True if *error* looks like a transient network / rate-limit issue."""
     error_str = str(error).lower()
     return any(pattern in error_str for pattern in _TRANSIENT_PATTERNS)
+
+
+def _extract_validation_feedback(error: Exception) -> Optional[str]:
+    """Extract structured feedback from a Pydantic ValidationError.
+
+    Returns a human-readable summary of the validation failures, or ``None``
+    if *error* is not a validation error.
+    """
+    # Walk the exception chain — LlamaIndex often wraps the original error.
+    current: Optional[BaseException] = error
+    for _ in range(100):
+        if current is None:
+            break
+        if isinstance(current, ValidationError):
+            lines = [f"Pydantic validation failed with {current.error_count()} error(s):"]
+            for err in current.errors():
+                loc = " → ".join(str(l) for l in err.get("loc", []))
+                lines.append(f"  - {loc}: {err['msg']} (type={err['type']})")
+            return "\n".join(lines)
+        current = current.__cause__ if current.__cause__ else current.__context__
+    return None
 
 
 @dataclass
@@ -140,12 +162,18 @@ class LLMExecutor:
     When *retry_config* is provided, transient errors (rate-limits, timeouts,
     connection problems) are retried with exponential back-off before moving
     on to the next model.
+
+    When *max_validation_retries* > 0, Pydantic validation errors trigger an
+    automatic retry on the **same** model.  Before the retry, structured error
+    feedback is stored in :attr:`validation_feedback` so that the caller's
+    ``execute_function`` can inspect it and inject the feedback into the prompt.
     """
     def __init__(
         self,
         llm_models: list[LLMModelBase],
         should_stop_callback: Optional[Callable[[ShouldStopCallbackParameters], None]] = None,
         retry_config: Optional[RetryConfig] = None,
+        max_validation_retries: int = 0,
     ):
         """
         Args:
@@ -158,6 +186,10 @@ class LLMExecutor:
             retry_config: Optional retry settings for transient errors.
                 When provided, each model is retried up to ``retry_config.max_retries``
                 times on transient errors before falling through to the next model.
+            max_validation_retries: Number of extra attempts per model on Pydantic
+                validation failures.  The structured error feedback is available
+                via :attr:`validation_feedback` so the ``execute_function`` can
+                include it in the next prompt.
         """
         if not llm_models:
             raise ValueError("No LLMs provided")
@@ -168,7 +200,19 @@ class LLMExecutor:
         self.llm_models = llm_models
         self.should_stop_callback = should_stop_callback
         self.retry_config = retry_config or RetryConfig(max_retries=0)
+        self.max_validation_retries = max_validation_retries
         self.attempts: List[LLMAttempt] = []
+        self._validation_feedback: Optional[str] = None
+
+    @property
+    def validation_feedback(self) -> Optional[str]:
+        """Structured description of the last validation error, or ``None``.
+
+        Callers can check this inside their ``execute_function`` to inject
+        error feedback into the prompt before a retry attempt.  It is cleared
+        before the first attempt and set only on validation-error retries.
+        """
+        return self._validation_feedback
 
     @property
     def attempt_count(self) -> int:
@@ -179,6 +223,7 @@ class LLMExecutor:
 
         # Reset attempts for each new run
         self.attempts = []
+        self._validation_feedback = None
         overall_start_time = time.perf_counter()
 
         for index, llm_model in enumerate(self.llm_models):
@@ -188,6 +233,7 @@ class LLMExecutor:
             self._check_stop_callback(attempt, overall_start_time, index)
 
             if attempt.success:
+                self._validation_feedback = None
                 return attempt.result
 
             # Retry transient errors with exponential back-off.
@@ -208,6 +254,29 @@ class LLMExecutor:
 
                 if attempt.success:
                     return attempt.result
+
+            # On validation errors, retry the *same* model with error feedback.
+            if self.max_validation_retries > 0 and attempt.exception is not None:
+                for retry_num in range(self.max_validation_retries):
+                    feedback = _extract_validation_feedback(attempt.exception)
+                    if feedback is None:
+                        break  # not a validation error — skip to next model
+
+                    self._validation_feedback = feedback
+                    logger.info(
+                        f"LLMExecutor: validation error from {llm_model!r}, "
+                        f"retrying with feedback (retry {retry_num + 1}/{self.max_validation_retries})"
+                    )
+
+                    attempt = self._try_one_attempt(llm_model, execute_function)
+                    self.attempts.append(attempt)
+                    self._check_stop_callback(attempt, overall_start_time, index)
+
+                    if attempt.success:
+                        self._validation_feedback = None
+                        return attempt.result
+
+                self._validation_feedback = None
 
         # If we get here, all attempts have failed.
         self._raise_final_exception()

@@ -68,6 +68,7 @@ Poll every 5 minutes. State transitions:
 - `processing` → Pipeline is running
 - `completed` → Report is ready
 - `failed` → Terminal error (use `plan_resume` or `plan_retry`)
+- `stopped` → User called `plan_stop` (use `plan_resume` to continue or `plan_retry` to restart)
 
 ### Step 6: Handle failures
 

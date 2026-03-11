@@ -103,10 +103,25 @@ def ensure_step_count_columns() -> None:
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
+def ensure_stopped_state() -> None:
+    """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
+
+    The PostgreSQL enum type is named ``taskstate`` in databases created before
+    the TaskState → PlanState Python rename (proposal 74).  Fresh databases
+    created after that rename will have ``planstate``.  We try both names.
+    """
+    with db.engine.begin() as conn:
+        for type_name in ("taskstate", "planstate"):
+            try:
+                conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
+            except Exception as exc:
+                logger.debug("ALTER TYPE %s: %s", type_name, exc)
+
 with app.app_context():
     ensure_planitem_stop_columns()
     ensure_multi_api_key_columns()
     ensure_step_count_columns()
+    ensure_stopped_state()
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (
@@ -136,12 +151,12 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If plan generation fails before completing all steps, call plan_resume to continue from where it left off without discarding completed work. "
     "Use plan_retry instead for a full restart (plan must be in failed state). "
     "Both accept a failed plan_id and optional model_profile (defaults to baseline). "
-    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
+    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will transition to the stopped state. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_file_info returns {ready:false,reason:...} while the artifact is not yet ready; check readiness by testing whether download_url is present in the response. "
     "plan_file_info download_url is the absolute URL where the requested artifact can be downloaded. "
     "To list recent plans for a user call plan_list; returns plan_id, state, progress_percentage, created_at, and prompt_excerpt for each plan. "
-    "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error; stopped => user called plan_stop (consider plan_resume). "
     "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the plan was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the plan_create likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "

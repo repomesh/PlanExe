@@ -186,6 +186,7 @@
     .plan-state {
         display: inline-flex;
         align-items: center;
+        gap: 0.3em;
         margin-top: 6px;
         font-size: 0.78rem;
         font-weight: 600;
@@ -540,23 +541,11 @@
             <p class="plan-meta-title">Plan</p>
             <p class="plan-meta-sub">id: {{ task.id }}<button type="button" class="plan-id-copy-btn" id="copy-plan-id-btn" title="Copy plan ID" data-plan-id="{{ task.id }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
             <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
-                Status: <span id="plan-state-text">
-                    {% if task.state %}
-                        {{ task.state.name | lower }}
-                    {% else %}
-                        pending
-                    {% endif %}
-                    {% if task.progress_percentage is not none %}
-                        · {{ "%.0f"|format(task.progress_percentage) }}%
-                    {% endif %}
-                    {% if task.progress_message %}
-                        · {{ task.progress_message }}
-                    {% endif %}
-                </span>
+                <span>Status:</span> <span id="plan-state-text">{% if task.state %}{{ task.state.name | lower }}{% else %}pending{% endif %}{% if task.progress_percentage is not none %} · {{ "%.0f"|format(task.progress_percentage) }}%{% endif %}{% if task.progress_message and not (task.state and task.state.name == 'stopped') %} · {{ task.progress_message }}{% endif %}</span>
             </p>
         </div>
         <div class="plan-meta-actions">
-            <form method="POST" class="plan-action-form" id="retry-resume-form" {% if not ((task.state and task.state.name == 'failed') or task.stop_requested) %}style="display:none"{% endif %}>
+            <form method="POST" class="plan-action-form" id="retry-resume-form" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="id" value="{{ task.id }}">
                 <div class="plan-action-group">
@@ -567,21 +556,21 @@
                         <option value="custom" {% if selected_model_profile == 'custom' %}selected{% endif %}>custom</option>
                     </select>
                     <button type="submit" formaction="{{ url_for('plan_retry') }}" class="btn-plan-meta" title="Discard all progress and start over from scratch">Retry</button>
-                    <button type="submit" formaction="{{ url_for('plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (task.state and task.state.name == 'failed') %}disabled{% endif %}>Resume</button>
+                    <button type="submit" formaction="{{ url_for('plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}disabled{% endif %}>Resume</button>
                     {% if resume_error == "version_mismatch" %}
                     <span class="plan-resume-error" id="resume-error-banner">Resume unavailable — plan was created with a different PlanExe version. Use Retry.</span>
                     {% endif %}
                 </div>
             </form>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" title="Discard all progress and start over from scratch" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Retry</span>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="resume-disabled" title="Continue from where it left off, skipping completed steps" {% if (task.state and task.state.name == 'failed') or task.stop_requested %}style="display:none"{% endif %}>Resume</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" title="Discard all progress and start over from scratch" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Retry</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="resume-disabled" title="Continue from where it left off, skipping completed steps" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Resume</span>
 
-            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested) %}style="display:none"{% endif %}>
+            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and task.state.name in ('pending', 'processing')) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="id" value="{{ task.id }}">
                 <button type="submit" class="btn-plan-meta">Stop</button>
             </form>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and (task.state.name == 'pending' or task.state.name == 'processing') and not task.stop_requested %}style="display:none"{% endif %}>Stop</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and task.state.name in ('pending', 'processing') %}style="display:none"{% endif %}>Stop</span>
 
             <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</span>
@@ -1135,21 +1124,21 @@
                 if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
                     parts.push(Math.round(meta.progress_percentage) + "%");
                 }
-                if (meta.progress_message) {
+                if (meta.progress_message && state !== "stopped") {
                     parts.push(meta.progress_message);
                 }
                 stateTextEl.textContent = parts.join(" · ");
             }
 
-            const canRetry = state === "failed" || !!meta.stop_requested;
-            const canResume = state === "failed";
+            const canRetry = state === "failed" || state === "stopped";
+            const canResume = state === "failed" || state === "stopped";
             setVisible("retry-resume-form", canRetry);
             setVisible("retry-disabled", !canRetry);
             setVisible("resume-disabled", !canRetry);
             var resumeBtn = document.getElementById("resume-btn");
             if (resumeBtn) resumeBtn.disabled = !canResume;
 
-            const canStop = (state === "pending" || state === "processing") && !meta.stop_requested;
+            const canStop = (state === "pending" || state === "processing");
             setVisible("stop-form", canStop);
             setVisible("stop-disabled", !canStop);
 

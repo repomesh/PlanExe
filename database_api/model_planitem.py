@@ -37,6 +37,7 @@ class PlanState(enum.Enum):
     processing = 2
     completed = 3
     failed = 4
+    stopped = 5
 
 
 class PlanItem(db.Model):

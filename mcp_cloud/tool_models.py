@@ -107,7 +107,7 @@ class PlanStopInput(BaseModel):
 class PlanRetryInput(BaseModel):
     plan_id: str = Field(
         ...,
-        description="UUID of the failed plan to retry.",
+        description="UUID of the failed or stopped plan to retry.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
@@ -167,11 +167,12 @@ class PlanStatusSuccess(BaseModel):
         ...,
         description="Plan UUID returned by plan_create."
     )
-    state: Literal["pending", "processing", "completed", "failed"] = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] = Field(
         ...,
         description=(
             "Caller contract: pending/processing => keep polling; "
-            "completed => download is ready; failed => terminal error."
+            "completed => download is ready; failed => terminal error; "
+            "stopped => user called plan_stop (consider plan_resume)."
         ),
     )
     progress_percentage: float = Field(
@@ -221,11 +222,12 @@ class PlanStatusOutput(BaseModel):
         default=None,
         description="Plan UUID returned by plan_create."
     )
-    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] | None = Field(
         default=None,
         description=(
             "Caller contract: pending/processing => keep polling; "
-            "completed => download is ready; failed => terminal error."
+            "completed => download is ready; failed => terminal error; "
+            "stopped => user called plan_stop (consider plan_resume)."
         ),
     )
     progress_percentage: float | None = Field(
@@ -272,7 +274,7 @@ class PlanStatusOutput(BaseModel):
 
 
 class PlanStopOutput(BaseModel):
-    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] | None = Field(
         default=None,
         description="Current plan state after stop request.",
     )
@@ -286,9 +288,9 @@ class PlanStopOutput(BaseModel):
 class PlanRetryOutput(BaseModel):
     plan_id: str | None = Field(
         default=None,
-        description="Plan UUID that was retried (same ID as the failed plan).",
+        description="Plan UUID that was retried (same ID as the failed or stopped plan).",
     )
-    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] | None = Field(
         default=None,
         description="Current plan state after retry request.",
     )
@@ -314,7 +316,7 @@ class PlanRetryOutput(BaseModel):
 class PlanResumeInput(BaseModel):
     plan_id: str = Field(
         ...,
-        description="UUID of the failed plan to resume.",
+        description="UUID of the failed or stopped plan to resume.",
     )
     model_profile: Literal["baseline", "premium", "frontier", "custom"] = Field(
         default="baseline",
@@ -327,9 +329,9 @@ class PlanResumeInput(BaseModel):
 class PlanResumeOutput(BaseModel):
     plan_id: str | None = Field(
         default=None,
-        description="Plan UUID that was resumed (same ID as the failed plan).",
+        description="Plan UUID that was resumed (same ID as the failed or stopped plan).",
     )
-    state: Literal["pending", "processing", "completed", "failed"] | None = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] | None = Field(
         default=None,
         description="Current plan state after resume request.",
     )
@@ -405,7 +407,7 @@ class PlanListInput(BaseModel):
 
 class PlanListItem(BaseModel):
     plan_id: str = Field(..., description="Plan UUID.")
-    state: Literal["pending", "processing", "completed", "failed"] = Field(
+    state: Literal["pending", "processing", "completed", "failed", "stopped"] = Field(
         ...,
         description="Current plan state.",
     )

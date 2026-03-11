@@ -758,7 +758,8 @@ TOOL_DEFINITIONS = [
             "Returns status and progress of the plan currently being created. "
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
             "(baseline profile) and may take longer on higher-quality profiles. "
-            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "State contract: pending/processing => keep polling; completed => download is ready; "
+            "failed => terminal error; stopped => user called plan_stop (consider plan_resume). "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
             "Unknown plan_id returns PLAN_NOT_FOUND (or REMOTE_ERROR when transport fails). "
@@ -780,7 +781,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Request the plan generation to stop. Pass the plan_id (the UUID returned by plan_create). "
             "Stopping is asynchronous: the stop flag is set immediately but the plan may continue briefly before halting. "
-            "A stopped plan will eventually transition to the failed state. "
+            "A stopped plan will transition to the stopped state. "
             "If the plan is already completed or failed, stop_requested returns false (the plan already finished). "
             "Unknown plan_id returns PLAN_NOT_FOUND (or REMOTE_ERROR when transport fails)."
         ),
@@ -796,10 +797,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_retry",
         description=(
-            "Retry a plan that is currently in failed state. "
-            "Pass the failed plan_id and optionally model_profile (defaults to baseline). "
+            "Retry a plan that is currently in failed or stopped state. "
+            "Pass the plan_id and optionally model_profile (defaults to baseline). "
             "The same plan_id is requeued and reset to pending on the cloud service. "
-            "Unknown plan_id returns PLAN_NOT_FOUND; non-failed plans return PLAN_NOT_FAILED."
+            "Unknown plan_id returns PLAN_NOT_FOUND; non-failed/stopped plans return PLAN_NOT_FAILED."
         ),
         input_schema=PLAN_RETRY_INPUT_SCHEMA,
         output_schema=PLAN_RETRY_OUTPUT_SCHEMA,
@@ -813,13 +814,13 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_resume",
         description=(
-            "Resume a failed plan without discarding completed intermediary files. "
+            "Resume a failed or stopped plan without discarding completed intermediary files. "
             "Plan generation restarts from the first incomplete step, skipping all steps that already produced output files. "
-            "Use plan_resume when plan_status shows 'failed' and plan generation was interrupted before completing all steps "
+            "Use plan_resume when plan_status shows 'failed' or 'stopped' and plan generation was interrupted before completing all steps "
             "(network drop, timeout, plan_stop, worker crash). "
             "For a full restart or to change model_profile, use plan_retry instead. "
-            "Only failed plans can be resumed. "
-            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state. "
+            "Only failed or stopped plans can be resumed. "
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed or stopped state. "
             "Returns PIPELINE_VERSION_MISMATCH when the snapshot was created by a different pipeline version; use plan_retry instead."
         ),
         input_schema=PLAN_RESUME_INPUT_SCHEMA,
@@ -894,12 +895,12 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "If plan generation fails before completing all steps, call plan_resume to continue from where it left off without discarding completed work. "
     "Use plan_retry instead for a full restart. "
     "Both accept the failed plan_id and optional model_profile (defaults to baseline). "
-    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will eventually transition to failed. "
+    "To stop, call plan_stop with the plan_id from plan_create; stopping is asynchronous and the plan will transition to the stopped state. "
     "If model_profiles returns MODEL_PROFILES_UNAVAILABLE, inform the user that no models are currently configured and the server administrator needs to set up model profiles. "
     "Tool errors use {error:{code,message}}. plan_download may return REMOTE_ERROR or DOWNLOAD_FAILED. "
     "plan_download saves to PLANEXE_PATH (default: current working directory) and returns saved_path. "
     "To list recent plans for a user call plan_list; returns plan_id, state, progress_percentage, created_at, and prompt_excerpt. "
-    "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+    "plan_status state contract: pending/processing => keep polling; completed => download is ready; failed => terminal error; stopped => user called plan_stop (consider plan_resume). "
     "Troubleshooting: if plan_status stays in pending for longer than 5 minutes, the plan was likely queued but not picked up by a worker (server issue). "
     "If plan_status is in processing and output files do not change for longer than 20 minutes, the run likely failed/stalled. "
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "

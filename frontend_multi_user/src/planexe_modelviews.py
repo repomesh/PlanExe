@@ -136,6 +136,11 @@ class PlanItemView(AdminOnlyModelView):
     column_filters = ['state', 'timestamp_created', 'user_id']
     column_formatters = {
         'id': lambda v, c, m, p: str(m.id)[:8] if m.id else '',
+        'state': lambda v, c, m, p: (
+            Markup('<span style="color:#e65100">stopped</span>')
+            if m.state and m.state.name == 'stopped'
+            else (m.state.name if m.state else '')
+        ),
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,
         'view_plan': lambda v, c, m, p: Markup(
             f'<a href="/viewplan?run_id={m.id}" target="_blank">View</a>'

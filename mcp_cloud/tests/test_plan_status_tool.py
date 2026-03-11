@@ -217,6 +217,49 @@ class TestPlanStatusTool(unittest.TestCase):
 
         self.assertEqual(result.structuredContent["current_step"], "SWOT Analysis")
 
+    def test_plan_status_stopped_returns_stopped_state(self):
+        """User-stopped plan has state='stopped' and no stop_reason field."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.stopped,
+            "stop_requested": True,
+            "progress_percentage": 42.0,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        self.assertEqual(result.structuredContent["state"], "stopped")
+        self.assertNotIn("stop_reason", result.structuredContent)
+
+    def test_plan_status_actual_failure_has_no_stop_reason(self):
+        """Failed plan response does not contain stop_reason field."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.failed,
+            "stop_requested": False,
+            "progress_percentage": 5.5,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        self.assertEqual(result.structuredContent["state"], "failed")
+        self.assertNotIn("stop_reason", result.structuredContent)
+        self.assertIn("error", result.structuredContent)
+
 
 if __name__ == "__main__":
     unittest.main()

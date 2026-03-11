@@ -1,15 +1,18 @@
 # Proposal 114: MCP Interface Issues from 10-Plan Agent Stress Test
 
 **Date:** 2026-03-11
-**Status:** Proposal
-**Source:** Feedback from Claude (Opus 4.6) after a 10-plan stress-testing session operated through Claude Code CLI.
+**Status:** Proposal (I1, I4 implemented; remainder open)
+**Source:** Feedback from Claude (Opus 4.6) after two stress-testing sessions (12 plans total) operated through Claude Code CLI.
 **Scope:** MCP interface design, observability, and lifecycle management. Does not cover plan content quality or pipeline output improvements.
 
 ---
 
 ## 1. Context
 
-A 10-plan stress test was conducted through Claude Code CLI using the PlanExe MCP interface.
+Two stress-testing sessions were conducted through Claude Code CLI using the PlanExe MCP interface:
+
+- **Session 1** (10 plans): Surfaced core MCP interface friction points — state ambiguity, missing diagnostics, lifecycle gaps.
+- **Session 2** (2 plans, with stop/resume cycling): Validated the `stopped` state implementation and identified remaining gaps.
 
 The testing surfaced concrete MCP interface friction points that affect agent operators — issues with state management, observability, lifecycle hygiene, and workflow ergonomics. This proposal catalogues the MCP-specific issues and maps them against existing proposals.
 
@@ -19,13 +22,15 @@ The testing surfaced concrete MCP interface friction points that affect agent op
 
 ### I1 — `failed` state conflates user-stop and actual failure
 
+**Status:** Implemented (Option A — dedicated `PlanState.stopped` DB state). Supersedes PR #244's Option B (`stop_reason` field).
+
 **Problem:** When `plan_stop` is called, the plan transitions to `failed`. When a worker crashes, it also transitions to `failed`. The agent operator cannot distinguish between:
 - User-initiated stop (nothing went wrong)
 - Actual failure (network drop, model error, worker crash)
 
 This matters because the correct response differs: user stop suggests `plan_resume`; actual failure may need `plan_retry` or investigation.
 
-**Overlap:** Proposal 87 (plan_resume) acknowledges this in §4 ("A future improvement could introduce a distinct `stopped` state") but defers it as out of scope.
+**Overlap:** Proposal 87 (plan_resume) acknowledged this in §4 — now updated to reflect the implementation.
 
 **Options:**
 
@@ -36,7 +41,9 @@ This matters because the correct response differs: user stop suggests `plan_resu
 
 Option B is less disruptive and can be added to `plan_status` without changing state enum values.
 
-**Affected files:** `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py` (plan_status response), DB model (new column or use existing `parameters` JSONB).
+**Implemented approach:** Option A — a dedicated `PlanState.stopped` enum value (value 5). `plan_stop` now transitions plans to the `stopped` state instead of `failed`. The `stop_reason` field introduced in PR #244 (Option B) has been removed — the state itself communicates intent. `plan_retry` and `plan_resume` accept both `failed` and `stopped` states. DB migration adds `'stopped'` to the PostgreSQL enum type (both `taskstate` for pre-rename databases and `planstate` for fresh databases — the Python class was renamed from `TaskState` to `PlanState` in proposal 74 but the PostgreSQL type name was not changed). The worker's post-pipeline finalization also transitions to `stopped` (not `failed`) when `stop_requested` is true.
+
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/run_via_database.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/autonomous_agent_guide.md`, `docs/proposals/87-plan-resume-mcp-tool.md`, `docs/proposals/111-promising-directions.md`.
 
 ---
 
@@ -57,11 +64,14 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
   "state": "failed",
   "failure_reason": "model_error",
   "failed_step": "016-expert_criticism",
-  "last_error": "openrouter-gemini-2.0-flash-001 returned invalid_json"
+  "last_error": "openrouter-gemini-2.0-flash-001 returned invalid_json",
+  "recoverable": true
 }
 ```
 
-**Implementation path:** The worker already logs errors internally. When transitioning to `failed`, write `failure_reason`, `failed_step`, and `last_error` to the plan's DB record (e.g. in the `parameters` JSONB column or new dedicated columns). `plan_status` handler surfaces these fields when `state == "failed"`.
+The `recoverable` boolean would let the agent immediately suggest `plan_resume` (transient/recoverable) vs `plan_retry` (fundamental/non-recoverable) without guessing.
+
+**Implementation path:** The worker already logs errors internally. When transitioning to `failed`, write `failure_reason`, `failed_step`, `last_error`, and `recoverable` to the plan's DB record (e.g. in the `parameters` JSONB column or new dedicated columns). `plan_status` handler surfaces these fields when `state == "failed"`.
 
 **Affected files:** `worker_plan_database/app.py` (error capture on failure), `mcp_cloud/db_queries.py` (store failure info), `mcp_cloud/handlers.py` (include in plan_status response).
 
@@ -75,7 +85,7 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 
 | Tool | Behavior |
 |------|----------|
-| `plan_delete` | Permanently remove a plan from the user's list. Only allowed for terminal states (`failed`, `completed`). |
+| `plan_delete` | Permanently remove a plan from the user's list. Only allowed for terminal states (`completed`, `failed`, `stopped`). |
 | `plan_archive` | Soft-delete: plan is hidden from `plan_list` but remains in DB for auditing. |
 
 `plan_archive` is safer for a billing system where plan records may need to be retained.
@@ -156,7 +166,7 @@ This would eliminate the need for `plan_status` polling entirely when SSE is ava
 
 ```
 plan_wait(plan_id, timeout_seconds=1200): Blocks until the plan reaches a terminal state
-(completed, failed) or the timeout expires. Returns the final plan_status response.
+(completed, failed, stopped) or the timeout expires. Returns the final plan_status response.
 ```
 
 **Implementation:** Server-side long-poll using the existing SSE infrastructure. The handler subscribes to the plan's state changes and returns when terminal or timeout.
@@ -182,11 +192,35 @@ This enables prompt iteration tracking without changing existing behavior for pl
 
 ---
 
+### I10 — Silent partial failures in completed plans
+
+**Problem:** A plan can reach `completed` with sections that are empty or stub-quality (e.g. 6/8 experts returning no feedback in the expert criticism step). There is no signal in `plan_status` or `plan_file_info` that the output has quality gaps. The agent has to read individual files to discover this. `completed` means "all 110 steps ran" — not "all sections produced quality output."
+
+This is a trust gap: the agent cannot confidently tell the user "your plan is ready" without caveats, because it has no visibility into per-section quality.
+
+**Proposed addition:** A `quality_summary` in the completed plan status or file info:
+
+```json
+{
+  "sections_complete": 108,
+  "sections_partial": 2,
+  "partial_details": [
+    {"step": "016-expert_criticism", "note": "2/8 experts provided feedback"}
+  ]
+}
+```
+
+**Implementation path:** The worker already knows which steps produced output. A post-pipeline validation pass could check key sections for minimum output quality (e.g. non-empty, expected structure present) and write a summary to the DB. `plan_status` surfaces it when `state == "completed"`.
+
+**Affected files:** `worker_plan_database/app.py` (quality validation pass), DB model (quality summary column), `mcp_cloud/handlers.py` (include in completed plan_status response).
+
+---
+
 ## 3. Cross-Reference with Existing Proposals
 
 | Issue | Existing Proposal | Gap |
 |-------|-------------------|-----|
-| I1 (stopped vs failed) | 87 §4 (deferred) | Needs its own decision — Option A vs B |
+| I1 (stopped vs failed) | 87 §4 (deferred) | **Implemented** (Option A — dedicated `PlanState.stopped`) |
 | I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
 | I4 (idempotency) | None | **Implemented** (PR #242) |
@@ -195,6 +229,7 @@ This enables prompt iteration tracking without changing existing behavior for pl
 | I7 (stall detection) | 87 §8 (partial) | No explicit stall timestamps |
 | I8 (plan_wait) | None | New |
 | I9 (prompt iteration) | None | New |
+| I10 (silent partial failures) | None | New |
 
 ---
 
@@ -208,7 +243,7 @@ Several items here refine or extend issues already tracked in Proposal 70's chec
 | I5 (rich SSE) | 70 §5.1 (SSE implemented) | Extension — SSE works but events are thin |
 | I6 (download TTL) | 70 (signed tokens done) | Refinement — increase TTL |
 
-If accepted, I1–I4 and I7–I9 should be added to Proposal 70's quick-win checklist as new line items.
+If accepted, I1–I4 and I7–I10 should be added to Proposal 70's quick-win checklist as new line items.
 
 ---
 
@@ -217,11 +252,46 @@ If accepted, I1–I4 and I7–I9 should be added to Proposal 70's quick-win chec
 | Priority | Issues | Rationale |
 |----------|--------|-----------|
 | P1 | I2 (failure diagnostics) | Biggest observability gap. Agent cannot help users debug failures without this. |
-| P1 | I1 (stopped vs failed) | Small change (Option B), high diagnostic value. Prerequisite for good plan_resume UX. |
+| ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option A). Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. |
 | P2 | I7 (stall detection) | Prevents agents from waiting indefinitely on stuck plans. |
 | P2 | I6 (download TTL) | Low effort, reduces friction. |
 | P2 | I5 (rich SSE events) | Eliminates polling for SSE-capable clients. |
 | P2 | I3 (plan_delete) | Hygiene for multi-plan sessions. |
 | ~~P3~~ | ~~I4 (idempotency)~~ | **Implemented** (PR #242). Server-side auto-dedup on `(user_id, prompt, model_profile)` within a time window. |
+| P2 | I10 (silent partial failures) | Agent cannot trust `completed` means quality output. Undermines confidence in the entire workflow. |
 | P3 | I8 (plan_wait) | Nice-to-have for shell-less agents. |
 | P3 | I9 (prompt iteration) | Nice-to-have for iteration workflows. |
+
+---
+
+## 6. Agent Perception (after 12 plans across two sessions)
+
+**Overall rating: 8.5/10** (up from 8/10 after session 1). The improvement comes from the `stopped` state — a small change with outsized impact on agent confidence.
+
+### What works well
+
+1. **Tool descriptions are best-in-class.** The agent operates PlanExe without external documentation, solely from tool descriptions. They specify call order, state contract, timing expectations, error codes, and troubleshooting guidance.
+2. **State machine is now clean.** Every state has a single obvious next action: `pending` → wait, `processing` → poll, `completed` → download, `stopped` → suggest resume, `failed` → investigate. No state requires guessing.
+3. **SSE completion detection is reliable.** Across 12 plans and multiple stop/resume cycles, the stream always auto-closed on terminal states as expected.
+4. **Resume preserves progress.** After stopping at step 12/110, resume continued from step 12, not step 1. The `resume_count` field makes the history visible without the agent needing to track it.
+5. **Deduplication prevents accidents.** Same prompt + model_profile within a short window returns the existing plan with `deduplicated=true`.
+6. **Progress reporting is honest.** The tool description explicitly warns that `progress_percentage` is not linear and shouldn't be used for time estimates.
+
+### The stop/resume cycle
+
+Session 2 tested: create → stop → resume → stop → resume → complete. At no point was the agent confused about state or what to suggest. The `resume_count` field confirmed history without shadow state. The mark of a good state machine — the agent doesn't need to maintain its own bookkeeping.
+
+### Remaining trust gap
+
+The agent trusts the state machine to report accurately, trusts resume to preserve progress, trusts SSE to close on terminal states, and trusts tool descriptions to be current. The remaining trust gap is around `completed` plans — `completed` means "all steps ran," not "all sections produced quality output." The interface doesn't distinguish between these yet (see I10).
+
+### Evolution between sessions
+
+| Aspect | Session 1 | Session 2 | Direction |
+|--------|-----------|-----------|-----------|
+| Stop state | `failed` (ambiguous) | `stopped` (clear) | Fixed |
+| Resume tracking | No history | `resume_count` field | New |
+| Tool descriptions | Excellent | Updated with `stopped` state | Improved |
+| Failure diagnostics | Missing | Still missing | Unchanged |
+| Silent partial failures | Not surfaced | Not surfaced | Unchanged |
+| Plan cleanup | No delete | No delete | Unchanged |

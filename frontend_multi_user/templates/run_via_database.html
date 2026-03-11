@@ -60,7 +60,7 @@
 </head>
 <body>
     <div class="progress-container">
-        <div class="progress-description">Don't close this page. Your plan will be visible after it's generated.</div>
+        <div class="progress-description">Your plan will be visible after it's generated.</div>
         <div class="progress-bar" id="progress-bar"></div>
         <div class="progress-message" id="progress-message"></div>
         <div class="elapsed-time" id="elapsed-time">Elapsed Time: 0:00</div>
@@ -158,20 +158,18 @@
                     const is_pending = data.status == "pending";
                     const is_processing = data.status == "processing";
                     const is_failed = data.status == "failed";
+                    const is_stopped = data.status == "stopped";
                     progressMessageElement.textContent = data.progress_message || 'No progress message';
-                    // console.log("is_completed", is_completed);
-                    // console.log("is_processing", is_processing);
-                    // console.log("is_failed", is_failed);
 
                     if (is_pending || is_processing || is_completed) {
                         // There is a connection with the server, so ignore past errors
                         consecutive_error_count = 0;
+                    } else if (is_stopped) {
+                        throw new PlanExeError("Plan stopped by user");
+                    } else if (is_failed) {
+                        throw new PlanExeError("Failed to generate plan");
                     } else {
-                        if (is_failed) {
-                            throw new PlanExeError("Failed to generate plan");
-                        } else {
-                            throw new PlanExeError(`Unhandled status: ${data.status}`);
-                        }
+                        throw new PlanExeError(`Unhandled status: ${data.status}`);
                     }
                     
                     // Update progress bar

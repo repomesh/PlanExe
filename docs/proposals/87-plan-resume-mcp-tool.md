@@ -106,7 +106,7 @@ This path is not used by `worker_plan_database` (which runs the pipeline directl
 | `failed` | ✅ Yes | Terminal state, run dir likely intact |
 | `stopped` (via `plan_stop`) | ✅ Yes | Intentionally halted, run dir intact |
 
-**Note:** `plan_stop` currently transitions to `failed`. A future improvement could introduce a distinct `stopped` state to disambiguate user-initiated halts from error failures (out of scope for this proposal).
+**Note:** `plan_stop` now transitions to the dedicated `stopped` state (implemented in Proposal 114-I1, Option A), disambiguating user-initiated halts from error failures.
 
 ---
 
@@ -273,7 +273,7 @@ This requires the worker to write the current task name to a lightweight status 
 
 ## 9. Out of Scope
 
-- Introducing a distinct `stopped` state (separate from `failed`) — deferred
+- ~~Introducing a distinct `stopped` state (separate from `failed`)~~ — implemented (Proposal 114-I1)
 - Progress scrubbing on resume (reporting accurate % based on remaining tasks) — deferred
 - `plan_resume` for `mcp_local` (local HTTP worker via `worker_plan/app.py`) — the HTTP worker already supports this via `submit_or_retry="retry"`; a follow-on can wire it up
 - Resume after partial artifact upload failure — deferred

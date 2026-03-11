@@ -496,6 +496,21 @@ class MyFlaskApp:
                 if "current_step" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
 
+        def _ensure_stopped_state() -> None:
+            """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
+
+            The PostgreSQL enum type is named ``taskstate`` in databases
+            created before the TaskState → PlanState Python rename
+            (proposal 74).  Fresh databases will have ``planstate``.
+            We try both names.
+            """
+            with self.db.engine.begin() as conn:
+                for type_name in ("taskstate", "planstate"):
+                    try:
+                        conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
+                    except Exception as exc:
+                        logger.debug("ALTER TYPE %s: %s", type_name, exc)
+
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
             table_names = set(insp.get_table_names())
@@ -553,6 +568,7 @@ class MyFlaskApp:
                         _ensure_user_account_columns()
                         _ensure_multi_api_key_columns()
                         _ensure_step_count_columns()
+                        _ensure_stopped_state()
                         _ensure_planitem_indexes()
                         _seed_initial_records()
                     return
@@ -2146,6 +2162,7 @@ class MyFlaskApp:
                                 self.db.session.query(
                                     PlanItem.id,
                                     PlanItem.state,
+                                    PlanItem.stop_requested,
                                     func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                                 )
                                 .filter(uid_filter)
@@ -2165,6 +2182,7 @@ class MyFlaskApp:
                                 self.db.session.query(
                                     PlanItem.id,
                                     PlanItem.state,
+                                    PlanItem.stop_requested,
                                 )
                                 .filter(uid_filter)
                                 .order_by(PlanItem.timestamp_created.desc())
@@ -2178,10 +2196,11 @@ class MyFlaskApp:
                                 prompt_text = self._load_prompt_preview_safe(task.id)
                             else:
                                 prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
+                            state = task.state if isinstance(task.state, PlanState) else None
                             recent_tasks.append(
                                 SimpleNamespace(
                                     id=str(task.id),
-                                    state=task.state if isinstance(task.state, PlanState) else None,
+                                    state=state,
                                     prompt=prompt_text,
                                 )
                             )
@@ -3213,6 +3232,7 @@ class MyFlaskApp:
                             PlanItem.id,
                             PlanItem.timestamp_created,
                             PlanItem.state,
+                            PlanItem.stop_requested,
                             func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                         )
                         .filter(uid_filter)
@@ -3232,6 +3252,7 @@ class MyFlaskApp:
                             PlanItem.id,
                             PlanItem.timestamp_created,
                             PlanItem.state,
+                            PlanItem.stop_requested,
                         )
                         .filter(uid_filter)
                         .order_by(PlanItem.timestamp_created.desc())
@@ -3246,11 +3267,12 @@ class MyFlaskApp:
                         prompt_text = self._load_prompt_preview_safe(task.id)
                     else:
                         prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
+                    state_name = task.state.name if isinstance(task.state, PlanState) else "pending"
                     rows.append({
                         "id": str(task.id),
                         "created_compact": created_compact,
                         "created_relative": self._format_relative_time(ts),
-                        "status": task.state.name if isinstance(task.state, PlanState) else "pending",
+                        "status": state_name,
                         "prompt": prompt_text,
                     })
                 return render_template("plan_list.html", plan_rows=rows)
@@ -3342,7 +3364,7 @@ class MyFlaskApp:
             task.stop_requested = True
             task.stop_requested_timestamp = datetime.now(UTC)
             if task.state in (PlanState.pending, PlanState.processing):
-                task.state = PlanState.failed
+                task.state = PlanState.stopped
                 task.progress_message = "Stop requested by user."
             self.db.session.commit()
             return redirect(url_for('plan', id=run_id))
@@ -3357,8 +3379,8 @@ class MyFlaskApp:
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 return jsonify({"error": "Forbidden"}), 403
 
-            if task.state == PlanState.processing and not bool(task.stop_requested):
-                return jsonify({"error": "Task is currently processing. Stop it first before retrying."}), 409
+            if task.state not in (PlanState.failed, PlanState.stopped) and not bool(task.stop_requested):
+                return jsonify({"error": "Task is not in a retryable state. Stop it first before retrying."}), 409
 
             raw_profile = request.form.get("model_profile")
             selected_model_profile = normalize_model_profile(raw_profile).value
@@ -3401,7 +3423,7 @@ class MyFlaskApp:
             if not current_user.is_admin and str(task.user_id) != str(current_user.id):
                 abort(403)
 
-            if task.state != PlanState.failed:
+            if task.state not in (PlanState.failed, PlanState.stopped):
                 return redirect(url_for('plan', id=run_id))
 
             # Reject resume if the snapshot was created by a different pipeline version.

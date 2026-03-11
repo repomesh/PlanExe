@@ -314,12 +314,18 @@ def ensure_multi_api_key_columns() -> None:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
 def ensure_stopped_state() -> None:
-    """Add 'stopped' value to the planstate enum type (idempotent)."""
+    """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
+
+    The PostgreSQL enum type is named ``taskstate`` in databases created before
+    the TaskState → PlanState Python rename (proposal 74).  Fresh databases
+    created after that rename will have ``planstate``.  We try both names.
+    """
     with db.engine.begin() as conn:
-        try:
-            conn.execute(text("ALTER TYPE planstate ADD VALUE IF NOT EXISTS 'stopped'"))
-        except Exception as exc:
-            logger.warning("Could not add 'stopped' to planstate enum: %s", exc)
+        for type_name in ("taskstate", "planstate"):
+            try:
+                conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
+            except Exception as exc:
+                logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
 def worker_process_started() -> None:
     planexe_worker_id = os.environ.get("PLANEXE_WORKER_ID")

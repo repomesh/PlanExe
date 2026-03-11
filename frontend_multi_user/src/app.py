@@ -497,12 +497,19 @@ class MyFlaskApp:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
 
         def _ensure_stopped_state() -> None:
-            """Add 'stopped' value to the planstate enum type (idempotent)."""
+            """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
+
+            The PostgreSQL enum type is named ``taskstate`` in databases
+            created before the TaskState → PlanState Python rename
+            (proposal 74).  Fresh databases will have ``planstate``.
+            We try both names.
+            """
             with self.db.engine.begin() as conn:
-                try:
-                    conn.execute(text("ALTER TYPE planstate ADD VALUE IF NOT EXISTS 'stopped'"))
-                except Exception as exc:
-                    logger.warning("Could not add 'stopped' to planstate enum: %s", exc)
+                for type_name in ("taskstate", "planstate"):
+                    try:
+                        conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
+                    except Exception as exc:
+                        logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)

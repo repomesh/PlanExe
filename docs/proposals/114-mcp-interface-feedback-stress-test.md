@@ -19,7 +19,7 @@ The testing surfaced concrete MCP interface friction points that affect agent op
 
 ### I1 — `failed` state conflates user-stop and actual failure
 
-**Status:** Implemented (Option B — `stop_reason` field on `plan_status`).
+**Status:** Implemented (PR #244, Option B — `stop_reason` field on `plan_status`).
 
 **Problem:** When `plan_stop` is called, the plan transitions to `failed`. When a worker crashes, it also transitions to `failed`. The agent operator cannot distinguish between:
 - User-initiated stop (nothing went wrong)
@@ -38,13 +38,21 @@ This matters because the correct response differs: user stop suggests `plan_resu
 
 Option B is less disruptive and can be added to `plan_status` without changing state enum values.
 
-**Affected files:** `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py` (plan_status response), DB model (new column or use existing `parameters` JSONB).
+**Implemented approach (PR #244):** Option B with a minimal initial vocabulary: `stop_reason` is `"user_requested"` when `plan_stop` was called, `null` otherwise. Computed at response time from the existing `stop_requested` DB boolean — no migration, no new DB columns. The richer values proposed above (`"worker_crash"`, `"timeout"`, `"model_error"`) require the failure diagnostics infrastructure from I2; once I2 is implemented, `stop_reason` can be extended to report finer-grained failure causes.
+
+The implementation also went beyond the original MCP-only scope:
+- `mcp_local` proxy schema and description updated to match
+- `frontend_multi_user` shows "stopped" (orange) instead of "failed" (red) across plan list, plan detail status bar, and dashboard recent tasks
+
+**Affected files (originally proposed):** `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py` (plan_status response), DB model (new column or use existing `parameters` JSONB).
+
+**Affected files (actual):** `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/plan_list.html`, `frontend_multi_user/templates/index.html`. No DB-layer changes were needed — `stop_reason` is computed from the existing `stop_requested` column at response time.
 
 ---
 
 ### I2 — No failure diagnostics in `plan_status`
 
-**Priority: High — identified as the single biggest observability gap.**
+**Priority: High — identified as the single biggest observability gap. Also prerequisite for extending I1's `stop_reason` with finer-grained failure causes (`"worker_crash"`, `"timeout"`, `"model_error"`).**
 
 **Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `last_error`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
 

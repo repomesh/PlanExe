@@ -176,8 +176,8 @@ TOOL_DEFINITIONS = [
             "This is the primary way to check progress — it returns structured JSON with all progress fields. "
             "Poll at reasonable intervals (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
             "(baseline profile) and may take longer on higher-quality profiles. "
-            "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
-            "When state is 'failed', check stop_reason: 'user_requested' means plan_stop was called (consider plan_resume); null means an actual error. "
+            "State contract: pending/processing => keep polling; completed => download is ready; "
+            "failed => terminal error; stopped => user called plan_stop (consider plan_resume). "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "Note: steps vary in duration — early steps complete quickly while later steps (review, report generation) "
             "take longer. Do not use progress_percentage to estimate time remaining. "
@@ -203,7 +203,7 @@ TOOL_DEFINITIONS = [
         description=(
             "Request the plan generation to stop. Pass the plan_id (the UUID returned by plan_create). "
             "Stopping is asynchronous: the stop flag is set immediately but the plan may continue briefly before halting. "
-            "A stopped plan will eventually transition to the failed state. "
+            "A stopped plan will transition to the stopped state. "
             "If the plan is already completed or failed, stop_requested returns false (the plan already finished). "
             "Unknown plan_id returns error code PLAN_NOT_FOUND."
         ),
@@ -219,10 +219,10 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_retry",
         description=(
-            "Retry a plan that is currently in failed state. "
-            "Pass the failed plan_id and optionally model_profile (defaults to baseline). "
+            "Retry a plan that is currently in failed or stopped state. "
+            "Pass the plan_id and optionally model_profile (defaults to baseline). "
             "The plan is reset to pending, prior artifacts are cleared, and the same plan_id is requeued for processing. "
-            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_FAILED when the plan is not in failed state."
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_FAILED when the plan is not in failed or stopped state."
         ),
         input_schema=PLAN_RETRY_INPUT_SCHEMA,
         output_schema=PLAN_RETRY_OUTPUT_SCHEMA,
@@ -236,13 +236,13 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="plan_resume",
         description=(
-            "Resume a failed plan without discarding completed intermediary files. "
+            "Resume a failed or stopped plan without discarding completed intermediary files. "
             "Plan generation restarts from the first incomplete step, skipping all steps that already produced output files. "
-            "Use plan_resume when plan_status shows 'failed' and plan generation was interrupted before completing all steps "
+            "Use plan_resume when plan_status shows 'failed' or 'stopped' and plan generation was interrupted before completing all steps "
             "(network drop, timeout, plan_stop, worker crash). "
             "For a full restart or to change model_profile, use plan_retry instead. "
-            "Only failed plans can be resumed. "
-            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed state. "
+            "Only failed or stopped plans can be resumed. "
+            "Returns PLAN_NOT_FOUND when plan_id is unknown and PLAN_NOT_RESUMABLE when the plan is not in failed or stopped state. "
             "Returns PIPELINE_VERSION_MISMATCH when the snapshot was created by a different pipeline version; use plan_retry instead."
         ),
         input_schema=PLAN_RESUME_INPUT_SCHEMA,

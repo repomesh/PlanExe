@@ -19,7 +19,7 @@ The testing surfaced concrete MCP interface friction points that affect agent op
 
 ### I1 — `failed` state conflates user-stop and actual failure
 
-**Status:** Implemented (PR #244, Option B — `stop_reason` field on `plan_status`).
+**Status:** Implemented (Option A — dedicated `PlanState.stopped` DB state). Supersedes PR #244's Option B (`stop_reason` field).
 
 **Problem:** When `plan_stop` is called, the plan transitions to `failed`. When a worker crashes, it also transitions to `failed`. The agent operator cannot distinguish between:
 - User-initiated stop (nothing went wrong)
@@ -38,15 +38,9 @@ This matters because the correct response differs: user stop suggests `plan_resu
 
 Option B is less disruptive and can be added to `plan_status` without changing state enum values.
 
-**Implemented approach (PR #244):** Option B with a minimal initial vocabulary: `stop_reason` is `"user_requested"` when `plan_stop` was called, `null` otherwise. Computed at response time from the existing `stop_requested` DB boolean — no migration, no new DB columns. The richer values proposed above (`"worker_crash"`, `"timeout"`, `"model_error"`) require the failure diagnostics infrastructure from I2; once I2 is implemented, `stop_reason` can be extended to report finer-grained failure causes.
+**Implemented approach:** Option A — a dedicated `PlanState.stopped` enum value (value 5). `plan_stop` now transitions plans to the `stopped` state instead of `failed`. The `stop_reason` field introduced in PR #244 (Option B) has been removed — the state itself communicates intent. `plan_retry` and `plan_resume` accept both `failed` and `stopped` states. DB migration adds `'stopped'` to the PostgreSQL `planstate` enum type.
 
-The implementation also went beyond the original MCP-only scope:
-- `mcp_local` proxy schema and description updated to match
-- `frontend_multi_user` shows "stopped" (orange) instead of "failed" (red) across plan list, plan detail status bar, and dashboard recent tasks
-
-**Affected files (originally proposed):** `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py` (plan_status response), DB model (new column or use existing `parameters` JSONB).
-
-**Affected files (actual):** `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/plan_list.html`, `frontend_multi_user/templates/index.html`. No DB-layer changes were needed — `stop_reason` is computed from the existing `stop_requested` column at response time.
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`.
 
 ---
 

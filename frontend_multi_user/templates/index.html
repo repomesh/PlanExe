@@ -620,10 +620,10 @@
     {% for task in recent_tasks %}
     <a class="task-row-link" href="{{ url_for('plan') }}?id={{ task.id }}">
     <div class="task-row">
-        <span class="task-status {{ task.display_state_name or (task.state.name if task.state else 'pending') }}"></span>
+        <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
         <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
         <span class="task-meta">
-            {% if task.display_state_name %}{{ task.display_state_name | capitalize }}{% elif task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
+            {% if task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
         </span>
     </div>
     </a>

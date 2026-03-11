@@ -313,6 +313,14 @@ def ensure_multi_api_key_columns() -> None:
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
+def ensure_stopped_state() -> None:
+    """Add 'stopped' value to the planstate enum type (idempotent)."""
+    with db.engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TYPE planstate ADD VALUE IF NOT EXISTS 'stopped'"))
+        except Exception as exc:
+            logger.warning("Could not add 'stopped' to planstate enum: %s", exc)
+
 def worker_process_started() -> None:
     planexe_worker_id = os.environ.get("PLANEXE_WORKER_ID")
     event_context = {
@@ -1314,6 +1322,7 @@ def startup_worker():
             ensure_token_metrics_columns()
             ensure_fractional_credit_columns()
             ensure_multi_api_key_columns()
+            ensure_stopped_state()
             logger.debug(f"Ensured database tables exist.")
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)
         except Exception as e:    

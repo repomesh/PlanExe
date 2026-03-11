@@ -138,7 +138,7 @@ class PlanItemView(AdminOnlyModelView):
         'id': lambda v, c, m, p: str(m.id)[:8] if m.id else '',
         'state': lambda v, c, m, p: (
             Markup('<span style="color:#e65100">stopped</span>')
-            if m.state and m.state.name == 'failed' and m.stop_requested
+            if m.state and m.state.name == 'stopped'
             else (m.state.name if m.state else '')
         ),
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,

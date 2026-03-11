@@ -338,16 +338,13 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         },
         "files_count": len(files),
         "files": files[:10],
-        "stop_reason": "user_requested" if (
-            state == "failed" and plan_snapshot.get("stop_requested")
-        ) else None,
     }
 
     if state == "failed":
         message = plan_snapshot.get("progress_message") or "Plan generation failed."
         response["error"] = {"code": "generation_failed", "message": message}
 
-    if state not in ("completed", "failed"):
+    if state not in ("completed", "failed", "stopped"):
         base_url = _get_download_base_url()
         if base_url:
             response["sse_url"] = f"{base_url}/sse/plan/{plan_uuid}"
@@ -573,6 +570,13 @@ async def handle_plan_file_info(arguments: dict[str, Any]) -> CallToolResult:
     plan_state = plan_snapshot["state"]
     if plan_state in (PlanState.pending, PlanState.processing) or plan_state is None:
         response = {"ready": False, "reason": "processing"}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=False,
+        )
+    if plan_state == PlanState.stopped:
+        response = {"ready": False, "reason": "stopped"}
         return CallToolResult(
             content=[TextContent(type="text", text=json.dumps(response))],
             structuredContent=response,

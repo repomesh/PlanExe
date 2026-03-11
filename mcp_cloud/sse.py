@@ -24,7 +24,7 @@ SSE_MAX_DURATION: int = int(os.environ.get("PLANEXE_SSE_MAX_DURATION", "3600"))
 SSE_MAX_CONNECTIONS_PER_CLIENT: int = int(os.environ.get("PLANEXE_SSE_MAX_CONNECTIONS", "5"))
 SSE_MAX_TOTAL_CONNECTIONS: int = int(os.environ.get("PLANEXE_SSE_MAX_TOTAL_CONNECTIONS", "200"))
 
-TERMINAL_STATES = {"completed", "failed"}
+TERMINAL_STATES = {"completed", "failed", "stopped"}
 
 
 class SSEConnectionLimitError(Exception):

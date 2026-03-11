@@ -241,10 +241,10 @@ def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
         if plan.state in (PlanState.pending, PlanState.processing):
             plan.stop_requested = True
             plan.stop_requested_timestamp = datetime.now(UTC)
-            plan.state = PlanState.failed
+            plan.state = PlanState.stopped
             plan.progress_message = "Stop requested by user."
             db.session.commit()
-            logger.info("Stop requested for plan %s; state set to failed.", plan_id)
+            logger.info("Stop requested for plan %s; state set to stopped.", plan_id)
             stop_requested = True
         return {
             "state": get_plan_state_mapping(plan.state),
@@ -257,11 +257,11 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
         plan = find_plan_by_id(plan_id)
         if plan is None:
             return None
-        if plan.state != PlanState.failed:
+        if plan.state not in (PlanState.failed, PlanState.stopped):
             return {
                 "error": {
                     "code": "PLAN_NOT_FAILED",
-                    "message": f"Plan is not in failed state: {plan_id}",
+                    "message": f"Plan is not in failed or stopped state: {plan_id}",
                 }
             }
 
@@ -333,11 +333,11 @@ def _resume_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, An
         plan = find_plan_by_id(plan_id)
         if plan is None:
             return None
-        if plan.state != PlanState.failed:
+        if plan.state not in (PlanState.failed, PlanState.stopped):
             return {
                 "error": {
                     "code": "PLAN_NOT_RESUMABLE",
-                    "message": f"Plan is not in failed state: {plan_id}",
+                    "message": f"Plan is not in failed or stopped state: {plan_id}",
                 }
             }
 
@@ -475,6 +475,7 @@ def get_plan_state_mapping(plan_state: PlanState) -> str:
         PlanState.processing: "processing",
         PlanState.completed: "completed",
         PlanState.failed: "failed",
+        PlanState.stopped: "stopped",
     }
     return mapping.get(plan_state, "pending")
 

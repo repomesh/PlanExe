@@ -96,6 +96,8 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 
 **Implemented approach:** Automatic server-side dedup. Before inserting a new plan, `_create_plan_sync` queries for an existing `pending`/`processing` plan matching `(user_id, prompt, model_profile)` created within a configurable time window (default 60 seconds, env `PLANEXE_DEDUP_WINDOW_SECONDS`). If found, the existing plan is returned with `deduplicated: true` instead of creating a new one. No schema migration needed — uses existing columns. Set `PLANEXE_DEDUP_WINDOW_SECONDS=0` to disable.
 
+**Known limitation:** There is a TOCTOU race — if two identical requests arrive concurrently and both pass the dedup check before either commits, a duplicate plan is created. This is accepted; the cost is wasted tokens for one extra plan, which is not worth the complexity of a database-level lock or migration to fix.
+
 **Affected files:** `mcp_cloud/db_queries.py` (`_find_recent_duplicate_plan`, `_create_plan_sync`), `mcp_cloud/tool_models.py` (`deduplicated` field on `PlanCreateOutput`), `mcp_cloud/schemas.py` (description and `idempotentHint`), `mcp_cloud/app.py` (re-export).
 
 ---

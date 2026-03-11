@@ -3,7 +3,8 @@ import unittest
 import tempfile
 import importlib.util
 from pathlib import Path
-from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelBase, LLMModelWithInstance, PipelineStopRequested, ShouldStopCallbackParameters
+from pydantic import BaseModel, ValidationError
+from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelBase, LLMModelWithInstance, PipelineStopRequested, ShouldStopCallbackParameters, _extract_validation_feedback
 from worker_plan_internal.llm_util.response_mockllm import ResponseMockLLM
 from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
 from llama_index.core.llms.llm import LLM
@@ -500,3 +501,237 @@ def bad_function(wrong_type: str) -> str:
                 self.assertEqual(record["error_id"], known_error_id)
             finally:
                 set_usage_metrics_path(None)
+
+
+class TestExtractValidationFeedback(unittest.TestCase):
+    """Tests for the _extract_validation_feedback helper."""
+
+    def _make_validation_error(self) -> ValidationError:
+        """Create a real Pydantic ValidationError for testing."""
+        class StrictModel(BaseModel):
+            name: str
+            age: int
+
+        try:
+            StrictModel(name=123, age="not a number")
+        except ValidationError as e:
+            return e
+        raise AssertionError("Expected ValidationError was not raised")
+
+    def test_direct_validation_error(self):
+        """Should extract feedback when the error itself is a ValidationError."""
+        ve = self._make_validation_error()
+        feedback = _extract_validation_feedback(ve)
+        self.assertIsNotNone(feedback)
+        self.assertIn("Pydantic validation failed", feedback)
+        self.assertIn("error(s):", feedback)
+
+    def test_wrapped_validation_error_via_cause(self):
+        """Should find a ValidationError wrapped via __cause__ (raise ... from ...)."""
+        ve = self._make_validation_error()
+        wrapper = RuntimeError("LLM output parsing failed")
+        wrapper.__cause__ = ve
+        feedback = _extract_validation_feedback(wrapper)
+        self.assertIsNotNone(feedback)
+        self.assertIn("Pydantic validation failed", feedback)
+
+    def test_wrapped_validation_error_via_context(self):
+        """Should find a ValidationError wrapped via __context__ (implicit chaining)."""
+        ve = self._make_validation_error()
+        wrapper = RuntimeError("something went wrong")
+        wrapper.__context__ = ve
+        feedback = _extract_validation_feedback(wrapper)
+        self.assertIsNotNone(feedback)
+        self.assertIn("Pydantic validation failed", feedback)
+
+    def test_non_validation_error_returns_none(self):
+        """Should return None for errors that are not ValidationErrors."""
+        feedback = _extract_validation_feedback(ValueError("just a value error"))
+        self.assertIsNone(feedback)
+
+    def test_deeply_nested_validation_error(self):
+        """Should find a ValidationError several levels deep in the chain."""
+        ve = self._make_validation_error()
+        inner = RuntimeError("inner")
+        inner.__cause__ = ve
+        outer = RuntimeError("outer")
+        outer.__cause__ = inner
+        feedback = _extract_validation_feedback(outer)
+        self.assertIsNotNone(feedback)
+        self.assertIn("Pydantic validation failed", feedback)
+
+    def test_no_chain_returns_none(self):
+        """An error with no __cause__ or __context__ and not a ValidationError."""
+        error = TypeError("plain error")
+        feedback = _extract_validation_feedback(error)
+        self.assertIsNone(feedback)
+
+
+class TestValidationRetry(unittest.TestCase):
+    """Tests for the validation error retry mechanism in LLMExecutor."""
+
+    def _make_validation_error(self) -> ValidationError:
+        class StrictModel(BaseModel):
+            name: str
+            age: int
+
+        try:
+            StrictModel(name=123, age="not a number")
+        except ValidationError as e:
+            return e
+        raise AssertionError("Expected ValidationError was not raised")
+
+    def test_validation_retry_succeeds_on_second_attempt(self):
+        """When a validation error occurs, retry on the same model and succeed."""
+        # Arrange
+        llm = ResponseMockLLM(responses=["unused", "unused"])
+        llm_model = LLMModelWithInstance(llm)
+        executor = LLMExecutor(llm_models=[llm_model], max_validation_retries=2)
+
+        call_count = 0
+        ve = self._make_validation_error()
+
+        def execute_function(llm: LLM) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ve
+            return "success after retry"
+
+        # Act
+        result = executor.run(execute_function)
+
+        # Assert
+        self.assertEqual(result, "success after retry")
+        self.assertEqual(call_count, 2)
+        self.assertEqual(executor.attempt_count, 2)
+        self.assertFalse(executor.attempts[0].success)
+        self.assertTrue(executor.attempts[1].success)
+        # validation_feedback should be cleared after success
+        self.assertIsNone(executor.validation_feedback)
+
+    def test_validation_retry_sets_feedback_before_retry(self):
+        """The validation_feedback property should be set when retrying."""
+        # Arrange
+        llm = ResponseMockLLM(responses=["unused", "unused"])
+        llm_model = LLMModelWithInstance(llm)
+        executor = LLMExecutor(llm_models=[llm_model], max_validation_retries=1)
+
+        ve = self._make_validation_error()
+        captured_feedback = None
+        call_count = 0
+
+        def execute_function(llm: LLM) -> str:
+            nonlocal call_count, captured_feedback
+            call_count += 1
+            if call_count == 1:
+                raise ve
+            # On retry, capture the feedback that was set
+            captured_feedback = executor.validation_feedback
+            return "ok"
+
+        # Act
+        executor.run(execute_function)
+
+        # Assert
+        self.assertIsNotNone(captured_feedback)
+        self.assertIn("Pydantic validation failed", captured_feedback)
+
+    def test_validation_retry_exhausted_falls_through_to_next_model(self):
+        """When all validation retries are exhausted, fall through to the next model."""
+        # Arrange
+        ve = self._make_validation_error()
+        llm1 = ResponseMockLLM(responses=["unused", "unused", "unused"])
+        llm2 = ResponseMockLLM(responses=["unused"])
+        llm_models = LLMModelWithInstance.from_instances([llm1, llm2])
+        executor = LLMExecutor(llm_models=llm_models, max_validation_retries=2)
+
+        call_count = 0
+
+        def execute_function(llm: LLM) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 3:
+                # First model: initial + 2 retries all fail with validation error
+                raise ve
+            return "second model success"
+
+        # Act
+        result = executor.run(execute_function)
+
+        # Assert
+        self.assertEqual(result, "second model success")
+        self.assertEqual(call_count, 4)
+        # 1 initial + 2 retries on model 1, then 1 on model 2
+        self.assertEqual(executor.attempt_count, 4)
+
+    def test_no_validation_retry_when_disabled(self):
+        """With max_validation_retries=0, no validation retries occur."""
+        # Arrange
+        ve = self._make_validation_error()
+        llm1 = ResponseMockLLM(responses=["unused"])
+        llm2 = ResponseMockLLM(responses=["unused"])
+        llm_models = LLMModelWithInstance.from_instances([llm1, llm2])
+        executor = LLMExecutor(llm_models=llm_models, max_validation_retries=0)
+
+        call_count = 0
+
+        def execute_function(llm: LLM) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise ve
+            return "second model"
+
+        # Act
+        result = executor.run(execute_function)
+
+        # Assert
+        self.assertEqual(result, "second model")
+        self.assertEqual(call_count, 2)
+        # No retries — just 1 attempt per model
+        self.assertEqual(executor.attempt_count, 2)
+
+    def test_non_validation_error_skips_validation_retry(self):
+        """Non-validation errors should not trigger validation retries."""
+        # Arrange
+        llm1 = ResponseMockLLM(responses=["unused"])
+        llm2 = ResponseMockLLM(responses=["unused"])
+        llm_models = LLMModelWithInstance.from_instances([llm1, llm2])
+        executor = LLMExecutor(llm_models=llm_models, max_validation_retries=2)
+
+        call_count = 0
+
+        def execute_function(llm: LLM) -> str:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                raise RuntimeError("not a validation error")
+            return "second model"
+
+        # Act
+        result = executor.run(execute_function)
+
+        # Assert
+        self.assertEqual(result, "second model")
+        self.assertEqual(call_count, 2)
+        # No validation retries — straight to next model
+        self.assertEqual(executor.attempt_count, 2)
+
+    def test_validation_feedback_cleared_after_all_retries_exhausted(self):
+        """validation_feedback should be None after retries are exhausted."""
+        # Arrange
+        ve = self._make_validation_error()
+        llm = ResponseMockLLM(responses=["unused", "unused"])
+        llm_model = LLMModelWithInstance(llm)
+        executor = LLMExecutor(llm_models=[llm_model], max_validation_retries=1)
+
+        def execute_function(llm: LLM) -> str:
+            raise ve
+
+        # Act
+        with self.assertRaises(Exception):
+            executor.run(execute_function)
+
+        # Assert — feedback should be cleared
+        self.assertIsNone(executor.validation_feedback)

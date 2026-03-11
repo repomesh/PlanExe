@@ -496,6 +496,19 @@ class MyFlaskApp:
                 if "current_step" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
 
+        def _ensure_failure_diagnostic_columns() -> None:
+            insp = inspect(self.db.engine)
+            columns = {col["name"] for col in insp.get_columns("task_item")}
+            with self.db.engine.begin() as conn:
+                if "failure_reason" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)"))
+                if "failed_step" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)"))
+                if "last_error" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_error VARCHAR(256)"))
+                if "recoverable" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN"))
+
         def _ensure_stopped_state() -> None:
             """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
 
@@ -568,6 +581,7 @@ class MyFlaskApp:
                         _ensure_user_account_columns()
                         _ensure_multi_api_key_columns()
                         _ensure_step_count_columns()
+                        _ensure_failure_diagnostic_columns()
                         _ensure_stopped_state()
                         _ensure_planitem_indexes()
                         _seed_initial_records()

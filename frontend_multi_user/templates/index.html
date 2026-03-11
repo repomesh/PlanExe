@@ -278,6 +278,7 @@
     .task-status.processing { background: #f59e0b; }
     .task-status.pending { background: #94a3b8; }
     .task-status.failed { background: #ef4444; }
+    .task-status.stopped { background: #ea580c; }
     .task-prompt {
         flex: 1;
         font-size: 0.9rem;
@@ -619,10 +620,10 @@
     {% for task in recent_tasks %}
     <a class="task-row-link" href="{{ url_for('plan') }}?id={{ task.id }}">
     <div class="task-row">
-        <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
+        <span class="task-status {{ task.display_state_name or (task.state.name if task.state else 'pending') }}"></span>
         <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
         <span class="task-meta">
-            {% if task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
+            {% if task.display_state_name %}{{ task.display_state_name | capitalize }}{% elif task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
         </span>
     </div>
     </a>

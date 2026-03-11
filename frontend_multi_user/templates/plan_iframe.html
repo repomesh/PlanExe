@@ -541,7 +541,9 @@
             <p class="plan-meta-sub">id: {{ task.id }}<button type="button" class="plan-id-copy-btn" id="copy-plan-id-btn" title="Copy plan ID" data-plan-id="{{ task.id }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
             <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
                 Status: <span id="plan-state-text">
-                    {% if task.state %}
+                    {% if task.state and task.state.name == 'failed' and task.stop_requested %}
+                        stopped
+                    {% elif task.state %}
                         {{ task.state.name | lower }}
                     {% else %}
                         pending
@@ -1124,6 +1126,7 @@
         function updatePanel(meta) {
             const state = (meta.state || "pending").toLowerCase();
             currentPlanState = state;
+            const displayState = (state === "failed" && meta.stop_reason === "user_requested") ? "stopped" : state;
             const isCompleted = state === "completed";
             const isActive = state === "pending" || state === "processing";
 
@@ -1131,7 +1134,7 @@
                 stateEl.style.display = "none";
             } else {
                 stateEl.style.display = "";
-                const parts = [state];
+                const parts = [displayState];
                 if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
                     parts.push(Math.round(meta.progress_percentage) + "%");
                 }

@@ -2146,6 +2146,7 @@ class MyFlaskApp:
                                 self.db.session.query(
                                     PlanItem.id,
                                     PlanItem.state,
+                                    PlanItem.stop_requested,
                                     func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                                 )
                                 .filter(uid_filter)
@@ -2165,6 +2166,7 @@ class MyFlaskApp:
                                 self.db.session.query(
                                     PlanItem.id,
                                     PlanItem.state,
+                                    PlanItem.stop_requested,
                                 )
                                 .filter(uid_filter)
                                 .order_by(PlanItem.timestamp_created.desc())
@@ -2178,10 +2180,15 @@ class MyFlaskApp:
                                 prompt_text = self._load_prompt_preview_safe(task.id)
                             else:
                                 prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
+                            state = task.state if isinstance(task.state, PlanState) else None
+                            display_state_name = None
+                            if state and state.name == "failed" and task.stop_requested:
+                                display_state_name = "stopped"
                             recent_tasks.append(
                                 SimpleNamespace(
                                     id=str(task.id),
-                                    state=task.state if isinstance(task.state, PlanState) else None,
+                                    state=state,
+                                    display_state_name=display_state_name,
                                     prompt=prompt_text,
                                 )
                             )
@@ -3213,6 +3220,7 @@ class MyFlaskApp:
                             PlanItem.id,
                             PlanItem.timestamp_created,
                             PlanItem.state,
+                            PlanItem.stop_requested,
                             func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
                         )
                         .filter(uid_filter)
@@ -3232,6 +3240,7 @@ class MyFlaskApp:
                             PlanItem.id,
                             PlanItem.timestamp_created,
                             PlanItem.state,
+                            PlanItem.stop_requested,
                         )
                         .filter(uid_filter)
                         .order_by(PlanItem.timestamp_created.desc())
@@ -3246,11 +3255,14 @@ class MyFlaskApp:
                         prompt_text = self._load_prompt_preview_safe(task.id)
                     else:
                         prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
+                    state_name = task.state.name if isinstance(task.state, PlanState) else "pending"
+                    if state_name == "failed" and task.stop_requested:
+                        state_name = "stopped"
                     rows.append({
                         "id": str(task.id),
                         "created_compact": created_compact,
                         "created_relative": self._format_relative_time(ts),
-                        "status": task.state.name if isinstance(task.state, PlanState) else "pending",
+                        "status": state_name,
                         "prompt": prompt_text,
                     })
                 return render_template("plan_list.html", plan_rows=rows)
@@ -3470,6 +3482,11 @@ class MyFlaskApp:
             state_name = task.state.name if isinstance(task.state, PlanState) else "pending"
             telemetry = self._build_plan_telemetry(task, include_raw=False)
             failure_trace = self._build_plan_failure_trace(task)
+            stop_reason = (
+                "user_requested"
+                if state_name == "failed" and task.stop_requested
+                else None
+            )
             return jsonify({
                 "id": str(task.id),
                 "state": state_name,
@@ -3478,6 +3495,7 @@ class MyFlaskApp:
                 "generated_report_html": bool(task.has_generated_report_html),
                 "run_zip_snapshot": bool(task.has_run_zip_snapshot),
                 "stop_requested": bool(task.stop_requested),
+                "stop_reason": stop_reason,
                 "telemetry": telemetry,
                 "failure_trace": failure_trace,
             }), 200

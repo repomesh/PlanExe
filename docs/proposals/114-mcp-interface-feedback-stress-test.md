@@ -2,17 +2,18 @@
 
 **Date:** 2026-03-11
 **Status:** Proposal (I1, I4 implemented; remainder open)
-**Source:** Feedback from Claude (Opus 4.6) after two stress-testing sessions (12 plans total) operated through Claude Code CLI.
+**Source:** Feedback from Claude (Opus 4.6) after three stress-testing sessions (13 plans total) operated through Claude Code CLI.
 **Scope:** MCP interface design, observability, and lifecycle management. Does not cover plan content quality or pipeline output improvements.
 
 ---
 
 ## 1. Context
 
-Two stress-testing sessions were conducted through Claude Code CLI using the PlanExe MCP interface:
+Three stress-testing sessions were conducted through Claude Code CLI using the PlanExe MCP interface:
 
 - **Session 1** (10 plans): Surfaced core MCP interface friction points — state ambiguity, missing diagnostics, lifecycle gaps.
 - **Session 2** (2 plans, with stop/resume cycling): Validated the `stopped` state implementation and identified remaining gaps.
+- **Session 3** (1 plan on remote server): First use of `planexeremote` alongside `planexelocal`. Exposed local-vs-remote behavioral differences and prompted a fundamental correction on SSE's role for agents.
 
 The testing surfaced concrete MCP interface friction points that affect agent operators — issues with state management, observability, lifecycle hygiene, and workflow ergonomics. This proposal catalogues the MCP-specific issues and maps them against existing proposals.
 
@@ -112,22 +113,42 @@ The `recoverable` boolean would let the agent immediately suggest `plan_resume` 
 
 ---
 
-### I5 — SSE events carry no structured progress data
+### I5 — SSE is the wrong mechanism for MCP agents
 
-**Problem:** The SSE stream works as a completion detector but events are opaque — no `step_name` or `progress_percentage` in event payloads. To get progress, the agent must poll `plan_status` separately, making SSE useful only as a "done" signal.
+**Updated in v3:** The original framing ("SSE events lack structured data") missed the deeper problem. SSE is designed for real-time UI clients, not turn-based agents.
 
-**Overlap:** Proposal 70 §5.1 (SSE progress streaming) is implemented but events only trigger on state/progress changes without rich payload.
-
-**Proposed enrichment of SSE `status` events:**
-
+**Problem:** The agent's SSE monitoring pattern across all 13 plans was:
 ```
-event: status
-data: {"state":"processing","progress_percentage":42.0,"current_step":"016-expert_criticism","steps_completed":16,"steps_total":38}
+curl -N -s <sse_url> 2>&1 | tail -5   # run in background
 ```
+The agent never reads SSE event content. It waits for `curl` to exit (connection close) and treats that as a "plan finished" signal — abusing a data stream as a binary trigger. When the remote SSE stream dropped at ~48% progress, the agent assumed the plan was done, checked `plan_status`, and discovered it was still running. The failure wasn't in SSE — it was in the pattern.
 
-This would eliminate the need for `plan_status` polling entirely when SSE is available.
+Even if SSE events contained rich structured progress data, a turn-based MCP agent wouldn't see them until the stream closes, because `curl` runs in the background and output is only read on task completion. MCP agents cannot "watch" a stream in real time.
 
-**Affected files:** `mcp_cloud/sse.py` (enrich event payloads).
+**What the agent previously asked for (wrong):**
+- "Richer SSE events with progress data" — useless, since event content is never read
+- "Webhooks" — HTTP callbacks, but CLI agents have no endpoint to register
+- "SSE heartbeat pings" — would only help if the pattern itself were sound
+
+**What would actually help MCP agents (corrected priority):**
+
+1. **MCP notifications (best fit):** The MCP protocol supports server-to-client notifications over the existing connection. If PlanExe sent a notification on terminal state:
+   ```json
+   {"method": "notifications/plan_state_changed", "params": {"plan_id": "...", "state": "completed", "progress_percentage": 100}}
+   ```
+   Claude Code would receive it as an event in the conversation. No SSE, no polling, no webhook endpoint. The connection already exists — use it.
+
+2. **`plan_wait` blocking tool (fallback):** See I8.
+
+3. **Polling `plan_status` (always works):** The current fallback. Inelegant but reliable across both local and remote servers.
+
+4. **SSE (for non-MCP real-time clients only):** Keep SSE for browser UIs, streaming dashboards, and CLI scripts that can consume events in real time. Stop recommending it to MCP agents in tool descriptions.
+
+**Practical recommendation:** Remove `sse_url` from `plan_create` responses once MCP notifications are working. If a future web UI needs SSE, add a dedicated endpoint at that point.
+
+**Overlap:** Proposal 70 §5.1 (SSE progress streaming) is implemented but serves the wrong consumer type for agent use cases.
+
+**Affected files:** `mcp_cloud/sse.py`, `mcp_cloud/schemas.py` (tool description update to stop recommending SSE to agents), `mcp_cloud/handlers.py` (MCP notification support).
 
 ---
 
@@ -216,6 +237,63 @@ This is a trust gap: the agent cannot confidently tell the user "your plan is re
 
 ---
 
+### I11 — No server identity in responses
+
+**New in v3.** Surfaced during the first session using both `planexelocal` and `planexeremote`.
+
+**Problem:** The agent cannot programmatically determine which server backend it's connected to. When the user ran `/mcp` and reconnected, the active server changed from local to remote without any signal — the only clue was the tool name prefix changing from `mcp__planexelocal__*` to `mcp__planexeremote__*`. If both servers had the same prefix, the switch would be invisible.
+
+This matters because:
+- Plans created on local can't be accessed from remote (different plan_id namespaces)
+- SSE monitoring patterns that work on local may fail on remote
+- Speed expectations differ (local ~13 min, remote ~28 min for baseline plans)
+
+**Proposed fix:** `plan_status` could include a `server` or `endpoint` field so the agent always knows which backend it's talking to. Alternatively, `plan_create` could return a `server_info` object with capabilities:
+
+```json
+{
+  "server_info": {
+    "server_id": "planexe-remote-prod",
+    "sse_reliable": false,
+    "files_visible_during_processing": false,
+    "expected_speed": "slow"
+  }
+}
+```
+
+**Affected files:** `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_local/planexe_mcp_local.py`.
+
+---
+
+### I12 — No files visibility during remote processing
+
+**New in v3.** Surfaced during the first remote plan.
+
+**Problem:** `plan_status` on the remote server returns `files_count: 0` while processing. On local, files appear incrementally. The incremental file list on local was useful for:
+- Confirming the plan is actually producing output (not just incrementing step count)
+- Seeing which pipeline sections have completed
+- Early reading of intermediate files if curious
+
+Losing this on remote makes the plan feel more opaque. The inconsistency also means agent workflows that depend on file visibility during processing will break silently when switching servers.
+
+**Proposed fix:** Align remote behavior with local — populate the files list incrementally during processing. If this isn't feasible due to remote storage architecture, document the difference in the tool description.
+
+**Affected files:** `worker_plan_database/app.py` (remote file list population), `mcp_cloud/schemas.py` (document behavioral difference if not fixed).
+
+---
+
+### I13 — SSE reliability differs between local and remote
+
+**New in v3.** The SSE stream on local was 100% reliable across 12 plans and multiple stop/resume cycles. On remote, the stream dropped at ~48% on the first plan. Possible causes: proxy timeout, load balancer idle timeout, or different SSE implementation.
+
+While I5 argues SSE is the wrong tool for agents regardless of reliability, this inconsistency also affects non-agent consumers (browser UIs, dashboards) that would rely on SSE for real-time progress. If SSE is kept for these consumers, it needs to work reliably on remote too.
+
+**Proposed fix:** Investigate and fix the remote SSE connection stability. Common causes: reverse proxy `proxy_read_timeout` too low, load balancer idle timeout, missing SSE keepalive pings.
+
+**Affected files:** Infrastructure/deployment configuration (not application code).
+
+---
+
 ## 3. Cross-Reference with Existing Proposals
 
 | Issue | Existing Proposal | Gap |
@@ -224,12 +302,15 @@ This is a trust gap: the agent cannot confidently tell the user "your plan is re
 | I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
 | I4 (idempotency) | None | **Implemented** (PR #242) |
-| I5 (rich SSE events) | 70 §5.1 (basic SSE done) | Events lack structured data |
+| I5 (SSE wrong for agents) | 70 §5.1 (basic SSE done) | SSE serves wrong consumer type; MCP notifications needed |
 | I6 (download TTL) | 70 §4 (tokens done) | TTL too short, not configurable |
 | I7 (stall detection) | 87 §8 (partial) | No explicit stall timestamps |
 | I8 (plan_wait) | None | New |
 | I9 (prompt iteration) | None | New |
 | I10 (silent partial failures) | None | New |
+| I11 (server identity) | None | New (v3) |
+| I12 (remote files visibility) | None | New (v3) |
+| I13 (remote SSE reliability) | 70 §5.1 | SSE drops on remote; local is fine |
 
 ---
 
@@ -240,10 +321,11 @@ Several items here refine or extend issues already tracked in Proposal 70's chec
 | This Proposal | Proposal 70 Item | Relationship |
 |---------------|-------------------|-------------|
 | I2 (failure diagnostics) | 70 §5.6 (pipeline stage names) | Complementary — 70 focuses on progress UX, I2 focuses on failure UX |
-| I5 (rich SSE) | 70 §5.1 (SSE implemented) | Extension — SSE works but events are thin |
+| I5 (SSE wrong for agents) | 70 §5.1 (SSE implemented) | Correction — SSE serves wrong consumer type for agents; MCP notifications needed |
 | I6 (download TTL) | 70 (signed tokens done) | Refinement — increase TTL |
+| I13 (remote SSE reliability) | 70 §5.1 (SSE implemented) | Bug — SSE drops on remote but works on local |
 
-If accepted, I1–I4 and I7–I10 should be added to Proposal 70's quick-win checklist as new line items.
+If accepted, I1–I4 and I7–I13 should be added to Proposal 70's quick-win checklist as new line items.
 
 ---
 
@@ -253,26 +335,29 @@ If accepted, I1–I4 and I7–I10 should be added to Proposal 70's quick-win che
 |----------|--------|-----------|
 | P1 | I2 (failure diagnostics) | Biggest observability gap. Agent cannot help users debug failures without this. |
 | ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option A). Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. |
+| P1 | I5 (SSE wrong for agents) | MCP notifications should replace SSE as the recommended agent completion mechanism. Highest-impact agent UX improvement. |
 | P2 | I7 (stall detection) | Prevents agents from waiting indefinitely on stuck plans. |
 | P2 | I6 (download TTL) | Low effort, reduces friction. |
-| P2 | I5 (rich SSE events) | Eliminates polling for SSE-capable clients. |
 | P2 | I3 (plan_delete) | Hygiene for multi-plan sessions. |
 | ~~P3~~ | ~~I4 (idempotency)~~ | **Implemented** (PR #242). Server-side auto-dedup on `(user_id, prompt, model_profile)` within a time window. |
 | P2 | I10 (silent partial failures) | Agent cannot trust `completed` means quality output. Undermines confidence in the entire workflow. |
-| P3 | I8 (plan_wait) | Nice-to-have for shell-less agents. |
+| P2 | I12 (remote files visibility) | Behavioral inconsistency between servers breaks agent workflows silently. |
+| P2 | I8 (plan_wait) | Upgraded from P3: validated as the correct fallback mechanism when MCP notifications aren't available. |
+| P3 | I11 (server identity) | Nice-to-have for multi-server awareness. |
 | P3 | I9 (prompt iteration) | Nice-to-have for iteration workflows. |
+| P3 | I13 (remote SSE reliability) | Only matters if SSE is kept for non-agent consumers. |
 
 ---
 
-## 6. Agent Perception (after 12 plans across two sessions)
+## 6. Agent Perception (after 13 plans across three sessions)
 
-**Overall rating: 8.5/10** (up from 8/10 after session 1). The improvement comes from the `stopped` state — a small change with outsized impact on agent confidence.
+**Overall rating: 8.5/10** (unchanged from session 2). The remote server works — same workflow, same tool contract — but exposed new friction that local hid.
 
 ### What works well
 
 1. **Tool descriptions are best-in-class.** The agent operates PlanExe without external documentation, solely from tool descriptions. They specify call order, state contract, timing expectations, error codes, and troubleshooting guidance.
 2. **State machine is now clean.** Every state has a single obvious next action: `pending` → wait, `processing` → poll, `completed` → download, `stopped` → suggest resume, `failed` → investigate. No state requires guessing.
-3. **SSE completion detection is reliable.** Across 12 plans and multiple stop/resume cycles, the stream always auto-closed on terminal states as expected.
+3. **Remote server works without configuration changes.** The same workflow (create → monitor → status → download) works on both local and remote servers without any adaptation. Same contract, different infrastructure — good API design.
 4. **Resume preserves progress.** After stopping at step 12/110, resume continued from step 12, not step 1. The `resume_count` field makes the history visible without the agent needing to track it.
 5. **Deduplication prevents accidents.** Same prompt + model_profile within a short window returns the existing plan with `deduplicated=true`.
 6. **Progress reporting is honest.** The tool description explicitly warns that `progress_percentage` is not linear and shouldn't be used for time estimates.
@@ -281,17 +366,49 @@ If accepted, I1–I4 and I7–I10 should be added to Proposal 70's quick-win che
 
 Session 2 tested: create → stop → resume → stop → resume → complete. At no point was the agent confused about state or what to suggest. The `resume_count` field confirmed history without shadow state. The mark of a good state machine — the agent doesn't need to maintain its own bookkeeping.
 
-### Remaining trust gap
+### Local vs remote: side-by-side comparison (new in session 3)
 
-The agent trusts the state machine to report accurately, trusts resume to preserve progress, trusts SSE to close on terminal states, and trusts tool descriptions to be current. The remaining trust gap is around `completed` plans — `completed` means "all steps ran," not "all sections produced quality output." The interface doesn't distinguish between these yet (see I10).
+| Aspect | planexelocal | planexeremote |
+|--------|-------------|---------------|
+| Speed (baseline, 110 steps) | ~13-14 minutes | ~28 minutes |
+| Files list in plan_status | Populated (shows files as created) | Empty (`files_count: 0` during processing) |
+| SSE reliability | 100% across 12 plans + stop/resume | Stream dropped at ~48% on first plan |
+| Download URLs | `http://192.168.1.40:8001/...` | `https://mcp.planexe.org/...` |
+| Files produced | 172 (parasomnia) | 198 (Delhi water) |
 
-### Evolution between sessions
+**Trust level — Local:** High. Every feature works as documented. SSE is reliable. State machine is clean. Files are visible during processing.
 
-| Aspect | Session 1 | Session 2 | Direction |
-|--------|-----------|-----------|-----------|
-| Stop state | `failed` (ambiguous) | `stopped` (clear) | Fixed |
-| Resume tracking | No history | `resume_count` field | New |
-| Tool descriptions | Excellent | Updated with `stopped` state | Improved |
-| Failure diagnostics | Missing | Still missing | Unchanged |
-| Silent partial failures | Not surfaced | Not surfaced | Unchanged |
-| Plan cleanup | No delete | No delete | Unchanged |
+**Trust level — Remote:** Medium-high. The core workflow works. But SSE dropped once, files aren't visible during processing, and it's 2x slower. The agent would use it confidently for plan creation and download, but would poll `plan_status` instead of relying on SSE.
+
+### Correction: SSE is the wrong tool for agents
+
+Session 3 forced a fundamental re-evaluation of how the agent used SSE. The agent never read SSE event content — it ran `curl` in the background and treated connection close as a "done" signal. This pattern worked reliably on local but failed on remote when the stream dropped at ~48%. The deeper issue: turn-based MCP agents cannot watch real-time streams. MCP notifications over the existing connection are the correct mechanism (see I5).
+
+### Remaining trust gaps
+
+1. **`completed` ≠ quality output.** `completed` means "all steps ran," not "all sections produced quality output." The interface doesn't distinguish between these yet (see I10).
+2. **No server identity.** The agent cannot programmatically determine which backend it's talking to, which matters for setting speed expectations and knowing whether plans are accessible cross-server (see I11).
+3. **Remote opacity.** No files visible during remote processing makes the plan feel like a black box (see I12).
+
+### Evolution across sessions
+
+| Aspect | Session 1 | Session 2 | Session 3 | Direction |
+|--------|-----------|-----------|-----------|-----------|
+| Stop state | `failed` (ambiguous) | `stopped` (clear) | `stopped` (clear) | Fixed |
+| Resume tracking | No history | `resume_count` field | `resume_count` field | Fixed |
+| Tool descriptions | Excellent | Updated with `stopped` state | Identical across servers | Stable |
+| Failure diagnostics | Missing | Still missing | Still missing | Unchanged |
+| Silent partial failures | Not surfaced | Not surfaced | Not surfaced | Unchanged |
+| Plan cleanup | No delete | No delete | No delete | Unchanged |
+| SSE understanding | "Reliable completion detector" | "Reliable completion detector" | "Wrong tool for agents" | Corrected |
+| Server awareness | Single server | Single server | No server identity signal | New gap |
+| Files during processing | Visible | Visible | Not visible (remote) | New gap |
+
+### Session totals
+
+| # | Plan ID | Description | Server | Time | Files |
+|---|---------|-------------|--------|------|-------|
+| 1–10 | (various) | Session 1 plans | local | varies | varies |
+| 11 | ff5488dc | Riemann Hypothesis Bonn | local | ~13 min | 179 |
+| 12 | 6d0c1d80 | Parasomnia facility Bonn | local | ~14 min (with 2 stop/resume) | 172 |
+| 13 | d623f577 | Delhi water purification | remote | ~28 min | 198 |

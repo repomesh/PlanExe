@@ -28,6 +28,8 @@ Agents need PlanExe runs to complete reliably without human intervention. A fail
 | **114-I2** | Failure Diagnostics in `plan_status` | When a plan fails, no `failure_reason`, `failed_step`, `last_error`, or `recoverable` flag is returned. Biggest observability gap — agents can only say "it failed" without explaining why or recommending resume vs retry. Extends #113 to the MCP consumer surface |
 | **114-I7** | Stalled-Plan Detection | No `last_progress_at` or `last_llm_call_at` timestamps. Agents can't distinguish "slow step" from "stuck worker". Complements #87 §8 |
 | **114-I10** | Silent Partial Failures in Completed Plans | A plan can reach `completed` with empty or stub-quality sections (e.g. 2/8 experts responding). No `quality_summary` in `plan_status` — agents can't tell if `completed` means "all sections produced quality output" or just "all steps ran." Trust gap for autonomous workflows |
+| **114-I12** | Remote Files Visibility During Processing | `plan_status` on remote returns `files_count: 0` while processing; local shows files incrementally. Agents lose the ability to confirm output is being produced and see which pipeline sections completed. Behavioral inconsistency between servers breaks workflows silently |
+| **114-I13** | Remote SSE Reliability | SSE stream on local was 100% reliable across 12 plans; remote dropped at ~48% on first plan. Only matters if SSE is kept for non-agent consumers (see I5 correction below) |
 
 ---
 
@@ -42,10 +44,11 @@ Agents need to discover PlanExe, understand its tools, and consume outputs progr
 | **110** | Usage Metrics for Local Runs | ✅ **Implemented (PR #219, #236, #237)**. Agents need cost accounting for budget-constrained workflows. `usage_metrics.jsonl` answers "how much did this run cost?" with per-call granularity (model, tokens, cost, duration). Errors are classified into short categories with traceable `error_id` UUIDs. Complements `activity_overview.json` aggregated totals |
 | **114-I3** | Plan Delete / Archive | Stopped and failed plans persist in `plan_list` forever. After 10 plans, the list is noisy. Add `plan_delete` (hard delete) or `plan_archive` (soft delete, hidden from list but retained for billing) |
 | **114-I4** | Idempotency Guard on `plan_create` | ✅ **Implemented (PR #242)**. Server-side auto-dedup on `(user_id, prompt, model_profile)` within configurable time window (default 10 min) |
-| **114-I5** | Rich SSE Event Payloads | SSE works as a completion detector but events carry no structured data. Adding `progress_percentage`, `current_step`, `steps_completed` to event payloads eliminates the need for `plan_status` polling |
+| **114-I5** | SSE Wrong for Agents; MCP Notifications Needed | **Corrected in v3.** SSE is designed for real-time UI clients, not turn-based agents. The agent never read SSE event content — it abused connection close as a binary "done" signal, which failed on remote (stream dropped at ~48%). MCP notifications over the existing connection are the correct mechanism; `plan_wait` (I8) is the fallback. SSE should only be recommended to non-MCP consumers. **Promoted to P1** |
 | **114-I6** | Download URL TTL Extension | 15-minute signed URL expiry surprises users who review before downloading. Extend to 30–60 min, make configurable via env var |
-| **114-I8** | `plan_wait` Tool | Agents without shell access can't use `curl -N` for SSE. A blocking `plan_wait(plan_id, timeout)` tool returns final status on completion — long-poll via existing SSE infra |
+| **114-I8** | `plan_wait` Tool | **Upgraded from P3 to P2 in v3.** Validated as the correct fallback when MCP notifications (I5) aren't available. A blocking `plan_wait(plan_id, timeout)` tool returns final status on completion — replaces both SSE monitoring and follow-up `plan_status` in a single call |
 | **114-I9** | Prompt Iteration Linking | Each `plan_create` is independent. Optional `parent_plan_id` links iteration chains so agents and users can track prompt refinement across plan versions |
+| **114-I11** | Server Identity in Responses | **New in v3.** Agent cannot programmatically determine which backend it's connected to (local vs remote). Plans from one server aren't accessible from the other, speed expectations differ (13 min vs 28 min), and SSE behavior varies. `plan_status` should include a `server` field or `plan_create` should return `server_info` with capabilities |
 
 Key friction points from #86 that block autonomous agent use:
 - **F1**: Human approval step before `plan_create` — autonomous agents can't proceed
@@ -110,19 +113,22 @@ Phase 1: Reliable foundation         (nearly complete)
   ├─ #58  Prompt boost ⚙️ (open PR #222)
   ├─ #114-I1 Stopped vs failed state ✅
   ├─ #114-I2 Failure diagnostics in plan_status  ← next priority (biggest gap)
+  ├─ #114-I5 MCP notifications for agents  ← P1 (v3 correction: SSE wrong for agents)
   ├─ #114-I7 Stalled-plan detection
-  └─ #114-I10 Silent partial failures in completed plans
+  ├─ #114-I10 Silent partial failures in completed plans
+  └─ #114-I12 Remote files visibility during processing
 
 Phase 2: Agent-native interface       (next)
   ├─ #86  Remove agent friction points ✅ (PR #223)
   ├─ #62  Discovery protocols ✅ (PR #224)
   ├─ #88  Fermi validation gate ⚙️ (open PR #225)
   ├─ #114-I3 Plan delete/archive
-  ├─ #114-I5 Rich SSE event payloads
   ├─ #114-I6 Download URL TTL extension
   ├─ #114-I4 Idempotency guard ✅ (PR #242)
-  ├─ #114-I8 plan_wait tool
-  └─ #114-I9 Prompt iteration linking
+  ├─ #114-I8 plan_wait tool (upgraded P2 — fallback for MCP notifications)
+  ├─ #114-I9 Prompt iteration linking
+  ├─ #114-I11 Server identity in responses
+  └─ #114-I13 Remote SSE reliability (if SSE kept for non-agent consumers)
 
 Phase 3: Automated quality            (then)
   ├─ #42  Evidence traceability

@@ -4,14 +4,21 @@
 <h2>Change State To Failed</h2>
 
 <h4>Selected Plans by State</h4>
-<table class="table" style="max-width:400px">
-    {% for state, count in state_counts.items() %}
-    <tr><th>{{ state }}</th><td>{{ count }}</td></tr>
+<table class="table" style="max-width:600px">
+    <thead>
+        <tr><th>State</th><th>Count</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for state, count, warning in state_rows %}
+    <tr>
+        <th>{{ state }}</th>
+        <td>{{ count }}</td>
+        <td>{% if warning %}<span style="color:red;font-weight:bold">WARNING: ill-advised to change state of {{ state }} because {{ warning }}</span>{% endif %}</td>
+    </tr>
     {% endfor %}
-    <tr><th>Total</th><td>{{ total_count }}</td></tr>
+    <tr><th>Total</th><td>{{ total_count }}</td><td></td></tr>
+    </tbody>
 </table>
-
-<p>Plans already in <strong>completed</strong> or <strong>failed</strong> state will be skipped.</p>
 
 <form method="POST" action="{{ form_action }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

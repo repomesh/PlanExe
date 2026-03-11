@@ -250,33 +250,35 @@ class PlanItemView(AdminOnlyModelView):
         if request.method == 'POST':
             failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
             last_error = request.form.get('last_error', '').strip() or None
-            skip_states = {PlanState.completed, PlanState.failed}
-            updated = 0
-            skipped = 0
             for plan in plans:
-                if plan.state in skip_states:
-                    skipped += 1
-                    continue
                 plan.state = PlanState.failed
                 plan.failure_reason = failure_reason
                 plan.failed_step = plan.current_step
                 plan.last_error = last_error
                 plan.recoverable = False
-                updated += 1
             self.session.commit()
             flask_session.pop("bulk_fail_ids", None)
-            flash(f'Transitioned {updated} plan(s) to failed. Skipped {skipped} (already completed/failed).', 'success')
+            flash(f'Transitioned {len(plans)} plan(s) to failed.', 'success')
             return redirect(self.get_url('.index_view'))
 
-        # GET: compute state breakdown
+        # GET: compute state breakdown with warnings
+        state_warnings = {
+            'completed': 'plan already finished successfully, changing state to failed shifts blame to the system',
+            'failed': 'plan is already in failed state',
+            'stopped': 'changing state of an already stopped task is ill-advised, since that changes the blame from the user responsible to the system responsible',
+        }
+        state_rows: list[tuple[str, int, str | None]] = []
         state_counts: dict[str, int] = {}
         for plan in plans:
             state_name = plan.state.name if plan.state else 'unknown'
             state_counts[state_name] = state_counts.get(state_name, 0) + 1
+        for state_name, count in state_counts.items():
+            warning = state_warnings.get(state_name)
+            state_rows.append((state_name, count, warning))
 
         return self.render(
             'admin/bulk_change_to_failed.html',
-            state_counts=state_counts,
+            state_rows=state_rows,
             total_count=len(plans),
             form_action=self.get_url('.bulk_change_to_failed_view'),
             cancel_url=self.get_url('.index_view'),

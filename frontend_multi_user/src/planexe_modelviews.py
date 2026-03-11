@@ -213,6 +213,75 @@ class PlanItemView(AdminOnlyModelView):
             else:
                 form.run_track_activity_jsonl_upload.description = "Current file: none"
 
+    @action("change_state_to_failed", "Change State To Failed", "Transition selected plans to failed state?")
+    def action_change_state_to_failed(self, ids):
+        from flask import session as flask_session
+        flask_session["bulk_fail_ids"] = list(ids)
+        return redirect(self.get_url(".bulk_change_to_failed_view"))
+
+    @expose('/bulk-change-to-failed/', methods=['GET', 'POST'])
+    def bulk_change_to_failed_view(self):
+        from flask import session as flask_session
+        from database_api.model_planitem import PlanState
+
+        if not self.is_accessible():
+            return self.inaccessible_callback('bulk_change_to_failed_view')
+
+        raw_ids = flask_session.get("bulk_fail_ids", [])
+        if not raw_ids:
+            flash('No plans selected.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        plan_ids = []
+        for raw_id in raw_ids:
+            try:
+                plan_ids.append(uuid.UUID(str(raw_id)))
+            except Exception:
+                plan_ids.append(raw_id)
+
+        plans = self.session.query(self.model).filter(
+            self.model.id.in_(plan_ids)
+        ).all()
+
+        if not plans:
+            flash('No matching plans found.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        if request.method == 'POST':
+            failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
+            last_error = request.form.get('last_error', '').strip() or None
+            skip_states = {PlanState.completed, PlanState.failed}
+            updated = 0
+            skipped = 0
+            for plan in plans:
+                if plan.state in skip_states:
+                    skipped += 1
+                    continue
+                plan.state = PlanState.failed
+                plan.failure_reason = failure_reason
+                plan.failed_step = plan.current_step
+                plan.last_error = last_error
+                plan.recoverable = False
+                updated += 1
+            self.session.commit()
+            flask_session.pop("bulk_fail_ids", None)
+            flash(f'Transitioned {updated} plan(s) to failed. Skipped {skipped} (already completed/failed).', 'success')
+            return redirect(self.get_url('.index_view'))
+
+        # GET: compute state breakdown
+        state_counts: dict[str, int] = {}
+        for plan in plans:
+            state_name = plan.state.name if plan.state else 'unknown'
+            state_counts[state_name] = state_counts.get(state_name, 0) + 1
+
+        return self.render(
+            'admin/bulk_change_to_failed.html',
+            state_counts=state_counts,
+            total_count=len(plans),
+            form_action=self.get_url('.bulk_change_to_failed_view'),
+            cancel_url=self.get_url('.index_view'),
+        )
+
     def on_model_change(self, form: Any, model: Any, is_created: bool) -> None:
         def _read_upload(field_name: str):
             field = getattr(form, field_name, None)

@@ -1,0 +1,39 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<h2>Change State To Failed</h2>
+
+<h4>Selected Plans by State</h4>
+<table class="table" style="max-width:400px">
+    {% for state, count in state_counts.items() %}
+    <tr><th>{{ state }}</th><td>{{ count }}</td></tr>
+    {% endfor %}
+    <tr><th>Total</th><td>{{ total_count }}</td></tr>
+</table>
+
+<p>Plans already in <strong>completed</strong> or <strong>failed</strong> state will be skipped.</p>
+
+<form method="POST" action="{{ form_action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group">
+        <label for="failure_reason">Failure Reason</label>
+        <select name="failure_reason" id="failure_reason" class="form-control" style="max-width:400px">
+            <option value="admin_bulk_fail">admin_bulk_fail</option>
+            <option value="stuck_plan">stuck_plan</option>
+            <option value="worker_error">worker_error</option>
+            <option value="generation_error">generation_error</option>
+            <option value="version_mismatch">version_mismatch</option>
+        </select>
+    </div>
+    <div class="form-group" style="margin-top:10px">
+        <label for="last_error">Last Error</label>
+        <input type="text" name="last_error" id="last_error" class="form-control"
+               style="max-width:400px"
+               placeholder="e.g. Manually failed by admin">
+    </div>
+    <div style="margin-top:15px">
+        <button type="submit" class="btn btn-danger">Change State To Failed</button>
+        <a href="{{ cancel_url }}" class="btn btn-default" style="margin-left:10px">Cancel</a>
+    </div>
+</form>
+{% endblock %}

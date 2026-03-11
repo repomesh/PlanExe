@@ -338,6 +338,9 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         },
         "files_count": len(files),
         "files": files[:10],
+        "stop_reason": "user_requested" if (
+            state == "failed" and plan_snapshot.get("stop_requested")
+        ) else None,
     }
 
     if state == "failed":

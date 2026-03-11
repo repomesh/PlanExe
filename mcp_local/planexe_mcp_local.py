@@ -554,6 +554,7 @@ PLAN_STATUS_OUTPUT_SCHEMA = {
                 },
             },
         },
+        "stop_reason": {"type": ["string", "null"]},
     },
 }
 
@@ -759,6 +760,7 @@ TOOL_DEFINITIONS = [
             "Poll at reasonable intervals only (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
             "(baseline profile) and may take longer on higher-quality profiles. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "When state is 'failed', check stop_reason: 'user_requested' means plan_stop was called (consider plan_resume); null means an actual error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
             "Unknown plan_id returns PLAN_NOT_FOUND (or REMOTE_ERROR when transport fails). "

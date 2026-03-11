@@ -217,6 +217,66 @@ class TestPlanStatusTool(unittest.TestCase):
 
         self.assertEqual(result.structuredContent["current_step"], "SWOT Analysis")
 
+    def test_plan_status_user_stopped_shows_stop_reason(self):
+        """Failed plan with stop_requested=True → stop_reason='user_requested'."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.failed,
+            "stop_requested": True,
+            "progress_percentage": 42.0,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        self.assertEqual(result.structuredContent["stop_reason"], "user_requested")
+
+    def test_plan_status_actual_failure_shows_null_stop_reason(self):
+        """Failed plan with stop_requested=False → stop_reason=None."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.failed,
+            "stop_requested": False,
+            "progress_percentage": 5.5,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        self.assertIsNone(result.structuredContent["stop_reason"])
+
+    def test_plan_status_non_failed_shows_null_stop_reason(self):
+        """Processing plan → stop_reason=None regardless of stop_requested."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.processing,
+            "stop_requested": True,
+            "progress_percentage": 50.0,
+            "timestamp_created": datetime.now(UTC),
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        self.assertIsNone(result.structuredContent["stop_reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

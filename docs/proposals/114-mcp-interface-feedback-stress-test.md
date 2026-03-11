@@ -19,6 +19,8 @@ The testing surfaced concrete MCP interface friction points that affect agent op
 
 ### I1 — `failed` state conflates user-stop and actual failure
 
+**Status:** Implemented (Option B — `stop_reason` field on `plan_status`).
+
 **Problem:** When `plan_stop` is called, the plan transitions to `failed`. When a worker crashes, it also transitions to `failed`. The agent operator cannot distinguish between:
 - User-initiated stop (nothing went wrong)
 - Actual failure (network drop, model error, worker crash)
@@ -186,7 +188,7 @@ This enables prompt iteration tracking without changing existing behavior for pl
 
 | Issue | Existing Proposal | Gap |
 |-------|-------------------|-----|
-| I1 (stopped vs failed) | 87 §4 (deferred) | Needs its own decision — Option A vs B |
+| I1 (stopped vs failed) | 87 §4 (deferred) | **Implemented** (Option B — `stop_reason` field) |
 | I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
 | I4 (idempotency) | None | **Implemented** (PR #242) |
@@ -217,7 +219,7 @@ If accepted, I1–I4 and I7–I9 should be added to Proposal 70's quick-win chec
 | Priority | Issues | Rationale |
 |----------|--------|-----------|
 | P1 | I2 (failure diagnostics) | Biggest observability gap. Agent cannot help users debug failures without this. |
-| P1 | I1 (stopped vs failed) | Small change (Option B), high diagnostic value. Prerequisite for good plan_resume UX. |
+| ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option B). `stop_reason` field on `plan_status`: `"user_requested"` when `plan_stop` was called, `null` for actual errors. |
 | P2 | I7 (stall detection) | Prevents agents from waiting indefinitely on stuck plans. |
 | P2 | I6 (download TTL) | Low effort, reduces friction. |
 | P2 | I5 (rich SSE events) | Eliminates polling for SSE-capable clients. |

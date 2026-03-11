@@ -214,6 +214,15 @@ class PlanStatusSuccess(BaseModel):
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
+    stop_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why the plan entered failed state. "
+            "'user_requested' means plan_stop was called (not an error — consider plan_resume). "
+            "null means an actual error (worker crash, model error, timeout). "
+            "Only set when state is 'failed'; always null for other states."
+        ),
+    )
 
 
 class PlanStatusOutput(BaseModel):
@@ -266,6 +275,15 @@ class PlanStatusOutput(BaseModel):
         description=(
             "Optional completion detector URL. Available when plan is not in a terminal state. "
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
+        ),
+    )
+    stop_reason: str | None = Field(
+        default=None,
+        description=(
+            "Why the plan entered failed state. "
+            "'user_requested' means plan_stop was called (not an error — consider plan_resume). "
+            "null means an actual error (worker crash, model error, timeout). "
+            "Only set when state is 'failed'; always null for other states."
         ),
     )
     error: ErrorDetail | None = None

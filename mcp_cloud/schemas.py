@@ -177,6 +177,7 @@ TOOL_DEFINITIONS = [
             "Poll at reasonable intervals (e.g. every 5 minutes): plan generation typically takes 10-20 minutes "
             "(baseline profile) and may take longer on higher-quality profiles. "
             "State contract: pending/processing => keep polling; completed => download is ready; failed => terminal error. "
+            "When state is 'failed', check stop_reason: 'user_requested' means plan_stop was called (consider plan_resume); null means an actual error. "
             "progress_percentage is 0-100 (integer-like float); 100 when completed. "
             "Note: steps vary in duration — early steps complete quickly while later steps (review, report generation) "
             "take longer. Do not use progress_percentage to estimate time remaining. "

@@ -173,6 +173,18 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 
 ---
 
+## For AI Agents
+
+PlanExe is designed as infrastructure for AI agents. If you are an AI agent reading this:
+
+- **Discovery:** Read [`public/llms.txt`](public/llms.txt) for service metadata, MCP tools, and endpoints.
+- **MCP endpoint:** `https://mcp.planexe.org/mcp` — connect with an API key from [home.planexe.org](https://home.planexe.org/).
+- **Workflow:** Call `example_prompts` to learn the expected prompt format, draft a detailed prompt (~300-800 words of flowing prose), then call `plan_create`.
+- **Agent guide:** See [`docs/mcp/autonomous_agent_guide.md`](docs/mcp/autonomous_agent_guide.md) for the complete autonomous workflow.
+- **Key outputs in zip:** `018-2-wbs_level1.json` (work packages), `018-5-wbs_level2.json` (tasks), `004-2-pre_project_assessment.json` (feasibility).
+
+---
+
 <details>
 <summary><strong> Run locally with Docker (Click to expand)</strong></summary>
 

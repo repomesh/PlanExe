@@ -1054,7 +1054,8 @@ def execute_pipeline_for_job(
             db.session.add(event)
             db.session.commit()
         else:
-            update_task_state_with_retry(task_id, PlanState.failed)
+            final_state = PlanState.stopped if stop_requested else PlanState.failed
+            update_task_state_with_retry(task_id, final_state)
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
             event_context["machai_error_message"] = machai_error_message or ""
             event_context.update({
@@ -1067,7 +1068,7 @@ def execute_pipeline_for_job(
             event = _new_model(
                 EventItem,
                 event_type=EventType.TASK_FAILED,
-                message=f"Processing -> Failed",
+                message=f"Processing -> {'Stopped' if stop_requested else 'Failed'}",
                 context=event_context
             )
             db.session.add(event)

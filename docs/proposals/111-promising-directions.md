@@ -24,6 +24,9 @@ Agents need PlanExe runs to complete reliably without human intervention. A fail
 | **103** | Pipeline Hardening for Local Models | Fix silent truncation and context-window overflows. Critical for agents running local models where failures are subtle |
 | **113** | LLM Error Traceability | ✅ **Implemented (PR #237)**. `LLMChatError` replaces generic `ValueError` across 38 call sites. Root cause preserved for error classification; `error_id` UUID enables log-to-metrics cross-referencing. Agents can programmatically diagnose failures |
 | **101** | Luigi Resume Enhancements | Webhook hooks on task completion/failure — agents can subscribe to events instead of polling |
+| **114-I1** | Stopped vs Failed State | `plan_stop` and worker crashes both produce `failed` — agents can't distinguish user-initiated stops from actual errors. Add `stop_reason` field or a new `stopped` state |
+| **114-I2** | Failure Diagnostics in `plan_status` | When a plan fails, no `failure_reason`, `failed_step`, or `last_error` is returned. Biggest observability gap — agents can only say "it failed" without explaining why. Extends #113 to the MCP consumer surface |
+| **114-I7** | Stalled-Plan Detection | No `last_progress_at` or `last_llm_call_at` timestamps. Agents can't distinguish "slow step" from "stuck worker". Complements #87 §8 |
 
 ---
 
@@ -36,6 +39,12 @@ Agents need to discover PlanExe, understand its tools, and consume outputs progr
 | **86** | Agent-Optimized Pipeline | Removes the 5 key friction points for autonomous agent use: human approval gate, no agent prompt examples, poll intervals tuned for humans, no machine-readable output, no autonomous agent setup docs |
 | **62** | Agent-First Frontend Discoverability | `llms.txt`, `/.well-known/mcp.json`, agent-readable README — standard discovery protocols so agents find PlanExe without human guidance |
 | **110** | Usage Metrics for Local Runs | ✅ **Implemented (PR #219, #236, #237)**. Agents need cost accounting for budget-constrained workflows. `usage_metrics.jsonl` answers "how much did this run cost?" with per-call granularity (model, tokens, cost, duration). Errors are classified into short categories with traceable `error_id` UUIDs. Complements `activity_overview.json` aggregated totals |
+| **114-I3** | Plan Delete / Archive | Stopped and failed plans persist in `plan_list` forever. After 10 plans, the list is noisy. Add `plan_delete` (hard delete) or `plan_archive` (soft delete, hidden from list but retained for billing) |
+| **114-I4** | Idempotency Guard on `plan_create` | No deduplication — double-submit creates two identical plans. Optional `request_id` parameter enables standard idempotency (Stripe/AWS pattern) |
+| **114-I5** | Rich SSE Event Payloads | SSE works as a completion detector but events carry no structured data. Adding `progress_percentage`, `current_step`, `steps_completed` to event payloads eliminates the need for `plan_status` polling |
+| **114-I6** | Download URL TTL Extension | 15-minute signed URL expiry surprises users who review before downloading. Extend to 30–60 min, make configurable via env var |
+| **114-I8** | `plan_wait` Tool | Agents without shell access can't use `curl -N` for SSE. A blocking `plan_wait(plan_id, timeout)` tool returns final status on completion — long-poll via existing SSE infra |
+| **114-I9** | Prompt Iteration Linking | Each `plan_create` is independent. Optional `parent_plan_id` links iteration chains so agents and users can track prompt refinement across plan versions |
 
 Key friction points from #86 that block autonomous agent use:
 - **F1**: Human approval step before `plan_create` — autonomous agents can't proceed
@@ -97,12 +106,21 @@ Phase 1: Reliable foundation         (now)
   ├─ #102 Error-feedback retries
   ├─ #110 Usage metrics ✅ (PR #219, #236, #237)
   ├─ #113 Error traceability ✅ (PR #237)
-  └─ #58  Prompt boost
+  ├─ #58  Prompt boost
+  ├─ #114-I1 Stopped vs failed state
+  ├─ #114-I2 Failure diagnostics in plan_status
+  └─ #114-I7 Stalled-plan detection
 
 Phase 2: Agent-native interface       (next)
   ├─ #86  Remove agent friction points
   ├─ #62  Discovery protocols
-  └─ #88  Fermi validation gate
+  ├─ #88  Fermi validation gate
+  ├─ #114-I3 Plan delete/archive
+  ├─ #114-I5 Rich SSE event payloads
+  ├─ #114-I6 Download URL TTL extension
+  ├─ #114-I4 Idempotency guard
+  ├─ #114-I8 plan_wait tool
+  └─ #114-I9 Prompt iteration linking
 
 Phase 3: Automated quality            (then)
   ├─ #42  Evidence traceability

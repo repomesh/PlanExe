@@ -82,8 +82,11 @@ def _find_recent_duplicate_plan(
     prompt: str,
     model_profile: str,
     window_seconds: int = DEDUP_WINDOW_SECONDS,
-) -> Optional[PlanItem]:
+) -> Optional[dict[str, Any]]:
     """Return an existing pending/processing plan with the same prompt if created recently.
+
+    Only fetches ``id``, ``timestamp_created``, and ``parameters`` to avoid
+    loading heavy columns (prompt can be up to 4 GB).
 
     Comparison of *model_profile* is done in Python to avoid JSON column
     dialect differences between SQLite and PostgreSQL.
@@ -95,8 +98,12 @@ def _find_recent_duplicate_plan(
 
     cutoff = datetime.now(UTC) - timedelta(seconds=window_seconds)
 
-    candidates = (
-        db.session.query(PlanItem)
+    rows = (
+        db.session.query(
+            PlanItem.id,
+            PlanItem.timestamp_created,
+            PlanItem.parameters,
+        )
         .filter(
             PlanItem.user_id == user_id,
             PlanItem.prompt == prompt,
@@ -107,10 +114,10 @@ def _find_recent_duplicate_plan(
         .all()
     )
 
-    for plan in candidates:
-        params = plan.parameters if isinstance(plan.parameters, dict) else {}
+    for row in rows:
+        params = row.parameters if isinstance(row.parameters, dict) else {}
         if params.get("model_profile") == model_profile:
-            return plan
+            return {"id": row.id, "timestamp_created": row.timestamp_created}
     return None
 
 
@@ -141,13 +148,13 @@ def _create_plan_sync(
             logger.info(
                 "Deduplicated plan_create for user %s — returning existing plan %s",
                 user_id,
-                existing.id,
+                existing["id"],
             )
-            created_at = existing.timestamp_created
+            created_at = existing["timestamp_created"]
             if created_at and created_at.tzinfo is None:
                 created_at = created_at.replace(tzinfo=UTC)
             return {
-                "plan_id": str(existing.id),
+                "plan_id": str(existing["id"]),
                 "created_at": format_datetime_utc(created_at),
                 "deduplicated": True,
             }

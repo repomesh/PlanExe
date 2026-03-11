@@ -54,25 +54,24 @@ class TestPlanCreateTool(unittest.TestCase):
         arguments = {"prompt": "build a spaceship", "config": None, "metadata": None}
         fake_session = MagicMock()
 
-        existing_plan = StubPlanItem(
-            prompt="build a spaceship",
-            state=None,
-            user_id="admin",
-            parameters={"model_profile": "baseline"},
-        )
+        existing_id = uuid.uuid4()
+        existing_dict = {
+            "id": existing_id,
+            "timestamp_created": datetime.now(UTC),
+        }
 
         with patch("mcp_cloud.db_queries.app.app_context", return_value=nullcontext()), patch(
             "mcp_cloud.db_queries.db.session", fake_session
         ), patch(
             "mcp_cloud.db_queries.PlanItem", StubPlanItem
         ), patch(
-            "mcp_cloud.db_queries._find_recent_duplicate_plan", return_value=existing_plan
+            "mcp_cloud.db_queries._find_recent_duplicate_plan", return_value=existing_dict
         ):
             result = asyncio.run(handle_plan_create(arguments))
 
         self.assertIsInstance(result, CallToolResult)
         self.assertIsInstance(result.structuredContent, dict)
-        self.assertEqual(result.structuredContent["plan_id"], str(existing_plan.id))
+        self.assertEqual(result.structuredContent["plan_id"], str(existing_id))
         self.assertTrue(result.structuredContent["deduplicated"])
 
     def test_find_recent_duplicate_plan_returns_none_when_window_zero(self):

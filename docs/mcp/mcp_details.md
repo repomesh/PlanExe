@@ -127,7 +127,21 @@ State contract:
 - `pending`: queued and waiting for a worker, keep polling.
 - `processing`: picked up by a worker, keep polling.
 - `completed`: terminal success, proceed to download.
-- `failed`: terminal error.
+- `stopped`: user called `plan_stop`. Use `plan_resume` to continue or `plan_retry` to restart.
+- `failed`: terminal error. Check failure diagnostics to decide next action.
+
+#### Failure diagnostics (on `failed` state)
+
+When a plan is in the `failed` state, the response includes additional diagnostic fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `failure_reason` | `string?` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
+| `failed_step` | `string?` | Pipeline step active at failure (e.g. `016-expert_criticism`) |
+| `last_error` | `string?` | Human-readable error message (max 256 chars) |
+| `recoverable` | `bool?` | `true` → `plan_resume` may work; `false` → use `plan_retry` |
+
+These fields are `null` for legacy plans that failed before this feature was added. They are absent from non-failed states.
 
 ### plan_stop
 

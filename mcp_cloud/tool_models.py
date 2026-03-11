@@ -215,6 +215,25 @@ class PlanStatusSuccess(BaseModel):
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "Failure category when state is 'failed'. Values: generation_error, worker_error, "
+            "inactivity_timeout, internal_error, version_mismatch. Absent for non-failed states."
+        ),
+    )
+    failed_step: str | None = Field(
+        default=None,
+        description="The pipeline step that was active when the failure occurred (e.g. '016-expert_criticism').",
+    )
+    last_error: str | None = Field(
+        default=None,
+        description="Human-readable error message describing the failure (max 256 chars).",
+    )
+    recoverable: bool | None = Field(
+        default=None,
+        description="True when plan_resume may succeed; False when plan_retry (full restart) is recommended.",
+    )
 
 
 class PlanStatusOutput(BaseModel):
@@ -269,6 +288,25 @@ class PlanStatusOutput(BaseModel):
             "Optional completion detector URL. Available when plan is not in a terminal state. "
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
+    )
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "Failure category when state is 'failed'. Values: generation_error, worker_error, "
+            "inactivity_timeout, internal_error, version_mismatch. Absent for non-failed states."
+        ),
+    )
+    failed_step: str | None = Field(
+        default=None,
+        description="The pipeline step that was active when the failure occurred.",
+    )
+    last_error: str | None = Field(
+        default=None,
+        description="Human-readable error message describing the failure (max 256 chars).",
+    )
+    recoverable: bool | None = Field(
+        default=None,
+        description="True when plan_resume may succeed; False when plan_retry (full restart) is recommended.",
     )
     error: ErrorDetail | None = None
 

@@ -72,17 +72,28 @@ Poll every 5 minutes. State transitions:
 
 ### Step 6: Handle failures
 
-If a plan fails mid-pipeline:
+When `plan_status` returns `state: "failed"`, check the failure diagnostics to decide next action:
+
+| Field | Meaning |
+|-------|---------|
+| `failure_reason` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
+| `failed_step` | Pipeline step that was active when the failure occurred |
+| `last_error` | Human-readable error message |
+| `recoverable` | `true` → try `plan_resume`; `false` → use `plan_retry` |
+
+If `recoverable` is `true`, resume first (preserves progress):
 
 ```
 Call: plan_resume(plan_id="...")  # Continue from where it stopped
 ```
 
-If you want a full restart:
+If `recoverable` is `false` or resume fails, do a full restart:
 
 ```
 Call: plan_retry(plan_id="...")   # Discard all progress, start fresh
 ```
+
+If diagnostics are `null` (legacy plan), default to trying `plan_resume` first, then `plan_retry`.
 
 ### Step 7: Retrieve output
 
@@ -96,7 +107,7 @@ The `download_url` points to the self-contained HTML report. The `zip` artifact 
 
 | Scenario | Action |
 |----------|--------|
-| `plan_status` returns `failed` | Call `plan_resume` first (preserves progress). If that fails, call `plan_retry`. |
+| `plan_status` returns `failed` | Check `recoverable` field: if `true`, call `plan_resume` (preserves progress); if `false`, call `plan_retry`. If diagnostics are `null`, try `plan_resume` first, then `plan_retry`. |
 | `plan_status` stays `pending` > 5 min | Worker may be down. Report to user. |
 | `plan_status` stays `processing` with no file changes > 20 min | Plan likely stalled. Call `plan_stop`, then `plan_retry`. |
 | Lost `plan_id` | Call `plan_list` to recover recent plans. |

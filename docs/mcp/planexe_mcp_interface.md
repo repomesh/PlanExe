@@ -348,6 +348,9 @@ Returns plan status and progress. Used for progress bars and UI states. **Pollin
   "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "state": "processing",
   "progress_percentage": 62.0,
+  "steps_completed": 19,
+  "steps_total": 30,
+  "current_step": "SWOT Analysis",
   "timing": {
     "started_at": "2026-01-14T12:35:10Z",
     "elapsed_sec": 512
@@ -360,6 +363,38 @@ Returns plan status and progress. Used for progress bars and UI states. **Pollin
   ]
 }
 ```
+
+**Failure diagnostics**
+
+When `state` is `"failed"`, the response includes additional fields to help agents understand the failure and recommend recovery:
+
+```json
+{
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "state": "failed",
+  "progress_percentage": 53.0,
+  "failure_reason": "generation_error",
+  "failed_step": "016-expert_criticism",
+  "last_error": "LLM provider returned 503",
+  "recoverable": true,
+  "error": {"code": "generation_failed", "message": "..."}
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `failure_reason` | string (nullable) | Failure category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch`. |
+| `failed_step` | string (nullable) | Pipeline step that was active at time of failure (e.g. `"016-expert_criticism"`). |
+| `last_error` | string (nullable) | Human-readable error message (max 256 chars). |
+| `recoverable` | boolean (nullable) | `true` → suggest `plan_resume`; `false` → suggest `plan_retry`. |
+
+These fields are `null` for legacy plans created before failure diagnostics were added. They are absent for non-failed states.
+
+**Agent decision guidance:**
+
+- `recoverable: true` → call `plan_resume` to continue from the failed step.
+- `recoverable: false` → call `plan_retry` for a clean restart.
+- `failure_reason: "version_mismatch"` → always use `plan_retry` (snapshot is from a different pipeline version).
 
 **Notes**
 

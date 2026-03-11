@@ -103,6 +103,21 @@ def ensure_step_count_columns() -> None:
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
+def ensure_failure_diagnostics_columns() -> None:
+    """Add failure diagnostic columns to task_item (idempotent)."""
+    statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_error VARCHAR(256)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
 def ensure_stopped_state() -> None:
     """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
 
@@ -121,6 +136,7 @@ with app.app_context():
     ensure_planitem_stop_columns()
     ensure_multi_api_key_columns()
     ensure_step_count_columns()
+    ensure_failure_diagnostics_columns()
     ensure_stopped_state()
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.

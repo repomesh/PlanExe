@@ -1648,6 +1648,10 @@ class MyFlaskApp:
 
         failure_trace: dict[str, Any] = {
             "task_id": task_id,
+            "failure_reason": task.failure_reason,
+            "failed_step": task.failed_step,
+            "last_error": task.last_error,
+            "recoverable": task.recoverable,
             "stage": stage,
             "error": {
                 "type": error_type,
@@ -1683,6 +1687,10 @@ class MyFlaskApp:
         }
         failure_trace["has_data"] = any(
             [
+                failure_trace["failure_reason"] is not None,
+                failure_trace["failed_step"] is not None,
+                failure_trace["last_error"] is not None,
+                failure_trace["recoverable"] is not None,
                 failure_trace["stage"] is not None,
                 failure_trace["error"]["type"] is not None,
                 failure_trace["error"]["message"] is not None,
@@ -3400,6 +3408,10 @@ class MyFlaskApp:
             task.run_track_activity_bytes = None
             task.run_activity_overview_json = None
             task.run_artifact_layout_version = None
+            task.failure_reason = None
+            task.failed_step = None
+            task.last_error = None
+            task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 
             # Archive old incremental billing entries so the new run starts fresh.
@@ -3453,6 +3465,10 @@ class MyFlaskApp:
             task.progress_message = "Resume requested by user."
             task.stop_requested = False
             task.stop_requested_timestamp = None
+            task.failure_reason = None
+            task.failed_step = None
+            task.last_error = None
+            task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 
             # Archive old incremental billing entries so the new run starts fresh.

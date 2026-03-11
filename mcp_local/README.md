@@ -20,7 +20,8 @@ proxy forwards tool calls over HTTP and downloads artifacts from `/download/{pla
 `plan_status` caller contract:
 - `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
-- `failed`: terminal error.
+- `stopped`: user called `plan_stop`. Use `plan_resume` to continue or `plan_retry` to restart.
+- `failed`: terminal error. Response includes failure diagnostics (`failure_reason`, `failed_step`, `last_error`, `recoverable`) when available. If `recoverable` is `true`, try `plan_resume`; if `false`, use `plan_retry`.
 
 Concurrency semantics:
 - Each `plan_create` call creates a new `plan_id`.

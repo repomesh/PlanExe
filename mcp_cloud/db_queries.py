@@ -214,6 +214,10 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
                 PlanItem.steps_total,
                 PlanItem.current_step,
                 PlanItem.timestamp_created,
+                PlanItem.failure_reason,
+                PlanItem.failed_step,
+                PlanItem.last_error,
+                PlanItem.recoverable,
             )
             .filter(PlanItem.id == plan_uuid)
             .first()
@@ -230,6 +234,10 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
             "steps_total": row.steps_total,
             "current_step": row.current_step,
             "timestamp_created": row.timestamp_created,
+            "failure_reason": row.failure_reason,
+            "failed_step": row.failed_step,
+            "last_error": row.last_error,
+            "recoverable": row.recoverable,
         }
 
 def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
@@ -285,6 +293,10 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
         plan.run_track_activity_bytes = None
         plan.run_activity_overview_json = None
         plan.run_artifact_layout_version = None
+        plan.failure_reason = None
+        plan.failed_step = None
+        plan.last_error = None
+        plan.recoverable = None
         plan.parameters = parameters
 
         # Update plan attribution when retried with a different API key.
@@ -374,6 +386,10 @@ def _resume_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, An
         plan.progress_message = "Resume requested via MCP."
         plan.stop_requested = False
         plan.stop_requested_timestamp = None
+        plan.failure_reason = None
+        plan.failed_step = None
+        plan.last_error = None
+        plan.recoverable = None
         plan.parameters = parameters
         # Keep: timestamp_created, progress_percentage, steps_completed,
         # steps_total, current_step, generated_report_html, run_zip_snapshot,

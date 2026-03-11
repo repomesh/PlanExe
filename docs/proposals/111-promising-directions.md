@@ -36,11 +36,11 @@ Agents need to discover PlanExe, understand its tools, and consume outputs progr
 
 | # | Proposal | Agent Impact |
 |---|----------|-------------|
-| **86** | Agent-Optimized Pipeline | Removes the 5 key friction points for autonomous agent use: human approval gate, no agent prompt examples, poll intervals tuned for humans, no machine-readable output, no autonomous agent setup docs |
-| **62** | Agent-First Frontend Discoverability | `llms.txt`, `/.well-known/mcp.json`, agent-readable README — standard discovery protocols so agents find PlanExe without human guidance |
+| **86** | Agent-Optimized Pipeline | ✅ **Implemented (PR #223)**. Autonomous agent guide and agent-oriented prompts. Removes key friction points for autonomous agent use |
+| **62** | Agent-First Frontend Discoverability | ✅ **Implemented (PR #224)**. `robots.txt` and README agent discoverability section — standard discovery protocols so agents find PlanExe without human guidance |
 | **110** | Usage Metrics for Local Runs | ✅ **Implemented (PR #219, #236, #237)**. Agents need cost accounting for budget-constrained workflows. `usage_metrics.jsonl` answers "how much did this run cost?" with per-call granularity (model, tokens, cost, duration). Errors are classified into short categories with traceable `error_id` UUIDs. Complements `activity_overview.json` aggregated totals |
 | **114-I3** | Plan Delete / Archive | Stopped and failed plans persist in `plan_list` forever. After 10 plans, the list is noisy. Add `plan_delete` (hard delete) or `plan_archive` (soft delete, hidden from list but retained for billing) |
-| **114-I4** | Idempotency Guard on `plan_create` | No deduplication — double-submit creates two identical plans. Optional `request_id` parameter enables standard idempotency (Stripe/AWS pattern) |
+| **114-I4** | Idempotency Guard on `plan_create` | ✅ **Implemented (PR #242)**. Server-side auto-dedup on `(user_id, prompt, model_profile)` within configurable time window (default 10 min) |
 | **114-I5** | Rich SSE Event Payloads | SSE works as a completion detector but events carry no structured data. Adding `progress_percentage`, `current_step`, `steps_completed` to event payloads eliminates the need for `plan_status` polling |
 | **114-I6** | Download URL TTL Extension | 15-minute signed URL expiry surprises users who review before downloading. Extend to 30–60 min, make configurable via env var |
 | **114-I8** | `plan_wait` Tool | Agents without shell access can't use `curl -N` for SSE. A blocking `plan_wait(plan_id, timeout)` tool returns final status on completion — long-poll via existing SSE infra |
@@ -59,12 +59,12 @@ Before agents can execute plans autonomously, the plans themselves need automate
 
 | # | Proposal | Agent Impact |
 |---|----------|-------------|
-| **58** | Boost Initial Prompt | Single LLM call to strengthen weak prompts before pipeline runs. Especially valuable for agent-originated prompts, which may be terse or overly technical |
+| **58** | Boost Initial Prompt | ⚙️ **Open PR #222**. Single LLM call to strengthen weak prompts before pipeline runs. Especially valuable for agent-originated prompts, which may be terse or overly technical |
 | **42** | Evidence Traceability Ledger | Links every claim to evidence with freshness scoring. Agents can programmatically check whether assumptions are grounded |
 | **43** | Assumption Drift Monitor | Watches key variables (costs, FX rates) against baselines, triggers re-plan on breach. Agents re-planning on a schedule need this to detect when a plan has gone stale |
 | **57** | Banned Words + Lever Realism | Auto-detects hype-heavy or impractical outputs without human review |
 | **56** | Adversarial Red-Team Reality Check | Multi-model adversarial review with judge scoring. Catches optimism bias that agents are prone to propagating |
-| **88** | Fermi Sanity Check Validation Gate | Rule-based guard on every assumption: bounds present, span ratio sane, evidence for low-confidence claims. First line of defense before expensive downstream processing |
+| **88** | Fermi Sanity Check Validation Gate | ⚙️ **Open PR #225**. Rule-based guard on every assumption: bounds present, span ratio sane, evidence for low-confidence claims. First line of defense before expensive downstream processing |
 
 ---
 
@@ -74,8 +74,8 @@ Luigi's caching makes prompt optimization uniquely practical — changing one pr
 
 | # | Proposal | Agent Impact |
 |---|----------|-------------|
-| **94** | Autoresearch-Style Prompt Optimization | Autonomous overnight loops: agent modifies one prompt, re-runs one task, scores, keeps or reverts. Hundreds of experiments per night exploiting Luigi resumability |
-| **59** | Prompt Optimizing with A/B Testing | Structured promotion pipeline: multi-model A/B matrix, Elo tracking, regression guards. Validates candidates discovered by #94 before merging into baseline |
+| **94** | Autoresearch-Style Prompt Optimization | ⚙️ **Open PR #226** (LLM-as-judge foundation). Autonomous overnight loops: agent modifies one prompt, re-runs one task, scores, keeps or reverts. Hundreds of experiments per night exploiting Luigi resumability |
+| **59** | Prompt Optimizing with A/B Testing | ⚙️ **Open PR #227** (A/B experiment runner). Structured promotion pipeline: multi-model A/B matrix, Elo tracking, regression guards. Validates candidates discovered by #94 before merging into baseline |
 
 Two-stage system: **#94 discovers** promising variants at high volume (greedy, autonomous), **#59 validates** them with rigor (conservative, human-gated). Exploration feeds promotion.
 
@@ -100,25 +100,25 @@ This is PlanExe's largest gap: *"I have a plan. Now what?"* For agents, a plan t
 ## Recommended Sequence
 
 ```
-Phase 1: Reliable foundation         (now)
+Phase 1: Reliable foundation         (nearly complete)
   ├─ #87  Plan resume ✅
   ├─ #109 Retry improvements ✅ (PR #220)
-  ├─ #102 Error-feedback retries ⚙️ (PR #221, foundation only)
+  ├─ #102 Error-feedback retries ⚙️ (PR #221, foundation only — tasks not yet wired)
   ├─ #110 Usage metrics ✅ (PR #219, #236, #237)
   ├─ #113 Error traceability ✅ (PR #237)
-  ├─ #58  Prompt boost
-  ├─ #114-I1 Stopped vs failed state
-  ├─ #114-I2 Failure diagnostics in plan_status
+  ├─ #58  Prompt boost ⚙️ (open PR #222)
+  ├─ #114-I1 Stopped vs failed state        ← next priority
+  ├─ #114-I2 Failure diagnostics in plan_status  ← next priority (biggest gap)
   └─ #114-I7 Stalled-plan detection
 
 Phase 2: Agent-native interface       (next)
-  ├─ #86  Remove agent friction points
-  ├─ #62  Discovery protocols
-  ├─ #88  Fermi validation gate
+  ├─ #86  Remove agent friction points ✅ (PR #223)
+  ├─ #62  Discovery protocols ✅ (PR #224)
+  ├─ #88  Fermi validation gate ⚙️ (open PR #225)
   ├─ #114-I3 Plan delete/archive
   ├─ #114-I5 Rich SSE event payloads
   ├─ #114-I6 Download URL TTL extension
-  ├─ #114-I4 Idempotency guard
+  ├─ #114-I4 Idempotency guard ✅ (PR #242)
   ├─ #114-I8 plan_wait tool
   └─ #114-I9 Prompt iteration linking
 
@@ -129,8 +129,8 @@ Phase 3: Automated quality            (then)
   └─ #57  Banned words / lever realism
 
 Phase 4: Self-improving pipeline      (concurrent with 3)
-  ├─ #94  Autoresearch prompt optimization
-  └─ #59  A/B testing promotion
+  ├─ #94  Autoresearch prompt optimization ⚙️ (open PR #226 foundation, PR #227 runner)
+  └─ #59  A/B testing promotion ⚙️ (open PR #227)
 
 Phase 5: Autonomous execution         (after quality gates)
   ├─ #41  Plan execution engine

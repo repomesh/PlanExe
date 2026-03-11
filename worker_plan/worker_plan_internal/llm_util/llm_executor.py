@@ -31,6 +31,7 @@ from typing import Any, Callable, Optional, List
 from dataclasses import dataclass, field
 from llama_index.core.llms.llm import LLM
 from llama_index.core.instrumentation.dispatcher import instrument_tags
+from pydantic import ValidationError
 from worker_plan_internal.llm_factory import get_llm
 from worker_plan_internal.llm_util.usage_metrics import record_usage_metric
 
@@ -58,14 +59,11 @@ def _extract_validation_feedback(error: Exception) -> Optional[str]:
     Returns a human-readable summary of the validation failures, or ``None``
     if *error* is not a validation error.
     """
-    try:
-        from pydantic import ValidationError
-    except ImportError:
-        return None
-
     # Walk the exception chain — LlamaIndex often wraps the original error.
     current: Optional[BaseException] = error
-    while current is not None:
+    for _ in range(100):
+        if current is None:
+            break
         if isinstance(current, ValidationError):
             lines = [f"Pydantic validation failed with {current.error_count()} error(s):"]
             for err in current.errors():
@@ -73,8 +71,6 @@ def _extract_validation_feedback(error: Exception) -> Optional[str]:
                 lines.append(f"  - {loc}: {err['msg']} (type={err['type']})")
             return "\n".join(lines)
         current = current.__cause__ if current.__cause__ else current.__context__
-        if current is error:
-            break  # avoid infinite loops on self-referencing chains
     return None
 
 

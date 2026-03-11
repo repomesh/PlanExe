@@ -46,7 +46,7 @@ Option B is less disruptive and can be added to `plan_status` without changing s
 
 ### I2 — No failure diagnostics in `plan_status`
 
-**Priority: High — identified as the single biggest observability gap. Also prerequisite for extending I1's `stop_reason` with finer-grained failure causes (`"worker_crash"`, `"timeout"`, `"model_error"`).**
+**Priority: High — identified as the single biggest observability gap.**
 
 **Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `last_error`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
 
@@ -79,7 +79,7 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 
 | Tool | Behavior |
 |------|----------|
-| `plan_delete` | Permanently remove a plan from the user's list. Only allowed for terminal states (`failed`, `completed`). |
+| `plan_delete` | Permanently remove a plan from the user's list. Only allowed for terminal states (`completed`, `failed`, `stopped`). |
 | `plan_archive` | Soft-delete: plan is hidden from `plan_list` but remains in DB for auditing. |
 
 `plan_archive` is safer for a billing system where plan records may need to be retained.
@@ -160,7 +160,7 @@ This would eliminate the need for `plan_status` polling entirely when SSE is ava
 
 ```
 plan_wait(plan_id, timeout_seconds=1200): Blocks until the plan reaches a terminal state
-(completed, failed) or the timeout expires. Returns the final plan_status response.
+(completed, failed, stopped) or the timeout expires. Returns the final plan_status response.
 ```
 
 **Implementation:** Server-side long-poll using the existing SSE infrastructure. The handler subscribes to the plan's state changes and returns when terminal or timeout.
@@ -190,7 +190,7 @@ This enables prompt iteration tracking without changing existing behavior for pl
 
 | Issue | Existing Proposal | Gap |
 |-------|-------------------|-----|
-| I1 (stopped vs failed) | 87 §4 (deferred) | **Implemented** (Option B — `stop_reason` field) |
+| I1 (stopped vs failed) | 87 §4 (deferred) | **Implemented** (Option A — dedicated `PlanState.stopped`) |
 | I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
 | I4 (idempotency) | None | **Implemented** (PR #242) |
@@ -221,7 +221,7 @@ If accepted, I1–I4 and I7–I9 should be added to Proposal 70's quick-win chec
 | Priority | Issues | Rationale |
 |----------|--------|-----------|
 | P1 | I2 (failure diagnostics) | Biggest observability gap. Agent cannot help users debug failures without this. |
-| ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option B). `stop_reason` field on `plan_status`: `"user_requested"` when `plan_stop` was called, `null` for actual errors. |
+| ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option A). Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. |
 | P2 | I7 (stall detection) | Prevents agents from waiting indefinitely on stuck plans. |
 | P2 | I6 (download TTL) | Low effort, reduces friction. |
 | P2 | I5 (rich SSE events) | Eliminates polling for SSE-capable clients. |

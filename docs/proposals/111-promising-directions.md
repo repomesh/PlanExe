@@ -24,7 +24,7 @@ Agents need PlanExe runs to complete reliably without human intervention. A fail
 | **103** | Pipeline Hardening for Local Models | Fix silent truncation and context-window overflows. Critical for agents running local models where failures are subtle |
 | **113** | LLM Error Traceability | ✅ **Implemented (PR #237)**. `LLMChatError` replaces generic `ValueError` across 38 call sites. Root cause preserved for error classification; `error_id` UUID enables log-to-metrics cross-referencing. Agents can programmatically diagnose failures |
 | **101** | Luigi Resume Enhancements | Webhook hooks on task completion/failure — agents can subscribe to events instead of polling |
-| **114-I1** | Stopped vs Failed State | `plan_stop` and worker crashes both produce `failed` — agents can't distinguish user-initiated stops from actual errors. Add `stop_reason` field or a new `stopped` state |
+| **114-I1** | Stopped vs Failed State | ✅ **Implemented**. Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. Agents can now distinguish user-initiated stops from actual errors. `plan_retry` and `plan_resume` accept both `failed` and `stopped` |
 | **114-I2** | Failure Diagnostics in `plan_status` | When a plan fails, no `failure_reason`, `failed_step`, or `last_error` is returned. Biggest observability gap — agents can only say "it failed" without explaining why. Extends #113 to the MCP consumer surface |
 | **114-I7** | Stalled-Plan Detection | No `last_progress_at` or `last_llm_call_at` timestamps. Agents can't distinguish "slow step" from "stuck worker". Complements #87 §8 |
 
@@ -107,7 +107,7 @@ Phase 1: Reliable foundation         (nearly complete)
   ├─ #110 Usage metrics ✅ (PR #219, #236, #237)
   ├─ #113 Error traceability ✅ (PR #237)
   ├─ #58  Prompt boost ⚙️ (open PR #222)
-  ├─ #114-I1 Stopped vs failed state        ← next priority
+  ├─ #114-I1 Stopped vs failed state ✅
   ├─ #114-I2 Failure diagnostics in plan_status  ← next priority (biggest gap)
   └─ #114-I7 Stalled-plan detection
 

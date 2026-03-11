@@ -27,7 +27,7 @@ The testing surfaced concrete MCP interface friction points that affect agent op
 
 This matters because the correct response differs: user stop suggests `plan_resume`; actual failure may need `plan_retry` or investigation.
 
-**Overlap:** Proposal 87 (plan_resume) acknowledges this in §4 ("A future improvement could introduce a distinct `stopped` state") but defers it as out of scope.
+**Overlap:** Proposal 87 (plan_resume) acknowledged this in §4 — now updated to reflect the implementation.
 
 **Options:**
 
@@ -38,9 +38,9 @@ This matters because the correct response differs: user stop suggests `plan_resu
 
 Option B is less disruptive and can be added to `plan_status` without changing state enum values.
 
-**Implemented approach:** Option A — a dedicated `PlanState.stopped` enum value (value 5). `plan_stop` now transitions plans to the `stopped` state instead of `failed`. The `stop_reason` field introduced in PR #244 (Option B) has been removed — the state itself communicates intent. `plan_retry` and `plan_resume` accept both `failed` and `stopped` states. DB migration adds `'stopped'` to the PostgreSQL `planstate` enum type.
+**Implemented approach:** Option A — a dedicated `PlanState.stopped` enum value (value 5). `plan_stop` now transitions plans to the `stopped` state instead of `failed`. The `stop_reason` field introduced in PR #244 (Option B) has been removed — the state itself communicates intent. `plan_retry` and `plan_resume` accept both `failed` and `stopped` states. DB migration adds `'stopped'` to the PostgreSQL enum type (both `taskstate` for pre-rename databases and `planstate` for fresh databases — the Python class was renamed from `TaskState` to `PlanState` in proposal 74 but the PostgreSQL type name was not changed). The worker's post-pipeline finalization also transitions to `stopped` (not `failed`) when `stop_requested` is true.
 
-**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`.
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/run_via_database.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/autonomous_agent_guide.md`, `docs/proposals/87-plan-resume-mcp-tool.md`, `docs/proposals/111-promising-directions.md`.
 
 ---
 

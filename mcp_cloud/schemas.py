@@ -154,7 +154,8 @@ TOOL_DEFINITIONS = [
             "Optionally, run `curl -N <sse_url>` in a background shell as a completion detector — "
             "the stream auto-closes on terminal state (completed/failed). "
             "If you lose a plan_id, call plan_list to recover it. "
-            "Each plan_create call creates a new plan_id (no server-side dedup). "
+            "If the same prompt + model_profile is submitted by the same user within a short window, "
+            "the existing plan is returned (with deduplicated=true) instead of creating a new one. "
             "If you are unsure which model_profile to choose, call model_profiles first. "
             "If your deployment uses credits, include user_api_key to charge the correct account. "
             "Common error codes: INVALID_USER_API_KEY, USER_API_KEY_REQUIRED, INSUFFICIENT_CREDITS."
@@ -164,7 +165,7 @@ TOOL_DEFINITIONS = [
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,
-            "idempotentHint": False,
+            "idempotentHint": True,
             "openWorldHint": True,
         },
     ),

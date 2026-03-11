@@ -1,7 +1,8 @@
 """PlanExe MCP Cloud – database query helpers."""
 import logging
+import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
 from flask import has_app_context
@@ -17,6 +18,7 @@ from database_api.model_credit_history import CreditHistory
 logger = logging.getLogger(__name__)
 
 PROMPT_EXCERPT_MAX_LENGTH = 100
+DEDUP_WINDOW_SECONDS = int(os.environ.get("PLANEXE_DEDUP_WINDOW_SECONDS", "600"))
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +74,55 @@ def resolve_plan_by_id(plan_id: str) -> Optional[PlanItem]:
 
 
 # ---------------------------------------------------------------------------
+# Dedup helper
+# ---------------------------------------------------------------------------
+
+def _find_recent_duplicate_plan(
+    user_id: str,
+    prompt: str,
+    model_profile: str,
+    window_seconds: int = DEDUP_WINDOW_SECONDS,
+) -> Optional[dict[str, Any]]:
+    """Return an existing pending/processing plan with the same prompt if created recently.
+
+    Only fetches ``id``, ``timestamp_created``, and ``parameters`` to avoid
+    loading heavy columns (generated_report_html, run_zip_snapshot,
+    run_track_activity_jsonl).
+
+    Comparison of *model_profile* is done in Python to avoid JSON column
+    dialect differences between SQLite and PostgreSQL.
+
+    Returns ``None`` when *window_seconds* <= 0 (opt-out).
+    """
+    if window_seconds <= 0:
+        return None
+
+    cutoff = datetime.now(UTC) - timedelta(seconds=window_seconds)
+
+    rows = (
+        db.session.query(
+            PlanItem.id,
+            PlanItem.timestamp_created,
+            PlanItem.parameters,
+        )
+        .filter(
+            PlanItem.user_id == user_id,
+            PlanItem.prompt == prompt,
+            PlanItem.state.in_([PlanState.pending, PlanState.processing]),
+            PlanItem.timestamp_created >= cutoff,
+        )
+        .order_by(PlanItem.timestamp_created.desc())
+        .all()
+    )
+
+    for row in rows:
+        params = row.parameters if isinstance(row.parameters, dict) else {}
+        if params.get("model_profile") == model_profile:
+            return {"id": row.id, "timestamp_created": row.timestamp_created}
+    return None
+
+
+# ---------------------------------------------------------------------------
 # Sync operations called from handlers via asyncio.to_thread
 # ---------------------------------------------------------------------------
 
@@ -86,10 +137,33 @@ def _create_plan_sync(
         parameters["trigger_source"] = "mcp plan_create"
         parameters["pipeline_version"] = PIPELINE_VERSION
 
+        user_id = metadata.get("user_id", "admin") if metadata else "admin"
+
+        # Dedup: return existing plan if an identical request was made recently.
+        existing = _find_recent_duplicate_plan(
+            user_id=user_id,
+            prompt=prompt,
+            model_profile=parameters["model_profile"],
+        )
+        if existing is not None:
+            logger.info(
+                "Deduplicated plan_create for user %s — returning existing plan %s",
+                user_id,
+                existing["id"],
+            )
+            created_at = existing["timestamp_created"]
+            if created_at and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+            return {
+                "plan_id": str(existing["id"]),
+                "created_at": format_datetime_utc(created_at),
+                "deduplicated": True,
+            }
+
         plan = PlanItem(
             prompt=prompt,
             state=PlanState.pending,
-            user_id=metadata.get("user_id", "admin") if metadata else "admin",
+            user_id=user_id,
             api_key_id=metadata.get("api_key_id") if metadata else None,
             parameters=parameters,
         )

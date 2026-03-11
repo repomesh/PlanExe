@@ -86,15 +86,19 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 
 ### I4 — No idempotency guard on `plan_create`
 
+**Status:** Implemented (PR #242).
+
 **Problem:** If the user double-clicks or the agent accidentally submits twice, two identical plans are created. Each `plan_create` call generates a new `plan_id` with no server-side deduplication.
 
-**Proposed fix:** Add an optional `request_id` (client-generated UUID) parameter to `plan_create`. The server checks if a plan with the same `request_id` already exists for this user:
-- If yes: return the existing `plan_id` (idempotent response)
-- If no: create a new plan
+**Original proposal:** Add an optional `request_id` (client-generated UUID) parameter to `plan_create`. The server checks if a plan with the same `request_id` already exists for this user. This is a standard idempotency pattern (Stripe, AWS, etc.).
 
-This is a standard idempotency pattern (Stripe, AWS, etc.) and does not change behavior for clients that omit `request_id`.
+**Why `request_id` was not adopted:** The primary MCP consumers are LLM agents. LLMs cannot generate UUIDs natively — they would need an extra tool call just to produce the idempotency key, adding friction to the exact workflow it's meant to protect. A mechanism that requires client cooperation is a poor fit when the clients are language models.
 
-**Affected files:** `mcp_cloud/tool_models.py` (new optional field), `mcp_cloud/db_queries.py` (lookup by request_id before insert), DB model (new indexed column).
+**Implemented approach:** Automatic server-side dedup. Before inserting a new plan, `_create_plan_sync` queries for an existing `pending`/`processing` plan matching `(user_id, prompt, model_profile)` created within a configurable time window (default 10 minutes, env `PLANEXE_DEDUP_WINDOW_SECONDS`). If found, the existing plan is returned with `deduplicated: true` instead of creating a new one. No schema migration needed — uses existing columns. Set `PLANEXE_DEDUP_WINDOW_SECONDS=0` to disable.
+
+**Known limitation:** There is a TOCTOU race — if two identical requests arrive concurrently and both pass the dedup check before either commits, a duplicate plan is created. This is accepted; the cost is wasted tokens for one extra plan, which is not worth the complexity of a database-level lock or migration to fix.
+
+**Affected files:** `mcp_cloud/db_queries.py` (`_find_recent_duplicate_plan`, `_create_plan_sync`), `mcp_cloud/tool_models.py` (`deduplicated` field on `PlanCreateOutput`), `mcp_cloud/schemas.py` (description and `idempotentHint`), `mcp_cloud/app.py` (re-export).
 
 ---
 
@@ -185,7 +189,7 @@ This enables prompt iteration tracking without changing existing behavior for pl
 | I1 (stopped vs failed) | 87 §4 (deferred) | Needs its own decision — Option A vs B |
 | I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
-| I4 (idempotency) | None | New |
+| I4 (idempotency) | None | **Implemented** (PR #242) |
 | I5 (rich SSE events) | 70 §5.1 (basic SSE done) | Events lack structured data |
 | I6 (download TTL) | 70 §4 (tokens done) | TTL too short, not configurable |
 | I7 (stall detection) | 87 §8 (partial) | No explicit stall timestamps |
@@ -218,6 +222,6 @@ If accepted, I1–I4 and I7–I9 should be added to Proposal 70's quick-win chec
 | P2 | I6 (download TTL) | Low effort, reduces friction. |
 | P2 | I5 (rich SSE events) | Eliminates polling for SSE-capable clients. |
 | P2 | I3 (plan_delete) | Hygiene for multi-plan sessions. |
-| P3 | I4 (idempotency) | Defensive, important for production but not urgent. |
+| ~~P3~~ | ~~I4 (idempotency)~~ | **Implemented** (PR #242). Server-side auto-dedup on `(user_id, prompt, model_profile)` within a time window. |
 | P3 | I8 (plan_wait) | Nice-to-have for shell-less agents. |
 | P3 | I9 (prompt iteration) | Nice-to-have for iteration workflows. |

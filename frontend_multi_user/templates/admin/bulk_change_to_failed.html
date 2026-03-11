@@ -32,7 +32,7 @@
                placeholder="e.g. Manually failed by admin">
     </div>
     <div style="margin-top:15px">
-        <button type="submit" class="btn btn-danger">Change State To Failed</button>
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Transition selected plans to failed state?')">Change State To Failed</button>
         <a href="{{ cancel_url }}" class="btn btn-default" style="margin-left:10px">Cancel</a>
     </div>
 </form>

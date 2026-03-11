@@ -213,7 +213,7 @@ class PlanItemView(AdminOnlyModelView):
             else:
                 form.run_track_activity_jsonl_upload.description = "Current file: none"
 
-    @action("change_state_to_failed", "Change State To Failed", "Transition selected plans to failed state?")
+    @action("change_state_to_failed", "Change State To Failed")
     def action_change_state_to_failed(self, ids):
         from flask import session as flask_session
         flask_session["bulk_fail_ids"] = list(ids)

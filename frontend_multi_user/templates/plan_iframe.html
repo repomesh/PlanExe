@@ -551,7 +551,7 @@
                     {% if task.progress_percentage is not none %}
                         · {{ "%.0f"|format(task.progress_percentage) }}%
                     {% endif %}
-                    {% if task.progress_message %}
+                    {% if task.progress_message and not (task.state and task.state.name == 'failed' and task.stop_requested) %}
                         · {{ task.progress_message }}
                     {% endif %}
                 </span>
@@ -1138,7 +1138,7 @@
                 if (meta.progress_percentage !== undefined && meta.progress_percentage !== null) {
                     parts.push(Math.round(meta.progress_percentage) + "%");
                 }
-                if (meta.progress_message) {
+                if (meta.progress_message && displayState !== "stopped") {
                     parts.push(meta.progress_message);
                 }
                 stateTextEl.textContent = parts.join(" · ");

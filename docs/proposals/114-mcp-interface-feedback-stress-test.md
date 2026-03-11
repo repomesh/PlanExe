@@ -94,7 +94,7 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 
 **Why `request_id` was not adopted:** The primary MCP consumers are LLM agents. LLMs cannot generate UUIDs natively — they would need an extra tool call just to produce the idempotency key, adding friction to the exact workflow it's meant to protect. A mechanism that requires client cooperation is a poor fit when the clients are language models.
 
-**Implemented approach:** Automatic server-side dedup. Before inserting a new plan, `_create_plan_sync` queries for an existing `pending`/`processing` plan matching `(user_id, prompt, model_profile)` created within a configurable time window (default 60 seconds, env `PLANEXE_DEDUP_WINDOW_SECONDS`). If found, the existing plan is returned with `deduplicated: true` instead of creating a new one. No schema migration needed — uses existing columns. Set `PLANEXE_DEDUP_WINDOW_SECONDS=0` to disable.
+**Implemented approach:** Automatic server-side dedup. Before inserting a new plan, `_create_plan_sync` queries for an existing `pending`/`processing` plan matching `(user_id, prompt, model_profile)` created within a configurable time window (default 10 minutes, env `PLANEXE_DEDUP_WINDOW_SECONDS`). If found, the existing plan is returned with `deduplicated: true` instead of creating a new one. No schema migration needed — uses existing columns. Set `PLANEXE_DEDUP_WINDOW_SECONDS=0` to disable.
 
 **Known limitation:** There is a TOCTOU race — if two identical requests arrive concurrently and both pass the dedup check before either commits, a duplicate plan is created. This is accepted; the cost is wasted tokens for one extra plan, which is not worth the complexity of a database-level lock or migration to fix.
 

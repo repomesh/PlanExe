@@ -18,7 +18,7 @@ from database_api.model_credit_history import CreditHistory
 logger = logging.getLogger(__name__)
 
 PROMPT_EXCERPT_MAX_LENGTH = 100
-DEDUP_WINDOW_SECONDS = int(os.environ.get("PLANEXE_DEDUP_WINDOW_SECONDS", "60"))
+DEDUP_WINDOW_SECONDS = int(os.environ.get("PLANEXE_DEDUP_WINDOW_SECONDS", "600"))
 
 
 # ---------------------------------------------------------------------------

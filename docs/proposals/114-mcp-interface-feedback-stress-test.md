@@ -1,7 +1,7 @@
 # Proposal 114: MCP Interface Issues from 10-Plan Agent Stress Test
 
 **Date:** 2026-03-11
-**Status:** Proposal (I1, I4 implemented; remainder open)
+**Status:** Proposal (I1, I2, I4 implemented; remainder open)
 **Source:** Feedback from Claude (Opus 4.6) after three stress-testing sessions (13 plans total) operated through Claude Code CLI.
 **Scope:** MCP interface design, observability, and lifecycle management. Does not cover plan content quality or pipeline output improvements.
 
@@ -50,31 +50,42 @@ Option B is less disruptive and can be added to `plan_status` without changing s
 
 ### I2 — No failure diagnostics in `plan_status`
 
+**Status:** Implemented. Four new nullable columns on `PlanItem` (`failure_reason`, `failed_step`, `error_message`, `recoverable`) populated by the worker on failure and surfaced in `plan_status` responses inside a consolidated `error` dict. Diagnostics are reset on retry/resume.
+
 **Priority: High — identified as the single biggest observability gap.**
 
-**Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `last_error`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
+**Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `error_message`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
 
 During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic information. The operator had no way to determine if it was a content refusal, a model error, or a worker crash.
 
 **Overlap:** Proposal 113 (LLM Error Traceability) preserves errors in usage metrics logs but does not surface them in `plan_status` responses to the MCP consumer.
 
-**Proposed addition to `plan_status` response (on failure):**
+**Implemented response shape (on failure):**
 
 ```json
 {
   "state": "failed",
-  "failure_reason": "model_error",
-  "failed_step": "016-expert_criticism",
-  "last_error": "openrouter-gemini-2.0-flash-001 returned invalid_json",
-  "recoverable": true
+  "error": {
+    "failure_reason": "generation_error",
+    "failed_step": "016-expert_criticism",
+    "message": "LLM provider returned 503",
+    "recoverable": true
+  }
 }
 ```
 
-The `recoverable` boolean would let the agent immediately suggest `plan_resume` (transient/recoverable) vs `plan_retry` (fundamental/non-recoverable) without guessing.
+The `recoverable` boolean lets the agent immediately suggest `plan_resume` (transient/recoverable) vs `plan_retry` (fundamental/non-recoverable) without guessing.
 
-**Implementation path:** The worker already logs errors internally. When transitioning to `failed`, write `failure_reason`, `failed_step`, `last_error`, and `recoverable` to the plan's DB record (e.g. in the `parameters` JSONB column or new dedicated columns). `plan_status` handler surfaces these fields when `state == "failed"`.
+**`failure_reason` values:**
+- `generation_error` — pipeline step failed (recoverable)
+- `worker_error` — unhandled exception in worker (recoverable)
+- `inactivity_timeout` — stop flag detected without user request (recoverable)
+- `internal_error` — pipeline completed but no report produced (not recoverable)
+- `version_mismatch` — resume attempted with incompatible pipeline version (not recoverable)
 
-**Affected files:** `worker_plan_database/app.py` (error capture on failure), `mcp_cloud/db_queries.py` (store failure info), `mcp_cloud/handlers.py` (include in plan_status response).
+**Implementation:** Four dedicated nullable columns on `PlanItem`: `failure_reason`, `failed_step`, `error_message`, `recoverable`. The column was originally named `last_error` and renamed to `error_message` to match the consolidated `error.message` field in the MCP response. Migration functions in all three services (mcp_cloud, worker_plan_database, frontend_multi_user) check column existence via `sqlalchemy.inspect` before attempting the rename — this avoids noisy PostgreSQL ERROR logs on restarts where the rename already succeeded. The worker populates them via `_update_failure_diagnostics()` at three failure paths: normal pipeline failure, unhandled exception, and version mismatch on resume. The `plan_status` handler consolidates these into a single `error` dict (with keys `failure_reason`, `failed_step`, `message`, `recoverable`) only when `state == "failed"` — non-failed plans omit the `error` field entirely. Diagnostics are cleared on `plan_retry` and `plan_resume`. The frontend displays diagnostics in the failure trace panel and the admin bulk-fail form uses the renamed field.
+
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_cloud/tests/test_plan_status_tool.py`, `mcp_cloud/README.md`, `mcp_local/README.md`, `worker_plan_database/app.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/admin/bulk_change_to_failed.html`, `frontend_multi_user/templates/plan_iframe.html`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/mcp_details.md`, `docs/mcp/autonomous_agent_guide.md`.
 
 ---
 
@@ -299,7 +310,7 @@ While I5 argues SSE is the wrong tool for agents regardless of reliability, this
 | Issue | Existing Proposal | Gap |
 |-------|-------------------|-----|
 | I1 (stopped vs failed) | 87 §4 (deferred) | **Implemented** (Option A — dedicated `PlanState.stopped`) |
-| I2 (failure diagnostics) | 113 (logs only) | Not surfaced to MCP consumer |
+| I2 (failure diagnostics) | 113 (logs only) | **Implemented** — surfaced to MCP consumer |
 | I3 (plan_delete) | None | New |
 | I4 (idempotency) | None | **Implemented** (PR #242) |
 | I5 (SSE wrong for agents) | 70 §5.1 (basic SSE done) | SSE serves wrong consumer type; MCP notifications needed |
@@ -333,7 +344,7 @@ If accepted, I1–I4 and I7–I13 should be added to Proposal 70's quick-win che
 
 | Priority | Issues | Rationale |
 |----------|--------|-----------|
-| P1 | I2 (failure diagnostics) | Biggest observability gap. Agent cannot help users debug failures without this. |
+| ~~P1~~ | ~~I2 (failure diagnostics)~~ | **Implemented**. Four DB columns populated by worker, surfaced in `plan_status`, displayed in frontend. |
 | ~~P1~~ | ~~I1 (stopped vs failed)~~ | **Implemented** (Option A). Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. |
 | P1 | I5 (SSE wrong for agents) | MCP notifications should replace SSE as the recommended agent completion mechanism. Highest-impact agent UX improvement. |
 | P2 | I7 (stall detection) | Prevents agents from waiting indefinitely on stuck plans. |
@@ -397,7 +408,7 @@ Session 3 forced a fundamental re-evaluation of how the agent used SSE. The agen
 | Stop state | `failed` (ambiguous) | `stopped` (clear) | `stopped` (clear) | Fixed |
 | Resume tracking | No history | `resume_count` field | `resume_count` field | Fixed |
 | Tool descriptions | Excellent | Updated with `stopped` state | Identical across servers | Stable |
-| Failure diagnostics | Missing | Still missing | Still missing | Unchanged |
+| Failure diagnostics | Missing | Still missing | **Implemented** | Fixed |
 | Silent partial failures | Not surfaced | Not surfaced | Not surfaced | Unchanged |
 | Plan cleanup | No delete | No delete | No delete | Unchanged |
 | SSE understanding | "Reliable completion detector" | "Reliable completion detector" | "Wrong tool for agents" | Corrected |

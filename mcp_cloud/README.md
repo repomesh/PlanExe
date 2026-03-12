@@ -164,8 +164,8 @@ See `docs/mcp/planexe_mcp_interface.md` for full specification. Available tools:
 `plan_status` caller contract:
 - `pending` / `processing`: keep polling.
 - `completed`: terminal success, download is ready.
-- `failed`: terminal error.
-- If `failed`, call `plan_retry` to requeue the same plan id.
+- `stopped`: user called `plan_stop`. Use `plan_resume` to continue or `plan_retry` to restart.
+- `failed`: terminal error. Response includes an `error` dict with failure diagnostics (`error.failure_reason`, `error.failed_step`, `error.message`, `error.recoverable`) when available. If `error.recoverable` is `true`, try `plan_resume`; if `false`, use `plan_retry`.
 
 Concurrency semantics:
 - Each `plan_create` call creates a new `plan_id`.

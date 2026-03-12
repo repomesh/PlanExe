@@ -137,8 +137,8 @@ class PlanItemView(AdminOnlyModelView):
     column_formatters = {
         'id': lambda v, c, m, p: str(m.id)[:8] if m.id else '',
         'state': lambda v, c, m, p: (
-            Markup('<span style="color:#e65100">stopped</span>')
-            if m.state and m.state.name == 'stopped'
+            Markup(f'<span style="color:#e65100">{m.state.name}</span>')
+            if m.state and m.state.name in ('stopped', 'failed')
             else (m.state.name if m.state else '')
         ),
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,
@@ -212,6 +212,103 @@ class PlanItemView(AdminOnlyModelView):
                 )
             else:
                 form.run_track_activity_jsonl_upload.description = "Current file: none"
+
+    @action("change_state_to_failed", "Change State To Failed")
+    def action_change_state_to_failed(self, ids):
+        from flask import session as flask_session
+        flask_session["bulk_fail_ids"] = list(ids)
+        return redirect(self.get_url(".bulk_change_to_failed_view"))
+
+    @expose('/bulk-change-to-failed/', methods=['GET', 'POST'])
+    def bulk_change_to_failed_view(self):
+        from flask import session as flask_session
+        from database_api.model_planitem import PlanState
+
+        if not self.is_accessible():
+            return self.inaccessible_callback('bulk_change_to_failed_view')
+
+        raw_ids = flask_session.get("bulk_fail_ids", [])
+        if not raw_ids:
+            flash('No plans selected.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        plan_ids = []
+        for raw_id in raw_ids:
+            try:
+                plan_ids.append(uuid.UUID(str(raw_id)))
+            except Exception:
+                plan_ids.append(raw_id)
+
+        plans = self.session.query(self.model).filter(
+            self.model.id.in_(plan_ids)
+        ).all()
+
+        if not plans:
+            flash('No matching plans found.', 'error')
+            return redirect(self.get_url('.index_view'))
+
+        if request.method == 'POST':
+            def _checked(name: str) -> bool:
+                return name in request.form
+
+            failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
+            error_message = request.form.get('error_message', '').strip() or None
+            failed_step = request.form.get('failed_step', '').strip() or None
+            recoverable_raw = request.form.get('recoverable', '')
+            recoverable = {'true': True, 'false': False}.get(recoverable_raw, False)
+            progress_pct = request.form.get('progress_percentage', '').strip()
+            progress_message = request.form.get('progress_message', '').strip() or None
+            steps_completed = request.form.get('steps_completed', '').strip()
+            steps_total = request.form.get('steps_total', '').strip()
+            current_step = request.form.get('current_step', '').strip() or None
+
+            for plan in plans:
+                plan.state = PlanState.failed
+                if _checked('overwrite_failure_reason'):
+                    plan.failure_reason = failure_reason
+                if _checked('overwrite_error_message'):
+                    plan.error_message = error_message
+                if _checked('overwrite_failed_step'):
+                    plan.failed_step = failed_step
+                if _checked('overwrite_recoverable'):
+                    plan.recoverable = recoverable
+                if _checked('overwrite_progress_percentage'):
+                    plan.progress_percentage = float(progress_pct) if progress_pct else 0.0
+                if _checked('overwrite_progress_message'):
+                    plan.progress_message = progress_message
+                if _checked('overwrite_steps_completed'):
+                    plan.steps_completed = int(steps_completed) if steps_completed else None
+                if _checked('overwrite_steps_total'):
+                    plan.steps_total = int(steps_total) if steps_total else None
+                if _checked('overwrite_current_step'):
+                    plan.current_step = current_step
+            self.session.commit()
+            flask_session.pop("bulk_fail_ids", None)
+            flash(f'Transitioned {len(plans)} plan(s) to failed.', 'success')
+            return redirect(self.get_url('.index_view'))
+
+        # GET: compute state breakdown with warnings
+        state_warnings = {
+            'completed': 'plan already finished successfully, changing state to failed shifts blame to the system',
+            'failed': 'plan is already in failed state',
+            'stopped': 'changing state of an already stopped task is ill-advised, since that changes the blame from the user responsible to the system responsible',
+        }
+        state_rows: list[tuple[str, int, str | None]] = []
+        state_counts: dict[str, int] = {}
+        for plan in plans:
+            state_name = plan.state.name if plan.state else 'unknown'
+            state_counts[state_name] = state_counts.get(state_name, 0) + 1
+        for state_name, count in state_counts.items():
+            warning = state_warnings.get(state_name)
+            state_rows.append((state_name, count, warning))
+
+        return self.render(
+            'admin/bulk_change_to_failed.html',
+            state_rows=state_rows,
+            total_count=len(plans),
+            form_action=self.get_url('.bulk_change_to_failed_view'),
+            cancel_url=self.get_url('.index_view'),
+        )
 
     def on_model_change(self, form: Any, model: Any, is_created: bool) -> None:
         def _read_upload(field_name: str):

@@ -496,6 +496,30 @@ class MyFlaskApp:
                 if "current_step" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
 
+        def _ensure_failure_diagnostic_columns() -> None:
+            insp = inspect(self.db.engine)
+            columns = {col["name"] for col in insp.get_columns("task_item")}
+            with self.db.engine.begin() as conn:
+                if "failure_reason" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)"))
+                if "failed_step" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)"))
+                if "recoverable" not in columns:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN"))
+            # Rename last_error → error_message in a separate transaction so a
+            # failed RENAME (race with another container) doesn't poison the above.
+            if "error_message" not in columns:
+                if "last_error" in columns:
+                    try:
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+                    except Exception:
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+                else:
+                    with self.db.engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+
         def _ensure_stopped_state() -> None:
             """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
 
@@ -568,6 +592,7 @@ class MyFlaskApp:
                         _ensure_user_account_columns()
                         _ensure_multi_api_key_columns()
                         _ensure_step_count_columns()
+                        _ensure_failure_diagnostic_columns()
                         _ensure_stopped_state()
                         _ensure_planitem_indexes()
                         _seed_initial_records()
@@ -1648,6 +1673,10 @@ class MyFlaskApp:
 
         failure_trace: dict[str, Any] = {
             "task_id": task_id,
+            "failure_reason": task.failure_reason,
+            "failed_step": task.failed_step,
+            "error_message": task.error_message,
+            "recoverable": task.recoverable,
             "stage": stage,
             "error": {
                 "type": error_type,
@@ -1683,6 +1712,10 @@ class MyFlaskApp:
         }
         failure_trace["has_data"] = any(
             [
+                failure_trace["failure_reason"] is not None,
+                failure_trace["failed_step"] is not None,
+                failure_trace["error_message"] is not None,
+                failure_trace["recoverable"] is not None,
                 failure_trace["stage"] is not None,
                 failure_trace["error"]["type"] is not None,
                 failure_trace["error"]["message"] is not None,
@@ -3400,6 +3433,10 @@ class MyFlaskApp:
             task.run_track_activity_bytes = None
             task.run_activity_overview_json = None
             task.run_artifact_layout_version = None
+            task.failure_reason = None
+            task.failed_step = None
+            task.error_message = None
+            task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 
             # Archive old incremental billing entries so the new run starts fresh.
@@ -3453,6 +3490,10 @@ class MyFlaskApp:
             task.progress_message = "Resume requested by user."
             task.stop_requested = False
             task.stop_requested_timestamp = None
+            task.failure_reason = None
+            task.failed_step = None
+            task.error_message = None
+            task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 
             # Archive old incremental billing entries so the new run starts fresh.

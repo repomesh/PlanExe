@@ -651,6 +651,18 @@
     <p class="plan-trace-title">Failure Modes &amp; Execution Trace</p>
     <div class="plan-trace-grid">
         <div class="plan-trace-item">
+            <p class="plan-trace-label">Failure reason</p>
+            <p class="plan-trace-value" id="trace-failure-reason">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Failed step</p>
+            <p class="plan-trace-value" id="trace-failed-step">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
+            <p class="plan-trace-label">Recoverable</p>
+            <p class="plan-trace-value" id="trace-recoverable">Pending...</p>
+        </div>
+        <div class="plan-trace-item">
             <p class="plan-trace-label">Stage</p>
             <p class="plan-trace-value" id="trace-stage">Pending...</p>
         </div>
@@ -1081,6 +1093,10 @@
             const timing = payload.timing || {};
             const fallback = payload.fallback || {};
 
+            setText("trace-failure-reason", cleanText(payload.failure_reason) || missingTraceValue(state));
+            setText("trace-failed-step", cleanText(payload.failed_step) || missingTraceValue(state));
+            var recoverableVal = payload.recoverable;
+            setText("trace-recoverable", recoverableVal === true ? "Yes (resume)" : recoverableVal === false ? "No (retry)" : missingTraceValue(state));
             setText("trace-stage", cleanText(payload.stage) || missingTraceValue(state));
             setText("trace-error-type", cleanText(error.type) || missingTraceValue(state));
             setText("trace-retries", formatRetry(payload, state));
@@ -1090,7 +1106,7 @@
             setText("trace-processing-time", formatSeconds(timing.processing_to_terminal_seconds, state));
             setText("trace-llm-total-time", formatSeconds(timing.llm_attempts_total_duration_seconds, state));
 
-            const errorMessage = cleanText(error.message);
+            const errorMessage = cleanText(error.message) || cleanText(payload.error_message);
             setText("trace-error-message", errorMessage ? ("Error: " + errorMessage) : "");
 
             renderExecutionTrace(payload, state);

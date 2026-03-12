@@ -313,6 +313,34 @@ def ensure_multi_api_key_columns() -> None:
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
+def ensure_failure_diagnostic_columns() -> None:
+    """Add failure diagnostic columns to task_item (idempotent)."""
+    statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)",
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+    # Rename last_error → error_message (existing DBs); add column for fresh DBs.
+    # Check column existence first to avoid noisy PostgreSQL ERROR logs on every restart.
+    columns = {col["name"] for col in inspect(db.engine).get_columns("task_item")}
+    if "error_message" not in columns:
+        if "last_error" in columns:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+            except Exception:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+        else:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+
 def ensure_stopped_state() -> None:
     """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
 
@@ -374,6 +402,30 @@ def update_task_state_with_retry(task_id: str, new_state: PlanState, max_retries
                 logger.error("Max retries reached for task state update")
                 return False
     return False
+
+def _update_failure_diagnostics(
+    task_id: str,
+    failure_reason: str,
+    error_message: Optional[str],
+    recoverable: bool,
+) -> None:
+    """Populate failure diagnostic columns on a PlanItem that just transitioned to failed.
+
+    Reads the current ``current_step`` from the DB row to populate ``failed_step``.
+    """
+    try:
+        task = db.session.get(PlanItem, task_id)
+        if task is None:
+            logger.error("Task %s not found; cannot write failure diagnostics.", task_id)
+            return
+        task.failure_reason = failure_reason[:64] if failure_reason else None
+        task.failed_step = task.current_step
+        task.error_message = error_message[:256] if error_message else None
+        task.recoverable = recoverable
+        db.session.commit()
+    except Exception as exc:
+        logger.error("Failed to write failure diagnostics for task %s: %s", task_id, exc, exc_info=True)
+        db.session.rollback()
 
 def update_task_progress_with_retry(
     task_id: str,
@@ -1056,6 +1108,14 @@ def execute_pipeline_for_job(
         else:
             final_state = PlanState.stopped if stop_requested else PlanState.failed
             update_task_state_with_retry(task_id, final_state)
+            # Populate failure diagnostics for non-stopped failures.
+            if final_state == PlanState.failed:
+                if pipeline_instance.has_stop_flag_file:
+                    _update_failure_diagnostics(task_id, "inactivity_timeout", machai_error_message, recoverable=True)
+                elif pipeline_instance.has_pipeline_complete_file:
+                    _update_failure_diagnostics(task_id, "internal_error", machai_error_message, recoverable=False)
+                else:
+                    _update_failure_diagnostics(task_id, "generation_error", machai_error_message, recoverable=True)
             billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
             event_context["machai_error_message"] = machai_error_message or ""
             event_context.update({
@@ -1207,6 +1267,10 @@ def process_pending_tasks() -> bool:
                     if plan is not None:
                         plan.state = PlanState.failed
                         plan.progress_message = short_msg[:128]
+                        plan.failure_reason = "version_mismatch"
+                        plan.failed_step = plan.current_step
+                        plan.error_message = short_msg[:256]
+                        plan.recoverable = False
                         # Clear pipeline_version so the frontend version
                         # check correctly rejects subsequent resume attempts.
                         params = dict(plan.parameters) if isinstance(plan.parameters, dict) else {}
@@ -1279,6 +1343,7 @@ def process_pending_tasks() -> bool:
         # Update task state to failed
         with app.app_context():
             update_task_state_with_retry(task_id, PlanState.failed)
+            _update_failure_diagnostics(task_id, "worker_error", str(e)[:256], recoverable=True)
         billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
         machai_error_message = 'Unknown error happened while processing.'
         machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
@@ -1329,6 +1394,7 @@ def startup_worker():
             ensure_token_metrics_columns()
             ensure_fractional_credit_columns()
             ensure_multi_api_key_columns()
+            ensure_failure_diagnostic_columns()
             ensure_stopped_state()
             logger.debug(f"Ensured database tables exist.")
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)

@@ -1,0 +1,118 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<h2>Change State To Failed</h2>
+
+<h4>Selected Plans by State</h4>
+<table class="table" style="max-width:600px">
+    <thead>
+        <tr><th>State</th><th>Count</th><th></th></tr>
+    </thead>
+    <tbody>
+    {% for state, count, warning in state_rows %}
+    <tr>
+        <th>{{ state }}</th>
+        <td>{{ count }}</td>
+        <td>{% if warning %}<span style="color:red;font-weight:bold">WARNING: ill-advised to change state of {{ state }} because {{ warning }}</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    <tr><th>Total</th><td>{{ total_count }}</td><td></td></tr>
+    </tbody>
+</table>
+
+<form method="POST" action="{{ form_action }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <table class="table" style="max-width:600px">
+        <thead>
+            <tr><th>Overwrite</th><th>Field</th><th>Value</th></tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td><input type="checkbox" name="overwrite_failure_reason" checked></td>
+            <td>failure_reason</td>
+            <td>
+                <select name="failure_reason" id="failure_reason" class="form-control">
+                    <option value="server_maintenance">server_maintenance</option>
+                    <option value="out_of_credits">out_of_credits</option>
+                    <option value="admin_bulk_fail">admin_bulk_fail</option>
+                    <option value="stuck_plan">stuck_plan</option>
+                    <option value="worker_error">worker_error</option>
+                    <option value="generation_error">generation_error</option>
+                    <option value="version_mismatch">version_mismatch</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_error_message" checked></td>
+            <td>error_message</td>
+            <td>
+                <input type="text" name="error_message" id="error_message" class="form-control"
+                       placeholder="e.g. Manually failed by admin">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_failed_step" checked></td>
+            <td>failed_step</td>
+            <td>
+                <input type="text" name="failed_step" id="failed_step" class="form-control"
+                       placeholder="e.g. 016-expert_criticism">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_recoverable" checked></td>
+            <td>recoverable</td>
+            <td>
+                <select name="recoverable" id="recoverable" class="form-control">
+                    <option value="false">false</option>
+                    <option value="true">true</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_progress_percentage"></td>
+            <td>progress_percentage</td>
+            <td>
+                <input type="number" name="progress_percentage" id="progress_percentage" class="form-control"
+                       step="0.01" min="0" max="100" value="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_progress_message"></td>
+            <td>progress_message</td>
+            <td>
+                <input type="text" name="progress_message" id="progress_message" class="form-control"
+                       placeholder="e.g. Failed by admin">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_steps_completed"></td>
+            <td>steps_completed</td>
+            <td>
+                <input type="number" name="steps_completed" id="steps_completed" class="form-control"
+                       min="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_steps_total"></td>
+            <td>steps_total</td>
+            <td>
+                <input type="number" name="steps_total" id="steps_total" class="form-control"
+                       min="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_current_step"></td>
+            <td>current_step</td>
+            <td>
+                <input type="text" name="current_step" id="current_step" class="form-control"
+                       placeholder="e.g. 016-expert_criticism">
+            </td>
+        </tr>
+        </tbody>
+    </table>
+    <div style="margin-top:15px">
+        <button type="submit" class="btn btn-danger" onclick="return confirm('Transition selected plans to failed state?')">Change State To Failed</button>
+        <a href="{{ cancel_url }}" class="btn btn-default" style="margin-left:10px">Cancel</a>
+    </div>
+</form>
+{% endblock %}

@@ -260,6 +260,103 @@ class TestPlanStatusTool(unittest.TestCase):
         self.assertNotIn("stop_reason", result.structuredContent)
         self.assertIn("error", result.structuredContent)
 
+    def test_plan_status_failed_includes_failure_diagnostics(self):
+        """Failed plan with all four diagnostic fields populated surfaces them in response."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.failed,
+            "stop_requested": False,
+            "progress_percentage": 53.0,
+            "progress_message": "Generation error",
+            "steps_completed": 16,
+            "steps_total": 30,
+            "current_step": "016-expert_criticism",
+            "timestamp_created": datetime.now(UTC),
+            "failure_reason": "generation_error",
+            "failed_step": "016-expert_criticism",
+            "error_message": "LLM provider returned 503",
+            "recoverable": True,
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        sc = result.structuredContent
+        self.assertEqual(sc["state"], "failed")
+        self.assertIn("error", sc)
+        err = sc["error"]
+        self.assertEqual(err["failure_reason"], "generation_error")
+        self.assertEqual(err["failed_step"], "016-expert_criticism")
+        self.assertEqual(err["message"], "LLM provider returned 503")
+        self.assertTrue(err["recoverable"])
+
+    def test_plan_status_failed_diagnostics_null_when_not_set(self):
+        """Legacy failed rows with no diagnostics return None for all four fields."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.failed,
+            "stop_requested": False,
+            "progress_percentage": 0.0,
+            "progress_message": "Plan generation failed.",
+            "timestamp_created": datetime.now(UTC),
+            "failure_reason": None,
+            "failed_step": None,
+            "error_message": None,
+            "recoverable": None,
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        sc = result.structuredContent
+        self.assertEqual(sc["state"], "failed")
+        self.assertIn("error", sc)
+        err = sc["error"]
+        self.assertIsNone(err["failure_reason"])
+        self.assertIsNone(err["failed_step"])
+        # message falls back to progress_message when error_message is None
+        self.assertEqual(err["message"], "Plan generation failed.")
+        self.assertIsNone(err["recoverable"])
+
+    def test_plan_status_non_failed_omits_diagnostics(self):
+        """Processing/completed plans have no failure_reason etc. in response."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.processing,
+            "stop_requested": False,
+            "progress_percentage": 50.0,
+            "steps_completed": 15,
+            "steps_total": 30,
+            "current_step": "SWOT Analysis",
+            "timestamp_created": datetime.now(UTC),
+            "failure_reason": None,
+            "failed_step": None,
+            "error_message": None,
+            "recoverable": None,
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        sc = result.structuredContent
+        self.assertEqual(sc["state"], "processing")
+        self.assertNotIn("error", sc)
+
 
 if __name__ == "__main__":
     unittest.main()

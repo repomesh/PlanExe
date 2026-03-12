@@ -337,12 +337,17 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
             "elapsed_sec": (datetime.now(UTC) - created_at).total_seconds() if created_at else 0,
         },
         "files_count": len(files),
-        "files": files[:10],
+        "files": files[-10:],
     }
 
     if state == "failed":
-        message = plan_snapshot.get("progress_message") or "Plan generation failed."
-        response["error"] = {"code": "generation_failed", "message": message}
+        progress_msg = plan_snapshot.get("progress_message")
+        response["error"] = {
+            "failure_reason": plan_snapshot.get("failure_reason"),
+            "failed_step": plan_snapshot.get("failed_step"),
+            "message": plan_snapshot.get("error_message") or progress_msg or "Plan generation failed.",
+            "recoverable": plan_snapshot.get("recoverable"),
+        }
 
     if state not in ("completed", "failed", "stopped"):
         base_url = _get_download_base_url()

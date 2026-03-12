@@ -118,6 +118,12 @@ class PlanItem(db.Model):
     # Artifact schema/version marker (legacy snapshots are NULL/1, split-storage snapshots are 2+).
     run_artifact_layout_version = db.Column(db.Integer, nullable=True, default=None)
 
+    # Failure diagnostics (populated when state transitions to failed).
+    failure_reason = db.Column(db.String(64), nullable=True)     # e.g. "generation_error", "worker_error", "version_mismatch"
+    failed_step = db.Column(db.String(128), nullable=True)       # e.g. "016-expert_criticism" (current_step at time of failure)
+    error_message = db.Column(db.String(256), nullable=True)     # human-readable error message
+    recoverable = db.Column(db.Boolean, nullable=True)           # true → suggest resume, false → suggest retry
+
     # Lightweight IS NOT NULL checks (actual column_property assigned after class body).
     # TYPE_CHECKING-only annotations so pyright knows the types without confusing
     # SQLAlchemy's declarative metaclass at runtime.

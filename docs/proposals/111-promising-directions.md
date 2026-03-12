@@ -25,7 +25,7 @@ Agents need PlanExe runs to complete reliably without human intervention. A fail
 | **113** | LLM Error Traceability | ✅ **Implemented (PR #237)**. `LLMChatError` replaces generic `ValueError` across 38 call sites. Root cause preserved for error classification; `error_id` UUID enables log-to-metrics cross-referencing. Agents can programmatically diagnose failures |
 | **101** | Luigi Resume Enhancements | Webhook hooks on task completion/failure — agents can subscribe to events instead of polling |
 | **114-I1** | Stopped vs Failed State | ✅ **Implemented**. Dedicated `PlanState.stopped` enum value — `plan_stop` transitions to `stopped`, not `failed`. Agents can now distinguish user-initiated stops from actual errors. `plan_retry` and `plan_resume` accept both `failed` and `stopped` |
-| **114-I2** | Failure Diagnostics in `plan_status` | When a plan fails, no `failure_reason`, `failed_step`, `last_error`, or `recoverable` flag is returned. Biggest observability gap — agents can only say "it failed" without explaining why or recommending resume vs retry. Extends #113 to the MCP consumer surface |
+| **114-I2** | Failure Diagnostics in `plan_status` | ✅ **Implemented**. Four DB columns (`failure_reason`, `failed_step`, `error_message`, `recoverable`) populated by worker on failure. `plan_status` returns a consolidated `error` dict (keys: `failure_reason`, `failed_step`, `message`, `recoverable`) only for failed plans — non-failed plans omit `error` entirely. The `recoverable` flag lets agents immediately suggest `plan_resume` vs `plan_retry`. Migration renames the legacy `last_error` column to `error_message` with existence checks to avoid noisy PostgreSQL logs. Diagnostics reset on retry/resume |
 | **114-I7** | Stalled-Plan Detection | No `last_progress_at` or `last_llm_call_at` timestamps. Agents can't distinguish "slow step" from "stuck worker". Complements #87 §8 |
 | **114-I10** | Silent Partial Failures in Completed Plans | A plan can reach `completed` with empty or stub-quality sections (e.g. 2/8 experts responding). No `quality_summary` in `plan_status` — agents can't tell if `completed` means "all sections produced quality output" or just "all steps ran." Trust gap for autonomous workflows |
 | **114-I12** | Remote Files Visibility During Processing | `plan_status` on remote returns `files_count: 0` while processing; local shows files incrementally. Agents lose the ability to confirm output is being produced and see which pipeline sections completed. Behavioral inconsistency between servers breaks workflows silently |
@@ -112,7 +112,7 @@ Phase 1: Reliable foundation         (nearly complete)
   ├─ #113 Error traceability ✅ (PR #237)
   ├─ #58  Prompt boost ⚙️ (open PR #222)
   ├─ #114-I1 Stopped vs failed state ✅
-  ├─ #114-I2 Failure diagnostics in plan_status  ← next priority (biggest gap)
+  ├─ #114-I2 Failure diagnostics in plan_status ✅
   ├─ #114-I5 MCP notifications for agents  ← P1 (v3 correction: SSE wrong for agents)
   ├─ #114-I7 Stalled-plan detection
   ├─ #114-I10 Silent partial failures in completed plans

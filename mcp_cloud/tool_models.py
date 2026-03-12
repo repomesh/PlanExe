@@ -9,6 +9,29 @@ class ErrorDetail(BaseModel):
     details: dict[str, Any] | None = None
 
 
+class FailureErrorDetail(BaseModel):
+    """Consolidated error dict returned inside plan_status when state is 'failed'."""
+    failure_reason: str | None = Field(
+        default=None,
+        description=(
+            "Failure category. Values: generation_error, worker_error, "
+            "inactivity_timeout, internal_error, version_mismatch."
+        ),
+    )
+    failed_step: str | None = Field(
+        default=None,
+        description="The pipeline step that was active when the failure occurred (e.g. '016-expert_criticism').",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Human-readable error message describing the failure (max 256 chars).",
+    )
+    recoverable: bool | None = Field(
+        default=None,
+        description="True when plan_resume may succeed; False when plan_retry (full restart) is recommended.",
+    )
+
+
 class ExamplePromptsOutput(BaseModel):
     samples: list[str] = Field(
         ...,
@@ -215,6 +238,13 @@ class PlanStatusSuccess(BaseModel):
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
+    error: FailureErrorDetail | None = Field(
+        default=None,
+        description=(
+            "Failure diagnostics (only present when state is 'failed'). "
+            "Contains failure_reason, failed_step, message, and recoverable."
+        ),
+    )
 
 
 class PlanStatusOutput(BaseModel):
@@ -270,7 +300,14 @@ class PlanStatusOutput(BaseModel):
             "Run `curl -N <sse_url>` in a background shell — auto-closes on completion/failure."
         ),
     )
-    error: ErrorDetail | None = None
+    error: FailureErrorDetail | ErrorDetail | None = Field(
+        default=None,
+        description=(
+            "Failure diagnostics (only present when state is 'failed'). "
+            "Contains failure_reason, failed_step, message, and recoverable. "
+            "For PLAN_NOT_FOUND errors, contains code and message."
+        ),
+    )
 
 
 class PlanStopOutput(BaseModel):

@@ -121,7 +121,7 @@ class PlanItem(db.Model):
     # Failure diagnostics (populated when state transitions to failed).
     failure_reason = db.Column(db.String(64), nullable=True)     # e.g. "generation_error", "worker_error", "version_mismatch"
     failed_step = db.Column(db.String(128), nullable=True)       # e.g. "016-expert_criticism" (current_step at time of failure)
-    last_error = db.Column(db.String(256), nullable=True)        # human-readable error message
+    error_message = db.Column(db.String(256), nullable=True)     # human-readable error message
     recoverable = db.Column(db.Boolean, nullable=True)           # true → suggest resume, false → suggest retry
 
     # Lightweight IS NOT NULL checks (actual column_property assigned after class body).

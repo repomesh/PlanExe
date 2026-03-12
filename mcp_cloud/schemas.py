@@ -27,6 +27,7 @@ from mcp_cloud.tool_models import (
     PlanListInput,
     PlanListOutput,
     ErrorDetail,
+    FailureErrorDetail,
 )
 
 PLAN_CREATE_INPUT_SCHEMA = PlanCreateInput.model_json_schema()
@@ -184,10 +185,11 @@ TOOL_DEFINITIONS = [
             "steps_completed and steps_total give the number of plan generation steps completed and expected (both nullable). "
             "current_step is the human-readable label of the most recently completed step (e.g. 'SWOT Analysis'). "
             "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
-            "When state is 'failed', the response includes failure diagnostics: "
-            "failure_reason (category: generation_error, worker_error, inactivity_timeout, internal_error, version_mismatch), "
-            "failed_step (pipeline step active at failure), last_error (human-readable message), "
-            "and recoverable (true => plan_resume may work, false => use plan_retry). "
+            "When state is 'failed', the response includes an error dict with failure diagnostics: "
+            "error.failure_reason (category: generation_error, worker_error, inactivity_timeout, internal_error, version_mismatch), "
+            "error.failed_step (pipeline step active at failure), error.message (human-readable message), "
+            "and error.recoverable (true => plan_resume may work, false => use plan_retry). "
+            "The error dict is absent for non-failed states. "
             "Unknown plan_id returns error code PLAN_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
             "processing with no file-output changes for >20 minutes likely means failed/stalled. "

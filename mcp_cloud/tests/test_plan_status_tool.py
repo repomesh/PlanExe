@@ -275,7 +275,7 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
             "failure_reason": "generation_error",
             "failed_step": "016-expert_criticism",
-            "last_error": "LLM provider returned 503",
+            "error_message": "LLM provider returned 503",
             "recoverable": True,
         }
         with patch(
@@ -288,11 +288,12 @@ class TestPlanStatusTool(unittest.TestCase):
 
         sc = result.structuredContent
         self.assertEqual(sc["state"], "failed")
-        self.assertEqual(sc["failure_reason"], "generation_error")
-        self.assertEqual(sc["failed_step"], "016-expert_criticism")
-        self.assertEqual(sc["last_error"], "LLM provider returned 503")
-        self.assertTrue(sc["recoverable"])
         self.assertIn("error", sc)
+        err = sc["error"]
+        self.assertEqual(err["failure_reason"], "generation_error")
+        self.assertEqual(err["failed_step"], "016-expert_criticism")
+        self.assertEqual(err["message"], "LLM provider returned 503")
+        self.assertTrue(err["recoverable"])
 
     def test_plan_status_failed_diagnostics_null_when_not_set(self):
         """Legacy failed rows with no diagnostics return None for all four fields."""
@@ -306,7 +307,7 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
             "failure_reason": None,
             "failed_step": None,
-            "last_error": None,
+            "error_message": None,
             "recoverable": None,
         }
         with patch(
@@ -319,10 +320,13 @@ class TestPlanStatusTool(unittest.TestCase):
 
         sc = result.structuredContent
         self.assertEqual(sc["state"], "failed")
-        self.assertIsNone(sc["failure_reason"])
-        self.assertIsNone(sc["failed_step"])
-        self.assertIsNone(sc["last_error"])
-        self.assertIsNone(sc["recoverable"])
+        self.assertIn("error", sc)
+        err = sc["error"]
+        self.assertIsNone(err["failure_reason"])
+        self.assertIsNone(err["failed_step"])
+        # message falls back to progress_message when error_message is None
+        self.assertEqual(err["message"], "Plan generation failed.")
+        self.assertIsNone(err["recoverable"])
 
     def test_plan_status_non_failed_omits_diagnostics(self):
         """Processing/completed plans have no failure_reason etc. in response."""
@@ -338,7 +342,7 @@ class TestPlanStatusTool(unittest.TestCase):
             "timestamp_created": datetime.now(UTC),
             "failure_reason": None,
             "failed_step": None,
-            "last_error": None,
+            "error_message": None,
             "recoverable": None,
         }
         with patch(
@@ -351,10 +355,7 @@ class TestPlanStatusTool(unittest.TestCase):
 
         sc = result.structuredContent
         self.assertEqual(sc["state"], "processing")
-        self.assertNotIn("failure_reason", sc)
-        self.assertNotIn("failed_step", sc)
-        self.assertNotIn("last_error", sc)
-        self.assertNotIn("recoverable", sc)
+        self.assertNotIn("error", sc)
 
 
 if __name__ == "__main__":

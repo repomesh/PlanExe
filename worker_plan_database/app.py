@@ -318,7 +318,6 @@ def ensure_failure_diagnostic_columns() -> None:
     statements = (
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)",
-        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_error VARCHAR(256)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN",
     )
     with db.engine.begin() as conn:
@@ -327,6 +326,20 @@ def ensure_failure_diagnostic_columns() -> None:
                 conn.execute(text(stmt))
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+    # Rename last_error → error_message (existing DBs); add column for fresh DBs.
+    # Check column existence first to avoid noisy PostgreSQL ERROR logs on every restart.
+    columns = {col["name"] for col in inspect(db.engine).get_columns("task_item")}
+    if "error_message" not in columns:
+        if "last_error" in columns:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+            except Exception:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+        else:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
 
 def ensure_stopped_state() -> None:
     """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
@@ -393,7 +406,7 @@ def update_task_state_with_retry(task_id: str, new_state: PlanState, max_retries
 def _update_failure_diagnostics(
     task_id: str,
     failure_reason: str,
-    last_error: Optional[str],
+    error_message: Optional[str],
     recoverable: bool,
 ) -> None:
     """Populate failure diagnostic columns on a PlanItem that just transitioned to failed.
@@ -407,7 +420,7 @@ def _update_failure_diagnostics(
             return
         task.failure_reason = failure_reason[:64] if failure_reason else None
         task.failed_step = task.current_step
-        task.last_error = last_error[:256] if last_error else None
+        task.error_message = error_message[:256] if error_message else None
         task.recoverable = recoverable
         db.session.commit()
     except Exception as exc:
@@ -1256,7 +1269,7 @@ def process_pending_tasks() -> bool:
                         plan.progress_message = short_msg[:128]
                         plan.failure_reason = "version_mismatch"
                         plan.failed_step = plan.current_step
-                        plan.last_error = short_msg[:256]
+                        plan.error_message = short_msg[:256]
                         plan.recoverable = False
                         # Clear pipeline_version so the frontend version
                         # check correctly rejects subsequent resume attempts.

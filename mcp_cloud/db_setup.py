@@ -8,7 +8,7 @@ from urllib.parse import quote_plus
 from flask import Flask
 from mcp.server import Server
 from pydantic import BaseModel
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from worker_plan_api.model_profile import ModelProfileEnum
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
@@ -108,7 +108,6 @@ def ensure_failure_diagnostics_columns() -> None:
     statements = (
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)",
-        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_error VARCHAR(256)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN",
     )
     with db.engine.begin() as conn:
@@ -117,6 +116,20 @@ def ensure_failure_diagnostics_columns() -> None:
                 conn.execute(text(stmt))
             except Exception as exc:
                 logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+    # Rename last_error → error_message (existing DBs); add column for fresh DBs.
+    # Check column existence first to avoid noisy PostgreSQL ERROR logs on every restart.
+    columns = {col["name"] for col in inspect(db.engine).get_columns("task_item")}
+    if "error_message" not in columns:
+        if "last_error" in columns:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+            except Exception:
+                with db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+        else:
+            with db.engine.begin() as conn:
+                conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
 
 def ensure_stopped_state() -> None:
     """Add 'stopped' value to the planstate/taskstate enum type (idempotent).

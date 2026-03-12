@@ -216,7 +216,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
                 PlanItem.timestamp_created,
                 PlanItem.failure_reason,
                 PlanItem.failed_step,
-                PlanItem.last_error,
+                PlanItem.error_message,
                 PlanItem.recoverable,
             )
             .filter(PlanItem.id == plan_uuid)
@@ -236,7 +236,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
             "timestamp_created": row.timestamp_created,
             "failure_reason": row.failure_reason,
             "failed_step": row.failed_step,
-            "last_error": row.last_error,
+            "error_message": row.error_message,
             "recoverable": row.recoverable,
         }
 
@@ -295,7 +295,7 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
         plan.run_artifact_layout_version = None
         plan.failure_reason = None
         plan.failed_step = None
-        plan.last_error = None
+        plan.error_message = None
         plan.recoverable = None
         plan.parameters = parameters
 
@@ -388,7 +388,7 @@ def _resume_plan_sync(plan_id: str, model_profile: str) -> Optional[dict[str, An
         plan.stop_requested_timestamp = None
         plan.failure_reason = None
         plan.failed_step = None
-        plan.last_error = None
+        plan.error_message = None
         plan.recoverable = None
         plan.parameters = parameters
         # Keep: timestamp_created, progress_percentage, steps_completed,

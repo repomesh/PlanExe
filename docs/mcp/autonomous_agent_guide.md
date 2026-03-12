@@ -72,14 +72,14 @@ Poll every 5 minutes. State transitions:
 
 ### Step 6: Handle failures
 
-When `plan_status` returns `state: "failed"`, check the failure diagnostics to decide next action:
+When `plan_status` returns `state: "failed"`, check the `error` dict for failure diagnostics:
 
 | Field | Meaning |
 |-------|---------|
-| `failure_reason` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
-| `failed_step` | Pipeline step that was active when the failure occurred |
-| `last_error` | Human-readable error message |
-| `recoverable` | `true` → try `plan_resume`; `false` → use `plan_retry` |
+| `error.failure_reason` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
+| `error.failed_step` | Pipeline step that was active when the failure occurred |
+| `error.message` | Human-readable error message |
+| `error.recoverable` | `true` → try `plan_resume`; `false` → use `plan_retry` |
 
 If `recoverable` is `true`, resume first (preserves progress):
 

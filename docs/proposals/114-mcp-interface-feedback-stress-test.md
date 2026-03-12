@@ -50,11 +50,11 @@ Option B is less disruptive and can be added to `plan_status` without changing s
 
 ### I2 — No failure diagnostics in `plan_status`
 
-**Status:** Implemented. Four new nullable columns on `PlanItem` (`failure_reason`, `failed_step`, `last_error`, `recoverable`) populated by the worker on failure and surfaced in `plan_status` responses. Diagnostics are reset on retry/resume.
+**Status:** Implemented. Four new nullable columns on `PlanItem` (`failure_reason`, `failed_step`, `error_message`, `recoverable`) populated by the worker on failure and surfaced in `plan_status` responses inside a consolidated `error` dict. Diagnostics are reset on retry/resume.
 
 **Priority: High — identified as the single biggest observability gap.**
 
-**Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `last_error`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
+**Problem:** When a plan fails, `plan_status` returns `state: "failed"` with no `failure_reason`, `error_message`, or `failed_step` field. The agent can only tell the user "it failed" without explaining why.
 
 During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic information. The operator had no way to determine if it was a content refusal, a model error, or a worker crash.
 
@@ -65,11 +65,12 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
 ```json
 {
   "state": "failed",
-  "failure_reason": "generation_error",
-  "failed_step": "016-expert_criticism",
-  "last_error": "LLM provider returned 503",
-  "recoverable": true,
-  "error": {"code": "generation_failed", "message": "Plan generation failed."}
+  "error": {
+    "failure_reason": "generation_error",
+    "failed_step": "016-expert_criticism",
+    "message": "LLM provider returned 503",
+    "recoverable": true
+  }
 }
 ```
 

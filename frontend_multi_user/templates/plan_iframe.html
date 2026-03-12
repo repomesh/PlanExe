@@ -1106,7 +1106,7 @@
             setText("trace-processing-time", formatSeconds(timing.processing_to_terminal_seconds, state));
             setText("trace-llm-total-time", formatSeconds(timing.llm_attempts_total_duration_seconds, state));
 
-            const errorMessage = cleanText(error.message) || cleanText(payload.last_error);
+            const errorMessage = cleanText(error.message) || cleanText(payload.error_message);
             setText("trace-error-message", errorMessage ? ("Error: " + errorMessage) : "");
 
             renderExecutionTrace(payload, state);

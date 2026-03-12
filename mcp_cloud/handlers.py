@@ -341,12 +341,13 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
     }
 
     if state == "failed":
-        message = plan_snapshot.get("progress_message") or "Plan generation failed."
-        response["error"] = {"code": "generation_failed", "message": message}
-        response["failure_reason"] = plan_snapshot.get("failure_reason")
-        response["failed_step"] = plan_snapshot.get("failed_step")
-        response["last_error"] = plan_snapshot.get("last_error")
-        response["recoverable"] = plan_snapshot.get("recoverable")
+        progress_msg = plan_snapshot.get("progress_message")
+        response["error"] = {
+            "failure_reason": plan_snapshot.get("failure_reason"),
+            "failed_step": plan_snapshot.get("failed_step"),
+            "message": plan_snapshot.get("error_message") or progress_msg or "Plan generation failed.",
+            "recoverable": plan_snapshot.get("recoverable"),
+        }
 
     if state not in ("completed", "failed", "stopped"):
         base_url = _get_download_base_url()

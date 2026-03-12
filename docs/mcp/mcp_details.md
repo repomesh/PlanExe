@@ -132,16 +132,16 @@ State contract:
 
 #### Failure diagnostics (on `failed` state)
 
-When a plan is in the `failed` state, the response includes additional diagnostic fields:
+When a plan is in the `failed` state, the response includes a consolidated `error` dict:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `failure_reason` | `string?` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
-| `failed_step` | `string?` | Pipeline step active at failure (e.g. `016-expert_criticism`) |
-| `last_error` | `string?` | Human-readable error message (max 256 chars) |
-| `recoverable` | `bool?` | `true` → `plan_resume` may work; `false` → use `plan_retry` |
+| `error.failure_reason` | `string?` | Category: `generation_error`, `worker_error`, `inactivity_timeout`, `internal_error`, `version_mismatch` |
+| `error.failed_step` | `string?` | Pipeline step active at failure (e.g. `016-expert_criticism`) |
+| `error.message` | `string?` | Human-readable error message (max 256 chars) |
+| `error.recoverable` | `bool?` | `true` → `plan_resume` may work; `false` → use `plan_retry` |
 
-These fields are `null` for legacy plans that failed before this feature was added. They are absent from non-failed states.
+These fields are `null` for legacy plans that failed before this feature was added. The `error` dict is absent for non-failed states.
 
 ### plan_stop
 

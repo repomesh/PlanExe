@@ -252,7 +252,7 @@ class PlanItemView(AdminOnlyModelView):
                 return name in request.form
 
             failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
-            last_error = request.form.get('last_error', '').strip() or None
+            error_message = request.form.get('error_message', '').strip() or None
             failed_step = request.form.get('failed_step', '').strip() or None
             recoverable_raw = request.form.get('recoverable', '')
             recoverable = {'true': True, 'false': False}.get(recoverable_raw, False)
@@ -266,8 +266,8 @@ class PlanItemView(AdminOnlyModelView):
                 plan.state = PlanState.failed
                 if _checked('overwrite_failure_reason'):
                     plan.failure_reason = failure_reason
-                if _checked('overwrite_last_error'):
-                    plan.last_error = last_error
+                if _checked('overwrite_error_message'):
+                    plan.error_message = error_message
                 if _checked('overwrite_failed_step'):
                     plan.failed_step = failed_step
                 if _checked('overwrite_recoverable'):

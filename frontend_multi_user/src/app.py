@@ -504,10 +504,21 @@ class MyFlaskApp:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)"))
                 if "failed_step" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)"))
-                if "last_error" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_error VARCHAR(256)"))
                 if "recoverable" not in columns:
                     conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN"))
+            # Rename last_error → error_message in a separate transaction so a
+            # failed RENAME (race with another container) doesn't poison the above.
+            if "error_message" not in columns:
+                if "last_error" in columns:
+                    try:
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+                    except Exception:
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+                else:
+                    with self.db.engine.begin() as conn:
+                        conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
 
         def _ensure_stopped_state() -> None:
             """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
@@ -1664,7 +1675,7 @@ class MyFlaskApp:
             "task_id": task_id,
             "failure_reason": task.failure_reason,
             "failed_step": task.failed_step,
-            "last_error": task.last_error,
+            "error_message": task.error_message,
             "recoverable": task.recoverable,
             "stage": stage,
             "error": {
@@ -1703,7 +1714,7 @@ class MyFlaskApp:
             [
                 failure_trace["failure_reason"] is not None,
                 failure_trace["failed_step"] is not None,
-                failure_trace["last_error"] is not None,
+                failure_trace["error_message"] is not None,
                 failure_trace["recoverable"] is not None,
                 failure_trace["stage"] is not None,
                 failure_trace["error"]["type"] is not None,
@@ -3424,7 +3435,7 @@ class MyFlaskApp:
             task.run_artifact_layout_version = None
             task.failure_reason = None
             task.failed_step = None
-            task.last_error = None
+            task.error_message = None
             task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 
@@ -3481,7 +3492,7 @@ class MyFlaskApp:
             task.stop_requested_timestamp = None
             task.failure_reason = None
             task.failed_step = None
-            task.last_error = None
+            task.error_message = None
             task.recoverable = None
             task.last_seen_timestamp = datetime.now(UTC)
 

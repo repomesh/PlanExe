@@ -337,7 +337,7 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
             "elapsed_sec": (datetime.now(UTC) - created_at).total_seconds() if created_at else 0,
         },
         "files_count": len(files),
-        "files": files[:10],
+        "files": files[-10:],
     }
 
     if state == "failed":

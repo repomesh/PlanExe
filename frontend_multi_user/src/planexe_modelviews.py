@@ -248,13 +248,17 @@ class PlanItemView(AdminOnlyModelView):
             return redirect(self.get_url('.index_view'))
 
         if request.method == 'POST':
+            overwrite_failure_reason = 'overwrite_failure_reason' in request.form
+            overwrite_last_error = 'overwrite_last_error' in request.form
             failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
             last_error = request.form.get('last_error', '').strip() or None
             for plan in plans:
                 plan.state = PlanState.failed
-                plan.failure_reason = failure_reason
+                if overwrite_failure_reason:
+                    plan.failure_reason = failure_reason
                 plan.failed_step = plan.current_step
-                plan.last_error = last_error
+                if overwrite_last_error:
+                    plan.last_error = last_error
                 plan.recoverable = False
             self.session.commit()
             flask_session.pop("bulk_fail_ids", None)

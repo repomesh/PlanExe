@@ -50,6 +50,64 @@
                        placeholder="e.g. Manually failed by admin">
             </td>
         </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_failed_step" checked></td>
+            <td>failed_step</td>
+            <td>
+                <input type="text" name="failed_step" id="failed_step" class="form-control"
+                       placeholder="e.g. 016-expert_criticism">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_recoverable" checked></td>
+            <td>recoverable</td>
+            <td>
+                <select name="recoverable" id="recoverable" class="form-control">
+                    <option value="false">false</option>
+                    <option value="true">true</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_progress_percentage"></td>
+            <td>progress_percentage</td>
+            <td>
+                <input type="number" name="progress_percentage" id="progress_percentage" class="form-control"
+                       step="0.01" min="0" max="100" value="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_progress_message"></td>
+            <td>progress_message</td>
+            <td>
+                <input type="text" name="progress_message" id="progress_message" class="form-control"
+                       placeholder="e.g. Failed by admin">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_steps_completed"></td>
+            <td>steps_completed</td>
+            <td>
+                <input type="number" name="steps_completed" id="steps_completed" class="form-control"
+                       min="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_steps_total"></td>
+            <td>steps_total</td>
+            <td>
+                <input type="number" name="steps_total" id="steps_total" class="form-control"
+                       min="0">
+            </td>
+        </tr>
+        <tr>
+            <td><input type="checkbox" name="overwrite_current_step"></td>
+            <td>current_step</td>
+            <td>
+                <input type="text" name="current_step" id="current_step" class="form-control"
+                       placeholder="e.g. 016-expert_criticism">
+            </td>
+        </tr>
         </tbody>
     </table>
     <div style="margin-top:15px">

@@ -248,18 +248,40 @@ class PlanItemView(AdminOnlyModelView):
             return redirect(self.get_url('.index_view'))
 
         if request.method == 'POST':
-            overwrite_failure_reason = 'overwrite_failure_reason' in request.form
-            overwrite_last_error = 'overwrite_last_error' in request.form
+            def _checked(name: str) -> bool:
+                return name in request.form
+
             failure_reason = request.form.get('failure_reason', '').strip() or 'admin_bulk_fail'
             last_error = request.form.get('last_error', '').strip() or None
+            failed_step = request.form.get('failed_step', '').strip() or None
+            recoverable_raw = request.form.get('recoverable', '')
+            recoverable = {'true': True, 'false': False}.get(recoverable_raw, False)
+            progress_pct = request.form.get('progress_percentage', '').strip()
+            progress_message = request.form.get('progress_message', '').strip() or None
+            steps_completed = request.form.get('steps_completed', '').strip()
+            steps_total = request.form.get('steps_total', '').strip()
+            current_step = request.form.get('current_step', '').strip() or None
+
             for plan in plans:
                 plan.state = PlanState.failed
-                if overwrite_failure_reason:
+                if _checked('overwrite_failure_reason'):
                     plan.failure_reason = failure_reason
-                plan.failed_step = plan.current_step
-                if overwrite_last_error:
+                if _checked('overwrite_last_error'):
                     plan.last_error = last_error
-                plan.recoverable = False
+                if _checked('overwrite_failed_step'):
+                    plan.failed_step = failed_step
+                if _checked('overwrite_recoverable'):
+                    plan.recoverable = recoverable
+                if _checked('overwrite_progress_percentage'):
+                    plan.progress_percentage = float(progress_pct) if progress_pct else 0.0
+                if _checked('overwrite_progress_message'):
+                    plan.progress_message = progress_message
+                if _checked('overwrite_steps_completed'):
+                    plan.steps_completed = int(steps_completed) if steps_completed else None
+                if _checked('overwrite_steps_total'):
+                    plan.steps_total = int(steps_total) if steps_total else None
+                if _checked('overwrite_current_step'):
+                    plan.current_step = current_step
             self.session.commit()
             flask_session.pop("bulk_fail_ids", None)
             flash(f'Transitioned {len(plans)} plan(s) to failed.', 'success')

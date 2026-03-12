@@ -137,8 +137,8 @@ class PlanItemView(AdminOnlyModelView):
     column_formatters = {
         'id': lambda v, c, m, p: str(m.id)[:8] if m.id else '',
         'state': lambda v, c, m, p: (
-            Markup('<span style="color:#e65100">stopped</span>')
-            if m.state and m.state.name == 'stopped'
+            Markup(f'<span style="color:#e65100">{m.state.name}</span>')
+            if m.state and m.state.name in ('stopped', 'failed')
             else (m.state.name if m.state else '')
         ),
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,

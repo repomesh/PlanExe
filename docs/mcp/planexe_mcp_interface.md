@@ -355,9 +355,10 @@ Returns plan status and progress. Used for progress bars and UI states. **Pollin
     "started_at": "2026-01-14T12:35:10Z",
     "elapsed_sec": 512
   },
+  "files_count": 42,
   "files": [
     {
-      "path": "plan.md",
+      "path": "019-swot_analysis.md",
       "updated_at": "2026-01-14T12:43:11Z"
     }
   ]
@@ -400,6 +401,7 @@ These fields are `null` for legacy plans created before failure diagnostics were
 **Notes**
 
 - progress_percentage must be a float within [0,100].
+- `files` contains the most recent 10 files (sorted by pipeline step number). `files_count` gives the total number of files produced. This lets agents see what the pipeline just produced rather than always seeing the same early files.
 
 ---
 

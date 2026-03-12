@@ -205,9 +205,9 @@ After `plan_create`, there is no indication of credits consumed or remaining. Fo
 
 ### 5.7 Complete files array in `plan_status` for completed plans
 
-**Source:** Claude Code agent feedback (2026-03-02).
+**Status:** Partially addressed. The `files` array now returns the **most recent 10** files instead of the first 10, so agents see what was just produced (e.g. `019-swot_analysis.md`) rather than always the same early pipeline files (`001-start_time.json`). `files_count` gives the total. Full manifest support for completed plans remains open.
 
-The `files` array in `plan_status` only shows early pipeline files (001-, 002-), not the final report or zip. When `state` is `completed`, the full manifest of outputs should be visible. This helps agents verify what was produced before calling `plan_file_info`.
+**Source:** Claude Code agent feedback (2026-03-02).
 
 ### 5.8 Prompt approval skip for agent-provided prompts
 

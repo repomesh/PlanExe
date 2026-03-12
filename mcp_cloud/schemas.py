@@ -184,7 +184,7 @@ TOOL_DEFINITIONS = [
             "take longer. Do not use progress_percentage to estimate time remaining. "
             "steps_completed and steps_total give the number of plan generation steps completed and expected (both nullable). "
             "current_step is the human-readable label of the most recently completed step (e.g. 'SWOT Analysis'). "
-            "files lists intermediate outputs produced so far; use their updated_at timestamps to detect stalls. "
+            "files lists the most recent 10 intermediate outputs produced so far (files_count gives the total); use their updated_at timestamps to detect stalls. "
             "When state is 'failed', the response includes an error dict with failure diagnostics: "
             "error.failure_reason (category: generation_error, worker_error, inactivity_timeout, internal_error, version_mismatch), "
             "error.failed_step (pipeline step active at failure), error.message (human-readable message), "

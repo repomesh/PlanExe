@@ -341,6 +341,18 @@ def ensure_failure_diagnostic_columns() -> None:
             with db.engine.begin() as conn:
                 conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
 
+def ensure_last_progress_at_column() -> None:
+    """Add last_progress_at column to task_item (idempotent)."""
+    statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
 def ensure_stopped_state() -> None:
     """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
 
@@ -464,6 +476,7 @@ def update_task_progress_with_retry(
             task.steps_completed = steps_completed
             task.steps_total = steps_total
             task.current_step = current_step
+            task.last_progress_at = datetime.now(UTC)
             db.session.commit()
             logger.debug(f"Updated task {task_id!r} progress to {progress_percentage}%: {progress_message}")
             return True
@@ -1396,6 +1409,7 @@ def startup_worker():
             ensure_multi_api_key_columns()
             ensure_failure_diagnostic_columns()
             ensure_stopped_state()
+            ensure_last_progress_at_column()
             logger.debug(f"Ensured database tables exist.")
             WorkerItem.upsert_heartbeat(worker_id=WORKER_ID)
         except Exception as e:    

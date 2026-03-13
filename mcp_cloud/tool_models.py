@@ -178,6 +178,7 @@ class PlanCreateOutput(BaseModel):
 class PlanStatusTiming(BaseModel):
     started_at: str | None
     elapsed_sec: float
+    last_progress_at: str | None = None
 
 
 class PlanStatusFile(BaseModel):

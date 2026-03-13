@@ -218,6 +218,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
                 PlanItem.failed_step,
                 PlanItem.error_message,
                 PlanItem.recoverable,
+                PlanItem.last_progress_at,
             )
             .filter(PlanItem.id == plan_uuid)
             .first()
@@ -238,6 +239,7 @@ def _get_plan_status_snapshot_sync(plan_id: str) -> Optional[dict[str, Any]]:
             "failed_step": row.failed_step,
             "error_message": row.error_message,
             "recoverable": row.recoverable,
+            "last_progress_at": row.last_progress_at,
         }
 
 def _request_plan_stop_sync(plan_id: str) -> Optional[dict[str, Any]]:
@@ -297,6 +299,7 @@ def _retry_failed_plan_sync(plan_id: str, model_profile: str, caller_metadata: O
         plan.failed_step = None
         plan.error_message = None
         plan.recoverable = None
+        plan.last_progress_at = None
         plan.parameters = parameters
 
         # Update plan attribution when retried with a different API key.

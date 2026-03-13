@@ -109,7 +109,7 @@ The `download_url` points to the self-contained HTML report. The `zip` artifact 
 |----------|--------|
 | `plan_status` returns `failed` | Check `recoverable` field: if `true`, call `plan_resume` (preserves progress); if `false`, call `plan_retry`. If diagnostics are `null`, try `plan_resume` first, then `plan_retry`. |
 | `plan_status` stays `pending` > 5 min | Worker may be down. Report to user. |
-| `plan_status` stays `processing` with no file changes > 20 min | Plan likely stalled. Call `plan_stop`, then `plan_retry`. |
+| `plan_status` `timing.last_progress_at` unchanged > 10 min | Plan likely stalled. Call `plan_stop`, then `plan_retry`. Fall back to file `updated_at` timestamps if `last_progress_at` is `null`. |
 | Lost `plan_id` | Call `plan_list` to recover recent plans. |
 | Invalid API key | Error code `INVALID_USER_API_KEY`. Prompt user to check their key. |
 

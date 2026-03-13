@@ -184,7 +184,9 @@ TOOL_DEFINITIONS = [
             "take longer. Do not use progress_percentage to estimate time remaining. "
             "steps_completed and steps_total give the number of plan generation steps completed and expected (both nullable). "
             "current_step is the human-readable label of the most recently completed step (e.g. 'SWOT Analysis'). "
-            "files lists the most recent 10 intermediate outputs produced so far (files_count gives the total); use their updated_at timestamps to detect stalls. "
+            "timing.last_progress_at is an ISO 8601 timestamp of the last progress update (null until the first worker update); "
+            "use it to compute time-since-last-progress and detect stalls — a gap > 10 minutes with no progress change is a strong stall signal. "
+            "files lists the most recent 10 intermediate outputs produced so far (files_count gives the total); use their updated_at timestamps as a secondary stall signal. "
             "When state is 'failed', the response includes an error dict with failure diagnostics: "
             "error.failure_reason (category: generation_error, worker_error, inactivity_timeout, internal_error, version_mismatch), "
             "error.failed_step (pipeline step active at failure), error.message (human-readable message), "
@@ -192,7 +194,8 @@ TOOL_DEFINITIONS = [
             "The error dict is absent for non-failed states. "
             "Unknown plan_id returns error code PLAN_NOT_FOUND. "
             "Troubleshooting: pending for >5 minutes likely means queued but not picked up by a worker. "
-            "processing with no file-output changes for >20 minutes likely means failed/stalled. "
+            "processing with timing.last_progress_at unchanged for >10 minutes likely means stalled — "
+            "call plan_stop then plan_retry. Fall back to file updated_at timestamps if last_progress_at is null. "
             "Report these issues to https://github.com/PlanExeOrg/PlanExe/issues ."
         ),
         input_schema=PLAN_STATUS_INPUT_SCHEMA,

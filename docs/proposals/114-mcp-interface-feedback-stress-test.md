@@ -182,7 +182,7 @@ The v3 priority ranking assumed MCP clients would surface progress notifications
 
 ---
 
-### I7 — No stalled-plan detection
+### I7 — No stalled-plan detection *(partially implemented)*
 
 **Problem:** Plan 1 (20f1cfac) stayed at 5.5% for multiple status checks with no indication of whether it was still working, stuck, or had silently failed. There is no `stalled_since` timestamp or heartbeat indicator in `plan_status`.
 
@@ -190,12 +190,14 @@ The v3 priority ranking assumed MCP clients would surface progress notifications
 
 **Proposed additions to `plan_status`:**
 
-| Field | Description |
-|-------|-------------|
-| `last_progress_at` | ISO 8601 timestamp of the last progress update. Enables the agent to compute time-since-last-progress and decide whether to wait, resume, or retry. |
-| `last_llm_call_at` | ISO 8601 timestamp of the most recent LLM call. A gap > 5 minutes with no progress change is a strong stall signal. |
+| Field | Description | Status |
+|-------|-------------|--------|
+| `last_progress_at` | ISO 8601 timestamp of the last progress update. Enables the agent to compute time-since-last-progress and decide whether to wait, resume, or retry. | ✅ Implemented |
+| `last_llm_call_at` | ISO 8601 timestamp of the most recent LLM call. A gap > 5 minutes with no progress change is a strong stall signal. | Deferred |
 
 **Affected files:** `worker_plan_database/app.py` (write timestamps on progress), DB model (new timestamp columns), `mcp_cloud/handlers.py` (include in response).
+
+**Implementation note:** `last_progress_at` is written by the worker on every progress update and returned in `plan_status` under `timing.last_progress_at`. It resets to `null` on `plan_retry` and is preserved on `plan_resume`. `last_llm_call_at` is deferred — it requires deeper integration with the LLM executor layer.
 
 ---
 

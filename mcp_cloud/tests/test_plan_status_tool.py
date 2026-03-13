@@ -328,6 +328,68 @@ class TestPlanStatusTool(unittest.TestCase):
         self.assertEqual(err["message"], "Plan generation failed.")
         self.assertIsNone(err["recoverable"])
 
+    def test_plan_status_includes_last_progress_at(self):
+        """Processing plan with last_progress_at set returns ISO 8601 string in timing."""
+        plan_id = str(uuid.uuid4())
+        progress_ts = datetime(2026, 3, 12, 14, 30, 0, tzinfo=UTC)
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.processing,
+            "stop_requested": False,
+            "progress_percentage": 50.0,
+            "steps_completed": 15,
+            "steps_total": 30,
+            "current_step": "SWOT Analysis",
+            "timestamp_created": datetime.now(UTC),
+            "failure_reason": None,
+            "failed_step": None,
+            "error_message": None,
+            "recoverable": None,
+            "last_progress_at": progress_ts,
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        timing = result.structuredContent["timing"]
+        self.assertIn("last_progress_at", timing)
+        self.assertIsInstance(timing["last_progress_at"], str)
+        self.assertIn("2026-03-12", timing["last_progress_at"])
+
+    def test_plan_status_last_progress_at_null_when_pending(self):
+        """Pending plan with no progress has last_progress_at as None in timing."""
+        plan_id = str(uuid.uuid4())
+        plan_snapshot = {
+            "id": plan_id,
+            "state": PlanState.pending,
+            "stop_requested": False,
+            "progress_percentage": 0.0,
+            "steps_completed": None,
+            "steps_total": None,
+            "current_step": None,
+            "timestamp_created": datetime.now(UTC),
+            "failure_reason": None,
+            "failed_step": None,
+            "error_message": None,
+            "recoverable": None,
+            "last_progress_at": None,
+        }
+        with patch(
+            "mcp_cloud.handlers._get_plan_status_snapshot_sync",
+            return_value=plan_snapshot,
+        ), patch(
+            "mcp_cloud.handlers.fetch_file_list_from_worker_plan", new=AsyncMock(return_value=[])
+        ):
+            result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
+
+        timing = result.structuredContent["timing"]
+        self.assertIn("last_progress_at", timing)
+        self.assertIsNone(timing["last_progress_at"])
+
     def test_plan_status_non_failed_omits_diagnostics(self):
         """Processing/completed plans have no failure_reason etc. in response."""
         plan_id = str(uuid.uuid4())

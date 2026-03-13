@@ -143,6 +143,12 @@ When a plan is in the `failed` state, the response includes a consolidated `erro
 
 These fields are `null` for legacy plans that failed before this feature was added. The `error` dict is absent for non-failed states.
 
+#### Stall detection (`timing.last_progress_at`)
+
+The `timing.last_progress_at` field is an ISO 8601 timestamp of the most recent worker progress update. It is `null` until the worker writes its first progress update, and resets to `null` on `plan_retry`.
+
+Use it to detect stalled plans: if `last_progress_at` has not changed for > 10 minutes while the plan is `processing`, the worker is likely stuck. Call `plan_stop` followed by `plan_retry`. Fall back to `files[].updated_at` timestamps if `last_progress_at` is `null` (legacy plans).
+
 ### plan_stop
 
 Request an active plan to stop.

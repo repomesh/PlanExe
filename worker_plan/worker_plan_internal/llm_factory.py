@@ -4,12 +4,14 @@ Create a LLM instances.
 PROMPT> python -m worker_plan_internal.llm_factory
 """
 import logging
+import os
 from typing import Optional, Any
 from worker_plan_api.planexe_dotenv import PlanExeDotEnv
 from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
 from worker_plan_api.model_profile import ModelProfileEnum, resolve_model_profile_from_env
 from llama_index.core.llms.llm import LLM
 # from llama_index.llms.mistralai import MistralAI
+from llama_index.llms.anthropic import Anthropic
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.openai import OpenAI
@@ -17,6 +19,11 @@ from llama_index.llms.openai import OpenAI
 # from llama_index.llms.groq import Groq
 from llama_index.llms.lmstudio import LMStudio
 from llama_index.llms.openrouter import OpenRouter
+
+# Claude Code OAuth tokens (sk-ant-oat*) require this beta header.
+# Generated via: claude setup-token  (needs Claude Pro/Max subscription)
+_CLAUDE_OAUTH_TOKEN_PREFIX = "sk-ant-oat"
+_CLAUDE_OAUTH_BETA_HEADER = "oauth-2025-04-20"
 from worker_plan_internal.llm_util.ollama_info import OllamaInfo
 from worker_plan_internal.llm_util.thinking_aware_openai_like import ThinkingAwareOpenAILike
 from worker_plan_api.llm_info import LLMConfigItem, LLMInfo, OllamaStatus
@@ -196,6 +203,22 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
     # Override with any kwargs passed to get_llm()
     arguments.update(kwargs)
 
+    _claude_oauth_token: Optional[str] = None  # set below if OAuth detected
+    if class_name == "Anthropic":
+        # Auto-detect Claude Code OAuth tokens.
+        # Regular API keys (sk-ant-api*): sent via x-api-key — no changes needed.
+        # OAuth tokens (sk-ant-oat*) from `claude setup-token`:
+        #   - Must use Authorization: Bearer (x-api-key causes 401)
+        #   - Require anthropic-beta: oauth-2025-04-20 header
+        #   - llama_index always passes api_key to the underlying SDK client, so
+        #     we can't suppress x-api-key at the argument level. Instead, after
+        #     llama_index instantiates the LLM we replace _client/_aclient with
+        #     SDK clients built from auth_token= (Bearer) instead of api_key=.
+        api_key = arguments.get("api_key", "")
+        if api_key and api_key.startswith(_CLAUDE_OAUTH_TOKEN_PREFIX):
+            _claude_oauth_token = api_key
+            logger.debug("Claude Code OAuth token detected — will apply Bearer auth post-init.")
+
     if class_name == "OpenRouter" and SEND_APP_INFO_TO_OPENROUTER:
         # https://openrouter.ai/rankings
         # https://openrouter.ai/docs/api-reference/overview#headers
@@ -212,7 +235,40 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
     # Dynamically instantiate the class
     try:
         llm_class = globals()[class_name]  # Get class from global scope
-        return llm_class(**arguments)
+        llm_instance = llm_class(**arguments)
+
+        # Post-init: swap underlying SDK clients for OAuth tokens.
+        # llama_index always builds its internal client with api_key= (x-api-key header),
+        # but Anthropic rejects requests that send x-api-key alongside a Bearer token.
+        # Replacing _client/_aclient with auth_token=-based SDK clients fixes this.
+        if _claude_oauth_token and class_name == "Anthropic":
+            import anthropic as _anthropic_sdk
+            _oauth_headers = {"anthropic-beta": _CLAUDE_OAUTH_BETA_HEADER}
+            # Temporarily remove ANTHROPIC_API_KEY from env so the SDK doesn't
+            # inject X-Api-Key alongside the Bearer token — the server rejects
+            # requests that include both auth headers simultaneously.
+            _saved_api_key = os.environ.pop("ANTHROPIC_API_KEY", None)
+            try:
+                llm_instance._client = _anthropic_sdk.Anthropic(
+                    auth_token=_claude_oauth_token,
+                    base_url=arguments.get("base_url"),
+                    timeout=arguments.get("timeout", 60.0),
+                    max_retries=arguments.get("max_retries", 3),
+                    default_headers=_oauth_headers,
+                )
+                llm_instance._aclient = _anthropic_sdk.AsyncAnthropic(
+                    auth_token=_claude_oauth_token,
+                    base_url=arguments.get("base_url"),
+                    timeout=arguments.get("timeout", 60.0),
+                    max_retries=arguments.get("max_retries", 3),
+                    default_headers=_oauth_headers,
+                )
+            finally:
+                if _saved_api_key:
+                    os.environ["ANTHROPIC_API_KEY"] = _saved_api_key
+            logger.debug("Replaced Anthropic SDK clients with Bearer auth (OAuth token).")
+
+        return llm_instance
     except KeyError:
         raise ValueError(f"Invalid LLM class name in config.json: {class_name}")
     except TypeError as e:

@@ -124,6 +124,10 @@ class PlanItem(db.Model):
     error_message = db.Column(db.String(256), nullable=True)     # human-readable error message
     recoverable = db.Column(db.Boolean, nullable=True)           # true → suggest resume, false → suggest retry
 
+    # When was the last time progress was updated (percentage/steps changed).
+    # NULL until the first worker progress update. Used for stall detection.
+    last_progress_at = db.Column(db.DateTime, nullable=True, default=None)
+
     # Lightweight IS NOT NULL checks (actual column_property assigned after class body).
     # TYPE_CHECKING-only annotations so pyright knows the types without confusing
     # SQLAlchemy's declarative metaclass at runtime.

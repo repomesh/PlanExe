@@ -145,12 +145,25 @@ def ensure_stopped_state() -> None:
             except Exception as exc:
                 logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
+def ensure_last_progress_at_column() -> None:
+    """Add last_progress_at column to task_item (idempotent)."""
+    statements = (
+        "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP",
+    )
+    with db.engine.begin() as conn:
+        for stmt in statements:
+            try:
+                conn.execute(text(stmt))
+            except Exception as exc:
+                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+
 with app.app_context():
     ensure_planitem_stop_columns()
     ensure_multi_api_key_columns()
     ensure_step_count_columns()
     ensure_failure_diagnostics_columns()
     ensure_stopped_state()
+    ensure_last_progress_at_column()
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (

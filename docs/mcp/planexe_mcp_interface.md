@@ -353,7 +353,8 @@ Returns plan status and progress. Used for progress bars and UI states. **Pollin
   "current_step": "SWOT Analysis",
   "timing": {
     "started_at": "2026-01-14T12:35:10Z",
-    "elapsed_sec": 512
+    "elapsed_sec": 512,
+    "last_progress_at": "2026-01-14T12:43:02Z"
   },
   "files_count": 42,
   "files": [
@@ -391,6 +392,10 @@ When `state` is `"failed"`, the response includes a consolidated `error` dict to
 | `error.recoverable` | boolean (nullable) | `true` → suggest `plan_resume`; `false` → suggest `plan_retry`. |
 
 These fields are `null` for legacy plans created before failure diagnostics were added. The `error` dict is absent for non-failed states.
+
+**Stall detection**
+
+The `timing.last_progress_at` field is an ISO 8601 timestamp of the most recent worker progress update. It is `null` until the first progress update. Agents can compute time-since-last-progress to detect stalls — a gap > 10 minutes with no progress change is a strong stall signal. Fall back to `files[].updated_at` timestamps if `last_progress_at` is `null`.
 
 **Agent decision guidance:**
 

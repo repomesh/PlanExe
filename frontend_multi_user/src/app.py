@@ -535,6 +535,12 @@ class MyFlaskApp:
                     except Exception as exc:
                         logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
+        def _ensure_last_progress_at_column() -> None:
+            columns = {col["name"] for col in insp.get_columns("task_item")}
+            if "last_progress_at" not in columns:
+                with self.db.engine.begin() as conn:
+                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP"))
+
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
             table_names = set(insp.get_table_names())
@@ -594,6 +600,7 @@ class MyFlaskApp:
                         _ensure_step_count_columns()
                         _ensure_failure_diagnostic_columns()
                         _ensure_stopped_state()
+                        _ensure_last_progress_at_column()
                         _ensure_planitem_indexes()
                         _seed_initial_records()
                     return

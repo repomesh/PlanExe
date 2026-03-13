@@ -325,6 +325,10 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
     if created_at and created_at.tzinfo is None:
         created_at = created_at.replace(tzinfo=UTC)
 
+    last_progress_at = plan_snapshot.get("last_progress_at")
+    if last_progress_at and last_progress_at.tzinfo is None:
+        last_progress_at = last_progress_at.replace(tzinfo=UTC)
+
     response = {
         "plan_id": plan_uuid,
         "state": state,
@@ -335,6 +339,7 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
         "timing": {
             "started_at": format_datetime_utc(created_at) if created_at else None,
             "elapsed_sec": (datetime.now(UTC) - created_at).total_seconds() if created_at else 0,
+            "last_progress_at": format_datetime_utc(last_progress_at) if last_progress_at else None,
         },
         "files_count": len(files),
         "files": files[-10:],

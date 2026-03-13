@@ -15,7 +15,8 @@ import json
 import logging
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 # Add worker_plan/ to sys.path so worker_plan_internal imports work.
@@ -110,54 +111,72 @@ def run_single_plan(
         )
 
 
+def _timestamp() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _append_jsonl(path: Path, obj: dict) -> None:
+    with open(path, "a") as f:
+        f.write(json.dumps(obj) + "\n")
+
+
+def _emit_event(events_path: Path, event: str, **kwargs) -> None:
+    entry = {"timestamp": _timestamp(), "event": event, **kwargs}
+    _append_jsonl(events_path, entry)
+    logger.info(f"event: {event} {kwargs}")
+
+
 def run(
     system_prompt: str,
     plan_dirs: list[Path],
     output_dir: Path,
     model_names: list[str],
-) -> dict:
+) -> None:
     """
-    Iterate over plan directories, run the lever step for each, and write
-    meta.json one level above output_dir.
+    Iterate over plan directories, run the lever step for each.
+
+    Writes immediately:
+      - meta.json      (one level above output_dir) — run metadata, written at start
+      - plans.jsonl     (one level above output_dir) — one row per completed plan
+      - events.jsonl    (one level above output_dir) — significant events as they happen
     """
     llm_models = LLMModelFromName.from_names(model_names)
     llm_executor = LLMExecutor(llm_models=llm_models)
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    run_dir = output_dir.parent
     prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
 
-    results: list[PlanResult] = []
-    total_t0 = time.monotonic()
-
-    for plan_dir in plan_dirs:
-        pr = run_single_plan(plan_dir, output_dir, system_prompt, llm_executor)
-        results.append(pr)
-
-    total_duration = round(time.monotonic() - total_t0, 2)
-
+    # Write meta.json up front (no plans or total_duration)
     meta = {
         "step": "identify_potential_levers",
         "system_prompt_sha256": prompt_sha256,
         "models": model_names,
-        "plans": [
-            {
-                "plan_name": r.plan_name,
-                "status": r.status,
-                "lever_count": r.lever_count,
-                "duration_seconds": r.duration_seconds,
-                "error": r.error,
-            }
-            for r in results
-        ],
-        "total_duration_seconds": total_duration,
     }
-
-    meta_path = output_dir.parent / "meta.json"
+    meta_path = run_dir / "meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
     logger.info(f"Wrote {meta_path}")
 
-    return meta
+    events_path = run_dir / "events.jsonl"
+    plans_path = run_dir / "plans.jsonl"
+
+    for plan_dir in plan_dirs:
+        plan_name = plan_dir.name
+        _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
+
+        pr = run_single_plan(plan_dir, output_dir, system_prompt, llm_executor)
+
+        if pr.status == "ok":
+            _emit_event(events_path, "run_single_plan_complete",
+                        plan_name=plan_name, lever_count=pr.lever_count,
+                        duration_seconds=pr.duration_seconds)
+        else:
+            _emit_event(events_path, "run_single_plan_error",
+                        plan_name=plan_name, error=pr.error,
+                        duration_seconds=pr.duration_seconds)
+
+        _append_jsonl(plans_path, asdict(pr))
 
 
 def main():
@@ -214,11 +233,16 @@ def main():
     if not plan_dirs:
         parser.error("No plan directories found.")
 
-    meta = run(system_prompt, plan_dirs, args.output_dir, args.models)
+    run(system_prompt, plan_dirs, args.output_dir, args.models)
 
-    ok = sum(1 for p in meta["plans"] if p["status"] == "ok")
-    total = len(meta["plans"])
-    print(f"\nDone: {ok}/{total} plans succeeded in {meta['total_duration_seconds']}s")
+    # Summarize from plans.jsonl
+    plans_path = args.output_dir.parent / "plans.jsonl"
+    if plans_path.exists():
+        plans = [json.loads(line) for line in plans_path.read_text().splitlines() if line.strip()]
+        ok = sum(1 for p in plans if p["status"] == "ok")
+        total = len(plans)
+        total_duration = sum(p["duration_seconds"] for p in plans)
+        print(f"\nDone: {ok}/{total} plans succeeded in {total_duration:.1f}s")
 
 
 if __name__ == "__main__":

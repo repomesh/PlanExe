@@ -126,6 +126,18 @@ The `recoverable` boolean lets the agent immediately suggest `plan_resume` (tran
 
 ### I5 — SSE is the wrong mechanism for MCP agents
 
+**Status:** Implemented and reverted. A `monitor` boolean parameter was added to `plan_create`, `plan_retry`, and `plan_resume` using the MCP SDK's `ctx.report_progress()` and `ctx.info()` APIs. The server sent `notifications/progress` and `notifications/message` correctly, but v4 real-world testing revealed that Claude Code — PlanExe's primary MCP consumer — silently drops both notification types. Claude Code only supports `list_changed` notifications (for refreshing tool/resource definitions). Since no current MCP client can consume the notifications, the implementation was reverted as unused code.
+
+**v4 real-world testing (March 2026):** A `monitor=true` parameter was implemented and tested. Claude Code tested `monitor=true` on `plan_resume`. The resume succeeded and the plan completed, but zero notifications were received. Investigation showed that Claude Code only supports `list_changed` MCP notifications (for refreshing tool/resource definitions). It does not handle `notifications/progress` or `notifications/message` — they are silently dropped. The server was sending notifications correctly; the gap is on the client side. The implementation was reverted as unused code — no MCP client can consume it today. See `docs/proposals/mcp-interface-perception-v4.md` for the full agent feedback.
+
+**Corrected priority ranking (from v4 agent feedback):**
+
+1. Polling `plan_status` — reliable, works everywhere, recommended default
+2. `plan_wait` blocking tool (see I8) — would eliminate polling for agents without notification support
+3. MCP notifications — correct long-term solution, blocked by client support (revisit when clients add `notifications/progress` handling)
+4. SSE — only useful for non-agent consumers (browser UIs, dashboards)
+5. HTTP webhooks — only useful for server-to-server
+
 **Updated in v3:** The original framing ("SSE events lack structured data") missed the deeper problem. SSE is designed for real-time UI clients, not turn-based agents.
 
 **Problem:** The agent's SSE monitoring pattern across all 13 plans was:
@@ -141,21 +153,17 @@ Even if SSE events contained rich structured progress data, a turn-based MCP age
 - "Webhooks" — HTTP callbacks, but CLI agents have no endpoint to register
 - "SSE heartbeat pings" — would only help if the pattern itself were sound
 
-**What would actually help MCP agents (corrected priority):**
+**What would actually help MCP agents (corrected in v3, re-corrected in v4):**
 
-1. **MCP notifications (best fit):** The MCP protocol supports server-to-client notifications over the existing connection. If PlanExe sent a notification on terminal state:
-   ```json
-   {"method": "notifications/plan_state_changed", "params": {"plan_id": "...", "state": "completed", "progress_percentage": 100}}
-   ```
-   Claude Code would receive it as an event in the conversation. No SSE, no polling, no webhook endpoint. The connection already exists — use it.
+The v3 priority ranking assumed MCP clients would surface progress notifications. Real-world testing in v4 showed this is not the case (Claude Code silently drops them). See corrected priority ranking above.
 
-2. **`plan_wait` blocking tool (fallback):** See I8.
+1. **Polling `plan_status` (works everywhere):** The primary method. Reliable across all clients and transports.
 
-3. **Polling `plan_status` (always works):** The current fallback. Inelegant but reliable across both local and remote servers.
+2. **`plan_wait` blocking tool:** See I8. Would eliminate polling for agents without notification support.
 
-4. **SSE (for non-MCP real-time clients only):** Keep SSE for browser UIs, streaming dashboards, and CLI scripts that can consume events in real time. Stop recommending it to MCP agents in tool descriptions.
+3. **MCP notifications:** Correct long-term solution, but blocked by client support. Revisit when MCP clients add `notifications/progress` and `notifications/message` handling.
 
-**Practical recommendation:** Remove `sse_url` from `plan_create` responses once MCP notifications are working. If a future web UI needs SSE, add a dedicated endpoint at that point.
+4. **SSE (for non-MCP real-time clients only):** Keep SSE for browser UIs, streaming dashboards, and CLI scripts that can consume events in real time. Do not recommend to MCP agents.
 
 **Overlap:** Proposal 70 §5.1 (SSE progress streaming) is implemented but serves the wrong consumer type for agent use cases.
 

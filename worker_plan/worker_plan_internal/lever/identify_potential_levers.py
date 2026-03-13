@@ -135,13 +135,16 @@ class IdentifyPotentialLevers:
     metadata: dict
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, user_prompt: str) -> 'IdentifyPotentialLevers':
+    def execute(cls, llm_executor: LLMExecutor, user_prompt: str, system_prompt: Optional[str] = None) -> 'IdentifyPotentialLevers':
         if not isinstance(llm_executor, LLMExecutor):
             raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(user_prompt, str):
             raise ValueError("Invalid user_prompt.")
-        
-        system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
+
+        if system_prompt is None:
+            system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
+        else:
+            system_prompt = system_prompt.strip()
         chat_message_list = [
             ChatMessage(
                 role=MessageRole.SYSTEM,

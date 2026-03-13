@@ -10,6 +10,7 @@ from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
 from worker_plan_api.model_profile import ModelProfileEnum, resolve_model_profile_from_env
 from llama_index.core.llms.llm import LLM
 # from llama_index.llms.mistralai import MistralAI
+from llama_index.llms.anthropic import Anthropic
 from llama_index.llms.ollama import Ollama
 from llama_index.llms.openai_like import OpenAILike
 from llama_index.llms.openai import OpenAI
@@ -17,6 +18,11 @@ from llama_index.llms.openai import OpenAI
 # from llama_index.llms.groq import Groq
 from llama_index.llms.lmstudio import LMStudio
 from llama_index.llms.openrouter import OpenRouter
+
+# Claude Code OAuth tokens (sk-ant-oat*) require this beta header.
+# Generated via: claude setup-token  (needs Claude Pro/Max subscription)
+_CLAUDE_OAUTH_TOKEN_PREFIX = "sk-ant-oat"
+_CLAUDE_OAUTH_BETA_HEADER = "oauth-2025-04-20"
 from worker_plan_internal.llm_util.ollama_info import OllamaInfo
 from worker_plan_internal.llm_util.thinking_aware_openai_like import ThinkingAwareOpenAILike
 from worker_plan_api.llm_info import LLMConfigItem, LLMInfo, OllamaStatus
@@ -195,6 +201,17 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
 
     # Override with any kwargs passed to get_llm()
     arguments.update(kwargs)
+
+    if class_name == "Anthropic":
+        # Auto-detect Claude Code OAuth tokens and inject the required beta header.
+        # Regular API keys (sk-ant-api*) work without any extra headers.
+        # OAuth tokens (sk-ant-oat*) from `claude setup-token` need anthropic-beta header.
+        api_key = arguments.get("api_key", "")
+        if api_key and api_key.startswith(_CLAUDE_OAUTH_TOKEN_PREFIX):
+            existing_headers = arguments.get("default_headers", {})
+            existing_headers["anthropic-beta"] = _CLAUDE_OAUTH_BETA_HEADER
+            arguments["default_headers"] = existing_headers
+            logger.debug("Claude Code OAuth token detected — injecting anthropic-beta header.")
 
     if class_name == "OpenRouter" and SEND_APP_INFO_TO_OPENROUTER:
         # https://openrouter.ai/rankings

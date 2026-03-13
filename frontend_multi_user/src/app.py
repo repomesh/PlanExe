@@ -536,6 +536,7 @@ class MyFlaskApp:
                         logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
         def _ensure_last_progress_at_column() -> None:
+            insp = inspect(self.db.engine)
             columns = {col["name"] for col in insp.get_columns("task_item")}
             if "last_progress_at" not in columns:
                 with self.db.engine.begin() as conn:

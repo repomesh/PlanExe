@@ -8,6 +8,38 @@ By the end of this prompt optimization, the overall plan quality should have bee
 I want to track metrics for how much improvement have happened.
 
 
+## Status (2026-03-13)
+
+### Done
+
+- **Data repo created**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, optimization run artifacts, and scores.
+- **Baseline data populated**: 5 train plans and 9 verify plans extracted from zips into `baseline/train/` and `baseline/verify/`. Each plan contains ~175-189 files covering the full pipeline output.
+- **`dataset.json`** defines the train/verify split with zip filenames.
+- **`populate_baseline.py`** script automates ingesting baseline data from local paths or URLs.
+- **Directory structure** for `runs/`, `scores/`, and `full_plan_comparisons/` is in place (empty, awaiting optimizer).
+
+### Not Started
+
+- **`prompt_optimizer/` package in PlanExe** — no optimizer code exists yet.
+- **Evaluator prompt** — no scoring rubric or comparison prompt written.
+- **Candidate generator** — no mechanism for producing prompt variants.
+- **Runner / Scorer / CLI** — none of the optimization loop machinery exists.
+
+### Next Steps
+
+1. **Design the evaluator prompt and scoring rubric.** This is the foundation. Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
+2. **Pick the first pipeline step to optimize.** Something early (e.g., `002-3-premise_attack` or `002-10-potential_levers`) since downstream steps depend on upstream quality.
+3. **Build the optimizer engine** in `prompt_optimizer/`:
+   - `runner.py` — reruns a single pipeline step with a candidate prompt against training plans.
+   - `evaluator.py` — calls a pinned reasoning model to score/compare outputs.
+   - `candidate_generator.py` — produces prompt variants (LLM rewrites, structured mutations).
+   - `optimizer.py` — orchestrates the train/verify loop.
+   - `cli.py` — CLI entry point.
+4. **Pin the reasoning model** for evaluation so scores are reproducible across runs.
+5. **Run baseline scoring** — score the current prompts to establish a numeric starting point.
+6. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
+
+
 ## Stage 1 - one improvement iteration
 
 Here is how one iteration is going to be:
@@ -18,8 +50,8 @@ For MODEL_LIST, loop through the models, (these are LLMs without reasoning):
 - It's very expensive to run the full pipeline. So I only want to rerun the luigi pipeline for that just step, see if the new system prompt does a better job than the reference plan.
 - Capture the output.
 
-Have a reasoning model do a comparison of the captured outputs. 
-If it does better than the original prompt then it’s a candidate for keeping.
+Have a reasoning model do a comparison of the captured outputs.
+If it does better than the original prompt then it's a candidate for keeping.
 If it does does worse than the original prompt then write it to a failed attempt log.
 Find prompts that consistently yield better outputs than the original prompt.
 Store the feedback.
@@ -39,7 +71,7 @@ Run "one improvement iteration" multiple times, until there score isn't improvin
 
 As more upstream tasks gets optimized, then move on to further downstream tasks.
 
-From time to time regenerate full plan, and have a reasoning model compare how 
+From time to time regenerate full plan, and have a reasoning model compare how
 much better or worse is the new full plan is over various KPIs.
 
 
@@ -47,9 +79,7 @@ much better or worse is the new full plan is over various KPIs.
 
 Config json file that contains the "dataset train" and "dataset verify".
 
-Within this dir is contained lots of zip files
-/Users/neoneye/git/PlanExe-web
-I don't want a hardcoded system path. It must be an envvar.
+The dataset lives in the [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) repository.
 
 These zip files are what PlanExe currently outputs, so these are the "baseline" to compare with.
 
@@ -152,31 +182,32 @@ prompt_optimizer/                   # NEW — the optimization engine
 This keeps the optimizer close to the code it's modifying — it needs to import pipeline tasks,
 swap prompts, and run individual steps.
 
-## Repo 2: `PlanExe-prompt-lab` (new — data repo)
+## Repo 2: [`PlanExe-prompt-lab`](https://github.com/PlanExeOrg/PlanExe-prompt-lab) (data repo)
 
 ```
 README.md
 dataset.json                        # train/verify split definition
+populate_baseline.py                # script to populate baseline from zip files
 
-baseline/                           # current outputs (unzipped from dataset zips)
+baseline/                           # current outputs (extracted from dataset zips)
   train/
-    hong_kong_game/
-      001-start_time.json
-      002-identify_purpose.json
+    20260310_hong_kong_game/
+      001-1-start_time.json
+      001-2-plan.txt
       ...
       030-report.html
-    gta_game/
+    20250329_gta_game/
       ...
-    silo/
+    20250321_silo/
       ...
-    parasomnia_research_unit/
+    20260311_parasomnia_research_unit/
       ...
-    sovereign_identity/
+    20260308_sovereign_identity/
       ...
   verify/
-    crate_recovery_campaign/
+    20260303_crate_recovery_campaign/
       ...
-    nuuk_clay_workshop/
+    20260215_nuuk_clay_workshop/
       ...
     (7 more plans)
 

@@ -1,0 +1,243 @@
+# System prompt optimizer
+
+My overall plan is to optimize all system prompts across PlanExe.
+By first starting optimizing the earliest system prompt, when that consistently performs better than
+older system prompts, then it's a keeper. Then move on to the next system prompt in the luigi pipeline.
+By the end of this prompt optimization, the overall plan quality should have been improved.
+
+I want to track metrics for how much improvement have happened.
+
+
+## Stage 1 - one improvement iteration
+
+Here is how one iteration is going to be:
+Optimize one system prompt for a single step in the luigi pipeline in run_plan_pipeline.py
+Take the "dataset train" and unzip the files to a work dir.
+Alter the system prompt of a named task in the pipeline.
+For MODEL_LIST, loop through the models, (these are LLMs without reasoning):
+- It's very expensive to run the full pipeline. So I only want to rerun the luigi pipeline for that just step, see if the new system prompt does a better job than the reference plan.
+- Capture the output.
+
+Have a reasoning model do a comparison of the captured outputs. 
+If it does better than the original prompt then it’s a candidate for keeping.
+If it does does worse than the original prompt then write it to a failed attempt log.
+Find prompts that consistently yield better outputs than the original prompt.
+Store the feedback.
+
+At this point there should be a ranked list of candidate system prompts that are better than the original.
+Go through the "dataset verify" and compute score of the best candidate prompts.
+Pick the best one and commit it to git.
+
+For all plans both train and verify, commit the new generated files for each plan.
+Commit improvement stats.
+
+## Stage 2 - multiple improvement iteration
+
+Run "one improvement iteration" multiple times, until there score isn't improving significantly.
+
+## Stage 3 - next item in the luigi pipeline
+
+As more upstream tasks gets optimized, then move on to further downstream tasks.
+
+From time to time regenerate full plan, and have a reasoning model compare how 
+much better or worse is the new full plan is over various KPIs.
+
+
+# Dataset
+
+Config json file that contains the "dataset train" and "dataset verify".
+
+Within this dir is contained lots of zip files
+/Users/neoneye/git/PlanExe-web
+I don't want a hardcoded system path. It must be an envvar.
+
+These zip files are what PlanExe currently outputs, so these are the "baseline" to compare with.
+
+
+## Dataset train
+
+20260310_hong_kong_game.zip
+20250329_gta_game.zip
+20250321_silo.zip
+20260311_parasomnia_research_unit.zip
+20260308_sovereign_identity.zip
+
+## Dataset verify
+
+20260303_crate_recovery_campaign.zip
+20260215_nuuk_clay_workshop.zip
+20260202_heatwave_resilience.zip
+20260201_media_rescue.zip
+20260201_yellowstone_evacuation.zip
+20260131_clear_english.zip
+20260129_euro_adoption.zip
+20260114_cbc_validation.zip
+20251101_e_bus_security.zip
+
+
+# Feedback
+
+## Strengths
+
+- Incremental approach is smart — optimizing one pipeline step at a time and proving it before moving on avoids compounding errors.
+- Train/verify split — using separate datasets to prevent overfitting to the evaluation set is the right call.
+- Failed attempt log — tracking what didn't work is often overlooked but very valuable.
+
+## Questions & Gaps
+
+1. What are the KPIs?
+The document mentions "score," "better," "worse," and "various KPIs" but never defines them. This is the most critical gap. Without concrete metrics, the reasoning model's comparison will be subjective and inconsistent. What makes one output "better"? Completeness? Specificity? Actionability? Structure?
+
+2. How is the reasoning model prompted for comparison?
+"Have a reasoning model do a comparison" is underspecified. Will it use a rubric? Pairwise ranking? A numeric score? The evaluation prompt itself will heavily influence which candidate "wins." This prompt may need its own optimization.
+
+3. What does "consistently" mean?
+"Find prompts that consistently yield better outputs" — across all train plans? A majority? With what confidence threshold? A candidate that's great for 3 plans but terrible for 1 might still be worse overall.
+
+4. MODEL_LIST is undefined.
+Which models are being tested? Are you running each candidate prompt across multiple LLMs to find prompts that are model-robust, or optimizing per-model?
+
+5. How are candidate prompts generated?
+The doc describes the evaluation loop but not how new prompt variants are created. Manual authoring? LLM-generated rewrites? A mix?
+
+6. "Rerun just that step" — dependency handling.
+If you rerun step N with a new prompt, its output feeds into step N+1 in the real pipeline. Are you only evaluating step N's output in isolation, or propagating through downstream steps? Evaluating in isolation is faster but may miss regressions that only show up downstream.
+
+7. Budget/cost controls.
+You mention "it's very expensive to run the full pipeline." What about the cost of this optimization loop itself? With multiple models x multiple candidate prompts x multiple train plans x multiple iterations, this can get expensive fast. Consider setting a budget cap or max iterations.
+
+8. The envvar for the dataset path — good instinct, but also specify a fallback or error message if it's unset.
+
+## Suggestions
+
+- Define a scoring rubric (even a simple 1-5 scale across 3-4 dimensions) before starting.
+- Version-control the evaluation prompts alongside the system prompts.
+- Consider running a baseline score for the current prompts first so you have a numeric starting point, not just pairwise comparisons.
+- Add a "no regression" gate: the new prompt must not score worse on any plan by more than X%, even if average improves.
+
+
+# Repo Structure
+
+Two repos: the optimization engine lives in PlanExe, the data/artifacts live in a separate repo.
+
+## Repo 1: `PlanExe` (existing — add optimization tooling)
+
+```
+worker_plan/
+  worker_plan_internal/
+    assume/
+      identify_purpose.py          # contains SYSTEM_PROMPT (current)
+      ...
+    ...
+
+prompt_optimizer/                   # NEW — the optimization engine
+  __init__.py
+  config.py                        # loads dataset config, env vars
+  runner.py                        # reruns a single pipeline step with a candidate prompt
+  evaluator.py                     # calls reasoning model to score/compare outputs
+  scorer.py                        # rubric definition, numeric scoring
+  candidate_generator.py           # generates prompt variants
+  optimizer.py                     # orchestrates the train/verify loop (Stage 1-2)
+  cli.py                           # CLI entry point
+
+  rubrics/                          # evaluation rubrics per pipeline step
+    identify_purpose.yaml
+    make_assumptions.yaml
+    ...
+
+  tests/
+    ...
+```
+
+This keeps the optimizer close to the code it's modifying — it needs to import pipeline tasks,
+swap prompts, and run individual steps.
+
+## Repo 2: `PlanExe-prompt-lab` (new — data repo)
+
+```
+README.md
+dataset.json                        # train/verify split definition
+
+baseline/                           # current outputs (unzipped from dataset zips)
+  train/
+    hong_kong_game/
+      001-start_time.json
+      002-identify_purpose.json
+      ...
+      030-report.html
+    gta_game/
+      ...
+    silo/
+      ...
+    parasomnia_research_unit/
+      ...
+    sovereign_identity/
+      ...
+  verify/
+    crate_recovery_campaign/
+      ...
+    nuuk_clay_workshop/
+      ...
+    (7 more plans)
+
+runs/                               # optimization run outputs
+  2026-03-13_identify_purpose/
+    meta.json                       # which step, which base prompt, model list
+    candidates/
+      candidate_01.txt              # candidate prompt text
+      candidate_02.txt
+      ...
+    outputs/
+      candidate_01/
+        hong_kong_game.json         # output from running this candidate
+        gta_game.json
+        ...
+      candidate_02/
+        ...
+    evaluations/
+      candidate_01/
+        hong_kong_game_eval.json    # reasoning model's comparison + score
+        ...
+    summary.json                    # ranked candidates, aggregate scores
+    failed_attempts.log
+
+  2026-03-14_make_assumptions/
+    ...
+
+scores/                             # longitudinal tracking
+  scoreboard.csv                    # step, date, baseline_score, best_score, delta
+  history.json                      # full history for charting
+
+full_plan_comparisons/              # Stage 3 periodic full-plan regenerations
+  2026-03-20/
+    hong_kong_game/
+      030-report.html
+    kpi_comparison.json
+```
+
+## Connecting the two repos
+
+`dataset.json` ties the two repos together:
+
+```json
+{
+  "dataset_dir_env": "PLANEXE_DATASET_DIR",
+  "train": [
+    {"name": "hong_kong_game", "zip": "20260310_hong_kong_game.zip"}
+  ],
+  "verify": [
+    {"name": "crate_recovery_campaign", "zip": "20260303_crate_recovery_campaign.zip"}
+  ]
+}
+```
+
+## Why this split
+
+- `PlanExe` stays clean — no multi-GB plan artifacts in the code repo.
+- `PlanExe-prompt-lab` can use Git LFS for the zip files and large outputs.
+- The data repo is a full audit trail — every candidate, evaluation, and score is committed.
+- `scoreboard.csv` gives the metrics tracking at a glance.
+
+## Env var
+
+The optimizer reads `PLANEXE_PROMPT_LAB_DIR` (path to the data repo checkout) — no hardcoded paths.

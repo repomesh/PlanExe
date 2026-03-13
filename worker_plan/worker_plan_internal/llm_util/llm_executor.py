@@ -44,6 +44,10 @@ _TRANSIENT_PATTERNS: list[str] = [
     "temporarily unavailable", "503", "502", "500",
     "overloaded", "capacity", "try again",
     "server error", "internal error",
+    # Empty/null responses from structured LLM calls — the provider returned a
+    # successful HTTP 200 but the response body contained no usable content.
+    # This is a transient API-side failure, not a model capability failure.
+    "nonetype", "'none' object", "none' object is not",
 ]
 
 

@@ -95,17 +95,9 @@ Obtain info about what resources the user has available, and if they are willing
 
 # Secondary issues
 
-## MCP - Multiple API keys
-
-As of 2026-mar-02, the user can only have 1 api key.
-Now I have quite a few places where PlanExe is integrated, and 
-I want to see stats on what api key is being used, and cost.
-Resetting the api key, and all the integrations dies.
-
-
 ## MCP - Polishing of MCP flow via planexe.org
 
-As of 2026-mar-02, I'm focusing on improving MCP.
+As of 2026-mar-13, I'm focusing on improving MCP.
 PlanExe is already working with OpenClaw.
 But it's not as smooth as I would like.
 
@@ -132,12 +124,6 @@ I want to capture the reasoning, since it may be helpful for troubleshooting.
 Or for other AIs to assess the reasoning steps leading up to the response.
 
 
-## Debugging
-
-Get step-by-step debugging working again.
-Now that I have switched to Docker, I have multiple python projects in the same repo, that use different incompatible packages.
-
-
 ## Table of content
 
 Currently the generated report has expandable/collapsible sections. There is an overwhelming amount of content inside each sections.
@@ -158,3 +144,9 @@ These user prompts are saved to the `track_activity.jsonl` file already. So havi
 I can't afford the pro plan to have a dedicated Postgres server.
 Currently when connecting to Railway, it's via a TCP Proxy and it's unencrypted.
 Either upgrade to pro, or use SSL certificates within the "database_postgres" Dockerfile.
+
+## Not a priority - Debugging
+
+Get step-by-step debugging working again.
+Now that I have switched to Docker, I have multiple python projects in the same repo, that use different incompatible packages.
+With vibe-coding, I can't recall last time I have debugged anything.

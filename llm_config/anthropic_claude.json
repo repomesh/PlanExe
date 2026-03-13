@@ -1,6 +1,65 @@
 {
+    "_comment": "Anthropic Claude models via the Anthropic API. Set ANTHROPIC_API_KEY in .env to a regular API key (sk-ant-api*) or a Claude Code OAuth token (sk-ant-oat*, generated via `claude setup-token` — requires Claude Pro/Max subscription). OAuth tokens are auto-detected and sent via Bearer auth with the required anthropic-beta header.",
+
+    "anthropic-claude-haiku-4-5": {
+        "comment": "Haiku 4.5 — fastest and cheapest. Good for most PlanExe runs. ~$0.25 input / $1.25 output per million tokens.",
+        "luigi_workers": 4,
+        "priority": 1,
+        "class": "Anthropic",
+        "arguments": {
+            "model": "claude-haiku-4-5",
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 60.0,
+            "context_window": 200000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "pricing_kind": "paid"
+    },
+
+    "anthropic-claude-haiku-4-5-pinned": {
+        "comment": "Haiku 4.5 — pinned to a specific version for reproducibility.",
+        "luigi_workers": 4,
+        "priority": 1,
+        "class": "Anthropic",
+        "arguments": {
+            "model": "claude-haiku-4-5-20251001",
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 60.0,
+            "context_window": 200000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "pricing_kind": "paid"
+    },
+
+    "anthropic-claude-sonnet-4-6": {
+        "comment": "Sonnet 4.6 (latest) — higher quality than Haiku, about 10x more expensive. Good balance of quality and cost for complex plans.",
+        "luigi_workers": 4,
+        "priority": 1,
+        "class": "Anthropic",
+        "arguments": {
+            "model": "claude-sonnet-4-6",
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 120.0,
+            "context_window": 200000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 16000,
+            "max_retries": 5
+        },
+        "pricing_kind": "paid"
+    },
+
     "anthropic-claude-sonnet-4-5": {
-        "comment": "Claude Sonnet 4.5 via Anthropic API. Requires ANTHROPIC_API_KEY in .env. Supports both regular API keys (sk-ant-api*) and Claude Code OAuth tokens (sk-ant-oat*, generated via `claude setup-token` — needs Claude Pro/Max subscription). OAuth tokens get the anthropic-beta header injected automatically.",
+        "comment": "Sonnet 4.5 — previous generation, pinned.",
         "luigi_workers": 4,
         "priority": 1,
         "class": "Anthropic",
@@ -17,21 +76,62 @@
         },
         "pricing_kind": "paid"
     },
-    "anthropic-claude-haiku-4-5": {
-        "comment": "Claude Haiku 4.5 via Anthropic API — faster and cheaper. Requires ANTHROPIC_API_KEY in .env. Also supports Claude Code OAuth tokens (sk-ant-oat*) automatically.",
-        "luigi_workers": 4,
-        "priority": 2,
+
+    "anthropic-claude-sonnet-4-6-thinking": {
+        "comment": "Sonnet 4.6 with extended thinking enabled (budget_tokens: 10000). Produces higher-quality structured output for complex tasks but significantly increases latency and cost. PlanExe makes 60-100+ calls per plan — use sparingly.",
+        "luigi_workers": 2,
+        "priority": 1,
         "class": "Anthropic",
         "arguments": {
-            "model": "claude-haiku-4-5",
+            "model": "claude-sonnet-4-6",
             "api_key": "${ANTHROPIC_API_KEY}",
             "temperature": 1.0,
-            "timeout": 60.0,
+            "timeout": 300.0,
             "context_window": 200000,
             "is_function_calling_model": false,
             "is_chat_model": true,
-            "max_tokens": 8192,
+            "max_tokens": 16000,
+            "max_retries": 5,
+            "thinking_dict": {"type": "enabled", "budget_tokens": 10000}
+        },
+        "pricing_kind": "paid"
+    },
+
+    "anthropic-claude-opus-4-6": {
+        "comment": "Opus 4.6 (latest, most capable) — highest quality, highest cost. Best for plans where quality matters more than budget. PlanExe makes 60-100+ calls — expect significant spend per plan.",
+        "luigi_workers": 2,
+        "priority": 1,
+        "class": "Anthropic",
+        "arguments": {
+            "model": "claude-opus-4-6",
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 300.0,
+            "context_window": 200000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 16000,
             "max_retries": 5
+        },
+        "pricing_kind": "paid"
+    },
+
+    "anthropic-claude-opus-4-6-thinking": {
+        "comment": "Opus 4.6 with extended thinking (budget_tokens: 16000). Maximum quality — use only when cost is not a concern. High latency per call.",
+        "luigi_workers": 1,
+        "priority": 1,
+        "class": "Anthropic",
+        "arguments": {
+            "model": "claude-opus-4-6",
+            "api_key": "${ANTHROPIC_API_KEY}",
+            "temperature": 1.0,
+            "timeout": 600.0,
+            "context_window": 200000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 16000,
+            "max_retries": 5,
+            "thinking_dict": {"type": "enabled", "budget_tokens": 16000}
         },
         "pricing_kind": "paid"
     }

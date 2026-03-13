@@ -243,30 +243,81 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
         # Replacing _client/_aclient with auth_token=-based SDK clients fixes this.
         if _claude_oauth_token and class_name == "Anthropic":
             import anthropic as _anthropic_sdk
+            from functools import wraps
+            from typing import List as TypingList
             _oauth_headers = {"anthropic-beta": _CLAUDE_OAUTH_BETA_HEADER}
             # Temporarily remove ANTHROPIC_API_KEY from env so the SDK doesn't
             # inject X-Api-Key alongside the Bearer token — the server rejects
             # requests that include both auth headers simultaneously.
             _saved_api_key = os.environ.pop("ANTHROPIC_API_KEY", None)
             try:
-                llm_instance._client = _anthropic_sdk.Anthropic(
+                sync_client = _anthropic_sdk.Anthropic(
                     auth_token=_claude_oauth_token,
                     base_url=arguments.get("base_url"),
                     timeout=arguments.get("timeout", 60.0),
                     max_retries=arguments.get("max_retries", 3),
                     default_headers=_oauth_headers,
                 )
-                llm_instance._aclient = _anthropic_sdk.AsyncAnthropic(
+                async_client = _anthropic_sdk.AsyncAnthropic(
                     auth_token=_claude_oauth_token,
                     base_url=arguments.get("base_url"),
                     timeout=arguments.get("timeout", 60.0),
                     max_retries=arguments.get("max_retries", 3),
                     default_headers=_oauth_headers,
                 )
+                
+                # Wrap parse() methods to automatically inject the OAuth beta.
+                # The SDK's parse() method builds its own anthropic-beta header
+                # (combining structured-outputs + user-provided betas), but doesn't
+                # merge with default_headers. We wrap it to inject OAuth beta into
+                # the betas parameter so it's combined correctly.
+                def _make_parse_wrapper(original_parse_method, oauth_beta: str):
+                    @wraps(original_parse_method)
+                    def wrapped_parse(
+                        *,
+                        max_tokens,
+                        messages,
+                        model,
+                        betas: TypingList[str] | None = None,
+                        **kwargs
+                    ):
+                        # Ensure betas is a list and includes the OAuth beta
+                        if betas is None:
+                            betas = []
+                        elif not isinstance(betas, list):
+                            betas = list(betas) if hasattr(betas, '__iter__') else []
+                        else:
+                            betas = list(betas)
+                        
+                        if oauth_beta not in betas:
+                            betas.insert(0, oauth_beta)  # Add OAuth beta first
+                        
+                        return original_parse_method(
+                            max_tokens=max_tokens,
+                            messages=messages,
+                            model=model,
+                            betas=betas,
+                            **kwargs
+                        )
+                    return wrapped_parse
+                
+                # Wrap both sync and async parse methods
+                original_sync_parse = sync_client.beta.messages.parse
+                sync_client.beta.messages.parse = _make_parse_wrapper(
+                    original_sync_parse, _CLAUDE_OAUTH_BETA_HEADER
+                )
+                
+                original_async_parse = async_client.beta.messages.parse
+                async_client.beta.messages.parse = _make_parse_wrapper(
+                    original_async_parse, _CLAUDE_OAUTH_BETA_HEADER
+                )
+                
+                llm_instance._client = sync_client
+                llm_instance._aclient = async_client
             finally:
                 if _saved_api_key:
                     os.environ["ANTHROPIC_API_KEY"] = _saved_api_key
-            logger.debug("Replaced Anthropic SDK clients with Bearer auth (OAuth token).")
+            logger.debug("Replaced Anthropic SDK clients with Bearer auth (OAuth token) and wrapped parse() for OAuth beta.")
 
         return llm_instance
     except KeyError:

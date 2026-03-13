@@ -248,16 +248,28 @@ full_plan_comparisons/              # Stage 3 periodic full-plan regenerations
 
 ## Connecting the two repos
 
-`dataset.json` ties the two repos together:
+`dataset.json` defines the train/verify split. The `populate_baseline.py` script reads this file and extracts the zips into `baseline/`.
 
 ```json
 {
-  "dataset_dir_env": "PLANEXE_DATASET_DIR",
+  "comment": "Replace the zip files with your own. Run the populate_baseline.py script to populate the baseline/ directory.",
   "train": [
-    {"name": "hong_kong_game", "zip": "20260310_hong_kong_game.zip"}
+    "20260310_hong_kong_game.zip",
+    "20250329_gta_game.zip",
+    "20250321_silo.zip",
+    "20260311_parasomnia_research_unit.zip",
+    "20260308_sovereign_identity.zip"
   ],
   "verify": [
-    {"name": "crate_recovery_campaign", "zip": "20260303_crate_recovery_campaign.zip"}
+    "20260303_crate_recovery_campaign.zip",
+    "20260215_nuuk_clay_workshop.zip",
+    "20260202_heatwave_resilience.zip",
+    "20260201_media_rescue.zip",
+    "20260201_yellowstone_evacuation.zip",
+    "20260131_clear_english.zip",
+    "20260129_euro_adoption.zip",
+    "20260114_cbc_validation.zip",
+    "20251101_e_bus_security.zip"
   ]
 }
 ```
@@ -268,10 +280,6 @@ full_plan_comparisons/              # Stage 3 periodic full-plan regenerations
 - `PlanExe-prompt-lab` can use Git LFS for the zip files and large outputs.
 - The data repo is a full audit trail — every candidate, evaluation, and score is committed.
 - `scoreboard.csv` gives the metrics tracking at a glance.
-
-## Env var
-
-The optimizer reads `PLANEXE_PROMPT_LAB_DIR` (path to the data repo checkout) — no hardcoded paths.
 
 ## Feedback from Bubba (2026-03-13)
 

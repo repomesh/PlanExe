@@ -300,7 +300,18 @@ class TrackActivity(BaseEventHandler):
             logger.debug("Failed to persist token metrics from TrackActivity", exc_info=True)
 
     def _record_file_usage_metric(self, event_data: dict, token_usage: Optional[dict], duration_seconds: Optional[float]) -> None:
-        """Write a usage metric row to usage_metrics.jsonl via the shared module."""
+        """Write a usage metric row to usage_metrics.jsonl via the shared module.
+
+        When multiple TrackActivity handlers are registered on the shared
+        dispatcher (e.g. parallel prompt-optimizer runs), every LLM completion
+        event fires ALL handlers. Guard against duplicate writes by only
+        recording when this handler's output directory matches the thread-local
+        usage_metrics_path.
+        """
+        from worker_plan_internal.llm_util.usage_metrics import get_usage_metrics_path
+        current_path = get_usage_metrics_path()
+        if current_path is not None and current_path.parent != self.jsonl_file_path.parent:
+            return
         cost = self._extract_cost(event_data)
         if not token_usage and cost == 0.0:
             return

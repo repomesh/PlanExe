@@ -1,0 +1,138 @@
+# Agent instructions for prompt_optimizer
+
+## What this does
+
+Optimizes system prompts for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers`; will extend to other pipeline tasks.
+
+## Prerequisites
+
+- Python venv: `worker_plan/.venv/bin/python` (has llama_index and dependencies)
+- Ollama running locally with a model (e.g. `ollama-llama3.1`)
+- Baseline training data at: `/Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/`
+
+## Extract the default system prompt
+
+```bash
+worker_plan/.venv/bin/python -c "
+import sys; sys.path.insert(0, 'worker_plan')
+from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
+print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
+" > /tmp/baseline_prompt.txt
+```
+
+## Run against a single plan (auto-increment history)
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
+    --model ollama-llama3.1
+```
+
+## Run against all baseline plans (auto-increment history)
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
+    --model ollama-llama3.1
+```
+
+## Run with manual output dir (no history)
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
+    --output-dir /tmp/prompt_opt_run/outputs \
+    --model ollama-llama3.1
+```
+
+## Monitor progress during a run
+
+```bash
+tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/events.jsonl
+```
+
+## Resume an interrupted run
+
+Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. Errored plans are retried.
+
+```bash
+# Same command as before — skips already-completed plans
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
+    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/outputs \
+    --model ollama-llama3.1
+```
+
+## Output structure
+
+With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:02d}_{step}/`:
+
+```
+history/0/00_identify_potential_levers/
+  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
+  outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
+  events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
+  outputs/
+    <plan_name>/
+      002-9-potential_levers_raw.json
+      002-10-potential_levers.json
+      activity_overview.json
+      usage_metrics.jsonl
+```
+
+The counter auto-increments by scanning existing history directories.
+
+## Parallelism
+
+The runner reads `luigi_workers` from `llm_config/*.json` for the given model. Cloud models (e.g. `openrouter-openai-gpt-oss-20b`) typically have `luigi_workers: 4`; local models (e.g. `ollama-llama3.1`) have `luigi_workers: 1`. The worker count is recorded in `meta.json`.
+
+With `workers > 1`, plans run in parallel using a thread pool. Thread safety:
+
+- Each plan gets its own `LLMExecutor` instance.
+- `set_usage_metrics_path` uses thread-local storage — each thread writes to its own `usage_metrics.jsonl`.
+- `TrackActivity` event handlers guard against duplicate writes by checking the thread-local path matches the handler's output directory.
+- `outputs.jsonl` and `events.jsonl` writes are protected by a lock.
+
+## Timing
+
+- **Local** (`ollama-llama3.1`, 1 worker): ~60-80s per plan, ~5-7 min for 5 plans.
+- **Cloud** (`openrouter-openai-gpt-oss-20b`, 4 workers): ~30-180s per plan, ~3 min for 5 plans in parallel.
+
+## Available baseline plans
+
+- `20250321_silo`
+- `20250329_gta_game`
+- `20260308_sovereign_identity`
+- `20260310_hong_kong_game`
+- `20260311_parasomnia_research_unit`
+
+## Register a system prompt
+
+Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256).
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.register_prompt \
+    --step identify_potential_levers \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab
+```
+
+Output: `prompts/identify_potential_levers/prompt_{index}_{sha256}.txt`
+
+Available steps: `identify_potential_levers`
+
+## Architecture notes
+
+The runner is designed to extend to other pipeline steps. Each step adapter needs:
+
+1. **Input files** — which files to read and how to assemble the user prompt
+2. **Execute call** — which class/method to invoke
+3. **Output filenames** — which files to save
+4. **Step name** — identifier for meta.json
+
+The outer infrastructure (CLI, progress tracking via events.jsonl/outputs.jsonl, meta.json) is shared across all steps.

@@ -8,7 +8,7 @@ By the end of this prompt optimization, the overall plan quality should have bee
 I want to track metrics for how much improvement have happened.
 
 
-## Status (2026-03-13)
+## Status (2026-03-14)
 
 ### Done
 
@@ -17,27 +17,39 @@ I want to track metrics for how much improvement have happened.
 - **`dataset.json`** defines the train/verify split with zip filenames.
 - **`populate_baseline.py`** script automates ingesting baseline data from local paths or URLs.
 - **Directory structure** for `runs/`, `scores/`, and `full_plan_comparisons/` is in place (empty, awaiting optimizer).
+- **`prompt_optimizer/` runner** ([PR #263](https://github.com/PlanExeOrg/PlanExe/pull/263)) — re-executes the `IdentifyPotentialLevers` step with a candidate system prompt against baseline plans. Features:
+  - Added optional `system_prompt` parameter to `IdentifyPotentialLevers.execute()` (backward-compatible).
+  - CLI with `--system-prompt-file`, `--baseline-dir`/`--plan-dir`, `--model`.
+  - `--prompt-lab-dir` auto-creates runs in `history/{counter//100}/{counter%100:02d}_{step}/` with auto-incrementing counter.
+  - `--output-dir` for manual placement (alternative to `--prompt-lab-dir`).
+  - Streaming progress: `meta.json` written at start, `events.jsonl` for real-time monitoring, `outputs.jsonl` for per-plan results.
+  - Per-plan `activity_overview.json` and `usage_metrics.jsonl` for token/cost tracking.
+  - System info (OS, CPU, memory, GPU) captured in `meta.json`.
+  - Resume support: re-run the same command to skip completed plans and retry errors.
+  - Automatic parallelism based on `luigi_workers` from `llm_config/*.json` (cloud models get 4 workers, local models get 1).
+  - Thread-safe: per-thread `LLMExecutor`, thread-local usage metrics via `threading.local()`, `TrackActivity` duplicate-write guard, locked file writes.
+  - Tested against all 5 training plans with local `ollama-llama3.1` (sequential) and `openrouter-openai-gpt-oss-20b` (parallel, 4 workers).
+- **`register_prompt.py`** — extracts the current system prompt for a step and saves it to `prompts/{step}/prompt_{index}_{sha256}.txt` in the prompt-lab repo. Auto-increments index, skips duplicates by SHA256.
+- **Thread-safety fixes to `worker_plan_internal`**:
+  - `usage_metrics.py`: replaced module-level global with `threading.local()` so each thread gets its own metrics path.
+  - `track_activity.py`: `_record_file_usage_metric` guards against duplicate writes when multiple handlers are registered on the shared dispatcher.
 
 ### Not Started
 
-- **`prompt_optimizer/` package in PlanExe** — no optimizer code exists yet.
 - **Evaluator prompt** — no scoring rubric or comparison prompt written.
 - **Candidate generator** — no mechanism for producing prompt variants.
-- **Runner / Scorer / CLI** — none of the optimization loop machinery exists.
+- **Scorer / Optimizer loop** — no automated train/verify loop.
 
 ### Next Steps
 
-1. **Design the evaluator prompt and scoring rubric.** This is the foundation. Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
-2. **Pick the first pipeline step to optimize.** Something early (e.g., `002-3-premise_attack` or `002-10-potential_levers`) since downstream steps depend on upstream quality.
-3. **Build the optimizer engine** in `prompt_optimizer/`:
-   - `runner.py` — reruns a single pipeline step with a candidate prompt against training plans.
-   - `evaluator.py` — calls a pinned reasoning model to score/compare outputs.
-   - `candidate_generator.py` — produces prompt variants (LLM rewrites, structured mutations).
-   - `optimizer.py` — orchestrates the train/verify loop.
-   - `cli.py` — CLI entry point.
-4. **Pin the reasoning model** for evaluation so scores are reproducible across runs.
-5. **Run baseline scoring** — score the current prompts to establish a numeric starting point.
-6. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
+1. **Design the evaluator prompt and scoring rubric.** Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
+2. **Build `evaluator.py`** — calls a pinned reasoning model to score/compare runner outputs against baseline.
+3. **Run baseline scoring** — score the current default prompt outputs to establish a numeric starting point.
+4. **Build `candidate_generator.py`** — produce prompt variants (LLM rewrites, structured mutations).
+5. **Build `optimizer.py`** — orchestrate the train/verify loop (Stage 1-2).
+6. **Pin the reasoning model** for evaluation so scores are reproducible across runs.
+7. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
+8. **Extend runner to other pipeline steps** — the runner is designed for this; each step needs an adapter for input assembly, execute call, output filenames, and step name.
 
 
 ## Stage 1 - one improvement iteration
@@ -211,29 +223,43 @@ baseline/                           # current outputs (extracted from dataset zi
       ...
     (7 more plans)
 
-runs/                               # optimization run outputs
-  2026-03-13_identify_purpose/
-    meta.json                       # which step, which base prompt, model list
-    candidates/
-      candidate_01.txt              # candidate prompt text
-      candidate_02.txt
-      ...
-    outputs/
-      candidate_01/
-        hong_kong_game.json         # output from running this candidate
-        gta_game.json
-        ...
-      candidate_02/
-        ...
-    evaluations/
-      candidate_01/
-        hong_kong_game_eval.json    # reasoning model's comparison + score
-        ...
+history/                                      # captured output, global run counter
+  # Path: history/{counter // 100}/{counter % 100:02d}_{step_name}/
+  # Counter is auto-incremented: scan history/ for the highest existing
+  # run number and add 1. No counter file needed.
+  # Runs for different steps are interleaved chronologically.
+  0/                                          # runs 0-99
+  1/                                          # runs 100-199
+  2/                                          # runs 200-299
+    00_identify_purpose/                      # run 200
+    01_identify_potential_levers/              # run 201
+    02_identify_potential_levers/              # run 202
+      meta.json                                # which step, which system prompt, what model used
+      events.jsonl
+      outputs.jsonl
+      outputs/
+        20250321_silo/
+          002-9-potential_levers_raw.json
+          002-10-potential_levers.json
+          activity_overview.json
+          usage_metrics.jsonl
+        20260310_hong_kong_game/
+        20260201_media_rescue/
+    03_identify_potential_levers/
+    ...
+    98_identify_potential_levers/
+    99_identify_potential_levers/
+  3/
+prompts/
+  identify_potential_levers/
+    prompt_0_e51751c30bc0c48402ecf759afdb996d8067cd8c5f057d0e242a9d93a856151e.txt      # prompt_index_sha.txt
+    prompt_1_long-sha-here.txt
+    prompt_2_long-sha-here.txt
+analysis/
+  0_identify_purpose/
+  1_identify_potential_levers/
     summary.json                    # ranked candidates, aggregate scores
     failed_attempts.log
-
-  2026-03-14_make_assumptions/
-    ...
 
 scores/                             # longitudinal tracking
   scoreboard.csv                    # step, date, baseline_score, best_score, delta

@@ -214,13 +214,17 @@ baseline/                           # current outputs (extracted from dataset zi
       ...
     (7 more plans)
 
-history/                                      # captured output
-  0/                                          # contains 00/ .. 99/
-  1/
-  2/
-    00_identify_purpose/                      # (\d\d)_(\w+)  increasing index % 100, name describing what it is
-    01_identify_potential_levers/
-    02_identify_potential_levers/
+history/                                      # captured output, global run counter
+  # Path: history/{counter // 100}/{counter % 100:02d}_{step_name}/
+  # Counter is auto-incremented: scan history/ for the highest existing
+  # run number and add 1. No counter file needed.
+  # Runs for different steps are interleaved chronologically.
+  0/                                          # runs 0-99
+  1/                                          # runs 100-199
+  2/                                          # runs 200-299
+    00_identify_purpose/                      # run 200
+    01_identify_potential_levers/              # run 201
+    02_identify_potential_levers/              # run 202
       meta.json                                # which step, which system prompt, what model used
       events.jsonl
       outputs.jsonl

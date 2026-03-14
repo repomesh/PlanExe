@@ -33,6 +33,14 @@ I want to track metrics for how much improvement have happened.
 - **Thread-safety fixes to `worker_plan_internal`**:
   - `usage_metrics.py`: replaced module-level global with `threading.local()` so each thread gets its own metrics path.
   - `track_activity.py`: `_record_file_usage_metric` guards against duplicate writes when multiple handlers are registered on the shared dispatcher.
+- **Anthropic instrumentation fix** ([PR #264](https://github.com/PlanExeOrg/PlanExe/pull/264)):
+  - **Root cause**: `llama-index-llms-anthropic` overrides `structured_predict()` and calls `self._client.beta.messages.parse()` directly, bypassing `self.chat()`. LlamaIndex instrumentation events (`LLMChatEndEvent`) never fire, so `TrackActivity` never writes `usage_metrics.jsonl` or `activity_overview.json`.
+  - **Fix**: `LLMExecutor._record_attempt_token_metrics()` now records basic metrics (model, duration, success) for all calls, not just failures. For Anthropic, this is the only record; for other backends, TrackActivity also writes richer data (token counts, cost).
+  - Added `ANTHROPIC_API_KEY` to `.env` example files and documented Anthropic usage in `prompt_optimizer/AGENTS.md`.
+- **Runner tested across 8 models** (history runs 00–09):
+  - 5/5: `ollama-llama3.1`, `openrouter-openai-gpt-oss-20b`, `openai-gpt-5-nano`, `openrouter-qwen3-30b-a3b`, `openrouter-openai-gpt-4o-mini`, `anthropic-claude-haiku-4-5-pinned`
+  - 3/5: `openrouter-stepfun-step-3-5-flash`
+  - 0/5: `openrouter-z-ai-glm-4-7-flash` (returned schema instead of data), `openrouter-nvidia-nemotron-3-nano-30b-a3b` (empty output)
 
 ### Not Started
 

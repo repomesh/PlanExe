@@ -6,7 +6,7 @@ Usage:
     python -m prompt_optimizer.runner \
         --system-prompt-file candidate.txt \
         --baseline-dir /path/to/baseline/train \
-        --output-dir /path/to/runs/my_run/outputs \
+        --prompt-lab-dir /path/to/PlanExe-prompt-lab \
         --model ollama-llama3.1
 """
 import argparse
@@ -203,6 +203,40 @@ def _emit_event(events_path: Path, event: str, **kwargs) -> None:
     logger.info(f"event: {event} {kwargs}")
 
 
+STEP_NAME = "identify_potential_levers"
+
+
+def _next_history_counter(history_dir: Path) -> int:
+    """Scan history/ for the highest existing run number and return +1."""
+    max_counter = -1
+    if not history_dir.exists():
+        return 0
+    for bucket in history_dir.iterdir():
+        if not bucket.is_dir() or not bucket.name.isdigit():
+            continue
+        bucket_base = int(bucket.name) * 100
+        for run_dir in bucket.iterdir():
+            if not run_dir.is_dir():
+                continue
+            try:
+                idx = int(run_dir.name.split("_")[0])
+                max_counter = max(max_counter, bucket_base + idx)
+            except (IndexError, ValueError):
+                pass
+    return max_counter + 1
+
+
+def _history_run_dir(prompt_lab_dir: Path, step_name: str) -> Path:
+    """Create and return the next history run directory."""
+    history_dir = prompt_lab_dir / "history"
+    counter = _next_history_counter(history_dir)
+    bucket = str(counter // 100)
+    entry = f"{counter % 100:02d}_{step_name}"
+    run_dir = history_dir / bucket / entry
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
 def run(
     system_prompt: str,
     plan_dirs: list[Path],
@@ -282,10 +316,14 @@ def main():
         help="Single plan directory to process (overrides --baseline-dir).",
     )
     parser.add_argument(
-        "--output-dir",
-        required=True,
+        "--prompt-lab-dir",
         type=Path,
-        help="Directory where outputs will be written.",
+        help="Path to PlanExe-prompt-lab repo. Auto-creates history/{counter}/{nn}_{step}/outputs/.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help="Manual output directory (alternative to --prompt-lab-dir).",
     )
     parser.add_argument(
         "--model",
@@ -315,10 +353,19 @@ def main():
     if not plan_dirs:
         parser.error("No plan directories found.")
 
-    run(system_prompt, plan_dirs, args.output_dir, args.models)
+    if args.prompt_lab_dir:
+        run_dir = _history_run_dir(args.prompt_lab_dir, STEP_NAME)
+        output_dir = run_dir / "outputs"
+        print(f"History run: {run_dir}")
+    elif args.output_dir:
+        output_dir = args.output_dir
+    else:
+        parser.error("Either --prompt-lab-dir or --output-dir is required.")
+
+    run(system_prompt, plan_dirs, output_dir, args.models)
 
     # Summarize from outputs.jsonl
-    outputs_path = args.output_dir.parent / "outputs.jsonl"
+    outputs_path = output_dir.parent / "outputs.jsonl"
     if outputs_path.exists():
         plans = [json.loads(line) for line in outputs_path.read_text().splitlines() if line.strip()]
         ok = sum(1 for p in plans if p["status"] == "ok")

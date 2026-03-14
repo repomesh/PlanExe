@@ -20,7 +20,27 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 " > /tmp/baseline_prompt.txt
 ```
 
-## Run against a single plan
+## Run against a single plan (auto-increment history)
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
+    --model ollama-llama3.1
+```
+
+## Run against all baseline plans (auto-increment history)
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
+    --model ollama-llama3.1
+```
+
+## Run with manual output dir (no history)
 
 ```bash
 worker_plan/.venv/bin/python -m prompt_optimizer.runner \
@@ -30,26 +50,18 @@ worker_plan/.venv/bin/python -m prompt_optimizer.runner \
     --model ollama-llama3.1
 ```
 
-## Run against all baseline plans
-
-```bash
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
-    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
-    --output-dir /tmp/prompt_opt_run/outputs \
-    --model ollama-llama3.1
-```
-
 ## Monitor progress during a run
 
 ```bash
-tail -f /tmp/prompt_opt_run/events.jsonl
+tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/events.jsonl
 ```
 
 ## Output structure
 
+With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:02d}_{step}/`:
+
 ```
-<run-dir>/
+history/0/00_identify_potential_levers/
   meta.json          # written at start: step name, system_prompt SHA256, model, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
@@ -60,6 +72,8 @@ tail -f /tmp/prompt_opt_run/events.jsonl
       activity_overview.json
       usage_metrics.jsonl
 ```
+
+The counter auto-increments by scanning existing history directories.
 
 ## Timing
 

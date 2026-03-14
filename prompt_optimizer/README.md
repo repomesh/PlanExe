@@ -7,10 +7,18 @@ Currently supports the `IdentifyPotentialLevers` step. Each pipeline step requir
 ## Usage
 
 ```bash
+# Auto-increment into prompt-lab history/
 python -m prompt_optimizer.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
-    --output-dir /path/to/runs/my_run/outputs \
+    --prompt-lab-dir /path/to/PlanExe-prompt-lab \
+    --model ollama-llama3.1
+
+# Or manual output directory
+python -m prompt_optimizer.runner \
+    --system-prompt-file candidate.txt \
+    --baseline-dir /path/to/baseline/train \
+    --output-dir /path/to/my_run/outputs \
     --model ollama-llama3.1
 ```
 
@@ -21,12 +29,16 @@ python -m prompt_optimizer.runner \
 | `--system-prompt-file` | Yes | Path to a text file containing the candidate system prompt |
 | `--baseline-dir` | No | Directory containing plan subdirectories (process all) |
 | `--plan-dir` | No | Single plan directory to process (overrides `--baseline-dir`) |
-| `--output-dir` | Yes | Directory where outputs will be written |
+| `--prompt-lab-dir` | No | Path to PlanExe-prompt-lab repo (auto-creates history run dir) |
+| `--output-dir` | No | Manual output directory (alternative to `--prompt-lab-dir`) |
 | `--model` | Yes | LLM model name. First is primary; additional are fallbacks |
 
 Either `--baseline-dir` or `--plan-dir` must be provided.
+Either `--prompt-lab-dir` or `--output-dir` must be provided.
 
 ## Output Structure
+
+With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:02d}_{step}/`. The counter auto-increments by scanning existing history directories.
 
 ```
 <run-dir>/
@@ -55,7 +67,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 python -m prompt_optimizer.runner \
     --system-prompt-file baseline_prompt.txt \
     --plan-dir /path/to/baseline/train/20250321_silo \
-    --output-dir /tmp/prompt_opt_test/outputs \
+    --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 ```
 

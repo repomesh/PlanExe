@@ -19,11 +19,14 @@ I want to track metrics for how much improvement have happened.
 - **Directory structure** for `runs/`, `scores/`, and `full_plan_comparisons/` is in place (empty, awaiting optimizer).
 - **`prompt_optimizer/` runner** ([PR #263](https://github.com/PlanExeOrg/PlanExe/pull/263)) — re-executes the `IdentifyPotentialLevers` step with a candidate system prompt against baseline plans. Features:
   - Added optional `system_prompt` parameter to `IdentifyPotentialLevers.execute()` (backward-compatible).
-  - CLI with `--system-prompt-file`, `--baseline-dir`/`--plan-dir`, `--output-dir`, `--model`.
+  - CLI with `--system-prompt-file`, `--baseline-dir`/`--plan-dir`, `--model`.
+  - `--prompt-lab-dir` auto-creates runs in `history/{counter//100}/{counter%100:02d}_{step}/` with auto-incrementing counter.
+  - `--output-dir` for manual placement (alternative to `--prompt-lab-dir`).
   - Streaming progress: `meta.json` written at start, `events.jsonl` for real-time monitoring, `outputs.jsonl` for per-plan results.
   - Per-plan `activity_overview.json` and `usage_metrics.jsonl` for token/cost tracking.
   - System info (OS, CPU, memory, GPU) captured in `meta.json`.
   - Tested against all 5 training plans with local ollama-llama3.1.
+- **`register_prompt.py`** — extracts the current system prompt for a step and saves it to `prompts/{step}/prompt_{index}_{sha256}.txt` in the prompt-lab repo. Auto-increments index, skips duplicates by SHA256.
 
 ### Not Started
 

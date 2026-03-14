@@ -117,7 +117,7 @@ def _run_cmd(cmd: list[str]) -> str | None:
         return None
 
 
-def _collect_hardware_info() -> dict:
+def _collect_system_info() -> dict:
     info: dict = {
         "os": platform.system(),
         "os_version": platform.platform(),
@@ -207,11 +207,14 @@ def run(
     prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
 
     # Write meta.json up front (no plans or total_duration)
+    model_info: dict = {"primary": model_names[0]}
+    if len(model_names) > 1:
+        model_info["fallbacks"] = model_names[1:]
     meta = {
         "step": "identify_potential_levers",
         "system_prompt_sha256": prompt_sha256,
-        "models": model_names,
-        "hardware": _collect_hardware_info(),
+        "model": model_info,
+        "system": _collect_system_info(),
     }
     meta_path = run_dir / "meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
@@ -269,7 +272,7 @@ def main():
         required=True,
         action="append",
         dest="models",
-        help="LLM model name (can be repeated).",
+        help="LLM model name. First is primary; additional are fallbacks.",
     )
     args = parser.parse_args()
 

@@ -22,7 +22,7 @@ python -m prompt_optimizer.runner \
 | `--baseline-dir` | No | Directory containing plan subdirectories (process all) |
 | `--plan-dir` | No | Single plan directory to process (overrides `--baseline-dir`) |
 | `--output-dir` | Yes | Directory where outputs will be written |
-| `--model` | Yes | LLM model name (can be repeated for fallback) |
+| `--model` | Yes | LLM model name. First is primary; additional are fallbacks |
 
 Either `--baseline-dir` or `--plan-dir` must be provided.
 
@@ -30,7 +30,7 @@ Either `--baseline-dir` or `--plan-dir` must be provided.
 
 ```
 <run-dir>/
-  meta.json          # written at start: step name, system_prompt SHA256, models
+  meta.json          # written at start: step name, system_prompt SHA256, model, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/

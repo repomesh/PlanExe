@@ -42,7 +42,7 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ```
 <run-dir>/
-  meta.json          # written at start: step name, system_prompt SHA256, model, system
+  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
@@ -70,6 +70,12 @@ python -m prompt_optimizer.runner \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 ```
+
+## Parallelism
+
+The runner automatically parallelizes based on the `luigi_workers` value in `llm_config/*.json` for the model being used. Cloud models typically use 4 workers; local models use 1. The worker count is recorded in `meta.json`.
+
+Each plan runs in its own thread with an independent `LLMExecutor`. Usage metrics use thread-local storage to avoid cross-thread interference.
 
 ## Architecture
 

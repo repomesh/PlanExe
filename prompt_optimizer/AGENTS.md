@@ -75,7 +75,7 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ```
 history/0/00_identify_potential_levers/
-  meta.json          # written at start: step name, system_prompt SHA256, model, system
+  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
@@ -88,9 +88,21 @@ history/0/00_identify_potential_levers/
 
 The counter auto-increments by scanning existing history directories.
 
+## Parallelism
+
+The runner reads `luigi_workers` from `llm_config/*.json` for the given model. Cloud models (e.g. `openrouter-openai-gpt-oss-20b`) typically have `luigi_workers: 4`; local models (e.g. `ollama-llama3.1`) have `luigi_workers: 1`. The worker count is recorded in `meta.json`.
+
+With `workers > 1`, plans run in parallel using a thread pool. Thread safety:
+
+- Each plan gets its own `LLMExecutor` instance.
+- `set_usage_metrics_path` uses thread-local storage — each thread writes to its own `usage_metrics.jsonl`.
+- `TrackActivity` event handlers guard against duplicate writes by checking the thread-local path matches the handler's output directory.
+- `outputs.jsonl` and `events.jsonl` writes are protected by a lock.
+
 ## Timing
 
-Each plan takes ~60-80 seconds on a local ollama-llama3.1. Five plans take ~5-7 minutes.
+- **Local** (`ollama-llama3.1`, 1 worker): ~60-80s per plan, ~5-7 min for 5 plans.
+- **Cloud** (`openrouter-openai-gpt-oss-20b`, 4 workers): ~30-180s per plan, ~3 min for 5 plans in parallel.
 
 ## Available baseline plans
 

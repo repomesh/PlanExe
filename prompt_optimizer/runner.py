@@ -301,7 +301,7 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    system_prompt = args.system_prompt_file.read_text()
+    system_prompt = args.system_prompt_file.read_text().strip()
 
     if args.plan_dir:
         plan_dirs = [args.plan_dir]

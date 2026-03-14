@@ -17,7 +17,9 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -34,6 +36,9 @@ from worker_plan_internal.llm_util.track_activity import TrackActivity
 from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
 
 logger = logging.getLogger(__name__)
+
+# Lock for thread-safe writes to shared files and global state
+_file_lock = threading.Lock()
 
 INPUT_FILES = [
     "001-2-plan.txt",
@@ -73,30 +78,37 @@ def run_single_plan(
     plan_dir: Path,
     output_dir: Path,
     system_prompt: str,
-    llm_executor: LLMExecutor,
+    model_names: list[str],
 ) -> PlanResult:
     """
     Run IdentifyPotentialLevers for one plan directory. Writes the raw and
     clean JSON outputs into output_dir/<plan_name>/.
+
+    Creates its own LLMExecutor so it's safe to call from multiple threads.
     """
     plan_name = plan_dir.name
     plan_output_dir = output_dir / plan_name
     plan_output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Set up per-plan usage tracking
-    set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
-    # TrackActivity derives activity_overview.json path from jsonl_file_path.parent,
-    # so we point it at the plan output dir. The jsonl file itself is deleted after.
+    llm_models = LLMModelFromName.from_names(model_names)
+    llm_executor = LLMExecutor(llm_models=llm_models)
+
+    # Set up per-plan usage tracking.
+    # set_usage_metrics_path and the dispatcher are global state, so we hold
+    # a lock while configuring and running to avoid cross-thread interference.
     track_activity_path = plan_output_dir / "track_activity.jsonl"
     track_activity = TrackActivity(
         jsonl_file_path=track_activity_path,
         write_to_logger=False,
     )
     dispatcher = get_dispatcher()
-    dispatcher.add_event_handler(track_activity)
 
     t0 = time.monotonic()
     try:
+        with _file_lock:
+            set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
+            dispatcher.add_event_handler(track_activity)
+
         user_prompt = load_user_prompt(plan_dir)
         result = IdentifyPotentialLevers.execute(
             llm_executor, user_prompt, system_prompt=system_prompt
@@ -124,8 +136,9 @@ def run_single_plan(
             error=str(e),
         )
     finally:
-        set_usage_metrics_path(None)
-        dispatcher.event_handlers.remove(track_activity)
+        with _file_lock:
+            set_usage_metrics_path(None)
+            dispatcher.event_handlers.remove(track_activity)
         track_activity_path.unlink(missing_ok=True)
 
 
@@ -193,8 +206,9 @@ def _timestamp() -> str:
 
 
 def _append_jsonl(path: Path, obj: dict) -> None:
-    with open(path, "a") as f:
-        f.write(json.dumps(obj) + "\n")
+    with _file_lock:
+        with open(path, "a") as f:
+            f.write(json.dumps(obj) + "\n")
 
 
 def _emit_event(events_path: Path, event: str, **kwargs) -> None:
@@ -204,6 +218,39 @@ def _emit_event(events_path: Path, event: str, **kwargs) -> None:
 
 
 STEP_NAME = "identify_potential_levers"
+
+
+def _resolve_workers(model_names: list[str]) -> int:
+    """Look up luigi_workers from llm_config/ JSON files for the given models."""
+    llm_config_dir = Path(__file__).resolve().parent.parent / "llm_config"
+    if not llm_config_dir.is_dir():
+        return 1
+
+    # Merge all config files into one dict
+    all_configs: dict = {}
+    for json_file in llm_config_dir.glob("*.json"):
+        try:
+            with open(json_file) as f:
+                all_configs.update(json.load(f))
+        except (json.JSONDecodeError, OSError):
+            continue
+
+    workers_candidates: list[int] = []
+    for name in model_names:
+        config = all_configs.get(name)
+        if not isinstance(config, dict):
+            continue
+        value = config.get("luigi_workers")
+        if value is None:
+            continue
+        try:
+            w = int(value)
+        except (TypeError, ValueError):
+            continue
+        if w >= 1:
+            workers_candidates.append(w)
+
+    return min(workers_candidates) if workers_candidates else 1
 
 
 def _next_history_counter(history_dir: Path) -> int:
@@ -237,6 +284,33 @@ def _history_run_dir(prompt_lab_dir: Path, step_name: str) -> Path:
     return run_dir
 
 
+def _run_plan_task(
+    plan_dir: Path,
+    output_dir: Path,
+    system_prompt: str,
+    model_names: list[str],
+    events_path: Path,
+    outputs_path: Path,
+) -> PlanResult:
+    """Run a single plan and record events/output. Thread-safe."""
+    plan_name = plan_dir.name
+    _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
+
+    pr = run_single_plan(plan_dir, output_dir, system_prompt, model_names)
+
+    if pr.status == "ok":
+        _emit_event(events_path, "run_single_plan_complete",
+                    plan_name=plan_name,
+                    duration_seconds=pr.duration_seconds)
+    else:
+        _emit_event(events_path, "run_single_plan_error",
+                    plan_name=plan_name, error=pr.error,
+                    duration_seconds=pr.duration_seconds)
+
+    _append_jsonl(outputs_path, asdict(pr))
+    return pr
+
+
 def run(
     system_prompt: str,
     plan_dirs: list[Path],
@@ -246,14 +320,13 @@ def run(
     """
     Iterate over plan directories, run the lever step for each.
 
+    Uses luigi_workers from the LLM config to parallelize when > 1.
+
     Writes immediately:
       - meta.json       (one level above output_dir) — run metadata, written at start
       - outputs.jsonl   (one level above output_dir) — one row per completed plan
       - events.jsonl    (one level above output_dir) — significant events as they happen
     """
-    llm_models = LLMModelFromName.from_names(model_names)
-    llm_executor = LLMExecutor(llm_models=llm_models)
-
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_dir = output_dir.parent
@@ -272,6 +345,8 @@ def run(
 
     prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
 
+    workers = _resolve_workers(model_names)
+
     # Write meta.json (overwrite on resume is fine — same content)
     model_info: dict = {"primary": model_names[0]}
     if len(model_names) > 1:
@@ -280,35 +355,37 @@ def run(
         "step": "identify_potential_levers",
         "system_prompt_sha256": prompt_sha256,
         "model": model_info,
+        "workers": workers,
         "system": _collect_system_info(),
     }
     meta_path = run_dir / "meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))
     logger.info(f"Wrote {meta_path}")
+    logger.info(f"Workers: {workers}")
 
     events_path = run_dir / "events.jsonl"
 
-    for plan_dir in plan_dirs:
-        plan_name = plan_dir.name
+    # Filter to plans that still need processing
+    pending_dirs = [d for d in plan_dirs if d.name not in completed]
+    for d in plan_dirs:
+        if d.name in completed:
+            logger.info(f"Skipping {d.name} (already completed)")
 
-        if plan_name in completed:
-            logger.info(f"Skipping {plan_name} (already completed)")
-            continue
-
-        _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
-
-        pr = run_single_plan(plan_dir, output_dir, system_prompt, llm_executor)
-
-        if pr.status == "ok":
-            _emit_event(events_path, "run_single_plan_complete",
-                        plan_name=plan_name,
-                        duration_seconds=pr.duration_seconds)
-        else:
-            _emit_event(events_path, "run_single_plan_error",
-                        plan_name=plan_name, error=pr.error,
-                        duration_seconds=pr.duration_seconds)
-
-        _append_jsonl(outputs_path, asdict(pr))
+    if workers <= 1:
+        for plan_dir in pending_dirs:
+            _run_plan_task(plan_dir, output_dir, system_prompt,
+                           model_names, events_path, outputs_path)
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(
+                    _run_plan_task, plan_dir, output_dir, system_prompt,
+                    model_names, events_path, outputs_path,
+                ): plan_dir
+                for plan_dir in pending_dirs
+            }
+            for future in as_completed(futures):
+                future.result()  # propagate exceptions
 
 
 def main():

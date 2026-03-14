@@ -18,13 +18,14 @@ Usage:
 """
 import json
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-_usage_metrics_path: Optional[Path] = None
+_thread_local = threading.local()
 
 # Ordered list: first match wins, so more specific patterns come before broad ones.
 _ERROR_CATEGORIES: list[tuple[str, list[str]]] = [
@@ -54,14 +55,13 @@ def classify_error(error_message: str) -> str:
 
 
 def set_usage_metrics_path(path: Optional[Path]) -> None:
-    """Set the JSONL file path for recording usage metrics."""
-    global _usage_metrics_path
-    _usage_metrics_path = path
+    """Set the JSONL file path for recording usage metrics (thread-local)."""
+    _thread_local.usage_metrics_path = path
 
 
 def get_usage_metrics_path() -> Optional[Path]:
-    """Get the current JSONL file path for recording usage metrics."""
-    return _usage_metrics_path
+    """Get the current JSONL file path for recording usage metrics (thread-local)."""
+    return getattr(_thread_local, "usage_metrics_path", None)
 
 
 def record_usage_metric(
@@ -79,7 +79,7 @@ def record_usage_metric(
 
     Best-effort: never raises exceptions to avoid blocking the LLM pipeline.
     """
-    path = _usage_metrics_path
+    path = getattr(_thread_local, "usage_metrics_path", None)
     if path is None:
         logger.warning("record_usage_metric called but no usage metrics path is set")
         return

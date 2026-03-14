@@ -103,12 +103,13 @@ def run_single_plan(
     )
     dispatcher = get_dispatcher()
 
+    set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
+
+    with _file_lock:
+        dispatcher.add_event_handler(track_activity)
+
     t0 = time.monotonic()
     try:
-        with _file_lock:
-            set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
-            dispatcher.add_event_handler(track_activity)
-
         user_prompt = load_user_prompt(plan_dir)
         result = IdentifyPotentialLevers.execute(
             llm_executor, user_prompt, system_prompt=system_prompt
@@ -136,8 +137,8 @@ def run_single_plan(
             error=str(e),
         )
     finally:
+        set_usage_metrics_path(None)
         with _file_lock:
-            set_usage_metrics_path(None)
             dispatcher.event_handlers.remove(track_activity)
         track_activity_path.unlink(missing_ok=True)
 

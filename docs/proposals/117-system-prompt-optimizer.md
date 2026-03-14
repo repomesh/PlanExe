@@ -25,8 +25,14 @@ I want to track metrics for how much improvement have happened.
   - Streaming progress: `meta.json` written at start, `events.jsonl` for real-time monitoring, `outputs.jsonl` for per-plan results.
   - Per-plan `activity_overview.json` and `usage_metrics.jsonl` for token/cost tracking.
   - System info (OS, CPU, memory, GPU) captured in `meta.json`.
-  - Tested against all 5 training plans with local ollama-llama3.1.
+  - Resume support: re-run the same command to skip completed plans and retry errors.
+  - Automatic parallelism based on `luigi_workers` from `llm_config/*.json` (cloud models get 4 workers, local models get 1).
+  - Thread-safe: per-thread `LLMExecutor`, thread-local usage metrics via `threading.local()`, `TrackActivity` duplicate-write guard, locked file writes.
+  - Tested against all 5 training plans with local `ollama-llama3.1` (sequential) and `openrouter-openai-gpt-oss-20b` (parallel, 4 workers).
 - **`register_prompt.py`** — extracts the current system prompt for a step and saves it to `prompts/{step}/prompt_{index}_{sha256}.txt` in the prompt-lab repo. Auto-increments index, skips duplicates by SHA256.
+- **Thread-safety fixes to `worker_plan_internal`**:
+  - `usage_metrics.py`: replaced module-level global with `threading.local()` so each thread gets its own metrics path.
+  - `track_activity.py`: `_record_file_usage_metric` guards against duplicate writes when multiple handlers are registered on the shared dispatcher.
 
 ### Not Started
 

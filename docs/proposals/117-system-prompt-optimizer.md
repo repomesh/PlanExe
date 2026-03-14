@@ -41,23 +41,34 @@ I want to track metrics for how much improvement have happened.
   - 5/5: `ollama-llama3.1`, `openrouter-openai-gpt-oss-20b`, `openai-gpt-5-nano`, `openrouter-qwen3-30b-a3b`, `openrouter-openai-gpt-4o-mini`, `anthropic-claude-haiku-4-5-pinned`
   - 3/5: `openrouter-stepfun-step-3-5-flash`
   - 0/5: `openrouter-z-ai-glm-4-7-flash` (returned schema instead of data), `openrouter-nvidia-nemotron-3-nano-30b-a3b` (empty output)
+- **Analysis automation** — two Python scripts in `PlanExe-prompt-lab/analysis/` that run Claude Code and Codex in parallel:
+  - **`run_insight.py`** (phase 1): reads `meta.json`, builds a prompt referencing `AGENTS.md` conventions and history runs, produces independent `insight_claude.md` and `insight_codex.md` with quantitative metrics, tiered rankings, and labeled hypotheses (H1–H4, C1–C4).
+  - **`run_code_review.py`** (phase 2): reads the insight files from phase 1 as context, asks both agents to review PlanExe source code (`identify_potential_levers.py`, `runner.py`) for bugs and improvements. Produces `code_claude.md` and `code_codex.md` with file:line references traced back to insight findings.
+  - Conventions documented in [`analysis/AGENTS.md`](https://github.com/PlanExeOrg/PlanExe-prompt-lab/blob/main/analysis/AGENTS.md).
+- **First analysis complete** for `identify_potential_levers` (step 0):
+  - Insight files identify run 09 (claude-haiku) as best content quality, run 02 (gpt-5-nano) as best structural regularity. 56% overall success rate (28/50 plan-runs). Three models failed completely (schema mismatch, empty output, config error).
+  - Code review files confirmed a double user-prompt bug in `identify_potential_levers.py` (the user prompt is sent twice on the first LLM call), template leakage from the prompt example name "Material Adaptation Strategy", and thread-safety issues in `runner.py`.
 
 ### Not Started
 
+- **Synthesis step** — no agent yet to read all insight + code review files and produce a ranked action plan.
 - **Evaluator prompt** — no scoring rubric or comparison prompt written.
 - **Candidate generator** — no mechanism for producing prompt variants.
 - **Scorer / Optimizer loop** — no automated train/verify loop.
 
 ### Next Steps
 
-1. **Design the evaluator prompt and scoring rubric.** Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
-2. **Build `evaluator.py`** — calls a pinned reasoning model to score/compare runner outputs against baseline.
-3. **Run baseline scoring** — score the current default prompt outputs to establish a numeric starting point.
-4. **Build `candidate_generator.py`** — produce prompt variants (LLM rewrites, structured mutations).
-5. **Build `optimizer.py`** — orchestrate the train/verify loop (Stage 1-2).
-6. **Pin the reasoning model** for evaluation so scores are reproducible across runs.
-7. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
-8. **Extend runner to other pipeline steps** — the runner is designed for this; each step needs an adapter for input assembly, execute call, output filenames, and step name.
+1. **Fix the double user-prompt bug** in `identify_potential_levers.py`. The code pre-loads `chat_message_list` with `[SYSTEM, USER(prompt)]`, then the loop appends the same `user_prompt` again before the first call. This causes call 1 to send the prompt twice, which may explain template leakage and robotic repetition in weaker models. This is a code fix, not a prompt change, so it benefits all models.
+2. **Build synthesis step** — an agent reads `meta.json`, all `insight_*.md`, and all `code_*.md` for a step, resolves disagreements, ranks hypotheses by impact and evidence, and produces a prioritized action plan (prompt edits, code fixes, or both).
+3. **Re-run history after the bug fix** — re-execute the runner on a few models to measure whether fixing the double-prompt bug improves uniqueness and reduces template leakage.
+4. **Design the evaluator prompt and scoring rubric.** Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
+5. **Build `evaluator.py`** — calls a pinned reasoning model to score/compare runner outputs against baseline.
+6. **Run baseline scoring** — score the current default prompt outputs to establish a numeric starting point.
+7. **Build `candidate_generator.py`** — produce prompt variants (LLM rewrites, structured mutations), informed by synthesis conclusions and failed-attempt logs.
+8. **Build `optimizer.py`** — orchestrate the train/verify loop (Stage 1-2).
+9. **Pin the reasoning model** for evaluation so scores are reproducible across runs.
+10. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
+11. **Extend runner to other pipeline steps** — the runner is designed for this; each step needs an adapter for input assembly, execute call, output filenames, and step name.
 
 
 ## Stage 1 - one improvement iteration

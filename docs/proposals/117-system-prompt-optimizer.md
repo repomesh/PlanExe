@@ -214,29 +214,39 @@ baseline/                           # current outputs (extracted from dataset zi
       ...
     (7 more plans)
 
-runs/                               # optimization run outputs
-  2026-03-13_identify_purpose/
-    meta.json                       # which step, which base prompt, model list
-    candidates/
-      candidate_01.txt              # candidate prompt text
-      candidate_02.txt
-      ...
-    outputs/
-      candidate_01/
-        hong_kong_game.json         # output from running this candidate
-        gta_game.json
-        ...
-      candidate_02/
-        ...
-    evaluations/
-      candidate_01/
-        hong_kong_game_eval.json    # reasoning model's comparison + score
-        ...
+history/                                      # captured output
+  0/                                          # contains 00/ .. 99/
+  1/
+  2/
+    00_identify_purpose/                      # (\d\d)_(\w+)  increasing index % 100, name describing what it is
+    01_identify_potential_levers/
+    02_identify_potential_levers/
+      meta.json                                # which step, which system prompt, what model used
+      events.jsonl
+      outputs.jsonl
+      outputs/
+        20250321_silo/
+          002-9-potential_levers_raw.json
+          002-10-potential_levers.json
+          activity_overview.json
+          usage_metrics.jsonl
+        20260310_hong_kong_game/
+        20260201_media_rescue/
+    03_identify_potential_levers/
+    ...
+    98_identify_potential_levers/
+    99_identify_potential_levers/
+  3/
+prompts/
+  identify_potential_levers/
+    prompt_0_e51751c30bc0c48402ecf759afdb996d8067cd8c5f057d0e242a9d93a856151e.txt      # prompt_index_sha.txt
+    prompt_1_long-sha-here.txt
+    prompt_2_long-sha-here.txt
+analysis/
+  0_identify_purpose/
+  1_identify_potential_levers/
     summary.json                    # ranked candidates, aggregate scores
     failed_attempts.log
-
-  2026-03-14_make_assumptions/
-    ...
 
 scores/                             # longitudinal tracking
   scoreboard.csv                    # step, date, baseline_score, best_score, delta

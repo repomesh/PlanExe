@@ -40,6 +40,24 @@ worker_plan/.venv/bin/python -m prompt_optimizer.runner \
     --model ollama-llama3.1
 ```
 
+## Run with Anthropic models
+
+Anthropic models live in `llm_config/anthropic_claude.json`, which is not loaded by default. Set `PLANEXE_MODEL_PROFILE=custom` and `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json` to make them available:
+
+```bash
+PLANEXE_MODEL_PROFILE=custom \
+PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
+    --model anthropic-claude-haiku-4-5-pinned
+```
+
+Available Anthropic model names are defined in `llm_config/anthropic_claude.json`. Requires `ANTHROPIC_API_KEY` in `.env`.
+
+**Note:** Anthropic's LlamaIndex integration overrides `structured_predict()` and bypasses `self.chat()`, so LlamaIndex instrumentation events don't fire. `usage_metrics.jsonl` will contain basic entries (model, duration, success) but no token counts. `activity_overview.json` is not generated.
+
 ## Run with manual output dir (no history)
 
 ```bash

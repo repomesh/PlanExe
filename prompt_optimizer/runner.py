@@ -13,6 +13,9 @@ import argparse
 import hashlib
 import json
 import logging
+import os
+import platform
+import subprocess
 import sys
 import time
 from dataclasses import dataclass, asdict
@@ -107,6 +110,62 @@ def run_single_plan(
         )
 
 
+def _run_cmd(cmd: list[str]) -> str | None:
+    try:
+        return subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True).strip()
+    except Exception:
+        return None
+
+
+def _collect_hardware_info() -> dict:
+    info: dict = {
+        "os": platform.system(),
+        "os_version": platform.version(),
+        "arch": platform.machine(),
+        "cpu_count": os.cpu_count(),
+    }
+
+    system = platform.system()
+    if system == "Darwin":
+        info["cpu_model"] = _run_cmd(["sysctl", "-n", "machdep.cpu.brand_string"])
+        memsize = _run_cmd(["sysctl", "-n", "hw.memsize"])
+        if memsize:
+            info["memory_gb"] = round(int(memsize) / (1024 ** 3), 1)
+        gpu_info = _run_cmd(["system_profiler", "SPDisplaysDataType", "-json"])
+        if gpu_info:
+            try:
+                displays = json.loads(gpu_info).get("SPDisplaysDataType", [])
+                gpus = []
+                for d in displays:
+                    gpu_entry: dict = {"name": d.get("sppci_model", "unknown")}
+                    vram = d.get("sppci_vram")
+                    if vram:
+                        gpu_entry["vram"] = vram
+                    elif d.get("sppci_vram_shared"):
+                        gpu_entry["vram_shared"] = d["sppci_vram_shared"]
+                    gpus.append(gpu_entry)
+                if gpus:
+                    info["gpu"] = gpus
+            except (json.JSONDecodeError, KeyError):
+                pass
+    elif system == "Linux":
+        info["cpu_model"] = _run_cmd(["bash", "-c", "grep -m1 'model name' /proc/cpuinfo | cut -d: -f2"])
+        meminfo = _run_cmd(["bash", "-c", "grep MemTotal /proc/meminfo | awk '{print $2}'"])
+        if meminfo:
+            info["memory_gb"] = round(int(meminfo) / (1024 ** 2), 1)
+        nvidia = _run_cmd(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"])
+        if nvidia:
+            gpus = []
+            for line in nvidia.strip().splitlines():
+                parts = [p.strip() for p in line.split(",")]
+                if len(parts) == 2:
+                    gpus.append({"name": parts[0], "vram_mb": int(parts[1])})
+            if gpus:
+                info["gpu"] = gpus
+
+    return info
+
+
 def _timestamp() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -149,6 +208,7 @@ def run(
         "step": "identify_potential_levers",
         "system_prompt_sha256": prompt_sha256,
         "models": model_names,
+        "hardware": _collect_hardware_info(),
     }
     meta_path = run_dir / "meta.json"
     meta_path.write_text(json.dumps(meta, indent=2))

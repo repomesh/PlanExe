@@ -73,6 +73,20 @@ Each plan takes ~60-80 seconds on a local ollama-llama3.1. Five plans take ~5-7 
 - `20260310_hong_kong_game`
 - `20260311_parasomnia_research_unit`
 
+## Register a system prompt
+
+Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256).
+
+```bash
+worker_plan/.venv/bin/python -m prompt_optimizer.register_prompt \
+    --step identify_potential_levers \
+    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab
+```
+
+Output: `prompts/identify_potential_levers/prompt_{index}_{sha256}.txt`
+
+Available steps: `identify_potential_levers`
+
 ## Architecture notes
 
 The runner is designed to extend to other pipeline steps. Each step adapter needs:

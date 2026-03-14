@@ -31,7 +31,7 @@ Either `--baseline-dir` or `--plan-dir` must be provided.
 ```
 <run-dir>/
   meta.json          # written at start: step name, system_prompt SHA256, models
-  outputs.jsonl      # one row per completed plan: {name, status, lever_count, duration_seconds, error}
+  outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
     <plan_name>/

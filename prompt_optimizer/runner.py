@@ -59,7 +59,6 @@ def load_user_prompt(plan_dir: Path) -> str:
 class PlanResult:
     name: str
     status: str
-    lever_count: int
     duration_seconds: float
     error: str | None = None
 
@@ -91,12 +90,10 @@ def run_single_plan(
         result.save_clean(str(clean_path))
 
         duration = time.monotonic() - t0
-        lever_count = len(result.levers)
-        logger.info(f"{plan_name}: {lever_count} levers in {duration:.1f}s")
+        logger.info(f"{plan_name}: {len(result.levers)} levers in {duration:.1f}s")
         return PlanResult(
             name=plan_name,
             status="ok",
-            lever_count=lever_count,
             duration_seconds=round(duration, 2),
         )
     except Exception as e:
@@ -105,7 +102,6 @@ def run_single_plan(
         return PlanResult(
             name=plan_name,
             status="error",
-            lever_count=0,
             duration_seconds=round(duration, 2),
             error=str(e),
         )
@@ -169,7 +165,7 @@ def run(
 
         if pr.status == "ok":
             _emit_event(events_path, "run_single_plan_complete",
-                        plan_name=plan_name, lever_count=pr.lever_count,
+                        plan_name=plan_name,
                         duration_seconds=pr.duration_seconds)
         else:
             _emit_event(events_path, "run_single_plan_error",

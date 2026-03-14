@@ -56,6 +56,19 @@ worker_plan/.venv/bin/python -m prompt_optimizer.runner \
 tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/events.jsonl
 ```
 
+## Resume an interrupted run
+
+Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. Errored plans are retried.
+
+```bash
+# Same command as before — skips already-completed plans
+worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+    --system-prompt-file /tmp/baseline_prompt.txt \
+    --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
+    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/outputs \
+    --model ollama-llama3.1
+```
+
 ## Output structure
 
 With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:02d}_{step}/`:

@@ -407,11 +407,15 @@ class LLMExecutor:
             logger.debug("Failed to record token metrics for attempt: %s", exc)
 
         # File-based usage metrics for local runs (no database required).
-        # Successful calls are recorded by TrackActivity via llama_index
-        # instrumentation, which has access to the real ChatResponse with
-        # full token counts and upstream provider/model info.
-        # Here we only record failures, since instrumentation end events
-        # are not emitted when the LLM call fails.
+        # Successful calls are also recorded by TrackActivity via llama_index
+        # instrumentation events — when those events fire, TrackActivity
+        # writes richer data (token counts, cost, provider info).  However,
+        # some LLM backends (e.g. Anthropic) override structured_predict()
+        # and bypass self.chat(), so instrumentation events never fire.
+        # Recording here as well ensures every call gets at least basic
+        # tracking (model, duration, success).  Duplicate rows (one from
+        # here, one from TrackActivity) are acceptable — consumers can
+        # deduplicate if needed.
         if not success:
             record_usage_metric(
                 model=llm_model_name,
@@ -419,6 +423,12 @@ class LLMExecutor:
                 success=False,
                 error_message=error_message,
                 error_id=error_id,
+            )
+        else:
+            record_usage_metric(
+                model=llm_model_name,
+                duration_seconds=duration,
+                success=True,
             )
 
     def _check_stop_callback(self, last_attempt: LLMAttempt, start_time: float, attempt_index: int) -> None:

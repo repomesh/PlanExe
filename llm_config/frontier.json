@@ -1,22 +1,4 @@
 {
-    "openrouter-z-ai-glm-5": {
-        "comment": "This is fast. Created Feb 11, 2026. 131,000 context. $0.55/M input tokens. $2.00/M output tokens.",
-        "priority": 11,
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "z-ai/glm-5",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 32000,
-            "max_retries": 5
-        },
-        "model_info_url": "https://openrouter.ai/z-ai/glm-5",
-        "pricing_kind": "paid"
-    },
     "openrouter-moonshotai-kimi-k2-5": {
         "comment": "This is fast. Created Jan 27, 2026. 131,072 context. $0.40/M input tokens. $2.00/M output tokens.",
         "priority": 111,

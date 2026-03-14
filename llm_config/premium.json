@@ -1,22 +1,4 @@
 {
-    "openrouter-z-ai-glm-4-7-flash": {
-        "comment": "This is very fast. Created Jan 19, 2026. 202,752 context. $0.06/M input tokens. $0.40/M output tokens.",
-        "priority": 6,
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "z-ai/glm-4.7-flash",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 32000,
-            "max_retries": 5
-        },
-        "model_info_url": "https://openrouter.ai/z-ai/glm-4.7-flash",
-        "pricing_kind": "paid"
-    },
     "openrouter-stepfun-step-3-5-flash": {
         "comment": "This is very fast. Created Jan 29, 2026. 256,000 context. $0.10/M input tokens. $0.30/M output tokens.",
         "priority": 21,

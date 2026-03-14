@@ -57,7 +57,7 @@ def load_user_prompt(plan_dir: Path) -> str:
 
 @dataclass
 class PlanResult:
-    plan_name: str
+    name: str
     status: str
     lever_count: int
     duration_seconds: float
@@ -94,7 +94,7 @@ def run_single_plan(
         lever_count = len(result.levers)
         logger.info(f"{plan_name}: {lever_count} levers in {duration:.1f}s")
         return PlanResult(
-            plan_name=plan_name,
+            name=plan_name,
             status="ok",
             lever_count=lever_count,
             duration_seconds=round(duration, 2),
@@ -103,7 +103,7 @@ def run_single_plan(
         duration = time.monotonic() - t0
         logger.error(f"{plan_name}: failed after {duration:.1f}s — {e}")
         return PlanResult(
-            plan_name=plan_name,
+            name=plan_name,
             status="error",
             lever_count=0,
             duration_seconds=round(duration, 2),
@@ -112,7 +112,7 @@ def run_single_plan(
 
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _append_jsonl(path: Path, obj: dict) -> None:
@@ -136,8 +136,8 @@ def run(
     Iterate over plan directories, run the lever step for each.
 
     Writes immediately:
-      - meta.json      (one level above output_dir) — run metadata, written at start
-      - plans.jsonl     (one level above output_dir) — one row per completed plan
+      - meta.json       (one level above output_dir) — run metadata, written at start
+      - outputs.jsonl   (one level above output_dir) — one row per completed plan
       - events.jsonl    (one level above output_dir) — significant events as they happen
     """
     llm_models = LLMModelFromName.from_names(model_names)
@@ -159,7 +159,7 @@ def run(
     logger.info(f"Wrote {meta_path}")
 
     events_path = run_dir / "events.jsonl"
-    plans_path = run_dir / "plans.jsonl"
+    outputs_path = run_dir / "outputs.jsonl"
 
     for plan_dir in plan_dirs:
         plan_name = plan_dir.name
@@ -176,7 +176,7 @@ def run(
                         plan_name=plan_name, error=pr.error,
                         duration_seconds=pr.duration_seconds)
 
-        _append_jsonl(plans_path, asdict(pr))
+        _append_jsonl(outputs_path, asdict(pr))
 
 
 def main():
@@ -235,10 +235,10 @@ def main():
 
     run(system_prompt, plan_dirs, args.output_dir, args.models)
 
-    # Summarize from plans.jsonl
-    plans_path = args.output_dir.parent / "plans.jsonl"
-    if plans_path.exists():
-        plans = [json.loads(line) for line in plans_path.read_text().splitlines() if line.strip()]
+    # Summarize from outputs.jsonl
+    outputs_path = args.output_dir.parent / "outputs.jsonl"
+    if outputs_path.exists():
+        plans = [json.loads(line) for line in outputs_path.read_text().splitlines() if line.strip()]
         ok = sum(1 for p in plans if p["status"] == "ok")
         total = len(plans)
         total_duration = sum(p["duration_seconds"] for p in plans)

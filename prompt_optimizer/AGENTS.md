@@ -57,6 +57,8 @@ tail -f /tmp/prompt_opt_run/events.jsonl
     <plan_name>/
       002-9-potential_levers_raw.json
       002-10-potential_levers.json
+      activity_overview.json
+      usage_metrics.jsonl
 ```
 
 ## Timing

@@ -37,6 +37,8 @@ Either `--baseline-dir` or `--plan-dir` must be provided.
     <plan_name>/
       002-9-potential_levers_raw.json
       002-10-potential_levers.json
+      activity_overview.json
+      usage_metrics.jsonl
 ```
 
 ## Quick Start

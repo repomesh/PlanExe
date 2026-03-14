@@ -120,13 +120,16 @@ def _run_cmd(cmd: list[str]) -> str | None:
 def _collect_hardware_info() -> dict:
     info: dict = {
         "os": platform.system(),
-        "os_version": platform.version(),
+        "os_version": platform.platform(),
         "arch": platform.machine(),
         "cpu_count": os.cpu_count(),
     }
 
     system = platform.system()
     if system == "Darwin":
+        mac_ver = platform.mac_ver()[0]
+        if mac_ver:
+            info["os_version"] = f"macOS {mac_ver}"
         info["cpu_model"] = _run_cmd(["sysctl", "-n", "machdep.cpu.brand_string"])
         memsize = _run_cmd(["sysctl", "-n", "hw.memsize"])
         if memsize:

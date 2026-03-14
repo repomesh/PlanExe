@@ -258,9 +258,21 @@ def run(
 
     run_dir = output_dir.parent
 
+    # Load already-completed plans from outputs.jsonl (for resume)
+    completed: set[str] = set()
+    outputs_path = run_dir / "outputs.jsonl"
+    if outputs_path.exists():
+        for line in outputs_path.read_text().splitlines():
+            if line.strip():
+                entry = json.loads(line)
+                if entry.get("status") == "ok":
+                    completed.add(entry["name"])
+        if completed:
+            logger.info(f"Resuming: {len(completed)} plan(s) already completed, skipping them")
+
     prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
 
-    # Write meta.json up front (no plans or total_duration)
+    # Write meta.json (overwrite on resume is fine — same content)
     model_info: dict = {"primary": model_names[0]}
     if len(model_names) > 1:
         model_info["fallbacks"] = model_names[1:]
@@ -275,10 +287,14 @@ def run(
     logger.info(f"Wrote {meta_path}")
 
     events_path = run_dir / "events.jsonl"
-    outputs_path = run_dir / "outputs.jsonl"
 
     for plan_dir in plan_dirs:
         plan_name = plan_dir.name
+
+        if plan_name in completed:
+            logger.info(f"Skipping {plan_name} (already completed)")
+            continue
+
         _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
         pr = run_single_plan(plan_dir, output_dir, system_prompt, llm_executor)

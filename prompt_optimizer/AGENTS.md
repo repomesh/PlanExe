@@ -2,7 +2,7 @@
 
 ## What this does
 
-Runs the `IdentifyPotentialLevers` pipeline step with a candidate system prompt against baseline training data. Produces lever JSON outputs per plan and progress-tracking files.
+Optimizes system prompts for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers`; will extend to other pipeline tasks.
 
 ## Prerequisites
 
@@ -70,3 +70,14 @@ Each plan takes ~60-80 seconds on a local ollama-llama3.1. Five plans take ~5-7 
 - `20260308_sovereign_identity`
 - `20260310_hong_kong_game`
 - `20260311_parasomnia_research_unit`
+
+## Architecture notes
+
+The runner is designed to extend to other pipeline steps. Each step adapter needs:
+
+1. **Input files** — which files to read and how to assemble the user prompt
+2. **Execute call** — which class/method to invoke
+3. **Output filenames** — which files to save
+4. **Step name** — identifier for meta.json
+
+The outer infrastructure (CLI, progress tracking via events.jsonl/outputs.jsonl, meta.json) is shared across all steps.

@@ -1,6 +1,8 @@
 # Prompt Optimizer
 
-Re-executes the `IdentifyPotentialLevers` pipeline step with a candidate system prompt against baseline training data and captures the output. This lets you compare candidate prompts against baseline outputs.
+Optimizes system prompts for pipeline steps in `run_plan_pipeline.py`. Re-executes a pipeline step with a candidate system prompt against baseline training data and captures the output, enabling comparison of candidate prompts against baseline outputs.
+
+Currently supports the `IdentifyPotentialLevers` step. Each pipeline step requires a custom adapter (input assembly, execute call, output filenames), but the runner infrastructure (progress tracking, CLI, output structure) is shared.
 
 ## Usage
 
@@ -27,16 +29,15 @@ Either `--baseline-dir` or `--plan-dir` must be provided.
 ## Output Structure
 
 ```
-<output-dir>/
-  <plan_name>/
-    002-9-potential_levers_raw.json
-    002-10-potential_levers.json
-  <plan_name>/
-    ...
-meta.json    (written one level above output-dir)
+<run-dir>/
+  meta.json          # written at start: step name, system_prompt SHA256, models
+  outputs.jsonl      # one row per completed plan: {name, status, lever_count, duration_seconds, error}
+  events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
+  outputs/
+    <plan_name>/
+      002-9-potential_levers_raw.json
+      002-10-potential_levers.json
 ```
-
-`meta.json` captures: step name, system prompt SHA256, models used, per-plan status/lever count/duration, and total duration.
 
 ## Quick Start
 
@@ -55,3 +56,12 @@ python -m prompt_optimizer.runner \
     --output-dir /tmp/prompt_opt_test/outputs \
     --model ollama-llama3.1
 ```
+
+## Architecture
+
+The runner is designed to extend to other pipeline steps. Each step needs four things:
+
+1. **Input files** — which files to read and how to assemble the user prompt
+2. **Execute call** — which class/method to invoke
+3. **Output filenames** — which files to save
+4. **Step name** — identifier for meta.json

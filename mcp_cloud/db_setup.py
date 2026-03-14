@@ -63,7 +63,11 @@ else:
     logger.info("Using SQLALCHEMY_DATABASE_URI from environment.")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle': 280, 'pool_pre_ping': True}
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_recycle': 280,
+    'pool_pre_ping': True,
+    'connect_args': {'connect_timeout': 10},
+}
 print("[startup] db_setup.py: calling db.init_app(app)", file=sys.stderr, flush=True)
 db.init_app(app)
 print("[startup] db_setup.py: db.init_app(app) done", file=sys.stderr, flush=True)

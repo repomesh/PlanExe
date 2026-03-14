@@ -27,8 +27,11 @@ _worker_plan_dir = str(Path(__file__).resolve().parent.parent / "worker_plan")
 if _worker_plan_dir not in sys.path:
     sys.path.insert(0, _worker_plan_dir)
 
+from llama_index.core.instrumentation import get_dispatcher
 from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName
+from worker_plan_internal.llm_util.track_activity import TrackActivity
+from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +83,18 @@ def run_single_plan(
     plan_output_dir = output_dir / plan_name
     plan_output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Set up per-plan usage tracking
+    set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
+    # TrackActivity derives activity_overview.json path from jsonl_file_path.parent,
+    # so we point it at the plan output dir. The jsonl file itself is deleted after.
+    track_activity_path = plan_output_dir / "track_activity.jsonl"
+    track_activity = TrackActivity(
+        jsonl_file_path=track_activity_path,
+        write_to_logger=False,
+    )
+    dispatcher = get_dispatcher()
+    dispatcher.add_event_handler(track_activity)
+
     t0 = time.monotonic()
     try:
         user_prompt = load_user_prompt(plan_dir)
@@ -108,6 +123,10 @@ def run_single_plan(
             duration_seconds=round(duration, 2),
             error=str(e),
         )
+    finally:
+        set_usage_metrics_path(None)
+        dispatcher.event_handlers.remove(track_activity)
+        track_activity_path.unlink(missing_ok=True)
 
 
 def _run_cmd(cmd: list[str]) -> str | None:
@@ -204,6 +223,7 @@ def run(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     run_dir = output_dir.parent
+
     prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
 
     # Write meta.json up front (no plans or total_duration)

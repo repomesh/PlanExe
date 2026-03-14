@@ -13,3 +13,7 @@ PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES="${{shared.PLANEXE_LLM_CONFIG_WHITELISTED
 ## Volume - None
 
 The `worker_plan` gets initialized via env vars. It does write to disk inside the `run` dir.
+
+## Settings - Private Networking
+
+Create `workerplan.railway.internal` as IPv4 and IPv6.

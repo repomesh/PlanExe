@@ -77,8 +77,8 @@ class DocumentDetails(BaseModel):
     )
     levers: list[Lever] = Field(
         min_length=5,
-        max_length=5,
-        description="Propose exactly 5 levers."
+        max_length=7,
+        description="Propose 5 to 7 levers."
     )
     summary: str = Field(
         description="Are these levers well picked? Are they well balanced? Are they well thought out? Point out flaws. 100 words."
@@ -125,7 +125,7 @@ IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT = """
 You are an expert strategic analyst. Generate solution space parameters following these directives:
 
 1. **Output Requirements**
-   - You must generate EXACTLY 5 levers per response. Do not generate more or fewer than 5 levers.
+   - You must generate 5 to 7 levers per response.
    - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
 2. **Lever Quality Standards**
@@ -184,12 +184,10 @@ class IdentifyPotentialLevers:
             system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
         else:
             system_prompt = system_prompt.strip()
-        chat_message_list = [
-            ChatMessage(
-                role=MessageRole.SYSTEM,
-                content=system_prompt,
-            ),
-        ]
+        system_message = ChatMessage(
+            role=MessageRole.SYSTEM,
+            content=system_prompt,
+        )
 
         total_calls = 3
         responses: list[DocumentDetails] = []
@@ -202,21 +200,25 @@ class IdentifyPotentialLevers:
             else:
                 names_list = ", ".join(f'"{n}"' for n in generated_lever_names)
                 prompt_content = (
-                    f"Generate 5 MORE levers with completely different names. "
-                    f"Do NOT reuse any of these already-generated names: [{names_list}]"
+                    f"Generate 5 to 7 MORE levers with completely different names. "
+                    f"Do NOT reuse any of these already-generated names: [{names_list}]\n\n"
+                    f"{user_prompt}"
                 )
 
             logger.info(f"Processing call {call_index} of {total_calls}")
-            chat_message_list.append(
+            call_messages = [
+                system_message,
                 ChatMessage(
                     role=MessageRole.USER,
                     content=prompt_content,
-                )
-            )
+                ),
+            ]
+
+            messages_snapshot = list(call_messages)
 
             def execute_function(llm: LLM) -> dict:
                 sllm = llm.as_structured_llm(DocumentDetails)
-                chat_response = sllm.chat(chat_message_list)
+                chat_response = sllm.chat(messages_snapshot)
                 metadata = dict(llm.metadata)
                 metadata["llm_classname"] = llm.class_name()
                 return {
@@ -234,16 +236,6 @@ class IdentifyPotentialLevers:
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
                 raise llm_error from e
-            
-            chat_message_list.append(
-                ChatMessage(
-                    role=MessageRole.ASSISTANT,
-                    content=(
-                        result["chat_response"].message.content
-                        or result["chat_response"].raw.model_dump_json()
-                    ),
-                )
-            )
 
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)

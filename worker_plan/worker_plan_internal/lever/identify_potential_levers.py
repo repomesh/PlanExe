@@ -152,20 +152,26 @@ class IdentifyPotentialLevers:
             ),
         ]
 
-        user_prompt_list = [
-            user_prompt,
-            "more",
-            "more",
-        ]
-
+        total_calls = 3
         responses: list[DocumentDetails] = []
         metadata_list: list[dict] = []
-        for user_prompt_index, user_prompt_item in enumerate(user_prompt_list, start=1):
-            logger.info(f"Processing user_prompt_index: {user_prompt_index} of {len(user_prompt_list)}")
+        generated_lever_names: list[str] = []
+
+        for call_index in range(1, total_calls + 1):
+            if call_index == 1:
+                prompt_content = user_prompt
+            else:
+                names_list = ", ".join(f'"{n}"' for n in generated_lever_names)
+                prompt_content = (
+                    f"Generate 5 MORE levers with completely different names. "
+                    f"Do NOT reuse any of these already-generated names: [{names_list}]"
+                )
+
+            logger.info(f"Processing call {call_index} of {total_calls}")
             chat_message_list.append(
                 ChatMessage(
                     role=MessageRole.USER,
-                    content=user_prompt_item,
+                    content=prompt_content,
                 )
             )
 
@@ -200,6 +206,7 @@ class IdentifyPotentialLevers:
                 )
             )
 
+            generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)
             metadata_list.append(result["metadata"])
 

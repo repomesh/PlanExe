@@ -1,6 +1,10 @@
 """
 Brainstorm what key "levers" can be pulled to change the outcome of the plan.
 
+Don’t focus on hitting exactly 15 levers. It’s more important that there is 15..20 levers.
+If there are too many levers, I don’t want to blindly discard the extra ones, this is what the deduplicate levers are made for.Downstream there is a deduplicate levers, that gets rid of near duplicates.
+It’s more important that the quality of the text content of the levers are getting improved on.
+
 The output contains near duplicates, these have to be deduplicated. A few lever names appear twice.
 The deduplication is done in the deduplicate_levers.py script.
 

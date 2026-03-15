@@ -155,16 +155,39 @@ success rate, bracket placeholder leakage, option count violations, lever
 name uniqueness, template leakage, review format compliance, consequence chain
 format, content depth, and cross-call duplication.
 
+## Critical Rules
+
+1. **Do NOT merge PRs before the verdict.** The correct order is: create PR → run
+   experiments on the branch → run analysis → read verdict → merge only if the
+   verdict confirms improvement. Merging before collecting evidence defeats the
+   purpose of the iteration.
+
+2. **No hardcoded English keywords in validators.** PlanExe users create plans in
+   many languages. Checking for presence of specific English words (e.g. "Controls",
+   "Weakness:") breaks for non-English plans. All validation must be
+   language-agnostic: structural checks, field length ratios, duplicate detection.
+
+3. **Never delete from the history directory.** History runs are permanent records,
+   even if flawed. Analysis can note that a run was problematic, but the artifacts
+   must remain.
+
+4. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file`
+   from the registered prompt in `prompts/`, not the `SYSTEM_PROMPT` constant in
+   Python code. Code-level prompt changes are invisible to experiments until a new
+   prompt file is registered via `register_prompt.py`.
+
 ## Prerequisites
 
-- Python venv: `worker_plan/.venv/bin/python` (has llama_index and dependencies)
+- Python 3.11: `/opt/homebrew/bin/python3.11` (has llama_index and dependencies).
+  Note: `sys.executable` may point to a different Python version — always use the
+  explicit path.
 - Ollama running locally with a model (e.g. `ollama-llama3.1`)
 - Baseline training data at: `/Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/`
 
 ## Extract the default system prompt
 
 ```bash
-worker_plan/.venv/bin/python -c "
+/opt/homebrew/bin/python3.11 -c "
 import sys; sys.path.insert(0, 'worker_plan')
 from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
 print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
@@ -174,7 +197,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 ## Run against a single plan (auto-increment history)
 
 ```bash
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -184,7 +207,7 @@ worker_plan/.venv/bin/python -m prompt_optimizer.runner \
 ## Run against all baseline plans (auto-increment history)
 
 ```bash
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -198,7 +221,7 @@ Anthropic models live in `llm_config/anthropic_claude.json`, which is not loaded
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -209,10 +232,12 @@ Available Anthropic model names are defined in `llm_config/anthropic_claude.json
 
 **Note:** Anthropic's LlamaIndex integration overrides `structured_predict()` and bypasses `self.chat()`, so LlamaIndex instrumentation events don't fire. `usage_metrics.jsonl` will contain basic entries (model, duration, success) but no token counts. `activity_overview.json` is not generated.
 
+The `run_optimization_iteration.py` script handles the Anthropic env vars automatically for models listed in its `CUSTOM_PROFILE_MODELS` dict.
+
 ## Run with manual output dir (no history)
 
 ```bash
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --output-dir /tmp/prompt_opt_run/outputs \
@@ -222,7 +247,7 @@ worker_plan/.venv/bin/python -m prompt_optimizer.runner \
 ## Monitor progress during a run
 
 ```bash
-tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/events.jsonl
+tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/events.jsonl
 ```
 
 ## Resume an interrupted run
@@ -231,10 +256,10 @@ Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. 
 
 ```bash
 # Same command as before — skips already-completed plans
-worker_plan/.venv/bin/python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
-    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/00_identify_potential_levers/outputs \
+    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/outputs \
     --model ollama-llama3.1
 ```
 
@@ -283,10 +308,10 @@ With `workers > 1`, plans run in parallel using a thread pool. Thread safety:
 
 ## Register a system prompt
 
-Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256).
+Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256). The runner picks the last sorted prompt file from `prompts/{step}/`, so registering a new prompt automatically makes it the active one for subsequent experiments.
 
 ```bash
-worker_plan/.venv/bin/python -m prompt_optimizer.register_prompt \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.register_prompt \
     --step identify_potential_levers \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab
 ```

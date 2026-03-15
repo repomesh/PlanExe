@@ -8,83 +8,102 @@ By the end of this prompt optimization, the overall plan quality should have bee
 I want to track metrics for how much improvement have happened.
 
 
-## Status (2026-03-14)
+## Status (2026-03-15)
 
-### Done
+### Infrastructure
 
-- **Data repo created**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, optimization run artifacts, and scores.
-- **Baseline data populated**: 5 train plans and 9 verify plans extracted from zips into `baseline/train/` and `baseline/verify/`. Each plan contains ~175-189 files covering the full pipeline output.
-- **`dataset.json`** defines the train/verify split with zip filenames.
-- **`populate_baseline.py`** script automates ingesting baseline data from local paths or URLs.
-- **Directory structure** for `runs/`, `scores/`, and `full_plan_comparisons/` is in place (empty, awaiting optimizer).
-- **`prompt_optimizer/` runner** ([PR #263](https://github.com/PlanExeOrg/PlanExe/pull/263)) — re-executes the `IdentifyPotentialLevers` step with a candidate system prompt against baseline plans. Features:
-  - Added optional `system_prompt` parameter to `IdentifyPotentialLevers.execute()` (backward-compatible).
-  - CLI with `--system-prompt-file`, `--baseline-dir`/`--plan-dir`, `--model`.
-  - `--prompt-lab-dir` auto-creates runs in `history/{counter//100}/{counter%100:02d}_{step}/` with auto-incrementing counter.
-  - `--output-dir` for manual placement (alternative to `--prompt-lab-dir`).
-  - Streaming progress: `meta.json` written at start, `events.jsonl` for real-time monitoring, `outputs.jsonl` for per-plan results.
-  - Per-plan `activity_overview.json` and `usage_metrics.jsonl` for token/cost tracking.
-  - System info (OS, CPU, memory, GPU) captured in `meta.json`.
-  - Resume support: re-run the same command to skip completed plans and retry errors.
-  - Automatic parallelism based on `luigi_workers` from `llm_config/*.json` (cloud models get 4 workers, local models get 1).
-  - Thread-safe: per-thread `LLMExecutor`, thread-local usage metrics via `threading.local()`, `TrackActivity` duplicate-write guard, locked file writes.
-  - Tested against all 5 training plans with local `ollama-llama3.1` (sequential) and `openrouter-openai-gpt-oss-20b` (parallel, 4 workers).
-- **`register_prompt.py`** — extracts the current system prompt for a step and saves it to `prompts/{step}/prompt_{index}_{sha256}.txt` in the prompt-lab repo. Auto-increments index, skips duplicates by SHA256.
-- **Thread-safety fixes to `worker_plan_internal`**:
-  - `usage_metrics.py`: replaced module-level global with `threading.local()` so each thread gets its own metrics path.
-  - `track_activity.py`: `_record_file_usage_metric` guards against duplicate writes when multiple handlers are registered on the shared dispatcher.
-- **Anthropic instrumentation fix** ([PR #264](https://github.com/PlanExeOrg/PlanExe/pull/264)):
-  - **Root cause**: `llama-index-llms-anthropic` overrides `structured_predict()` and calls `self._client.beta.messages.parse()` directly, bypassing `self.chat()`. LlamaIndex instrumentation events (`LLMChatEndEvent`) never fire, so `TrackActivity` never writes `usage_metrics.jsonl` or `activity_overview.json`.
-  - **Fix**: `LLMExecutor._record_attempt_token_metrics()` now records basic metrics (model, duration, success) for all calls, not just failures. For Anthropic, this is the only record; for other backends, TrackActivity also writes richer data (token counts, cost).
-  - Added `ANTHROPIC_API_KEY` to `.env` example files and documented Anthropic usage in `prompt_optimizer/AGENTS.md`.
-- **GLM models removed** ([PR #266](https://github.com/PlanExeOrg/PlanExe/pull/266)) — `openrouter-z-ai-glm-4-7-flash` returned the schema instead of data (schema-echoing failure). Removed from `llm_config`.
-- **Runner tested across 8 models** (history runs 00–08, pre-fix):
-  - 5/5: `ollama-llama3.1`, `openrouter-openai-gpt-oss-20b`, `openai-gpt-5-nano`, `openrouter-qwen3-30b-a3b`, `openrouter-openai-gpt-4o-mini`, `anthropic-claude-haiku-4-5-pinned`
-  - 0/5: `openrouter-z-ai-glm-4-7-flash` (schema-echoing), `openrouter-nvidia-nemotron-3-nano-30b-a3b` (empty output), `openrouter-stepfun-step-3-5-flash` (removed from config)
-- **Analysis automation** — Python scripts in `PlanExe-prompt-lab/analysis/` that run Claude Code and Codex:
-  - **`create_analysis_dir.py`** (phase 0): scans existing analysis directories and history runs, creates a new auto-incremented analysis directory with `meta.json` containing only unanalyzed runs. Ensures no runs are accidentally skipped.
-  - **`run_insight.py`** (phase 1): reads `meta.json`, builds a prompt referencing `AGENTS.md` conventions and history runs, runs Claude Code and Codex in parallel. Produces independent `insight_claude.md` and `insight_codex.md` with quantitative metrics, tiered rankings, and labeled hypotheses (H1–H4, C1–C4).
-  - **`run_code_review.py`** (phase 2): reads the insight files from phase 1 as context, asks both agents to review PlanExe source code (`identify_potential_levers.py`, `runner.py`) for bugs and improvements. Produces `code_claude.md` and `code_codex.md` with file:line references traced back to insight findings.
-  - **`run_synthesis.py`** (phase 3): reads all insight and code review files, cross-references across agents, resolves disagreements by reading source code, and produces a single `synthesis.md` with top 5 ranked directions and 1 recommendation.
-  - **`run_assessment.py`** (phase 4): compares the current analysis against the previous one, reads actual output samples from history, and produces `assessment.md` with a metric-by-metric comparison table and a keeper verdict (YES/NO/CONDITIONAL).
-  - **`update_meta_pr.py`**: fetches PR info from GitHub via `gh` and writes `pr_url`, `pr_title`, `pr_description` into `meta.json` for provenance.
-  - Conventions documented in [`analysis/AGENTS.md`](https://github.com/PlanExeOrg/PlanExe-prompt-lab/blob/main/analysis/AGENTS.md).
-- **`run_optimization_iteration.py`** — orchestrates a full optimization loop: reads the latest `synthesis.md`, extracts the top recommendation, invokes Claude Code to implement it (branch + PR), runs experiments across models, and runs the full analysis pipeline (phases 0–4). Supports `--skip-implement`, `--skip-runner`, `--skip-analysis`, and `--models`.
-- **First analysis complete** ([analysis 0](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/0_identify_potential_levers)):
-  - Insight files identify run 09 (claude-haiku) as best content quality, run 02 (gpt-5-nano) as best structural regularity. ~70% artifact-level success rate. Three models failed completely (schema mismatch, empty output, config error).
-  - Code review files confirmed bugs: B1 (double user-prompt), B7 (field description mismatch), thread-safety issues, no post-call validation.
-  - Synthesis ranked B1 as the top recommendation.
-- **First optimization iteration complete** — B1 fix ([PR #268](https://github.com/PlanExeOrg/PlanExe/pull/268)):
-  - **Fix**: removed the initial `USER(user_prompt)` from `chat_message_list` initialization in `identify_potential_levers.py`. All three LLM turns now handled uniformly by the loop.
-  - **Post-fix runs** (09–16): 7 models re-tested, 29/30 plans succeeded (96.7% excluding infrastructure failures).
-  - **[Assessment verdict: YES](https://github.com/PlanExeOrg/PlanExe-prompt-lab/blob/main/analysis/1_identify_potential_levers/assessment.md)** — PR merged. Key improvements:
-    - Review format violations: 67 → ~4
-    - Consequence chain violations: 35 → 7
-    - Bracket placeholder leakage: ~17 → ~1
-    - No regressions in success rate, content depth, or cross-call duplication.
-  - New issues surfaced (not caused by B1): assistant turn stored as `dict` instead of `str` (corrupts turns 2–3 context), metric exemplar leakage ("25% faster scaling through").
+- **Data repo**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, run history, registered prompts, and analysis artifacts.
+- **Baseline data**: 5 train plans × 9 verify plans, extracted from zips into `baseline/train/` and `baseline/verify/`.
+- **Runner** (`prompt_optimizer/runner.py`): re-executes a single pipeline step with a candidate system prompt against baseline plans. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--system-prompt-file`, `--model`, `--prompt-lab-dir`, resume, and parallel workers.
+- **Analysis pipeline** (4 phases in `analysis/`):
+  - Phase 0: `create_analysis_dir.py` — creates analysis dir with unanalyzed runs.
+  - Phase 1: `run_insight.py` — Claude Code + Codex in parallel produce independent `insight_*.md` files with quantitative metrics and PR impact verdicts.
+  - Phase 2: `run_code_review.py` — both agents review PlanExe source code, producing `code_*.md` with file:line references.
+  - Phase 3: `run_synthesis.py` — single agent reconciles all findings into `synthesis.md` with top 5 ranked directions.
+  - Phase 4: `run_assessment.py` — before/after comparison, metric table, keeper verdict (YES/NO/CONDITIONAL), and evaluation of the synthesis recommendation for the next iteration.
+- **`run_optimization_iteration.py`** — orchestrates a full loop: implement recommendation → create PR → run experiments → run analysis pipeline. Supports `--skip-implement`, `--skip-runner`, `--skip-analysis`, `--models`.
+- **Conventions**: [`analysis/AGENTS.md`](https://github.com/PlanExeOrg/PlanExe-prompt-lab/blob/main/analysis/AGENTS.md).
+
+### Models
+
+7 models tested per iteration (5 plans each = 35 runs):
+
+| Model | Alias | Status |
+|-------|-------|--------|
+| ollama-llama3.1 | llama | Working (5/5) |
+| openrouter-openai-gpt-oss-20b | gpt-oss | Working (4-5/5) |
+| openai-gpt-5-nano | gpt5-nano | Working (5/5) |
+| openrouter-qwen3-30b-a3b | qwen | Working (5/5) |
+| openrouter-openai-gpt-4o-mini | gpt4o-mini | Working (5/5) |
+| anthropic-claude-haiku-4-5-pinned | haiku | Working (4/5) |
+| openrouter-nvidia-nemotron-3-nano-30b-a3b | nemotron | Broken — 0/5 across all 11 iterations |
+
+Removed: GLM (PR #266, schema-echoing), StepFun (removed from config).
+
+### Iteration History
+
+Currently optimizing: `identify_potential_levers` (the first step after plan intake).
+
+88 history runs completed (runs 00–87), 12 analysis rounds (0–11).
+
+| Iter | PR | Change | Verdict | Runs | Analysis |
+|------|-----|--------|---------|------|----------|
+| 0 | — | Baseline | — | 00–08 | [analysis/0](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/0_identify_potential_levers) |
+| 1 | [#268](https://github.com/PlanExeOrg/PlanExe/pull/268) | Fix doubled user prompt | YES | 09–16 | [analysis/1](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/1_identify_potential_levers) |
+| 2 | [#270](https://github.com/PlanExeOrg/PlanExe/pull/270) | Fix assistant turn serialization | CONDITIONAL | 17–23 | [analysis/2](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/2_identify_potential_levers) |
+| 3 | [#272](https://github.com/PlanExeOrg/PlanExe/pull/272) | Novelty-aware follow-up prompts | YES | 24–31 | [analysis/3](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/3_identify_potential_levers) |
+| 4 | [#273](https://github.com/PlanExeOrg/PlanExe/pull/273) | Remove exemplar strings + make wrapper fields optional | CONDITIONAL | 32–38 | [analysis/4](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/4_identify_potential_levers) |
+| 5 | [#274](https://github.com/PlanExeOrg/PlanExe/pull/274) | Align Pydantic field descriptions with system prompt | YES | 39–45 | [analysis/5](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/5_identify_potential_levers) |
+| 6 | [#275](https://github.com/PlanExeOrg/PlanExe/pull/275) | Fix consequences length + trade-off requirement + review format | YES | 46–52 | [analysis/6](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/6_identify_potential_levers) |
+| 7 | [#276](https://github.com/PlanExeOrg/PlanExe/pull/276) | Enforce schema contract: levers min/max 5, summary required | CONDITIONAL | 53–59 | [analysis/7](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/7_identify_potential_levers) |
+| 8 | [#278](https://github.com/PlanExeOrg/PlanExe/pull/278) | Fresh context per call + relax lever count to 5–7 | CONDITIONAL | 60–66 | [analysis/8](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/8_identify_potential_levers) |
+| 9 | [#279](https://github.com/PlanExeOrg/PlanExe/pull/279) | Remove naming template | YES | 67–73 | [analysis/9](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/9_identify_potential_levers) |
+| 10 | [#281](https://github.com/PlanExeOrg/PlanExe/pull/281) | Keyword quality gate (reverted in [#282](https://github.com/PlanExeOrg/PlanExe/pull/282)) | NO | 74–80 | [analysis/10](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/10_identify_potential_levers) |
+| 11 | [#283](https://github.com/PlanExeOrg/PlanExe/pull/283) | RetryConfig in runner (reverted in [#284](https://github.com/PlanExeOrg/PlanExe/pull/284)) | NO | 81–87 | [analysis/11](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/11_identify_potential_levers) |
+
+### Key Improvements So Far
+
+Comparing iteration 0 (baseline) to iteration 9 (best state after the naming template fix):
+
+- **Review format violations**: 67 → ~4
+- **Consequence chain violations**: 35 → 7
+- **Bracket placeholder leakage**: ~17 → 0
+- **Template leakage** (naming suffix): 83–100% → 2–10%
+- **Cross-call duplication**: eliminated via novelty-aware follow-ups
+- **Chat-history contamination**: eliminated via fresh context per call
+
+### Key Lessons Learned
+
+1. **No hardcoded English keywords in validators.** PlanExe users create plans in many languages. Keyword-based quality gates (checking for "Controls", "Weakness:") break for non-English plans. All validation must be language-agnostic — structural checks, field length ratios, duplicate detection. Iteration 10 was a disaster because of this.
+2. **Don't merge PRs before the verdict.** The correct order is: create PR → run experiments on the branch → run analysis → read verdict → merge only if verdict confirms improvement. Iteration 11 was merged prematurely.
+3. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file` from the registered prompt in `prompts/`, not the `SYSTEM_PROMPT` constant in Python code. Code-level prompt changes are invisible to experiments until a new prompt file is registered.
+4. **Auto-implementing synthesis recommendations can conflict with user intent.** The `run_optimization_iteration.py` script auto-applies the top recommendation, but this can conflict with explicit user preferences (e.g., reverting to "exactly 5 levers" when the user wanted 5–7). Use `--skip-implement` when needed.
+5. **Dual-agent analysis catches real errors.** Codex corrected Claude's success rate miscount in iteration 0. Independent analysis is worth the extra cost.
+
+### Current State of `identify_potential_levers.py`
+
+After 11 iterations, the step has these characteristics:
+
+- System prompt says "5 to 7 levers per response", schema has `min_length=5, max_length=7`
+- Follow-up calls use novelty-aware prompts (exclude already-generated lever names)
+- Each LLM call gets a fresh context (no chat history accumulation)
+- Naming guidance says "avoid formulaic patterns or repeated prefixes" (no template)
+- Quality gate: duplicate name filter only (language-agnostic)
+- Registered prompt: `prompt_2` (aligned with code changes)
 
 ### Not Started
 
-- **Evaluator prompt** — no scoring rubric or comparison prompt written.
-- **Candidate generator** — no mechanism for producing prompt variants.
-- **Scorer / Optimizer loop** — no automated train/verify loop.
+- **Numeric evaluator** — no deterministic scoring script. Metrics are computed by LLM agents, not reproducible code.
+- **Candidate generator** — prompt variants are proposed by synthesis agents and implemented manually, not auto-generated.
+- **Train/verify scoring loop** — no automated optimizer that tests candidates against `baseline/verify/`.
+- **Other pipeline steps** — only `identify_potential_levers` has been optimized so far.
 
 ### Next Steps
 
-1. **Fix assistant turn serialization** in `identify_potential_levers.py:196`. `result["chat_response"].raw.model_dump()` passes a Python dict as `ChatMessage.content`; it should be `result["chat_response"].message.content` (the raw JSON string). This corrupts conversation context for turns 2 and 3 on 100% of runs and is the top-priority fix per synthesis 1.
-2. **Replace metric exemplar** in `identify_potential_levers.py:95`. The literal `"Systemic: 25% faster scaling through..."` is copied verbatim by 5/6 models. Replace with `"Systemic: [N]% [measurable outcome] through [mechanism]"`.
-3. **Add stateful "more" turns** — inject already-generated lever names into turns 2 and 3 to reduce cross-call thematic redundancy.
-4. **Add per-call lever count validation** — `levers_raw.extend()` has no count guard; llama3.1 produced 20 levers instead of 15.
-5. **Add model preflight check** — move `LLMModelFromName.from_names()` before the plan loop to catch bad model aliases early.
-6. **Fix `Lever.options` field description** from `"2-5 options"` to `"Exactly 3 options"` (B7 from synthesis 0).
-7. **Design the evaluator prompt and scoring rubric.** Define concrete dimensions (completeness, specificity, actionability, structure) and a numeric scale. Version-control it alongside the system prompts.
-8. **Build `evaluator.py`** — calls a pinned reasoning model to score/compare runner outputs against baseline.
-9. **Run baseline scoring** — score the current default prompt outputs to establish a numeric starting point.
-10. **Build `candidate_generator.py`** — produce prompt variants (LLM rewrites, structured mutations), informed by synthesis conclusions and failed-attempt logs.
-11. **Build `optimizer.py`** — orchestrate the train/verify loop (Stage 1-2).
-12. **Add regression detection** — after optimizing one step, re-run downstream steps to check for cascade regressions before committing.
-13. **Extend runner to other pipeline steps** — the runner is designed for this; each step needs an adapter for input assembly, execute call, output filenames, and step name.
+1. **Truncate over-limit lever lists** instead of hard-failing. When a model returns 8 levers (`max_length=7`), truncate to 7 with a warning instead of discarding the entire response. This fixes haiku's recurring failure mode (1 plan per batch).
+2. **Add negative example for field separation** — `consequences` and `review_lever` fields get confused in qwen3 (72% contamination rate in run 85). A concrete bad example in the prompt should reduce this.
+3. **Build a deterministic evaluator** — compute the same metrics the insight agents compute (uniqueness, option count, template leakage, format compliance) without LLM calls. This makes assessment reproducible and fast.
+4. **Move to the next pipeline step** once `identify_potential_levers` is stable.
 
 
 ## Stage 1 - one improvement iteration

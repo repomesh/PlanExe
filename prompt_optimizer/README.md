@@ -5,9 +5,10 @@ an iterative loop: implement a fix, test across models, analyze results, and
 decide whether to keep or revert. Each iteration produces an auditable trail
 with a PR, quantitative comparison, and a keeper verdict.
 
-Currently optimizing the `IdentifyPotentialLevers` step. The runner
-infrastructure (progress tracking, CLI, output structure) is shared across
-steps; each new step requires only a custom adapter.
+Currently optimizing the `IdentifyPotentialLevers` step (11 iterations
+completed, 88 history runs). The runner infrastructure (progress tracking,
+CLI, output structure) is shared across steps; each new step requires only a
+custom adapter.
 
 See [proposal 117](../docs/proposals/117-system-prompt-optimizer.md) for the
 full design and current status.
@@ -49,6 +50,10 @@ python run_optimization_iteration.py --skip-implement --skip-runner
 
 See `run_optimization_iteration.py --help` for all options.
 
+**Important:** Do NOT merge the PR before the verdict. The correct order is:
+create PR → run experiments → run analysis → read verdict → merge only if
+verdict confirms improvement.
+
 ### Running analysis phases individually
 
 ```bash
@@ -63,16 +68,19 @@ python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 
 
 ## Runner Usage
 
+The runner must be invoked with Python 3.11 (`/opt/homebrew/bin/python3.11`)
+which has the required llama_index dependencies.
+
 ```bash
 # Auto-increment into prompt-lab history/
-python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 
 # Or manual output directory
-python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --output-dir /path/to/my_run/outputs \
@@ -95,12 +103,13 @@ Either `--prompt-lab-dir` or `--output-dir` must be provided.
 
 ### Anthropic models
 
-Anthropic models need custom profile env vars:
+Anthropic models need custom profile env vars. The `run_optimization_iteration.py`
+script handles this automatically for models in its `CUSTOM_PROFILE_MODELS` dict.
 
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
@@ -129,13 +138,13 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 Extract the current default system prompt to a file, then run against a single plan:
 
 ```bash
-python -c "
+/opt/homebrew/bin/python3.11 -c "
 import sys; sys.path.insert(0, 'worker_plan')
 from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
 print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 " > baseline_prompt.txt
 
-python -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file baseline_prompt.txt \
     --plan-dir /path/to/baseline/train/20250321_silo \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
@@ -165,12 +174,50 @@ The runner automatically parallelizes based on the `luigi_workers` value in `llm
 
 Each plan runs in its own thread with an independent `LLMExecutor`. Usage metrics use thread-local storage to avoid cross-thread interference.
 
+## Models
+
+7 models tested per iteration (5 plans each = 35 runs per batch):
+
+| Alias | Model | Status |
+|-------|-------|--------|
+| llama | ollama-llama3.1 | Working (5/5) |
+| gpt-oss | openrouter-openai-gpt-oss-20b | Working (4-5/5) |
+| gpt5-nano | openai-gpt-5-nano | Working (5/5) |
+| qwen | openrouter-qwen3-30b-a3b | Working (5/5) |
+| gpt4o-mini | openrouter-openai-gpt-4o-mini | Working (5/5) |
+| haiku | anthropic-claude-haiku-4-5-pinned | Working (4/5) |
+| nemotron | openrouter-nvidia-nemotron-3-nano-30b-a3b | Broken (0/5 all iterations) |
+
 ## Iteration History
 
-| Iteration | PR | Change | Verdict | Key Result |
-|-----------|-----|--------|---------|------------|
-| 0 | — | Baseline (no change) | — | 8 models tested, 3 failed completely |
-| 1 | [#268](https://github.com/PlanExeOrg/PlanExe/pull/268) | Fix doubled user prompt (B1) | **YES** | Review violations 67→4, bracket leakage 17→1 |
+| Iter | PR | Change | Verdict |
+|------|-----|--------|---------|
+| 0 | — | Baseline | — |
+| 1 | [#268](https://github.com/PlanExeOrg/PlanExe/pull/268) | Fix doubled user prompt | YES |
+| 2 | [#270](https://github.com/PlanExeOrg/PlanExe/pull/270) | Fix assistant turn serialization | CONDITIONAL |
+| 3 | [#272](https://github.com/PlanExeOrg/PlanExe/pull/272) | Novelty-aware follow-up prompts | YES |
+| 4 | [#273](https://github.com/PlanExeOrg/PlanExe/pull/273) | Remove exemplar strings + optional wrapper fields | CONDITIONAL |
+| 5 | [#274](https://github.com/PlanExeOrg/PlanExe/pull/274) | Align Pydantic field descriptions with system prompt | YES |
+| 6 | [#275](https://github.com/PlanExeOrg/PlanExe/pull/275) | Fix consequences length + trade-off + review format | YES |
+| 7 | [#276](https://github.com/PlanExeOrg/PlanExe/pull/276) | Enforce schema contract: levers min/max 5, summary required | CONDITIONAL |
+| 8 | [#278](https://github.com/PlanExeOrg/PlanExe/pull/278) | Fresh context per call + relax lever count to 5–7 | CONDITIONAL |
+| 9 | [#279](https://github.com/PlanExeOrg/PlanExe/pull/279) | Remove naming template | YES |
+| 10 | [#281](https://github.com/PlanExeOrg/PlanExe/pull/281) | Keyword quality gate (reverted in [#282](https://github.com/PlanExeOrg/PlanExe/pull/282)) | NO |
+| 11 | [#283](https://github.com/PlanExeOrg/PlanExe/pull/283) | RetryConfig in runner (reverted in [#284](https://github.com/PlanExeOrg/PlanExe/pull/284)) | NO |
+
+Full analysis artifacts for each iteration are in
+[PlanExe-prompt-lab/analysis/](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis).
+
+## Critical Rules
+
+1. **Do NOT merge PRs before the verdict.** Create PR → run experiments → run
+   analysis → read verdict → merge only if confirmed.
+2. **No hardcoded English keywords in validators.** PlanExe users create plans
+   in many languages. All validation must be language-agnostic.
+3. **Never delete from the history directory.** Runs are permanent records.
+4. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file`
+   from `prompts/`, not the Python constant. Register new prompts via
+   `register_prompt.py` after code changes.
 
 ## Architecture
 

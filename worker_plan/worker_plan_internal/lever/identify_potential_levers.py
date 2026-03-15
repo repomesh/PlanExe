@@ -77,7 +77,6 @@ class DocumentDetails(BaseModel):
     )
     levers: list[Lever] = Field(
         min_length=5,
-        max_length=7,
         description="Propose 5 to 7 levers."
     )
     summary: str = Field(

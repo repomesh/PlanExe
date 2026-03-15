@@ -8,7 +8,7 @@ PLANEXE_MCP_HTTP_HOST="0.0.0.0"
 PLANEXE_API_KEY_SECRET="${{shared.PLANEXE_API_KEY_SECRET}}"
 PLANEXE_MCP_CORS_ORIGINS="https://mcp.planexe.org,https://home.planexe.org,http://localhost:6274,http://localhost:5173"
 PLANEXE_WORKER_PLAN_URL="http://workerplan.railway.internal:8000"
-PLANEXE_POSTGRES_HOST="database_postgres.railway.internal"
+PLANEXE_POSTGRES_HOST="${{shared.PLANEXE_POSTGRES_HOST}}"
 ```
 
 The MCP Inspector runs a local web UI, 6274 is the default port, 5173 is an alternative it sometimes uses.

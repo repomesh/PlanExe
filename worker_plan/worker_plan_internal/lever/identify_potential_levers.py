@@ -51,13 +51,15 @@ class Lever(BaseModel):
         return v
 
 class DocumentDetails(BaseModel):
-    strategic_rationale: str = Field(
+    strategic_rationale: Optional[str] = Field(
+        default=None,
         description="A concise strategic analysis (around 100 words) of the project's core tensions and trade-offs. This rationale must JUSTIFY why the selected levers are the most critical levers for decision-making. For example, explain how the chosen levers navigate the fundamental conflicts between speed, cost, scope, and quality."
     )
     levers: list[Lever] = Field(
         description="Propose exactly 5 levers."
     )
-    summary: str = Field(
+    summary: Optional[str] = Field(
+        default=None,
         description="Are these levers well picked? Are they well balanced? Are they well thought out? Point out flaws. 100 words."
     )
 
@@ -92,7 +94,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
 2. **Lever Quality Standards**
    - Consequences MUST:
      • Chain three SPECIFIC effects: "Immediate: [effect] → Systemic: [impact] → Strategic: [implication]"
-     • Include measurable outcomes: "Systemic: 25% faster scaling through..."
+     • Include measurable outcomes: "Systemic: [a specific, domain-relevant second-order impact with a measurable indicator, such as a % change, capacity shift, or cost delta]"
      • Explicitly describe trade-offs between core tensions
    - Options MUST:
      • Represent distinct strategic pathways (not just labels)
@@ -101,7 +103,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
      • NO prefixes (e.g., "Option A:", "Choice 1:")
 
 3. **Strategic Framing**
-   - Name levers as strategic concepts (e.g., "Material Adaptation Strategy")
+   - Name levers as strategic concepts that are specific to this project's domain (e.g., "[Domain]-[Decision Type] Strategy")
    - Frame options as complete strategic approaches
    - Ensure levers challenge core project assumptions
 
@@ -114,7 +116,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
      • Prescribe CONCRETE addition: "Add '[full strategic option]' to [lever]"
 
 5. **Prohibitions**
-   - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:")
+   - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:", "Conservative:", "Moderate:", "Radical:")
    - NO generic option labels (e.g., "Optimize X", "Tolerate Y")
    - NO placeholder consequences
    - NO "[specific innovative option]" placeholders

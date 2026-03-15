@@ -33,7 +33,11 @@ class Lever(BaseModel):
             "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
             "Strategic: [long-term implication for the project]'. "
             "All three labels and at least one quantitative estimate are mandatory. "
-            "Target length: 150–300 words."
+            "The Systemic or Strategic clause MUST name an explicit trade-off between two competing forces "
+            "(e.g. 'This accelerates delivery but increases defect risk'). "
+            "Do NOT include 'Controls ... vs.', 'Weakness:', or other review/critique text in this field — "
+            "those belong exclusively in review_lever. "
+            "Target length: 3–5 sentences (approximately 60–120 words)."
         )
     )
     options: list[str] = Field(
@@ -41,7 +45,12 @@ class Lever(BaseModel):
                     "strategic approach (a full sentence with an action verb), not a label."
     )
     review_lever: str = Field(
-        description="Critique this lever. State the core trade-off it controls (e.g., 'Controls Speed vs. Quality'). Then, identify one specific weakness in how its options address that trade-off."
+        description=(
+            "Required format: Two sentences. "
+            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
+            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
+            "Both sentences are mandatory in every response."
+        )
     )
 
     @field_validator('options', mode='before')
@@ -87,7 +96,11 @@ class LeverCleaned(BaseModel):
             "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
             "Strategic: [long-term implication for the project]'. "
             "All three labels and at least one quantitative estimate are mandatory. "
-            "Target length: 150–300 words."
+            "The Systemic or Strategic clause MUST name an explicit trade-off between two competing forces "
+            "(e.g. 'This accelerates delivery but increases defect risk'). "
+            "Do NOT include 'Controls ... vs.', 'Weakness:', or other review/critique text in this field — "
+            "those belong exclusively in review_lever. "
+            "Target length: 3–5 sentences (approximately 60–120 words)."
         )
     )
     options: list[str] = Field(
@@ -95,7 +108,12 @@ class LeverCleaned(BaseModel):
                     "strategic approach (a full sentence with an action verb), not a label."
     )
     review: str = Field(
-        description="Critique this lever. State the core trade-off it controls (e.g., 'Controls Speed vs. Quality'). Then, identify one specific weakness in how its options address that trade-off."
+        description=(
+            "Required format: Two sentences. "
+            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
+            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
+            "Both sentences are mandatory in every response."
+        )
     )
 
 IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT = """

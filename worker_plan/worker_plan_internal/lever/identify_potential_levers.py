@@ -28,10 +28,17 @@ class Lever(BaseModel):
         description="Name of this lever."
     )
     consequences: str = Field(
-        description="Briefly describe the likely second-order effects or consequences of pulling this lever (e.g., 'Choosing a high-risk tech strategy will likely increase talent acquisition difficulty and require a larger contingency budget.'). 30 words."
+        description=(
+            "Required format: 'Immediate: [direct first-order effect] → "
+            "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
+            "Strategic: [long-term implication for the project]'. "
+            "All three labels and at least one quantitative estimate are mandatory. "
+            "Target length: 150–300 words."
+        )
     )
     options: list[str] = Field(
-        description="2-5 options for this lever."
+        description="Exactly 3 options for this lever. No more, no fewer. Each option must be a complete "
+                    "strategic approach (a full sentence with an action verb), not a label."
     )
     review_lever: str = Field(
         description="Critique this lever. State the core trade-off it controls (e.g., 'Controls Speed vs. Quality'). Then, identify one specific weakness in how its options address that trade-off."
@@ -75,10 +82,17 @@ class LeverCleaned(BaseModel):
         description="Name of this lever."
     )
     consequences: str = Field(
-        description="Briefly describe the likely second-order effects or consequences of pulling this lever (e.g., 'Choosing a high-risk tech strategy will likely increase talent acquisition difficulty and require a larger contingency budget.'). 30 words."
+        description=(
+            "Required format: 'Immediate: [direct first-order effect] → "
+            "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
+            "Strategic: [long-term implication for the project]'. "
+            "All three labels and at least one quantitative estimate are mandatory. "
+            "Target length: 150–300 words."
+        )
     )
     options: list[str] = Field(
-        description="2-5 options for this lever."
+        description="Exactly 3 options for this lever. No more, no fewer. Each option must be a complete "
+                    "strategic approach (a full sentence with an action verb), not a label."
     )
     review: str = Field(
         description="Critique this lever. State the core trade-off it controls (e.g., 'Controls Speed vs. Quality'). Then, identify one specific weakness in how its options address that trade-off."

@@ -72,10 +72,11 @@ class DocumentDetails(BaseModel):
         description="A concise strategic analysis (around 100 words) of the project's core tensions and trade-offs. This rationale must JUSTIFY why the selected levers are the most critical levers for decision-making. For example, explain how the chosen levers navigate the fundamental conflicts between speed, cost, scope, and quality."
     )
     levers: list[Lever] = Field(
+        min_length=5,
+        max_length=5,
         description="Propose exactly 5 levers."
     )
-    summary: Optional[str] = Field(
-        default=None,
+    summary: str = Field(
         description="Are these levers well picked? Are they well balanced? Are they well thought out? Point out flaws. 100 words."
     )
 

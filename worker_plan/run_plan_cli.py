@@ -1,4 +1,13 @@
 """
+.. deprecated::
+    Use the top-level ``planexe`` executable instead::
+
+        planexe create_plan \\
+            --plan-text "Small coffee shop in Copenhagen, Denmark" \\
+            --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+
+    This module is retained for backward compatibility only.
+
 CLI bootstrap script for direct PlanExe pipeline invocation.
 
 The Gradio/Flask frontend normally creates a set of bootstrap files in the run

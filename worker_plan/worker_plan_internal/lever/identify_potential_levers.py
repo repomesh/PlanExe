@@ -70,6 +70,34 @@ class Lever(BaseModel):
                 pass
         return v
 
+    @field_validator('options', mode='after')
+    @classmethod
+    def check_option_count(cls, v):
+        """Reject levers that don't have exactly 3 options.
+
+        Run 89 (llama, hong_kong_game) produced levers with 2 options that
+        silently passed validation and shipped to downstream tasks which
+        assume exactly 3 options per lever.
+        """
+        if len(v) != 3:
+            raise ValueError(f"options must have exactly 3 items, got {len(v)}")
+        return v
+
+    @field_validator('review_lever', mode='after')
+    @classmethod
+    def check_review_format(cls, v):
+        """Reject review_lever fields missing the required format.
+
+        The prompt requires 'Controls [A] vs. [B].' and 'Weakness: ...'.
+        Without validation, models sometimes omit these markers, producing
+        reviews that don't follow the expected structure.
+        """
+        if 'Controls ' not in v:
+            raise ValueError("review_lever must contain 'Controls [Tension A] vs. [Tension B].'")
+        if 'Weakness:' not in v:
+            raise ValueError("review_lever must contain 'Weakness: ...'")
+        return v
+
 class DocumentDetails(BaseModel):
     strategic_rationale: Optional[str] = Field(
         default=None,

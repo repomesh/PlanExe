@@ -5,8 +5,8 @@ an iterative loop: implement a fix, test across models, analyze results, and
 decide whether to keep or revert. Each iteration produces an auditable trail
 with a PR, quantitative comparison, and a keeper verdict.
 
-Currently optimizing the `IdentifyPotentialLevers` step (11 iterations
-completed, 88 history runs). The runner infrastructure (progress tracking,
+Currently optimizing the `IdentifyPotentialLevers` step (14 iterations
+completed, 109 history runs). The runner infrastructure (progress tracking,
 CLI, output structure) is shared across steps; each new step requires only a
 custom adapter.
 
@@ -180,13 +180,16 @@ Each plan runs in its own thread with an independent `LLMExecutor`. Usage metric
 
 | Alias | Model | Status |
 |-------|-------|--------|
-| llama | ollama-llama3.1 | Working (5/5) |
+| llama | ollama-llama3.1 | Working (3-5/5) |
 | gpt-oss | openrouter-openai-gpt-oss-20b | Working (4-5/5) |
 | gpt5-nano | openai-gpt-5-nano | Working (5/5) |
 | qwen | openrouter-qwen3-30b-a3b | Working (5/5) |
 | gpt4o-mini | openrouter-openai-gpt-4o-mini | Working (5/5) |
-| haiku | anthropic-claude-haiku-4-5-pinned | Working (4/5) |
-| nemotron | openrouter-nvidia-nemotron-3-nano-30b-a3b | Broken (0/5 all iterations) |
+| gemini-flash | openrouter-gemini-2.0-flash-001 | Working (5/5) — added iter 13 |
+| haiku | anthropic-claude-haiku-4-5-pinned | Working (4-5/5) |
+
+Removed models:
+- `nemotron` (openrouter-nvidia-nemotron-3-nano-30b-a3b) — 0/5 all iterations, structural incompatibility
 
 ## Iteration History
 
@@ -204,6 +207,9 @@ Each plan runs in its own thread with an independent `LLMExecutor`. Usage metric
 | 9 | [#279](https://github.com/PlanExeOrg/PlanExe/pull/279) | Remove naming template | YES |
 | 10 | [#281](https://github.com/PlanExeOrg/PlanExe/pull/281) | Keyword quality gate (reverted in [#282](https://github.com/PlanExeOrg/PlanExe/pull/282)) | NO |
 | 11 | [#283](https://github.com/PlanExeOrg/PlanExe/pull/283) | RetryConfig in runner (reverted in [#284](https://github.com/PlanExeOrg/PlanExe/pull/284)) | NO |
+| 12 | [#286](https://github.com/PlanExeOrg/PlanExe/pull/286) | Remove max_length=7 hard constraint on levers | YES |
+| 13 | [#289](https://github.com/PlanExeOrg/PlanExe/pull/289) | Add options count and review format validators | CONDITIONAL |
+| 14 | [#292](https://github.com/PlanExeOrg/PlanExe/pull/292) | Recover partial results when a call fails | YES |
 
 Full analysis artifacts for each iteration are in
 [PlanExe-prompt-lab/analysis/](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis).

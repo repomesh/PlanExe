@@ -1827,6 +1827,18 @@ class EnrichTeamMembersWithBackgroundStoryTask(PlanTask):
         }
 
     def run_with_llm(self, llm: LLM) -> None:
+        # In FAST_BUT_SKIP_DETAILS mode, skip fictional biography generation entirely.
+        # Pass the bare team member list (title, domain, relevance) through unchanged.
+        if self.speedvsdetail == SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS:
+            logger.info("FAST_BUT_SKIP_DETAILS mode: skipping biography enrichment.")
+            with self.input()['enrich_team_members_with_contract_type']['clean'].open("r") as f:
+                team_member_list = json.load(f)
+            with self.output()['raw'].open("w") as f:
+                json.dump({"team_members": team_member_list}, f, indent=2)
+            with self.output()['clean'].open("w") as f:
+                json.dump(team_member_list, f, indent=2)
+            return
+
         # Read inputs from required tasks.
         with self.input()['setup'].open("r") as f:
             plan_prompt = f.read()

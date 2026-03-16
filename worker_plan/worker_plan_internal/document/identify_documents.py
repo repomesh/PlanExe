@@ -250,6 +250,15 @@ Based *only* on the **project description provided by the user**, generate the f
 - Adhere strictly to the Pydantic schema and field definitions.
 """
 
+OPTIMIZE_INSTRUCTIONS = """Output constraints (critical — JSON truncation is the known failure mode):
+- documents_to_create: maximum 6 items total across both passes
+- documents_to_find: maximum 6 items total across both passes
+- steps_to_create / steps_to_find: maximum 3 items per document
+- All string fields: maximum 120 characters
+- If token pressure rises, shorten descriptions — never truncate JSON mid-string
+- Prefer breadth over depth: cover more document types briefly rather than fewer in detail
+"""
+
 @dataclass
 class IdentifyDocuments:
     """
@@ -296,11 +305,11 @@ class IdentifyDocuments:
         # Select the appropriate system prompt based on the purpose
         logging.info(f"IdentifyDocuments.execute: purpose: {purpose_info.purpose}")
         if purpose_info.purpose == PlanPurpose.business:
-            system_prompt = IDENTIFY_DOCUMENTS_BUSINESS_SYSTEM_PROMPT
+            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_BUSINESS_SYSTEM_PROMPT
         elif purpose_info.purpose == PlanPurpose.personal:
-            system_prompt = IDENTIFY_DOCUMENTS_PERSONAL_SYSTEM_PROMPT
+            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_PERSONAL_SYSTEM_PROMPT
         elif purpose_info.purpose == PlanPurpose.other:
-            system_prompt = IDENTIFY_DOCUMENTS_OTHER_SYSTEM_PROMPT
+            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_OTHER_SYSTEM_PROMPT
         else:
             raise ValueError(f"Invalid purpose: {purpose_info.purpose}, must be one of 'business', 'personal', or 'other'. Cannot identify documents.")
 

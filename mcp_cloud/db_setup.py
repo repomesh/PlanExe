@@ -36,6 +36,8 @@ from database_api.model_planitem import PlanItem, PlanState
 from database_api.model_event import EventItem, EventType
 from database_api.model_user_account import UserAccount
 from database_api.model_user_api_key import UserApiKey
+from database_api.model_credit_history import CreditHistory  # noqa: F401
+from database_api.model_token_metrics import TokenMetrics  # noqa: F401
 
 print("[startup] db_setup.py: creating Flask app", file=sys.stderr, flush=True)
 app = Flask(__name__)

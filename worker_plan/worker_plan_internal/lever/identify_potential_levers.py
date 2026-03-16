@@ -75,9 +75,11 @@ class DocumentDetails(BaseModel):
         default=None,
         description="A concise strategic analysis (around 100 words) of the project's core tensions and trade-offs. This rationale must JUSTIFY why the selected levers are the most critical levers for decision-making. For example, explain how the chosen levers navigate the fundamental conflicts between speed, cost, scope, and quality."
     )
+    # No max_length constraint: if a model returns more than 7 levers, the downstream
+    # DeduplicateLeversTask handles extras. A hard cap would discard the entire response
+    # and waste tokens retrying.
     levers: list[Lever] = Field(
         min_length=5,
-        max_length=7,
         description="Propose 5 to 7 levers."
     )
     summary: str = Field(

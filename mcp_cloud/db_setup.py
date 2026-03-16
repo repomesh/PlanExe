@@ -81,12 +81,12 @@ def ensure_planitem_stop_columns() -> None:
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested_timestamp TIMESTAMP",
     )
-    with db.engine.begin() as conn:
-        for statement in statements:
-            try:
+    for statement in statements:
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(statement))
-            except Exception as exc:
-                logger.warning("Schema update failed for %s: %s", statement, exc, exc_info=True)
+        except Exception as exc:
+            logger.warning("Schema update failed for %s: %s", statement, exc, exc_info=True)
 
 def ensure_multi_api_key_columns() -> None:
     """Add columns for multi-API-key support (idempotent)."""
@@ -97,12 +97,12 @@ def ensure_multi_api_key_columns() -> None:
         "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
         "ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
     )
-    with db.engine.begin() as conn:
-        for stmt in statements:
-            try:
+    for stmt in statements:
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception as exc:
-                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+        except Exception as exc:
+            logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
 def ensure_step_count_columns() -> None:
     """Add steps_completed, steps_total, and current_step columns to task_item (idempotent)."""
@@ -111,12 +111,12 @@ def ensure_step_count_columns() -> None:
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS steps_total INTEGER",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)",
     )
-    with db.engine.begin() as conn:
-        for stmt in statements:
-            try:
+    for stmt in statements:
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception as exc:
-                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+        except Exception as exc:
+            logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
 def ensure_failure_diagnostics_columns() -> None:
     """Add failure diagnostic columns to task_item (idempotent)."""
@@ -125,12 +125,12 @@ def ensure_failure_diagnostics_columns() -> None:
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)",
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN",
     )
-    with db.engine.begin() as conn:
-        for stmt in statements:
-            try:
+    for stmt in statements:
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception as exc:
-                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+        except Exception as exc:
+            logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
     # Rename last_error → error_message (existing DBs); add column for fresh DBs.
     # Check column existence first to avoid noisy PostgreSQL ERROR logs on every restart.
     columns = {col["name"] for col in inspect(db.engine).get_columns("task_item")}
@@ -153,27 +153,30 @@ def ensure_stopped_state() -> None:
     the TaskState → PlanState Python rename (proposal 74).  Fresh databases
     created after that rename will have ``planstate``.  We try both names.
     """
-    with db.engine.begin() as conn:
-        for type_name in ("taskstate", "planstate"):
-            try:
+    for type_name in ("taskstate", "planstate"):
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
-            except Exception as exc:
-                logger.debug("ALTER TYPE %s: %s", type_name, exc)
+        except Exception as exc:
+            logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
 def ensure_last_progress_at_column() -> None:
     """Add last_progress_at column to task_item (idempotent)."""
     statements = (
         "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP",
     )
-    with db.engine.begin() as conn:
-        for stmt in statements:
-            try:
+    for stmt in statements:
+        try:
+            with db.engine.begin() as conn:
                 conn.execute(text(stmt))
-            except Exception as exc:
-                logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+        except Exception as exc:
+            logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
 print("[startup] db_setup.py: running schema migrations...", file=sys.stderr, flush=True)
 with app.app_context():
+    print("[startup] db_setup.py: db.create_all()", file=sys.stderr, flush=True)
+    db.create_all()
+    print("[startup] db_setup.py: db.create_all() done", file=sys.stderr, flush=True)
     print("[startup] db_setup.py: ensure_planitem_stop_columns", file=sys.stderr, flush=True)
     ensure_planitem_stop_columns()
     print("[startup] db_setup.py: ensure_multi_api_key_columns", file=sys.stderr, flush=True)

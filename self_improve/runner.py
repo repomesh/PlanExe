@@ -3,7 +3,7 @@ Run the IdentifyPotentialLevers pipeline step with a candidate system prompt
 against baseline training data and capture the output.
 
 Usage:
-    python -m prompt_optimizer.runner \
+    python -m self_improve.runner \
         --system-prompt-file candidate.txt \
         --baseline-dir /path/to/baseline/train \
         --prompt-lab-dir /path/to/PlanExe-prompt-lab \

@@ -73,14 +73,14 @@ which has the required llama_index dependencies.
 
 ```bash
 # Auto-increment into prompt-lab history/
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 
 # Or manual output directory
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --output-dir /path/to/my_run/outputs \
@@ -109,7 +109,7 @@ script handles this automatically for models in its `CUSTOM_PROFILE_MODELS` dict
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
@@ -144,7 +144,7 @@ from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENT
 print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 " > baseline_prompt.txt
 
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file baseline_prompt.txt \
     --plan-dir /path/to/baseline/train/20250321_silo \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
@@ -155,7 +155,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 
 ```
 PlanExe/                              PlanExe-prompt-lab/
-  prompt_optimizer/                     baseline/train/       ← gold-standard outputs
+  self_improve/                     baseline/train/       ← gold-standard outputs
     runner.py                           prompts/              ← registered system prompts
     register_prompt.py                  history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment

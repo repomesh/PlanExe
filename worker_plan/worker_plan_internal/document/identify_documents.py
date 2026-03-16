@@ -305,11 +305,11 @@ class IdentifyDocuments:
         # Select the appropriate system prompt based on the purpose
         logging.info(f"IdentifyDocuments.execute: purpose: {purpose_info.purpose}")
         if purpose_info.purpose == PlanPurpose.business:
-            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_BUSINESS_SYSTEM_PROMPT
+            system_prompt = IDENTIFY_DOCUMENTS_BUSINESS_SYSTEM_PROMPT
         elif purpose_info.purpose == PlanPurpose.personal:
-            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_PERSONAL_SYSTEM_PROMPT
+            system_prompt = IDENTIFY_DOCUMENTS_PERSONAL_SYSTEM_PROMPT
         elif purpose_info.purpose == PlanPurpose.other:
-            system_prompt = OPTIMIZE_INSTRUCTIONS + IDENTIFY_DOCUMENTS_OTHER_SYSTEM_PROMPT
+            system_prompt = IDENTIFY_DOCUMENTS_OTHER_SYSTEM_PROMPT
         else:
             raise ValueError(f"Invalid purpose: {purpose_info.purpose}, must be one of 'business', 'personal', or 'other'. Cannot identify documents.")
 

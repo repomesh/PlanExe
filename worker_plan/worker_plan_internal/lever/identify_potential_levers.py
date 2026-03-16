@@ -50,9 +50,11 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "Required format: Two sentences. "
-            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
-            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
+            "Required format: Two sentences in a single field. "
+            "Example: 'Controls centralization vs. local autonomy. "
+            "Weakness: The options fail to account for transition costs.' "
+            "The 'Controls [A] vs. [B].' sentence MUST come first, "
+            "followed immediately by the 'Weakness: ...' sentence. "
             "Both sentences are mandatory in every response."
         )
     )
@@ -144,9 +146,11 @@ class LeverCleaned(BaseModel):
     )
     review: str = Field(
         description=(
-            "Required format: Two sentences. "
-            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
-            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
+            "Required format: Two sentences in a single field. "
+            "Example: 'Controls centralization vs. local autonomy. "
+            "Weakness: The options fail to account for transition costs.' "
+            "The 'Controls [A] vs. [B].' sentence MUST come first, "
+            "followed immediately by the 'Weakness: ...' sentence. "
             "Both sentences are mandatory in every response."
         )
     )
@@ -175,9 +179,9 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - Ensure levers challenge core project assumptions
 
 4. **Validation Protocols**
-   - For `review_lever`:
-     • State the trade-off explicitly: "Controls [Tension A] vs. [Tension B]."
-     • Identify a specific weakness: "Weakness: The options fail to consider [specific factor]."
+   - For `review_lever` (one field, two sentences, in this order):
+     "Controls [Tension A] vs. [Tension B]. Weakness: The options fail to consider [specific factor]."
+     Both clauses are mandatory in every response, in this exact order, in one field.
    - For `summary`:
      • Identify ONE critical missing dimension
      • Prescribe CONCRETE addition: "Add '[full strategic option]' to [lever]"

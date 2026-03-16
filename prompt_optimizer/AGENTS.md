@@ -2,7 +2,7 @@
 
 ## What this does
 
-Optimizes system prompts for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers`; will extend to other pipeline tasks.
+Optimizes system prompts and validation logic for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers` (14 iterations completed, 109 history runs); will extend to other pipeline tasks.
 
 ## Optimization Flow
 
@@ -247,7 +247,7 @@ The `run_optimization_iteration.py` script handles the Anthropic env vars automa
 ## Monitor progress during a run
 
 ```bash
-tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/events.jsonl
+tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/1/08_identify_potential_levers/events.jsonl
 ```
 
 ## Resume an interrupted run
@@ -259,7 +259,7 @@ Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. 
 /opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
-    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/outputs \
+    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/1/08_identify_potential_levers/outputs \
     --model ollama-llama3.1
 ```
 

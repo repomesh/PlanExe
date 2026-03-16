@@ -706,7 +706,14 @@ class MyFlaskApp:
         # 2nd time, the os.environ is the original environment of the shell + the .env content.
         # If it was the same in both cases, it would be easier to reason about the environment variables.
         # On following hot reloads, the os.environ continues to be the original environment of the shell + the .env content.
-        logger.info(f"MyFlaskApp._start_check. environment variables: {os.environ}")
+        # Log environment variable names with sensitive values redacted.
+        # This lets operators see WHICH vars are set without leaking secrets.
+        _sensitive_substrings = ("SECRET", "KEY", "PASSWORD", "TOKEN")
+        redacted_env = {
+            k: ("***REDACTED***" if any(s in k.upper() for s in _sensitive_substrings) else v)
+            for k, v in os.environ.items()
+        }
+        logger.info(f"MyFlaskApp._start_check. environment variables: {redacted_env}")
 
         issue_count = 0
         if not self.path_to_python.exists():

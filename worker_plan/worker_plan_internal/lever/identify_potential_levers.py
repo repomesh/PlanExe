@@ -277,9 +277,9 @@ class IdentifyPotentialLevers:
                     raise llm_error from e
                 logger.warning(
                     f"Call {call_index} of {total_calls} failed [{llm_error.error_id}], "
-                    f"returning partial results from {len(responses)} prior call(s)."
+                    f"continuing with {len(responses)} prior call(s)."
                 )
-                break
+                continue
 
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)

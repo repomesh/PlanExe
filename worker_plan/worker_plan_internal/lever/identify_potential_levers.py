@@ -265,7 +265,17 @@ class IdentifyPotentialLevers:
                 llm_error = LLMChatError(cause=e)
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
-                raise llm_error from e
+                # If earlier calls succeeded, keep their levers instead of
+                # discarding everything. A single validator rejection (e.g.,
+                # one lever with 2 options) should not wipe out 10+ valid
+                # levers from prior calls.
+                if len(responses) == 0:
+                    raise llm_error from e
+                logger.warning(
+                    f"Call {call_index} of {total_calls} failed [{llm_error.error_id}], "
+                    f"returning partial results from {len(responses)} prior call(s)."
+                )
+                break
 
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)

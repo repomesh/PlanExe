@@ -1,4 +1,4 @@
-# Agent instructions for prompt_optimizer
+# Agent instructions for self_improve
 
 ## What this does
 
@@ -92,7 +92,7 @@ python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 
 
 The optimizer spans two repositories:
 
-- **PlanExe** (`prompt_optimizer/runner.py`, pipeline step source code) —
+- **PlanExe** (`self_improve/runner.py`, pipeline step source code) —
   the code being optimized. PRs are created here.
 - **PlanExe-prompt-lab** (data repo) — baseline training data, history
   outputs, registered prompts, and analysis artifacts. No PRs; commits
@@ -100,7 +100,7 @@ The optimizer spans two repositories:
 
 ```
 PlanExe/                              PlanExe-prompt-lab/
-  prompt_optimizer/                     baseline/train/          ← gold-standard outputs
+  self_improve/                     baseline/train/          ← gold-standard outputs
     runner.py                           prompts/                 ← registered system prompts
     register_prompt.py                  history/                 ← runner output per model
   worker_plan/.../                      analysis/                ← insight/review/synthesis/assessment
@@ -197,7 +197,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 ## Run against a single plan (auto-increment history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -207,7 +207,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 ## Run against all baseline plans (auto-increment history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -221,7 +221,7 @@ Anthropic models live in `llm_config/anthropic_claude.json`, which is not loaded
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
@@ -237,7 +237,7 @@ The `run_optimization_iteration.py` script handles the Anthropic env vars automa
 ## Run with manual output dir (no history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --output-dir /tmp/prompt_opt_run/outputs \
@@ -256,7 +256,7 @@ Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. 
 
 ```bash
 # Same command as before — skips already-completed plans
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --system-prompt-file /tmp/baseline_prompt.txt \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/1/08_identify_potential_levers/outputs \
@@ -311,7 +311,7 @@ With `workers > 1`, plans run in parallel using a thread pool. Thread safety:
 Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256). The runner picks the last sorted prompt file from `prompts/{step}/`, so registering a new prompt automatically makes it the active one for subsequent experiments.
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.register_prompt \
+/opt/homebrew/bin/python3.11 -m self_improve.register_prompt \
     --step identify_potential_levers \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab
 ```

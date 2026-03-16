@@ -2,7 +2,7 @@
 Register the current system prompt for a pipeline step into the prompt-lab repo.
 
 Usage:
-    python -m prompt_optimizer.register_prompt \
+    python -m self_improve.register_prompt \
         --step identify_potential_levers \
         --prompt-lab-dir /path/to/PlanExe-prompt-lab
 """

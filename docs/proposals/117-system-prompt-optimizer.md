@@ -14,7 +14,7 @@ I want to track metrics for how much improvement have happened.
 
 - **Data repo**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, run history, registered prompts, and analysis artifacts.
 - **Baseline data**: 5 train plans × 9 verify plans, extracted from zips into `baseline/train/` and `baseline/verify/`.
-- **Runner** (`prompt_optimizer/runner.py`): re-executes a single pipeline step with a candidate system prompt against baseline plans. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--system-prompt-file`, `--model`, `--prompt-lab-dir`, resume, and parallel workers.
+- **Runner** (`self_improve/runner.py`): re-executes a single pipeline step with a candidate system prompt against baseline plans. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--system-prompt-file`, `--model`, `--prompt-lab-dir`, resume, and parallel workers.
 - **Analysis pipeline** (4 phases in `analysis/`):
   - Phase 0: `create_analysis_dir.py` — creates analysis dir with unanalyzed runs.
   - Phase 1: `run_insight.py` — Claude Code + Codex in parallel produce independent `insight_*.md` files with quantitative metrics and PR impact verdicts.
@@ -239,7 +239,7 @@ worker_plan/
       ...
     ...
 
-prompt_optimizer/                   # NEW — the optimization engine
+self_improve/                   # NEW — the optimization engine
   __init__.py
   config.py                        # loads dataset config, env vars
   runner.py                        # reruns a single pipeline step with a candidate prompt

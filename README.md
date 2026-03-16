@@ -173,6 +173,46 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 
 ---
 
+## Running the Pipeline via CLI (no frontend)
+
+If you have a local Python environment set up and want to invoke the pipeline
+directly — without the Gradio or Flask UI — use `run_plan_cli.py`.
+
+The Gradio frontend normally writes a pair of bootstrap files into the run
+directory before Luigi is invoked.  `run_plan_cli.py` replicates that step so
+you can drive the pipeline entirely from the command line.
+
+```bash
+# Bootstrap the run directory and launch the pipeline in one step
+python -m worker_plan.run_plan_cli \
+    --plan-text "Small coffee shop in Copenhagen, Denmark" \
+    --run-id-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1 \
+    --launch
+
+# Or: bootstrap only, then run manually (useful for inspection)
+python -m worker_plan.run_plan_cli \
+    --plan-text "Small coffee shop in Copenhagen, Denmark" \
+    --run-id-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+
+RUN_ID_DIR=./planexe-outputs/2026-03-16/MyCoffeeShop_v1 \
+    python -m worker_plan_internal.plan.run_plan_pipeline
+
+# Or: read the plan prompt from a file
+python -m worker_plan.run_plan_cli \
+    --plan-file my_plan.txt \
+    --run-id-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1 \
+    --launch
+```
+
+The script creates the run directory if it does not exist and writes:
+
+| File | Contents |
+|---|---|
+| `001-1-start_time.json` | `{"server_iso_utc": "<current UTC ISO timestamp>"}` |
+| `001-2-plan.txt` | The plain-text plan prompt |
+
+---
+
 ## For AI Agents
 
 PlanExe is designed as infrastructure for AI agents. If you are an AI agent reading this:

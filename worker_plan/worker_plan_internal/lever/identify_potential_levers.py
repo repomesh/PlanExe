@@ -88,12 +88,22 @@ class Lever(BaseModel):
     @field_validator('review_lever', mode='after')
     @classmethod
     def check_review_format(cls, v):
-        """Reject review_lever fields missing the required format.
+        """Auto-correct common format deviations, then reject if still invalid.
 
         The prompt requires 'Controls [A] vs. [B].' and 'Weakness: ...'.
-        Without validation, models sometimes omit these markers, producing
-        reviews that don't follow the expected structure.
+        Some models (e.g. haiku on hong_kong_game, run 89/23) produce valid
+        tension pairs like 'Narrative structure vs. ...' but omit the leading
+        'Controls' word, causing all levers in the response to be discarded.
+        Auto-correcting recovers these otherwise-valid levers.
         """
+        # Normalise "versus" to "vs." before any other checks.
+        v = v.replace(' versus ', ' vs. ').replace(' Versus ', ' vs. ')
+
+        # Auto-correct: if the field has a tension pair and Weakness clause
+        # but is missing the "Controls" prefix, prepend it.
+        if 'Controls ' not in v and ' vs. ' in v and 'Weakness:' in v:
+            v = 'Controls ' + v
+
         if 'Controls ' not in v:
             raise ValueError("review_lever must contain 'Controls [Tension A] vs. [Tension B].'")
         if 'Weakness:' not in v:

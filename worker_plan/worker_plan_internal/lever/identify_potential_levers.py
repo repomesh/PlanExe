@@ -91,10 +91,9 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "Two sentences. First sentence names the core tension this lever "
-            "controls. Second sentence identifies a weakness the options miss. "
-            "Example: 'Controls centralization vs. local autonomy. "
-            "Weakness: The options fail to account for transition costs.' "
+            "A short critical review of this lever (two sentences). "
+            "Example: 'This lever governs the tension between centralization "
+            "and local autonomy, but the options overlook transition costs.' "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -214,8 +213,8 @@ You are an expert strategic analyst. Generate solution space parameters followin
 
 4. **Validation Protocols**
    - For `review_lever` (one field, two sentences):
-     First sentence names the core tension. Second sentence identifies a weakness.
-     Example: "Controls centralization vs. local autonomy. Weakness: The options fail to account for transition costs."
+     A short critical review — name the core tension, then identify a weakness the options miss.
+     Example: "This lever governs the tension between centralization and local autonomy, but the options overlook transition costs."
      Do not use square brackets or placeholder text.
    - For `summary`:
      One sentence prescribing a concrete addition to a specific lever.

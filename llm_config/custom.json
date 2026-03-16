@@ -70,23 +70,5 @@
         },
         "model_info_url": "https://openrouter.ai/qwen/qwen3.5-397b-a17b",
         "pricing_kind": "paid"
-    },
-    "openrouter-nvidia-nemotron-3-nano-30b-a3b": {
-        "comment": "This is very fast. Created Dec 14, 2025. 262,144 context. $0.05/M input tokens. $0.20/M output tokens. This is a reasoning model, and uses more tokens than LLMs.",
-        "priority": 5,
-        "luigi_workers": 4,
-        "class": "OpenRouter",
-        "arguments": {
-            "model": "nvidia/nemotron-3-nano-30b-a3b",
-            "api_key": "${OPENROUTER_API_KEY}",
-            "temperature": 1,
-            "timeout": 60.0,
-            "is_function_calling_model": false,
-            "is_chat_model": true,
-            "max_tokens": 32000,
-            "max_retries": 5
-        },
-        "model_info_url": "https://openrouter.ai/nvidia/nemotron-3-nano-30b-a3b",
-        "pricing_kind": "paid"
     }
 }

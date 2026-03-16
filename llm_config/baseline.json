@@ -1,6 +1,6 @@
 {
     "openai-gpt-5-nano": {
-        "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan.",
+        "comment": "This is slow. It's paid, and requires that you have a OPENAI_API_KEY in the .env file. This is a reasoning model, so it takes MUCH longer to create a plan. $0.05/M input tokens. $0.40/M output tokens.",
         "luigi_workers": 4,
         "class": "OpenAI",
         "arguments": {
@@ -13,6 +13,10 @@
             "is_chat_model": true,
             "max_tokens": 128000,
             "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.05,
+            "output_per_million_tokens": 0.40
         },
         "pricing_kind": "paid"
     },
@@ -31,6 +35,10 @@
             "max_retries": 5
         },
         "model_info_url": "https://openrouter.ai/openai/gpt-oss-20b",
+        "pricing": {
+            "input_per_million_tokens": 0.05,
+            "output_per_million_tokens": 0.20
+        },
         "pricing_kind": "paid"
     },
     "openrouter-gemini-2.0-flash-001": {
@@ -48,6 +56,10 @@
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.075,
+            "output_per_million_tokens": 0.30
         },
         "pricing_kind": "paid"
     },
@@ -67,6 +79,10 @@
             "max_retries": 5
         },
         "model_info_url": "https://openrouter.ai/openai/gpt-4o-mini",
+        "pricing": {
+            "input_per_million_tokens": 0.15,
+            "output_per_million_tokens": 0.60
+        },
         "pricing_kind": "paid"
     },
     "openrouter-qwen3-30b-a3b": {
@@ -85,6 +101,10 @@
             "max_retries": 5
         },
         "model_info_url": "https://openrouter.ai/qwen/qwen3-30b-a3b",
+        "pricing": {
+            "input_per_million_tokens": 0.08,
+            "output_per_million_tokens": 0.29
+        },
         "pricing_kind": "paid"
     },
     "alibabacloud-qwen-flash-2025-07-28": {
@@ -101,6 +121,10 @@
             "is_chat_model": true,
             "max_tokens": 16384,
             "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.05,
+            "output_per_million_tokens": 0.40
         },
         "pricing_kind": "paid"
     },

@@ -72,6 +72,7 @@ class PlanResult:
     status: str
     duration_seconds: float
     error: str | None = None
+    calls_succeeded: int | None = None
 
 
 def run_single_plan(
@@ -121,11 +122,20 @@ def run_single_plan(
         result.save_clean(str(clean_path))
 
         duration = time.monotonic() - t0
+
+        expected_calls = 3
+        actual_calls = len(result.responses)
+        if actual_calls < expected_calls:
+            logger.warning(
+                f"{plan_name}: partial recovery — {actual_calls}/{expected_calls} calls succeeded"
+            )
+
         logger.info(f"{plan_name}: {len(result.levers)} levers in {duration:.1f}s")
         return PlanResult(
             name=plan_name,
             status="ok",
             duration_seconds=round(duration, 2),
+            calls_succeeded=actual_calls,
         )
     except Exception as e:
         duration = time.monotonic() - t0
@@ -317,6 +327,12 @@ def _run_plan_task(
         _emit_event(events_path, "run_single_plan_error",
                     plan_name=plan_name, error=pr.error,
                     duration_seconds=pr.duration_seconds)
+
+    if pr.calls_succeeded is not None and pr.calls_succeeded < 3:
+        _emit_event(events_path, "partial_recovery",
+                    plan_name=plan_name,
+                    calls_succeeded=pr.calls_succeeded,
+                    expected_calls=3)
 
     _append_jsonl(outputs_path, asdict(pr))
     return pr

@@ -13,7 +13,7 @@
 
 **Observed in testing (2026-03-16):**
 - FTL_PremiseAttack_StressTest_v1: PremiseAttack produced 5/5 unanimous REJECTs citing Alcubierre metric exotic matter requirements, Theranos fraud archetype. The pipeline then generated a full 60-task business plan for WarpDrive Inc. without any reference to the physics impossibility.
-- AIChickenIncubator runs v1/v2: PremiseAttack flagged the design correctly but downstream tasks built on misread architecture anyway.
+- AIChickenIncubator runs v1/v2: downstream tasks built on a misread of the prompt architecture (inventing a Jetson Nano direct-coupling design that wasn't in the spec). This was a prompt-reading failure, not a PremiseAttack failure — noted here as a related issue where downstream tasks ignored available context.
 
 The adversarial findings are advisory only. They do not feed back into MakeAssumptions, RiskRegister, ProjectPlan, or ExecutiveSummary.
 
@@ -119,6 +119,7 @@ them explicitly and plan accordingly.
 2. What threshold triggers Pass 2? Unanimous REJECT only, or any REJECT score above a threshold?
 3. Should `redline_gate.py` findings also feed Pass 2, or only `premise_attack.py`?
 4. Is the `/refined/` subdirectory the right output structure, or a separate run dir with `_v2` suffix?
+5. Pass 2 task selection: should the list of "assumption-dependent tasks" be hardcoded, or derived dynamically from the task graph (e.g., any task whose `requires()` includes `MakeAssumptionsTask` output)?
 
 ---
 

@@ -12,11 +12,11 @@ I want to track metrics for how much improvement have happened.
 
 ### Infrastructure
 
-- **Data repo**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, run history, registered prompts, and analysis artifacts.
+- **Data repo**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, run history, and analysis artifacts.
 - **Baseline data**: 5 train plans × 9 verify plans, extracted from zips into `baseline/train/` and `baseline/verify/`.
-- **Runner** (`self_improve/runner.py`): re-executes a single pipeline step with a candidate system prompt against baseline plans. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--system-prompt-file`, `--model`, `--prompt-lab-dir`, resume, and parallel workers.
+- **Runner** (`self_improve/runner.py`): re-executes a single pipeline step against baseline plans using the system prompt constant from PlanExe's code. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--model`, `--prompt-lab-dir`, resume, and parallel workers.
 - **Analysis pipeline** (5 phases in `analysis/`):
-  - Phase 0: `prepare_iteration.py` — verifies PR state, resolves prompt, pre-creates history dirs, and writes analysis `meta.json` with PR info. Replaces the former `create_analysis_dir.py` + `update_meta_pr.py`.
+  - Phase 0: `prepare_iteration.py` — verifies PR state, pre-creates history dirs, and writes analysis `meta.json` with PR info. Replaces the former `create_analysis_dir.py` + `update_meta_pr.py`.
   - Phase 1: `run_insight.py` — Claude Code + Codex in parallel produce independent `insight_*.md` files with quantitative metrics and PR impact verdicts.
   - Phase 2: `run_code_review.py` — both agents review PlanExe source code, producing `code_*.md` with file:line references.
   - Phase 3: `run_synthesis.py` — single agent reconciles all findings into `synthesis.md` with top 5 ranked directions.
@@ -93,7 +93,7 @@ Comparing iteration 0 (baseline) to iteration 14 (current state):
 
 1. **No hardcoded English keywords in validators.** PlanExe users create plans in many languages. Keyword-based quality gates (checking for "Controls", "Weakness:") break for non-English plans. All validation must be language-agnostic — structural checks, field length ratios, duplicate detection. Iteration 10 was a disaster because of this.
 2. **Don't merge PRs before the verdict.** The correct order is: create PR → run experiments on the branch → run analysis → read verdict → merge only if verdict confirms improvement. Iteration 11 was merged prematurely.
-3. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file` from the registered prompt in `prompts/`, not the `SYSTEM_PROMPT` constant in Python code. Code-level prompt changes are invisible to experiments until a new prompt file is registered.
+3. **The runner always uses the code constant.** There is no external prompt file or CLI override — the prompt is whatever is committed in PlanExe's code at run time.
 4. **Auto-implementing synthesis recommendations can conflict with user intent.** The `run_optimization_iteration.py` script auto-applies the top recommendation, but this can conflict with explicit user preferences (e.g., reverting to "exactly 5 levers" when the user wanted 5–7). Use `--skip-implement` when needed.
 5. **Dual-agent analysis catches real errors.** Codex corrected Claude's success rate miscount in iteration 0. Independent analysis is worth the extra cost.
 6. **Prefer soft prompt guidance over hard Pydantic constraints.** `max_length=7` on the levers field discarded entire LLM responses when a model returned 8 levers. The downstream dedup step already handles extras. Hard caps waste tokens on retries; soft guidance in the prompt is cheaper and more fault-tolerant.
@@ -112,7 +112,7 @@ After 23 iterations, the step has these characteristics:
 - Quality gate: duplicate name filter (language-agnostic)
 - `review_lever` prompt uses two structurally distinct examples to prevent template lock
 - `OPTIMIZE_INSTRUCTIONS` documents 6 known problems (including template lock)
-- Registered prompt: `prompt_7`
+- System prompt: `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT` constant in code
 
 ### Not Started
 
@@ -327,14 +327,9 @@ history/                                      # captured output, global run coun
     98_identify_potential_levers/
     99_identify_potential_levers/
   3/
-prompts/
-  identify_potential_levers/
-    prompt_0_e51751c30bc0c48402ecf759afdb996d8067cd8c5f057d0e242a9d93a856151e.txt      # prompt_index_sha.txt
-    prompt_1_long-sha-here.txt
-    prompt_2_long-sha-here.txt
 analysis/
   AGENTS.md                         # conventions for analysis artifacts
-  prepare_iteration.py              # phase 0: verify PR, resolve prompt, pre-create history dirs
+  prepare_iteration.py              # phase 0: verify PR, pre-create history dirs
   run_analysis.py                   # orchestrates phases 1-4 sequentially
   run_insight.py                    # phase 1: Claude + Codex insight in parallel
   run_code_review.py                # phase 2: Claude + Codex code review in parallel

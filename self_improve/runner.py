@@ -10,7 +10,6 @@ Usage:
         --model ollama-llama3.1
 """
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -78,7 +77,6 @@ class PlanResult:
 def run_single_plan(
     plan_dir: Path,
     output_dir: Path,
-    system_prompt: str,
     model_names: list[str],
 ) -> PlanResult:
     """
@@ -112,9 +110,7 @@ def run_single_plan(
     t0 = time.monotonic()
     try:
         user_prompt = load_user_prompt(plan_dir)
-        result = IdentifyPotentialLevers.execute(
-            llm_executor, user_prompt, system_prompt=system_prompt
-        )
+        result = IdentifyPotentialLevers.execute(llm_executor, user_prompt)
 
         raw_path = plan_output_dir / "002-9-potential_levers_raw.json"
         clean_path = plan_output_dir / "002-10-potential_levers.json"
@@ -308,7 +304,6 @@ def _history_run_dir(prompt_lab_dir: Path, step_name: str) -> Path:
 def _run_plan_task(
     plan_dir: Path,
     output_dir: Path,
-    system_prompt: str,
     model_names: list[str],
     events_path: Path,
     outputs_path: Path,
@@ -317,7 +312,7 @@ def _run_plan_task(
     plan_name = plan_dir.name
     _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
-    pr = run_single_plan(plan_dir, output_dir, system_prompt, model_names)
+    pr = run_single_plan(plan_dir, output_dir, model_names)
 
     if pr.status == "ok":
         _emit_event(events_path, "run_single_plan_complete",
@@ -339,7 +334,6 @@ def _run_plan_task(
 
 
 def run(
-    system_prompt: str,
     plan_dirs: list[Path],
     output_dir: Path,
     model_names: list[str],
@@ -370,8 +364,6 @@ def run(
         if completed:
             logger.info(f"Resuming: {len(completed)} plan(s) already completed, skipping them")
 
-    prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
-
     workers = _resolve_workers(model_names)
 
     # Write meta.json (overwrite on resume is fine — same content)
@@ -380,7 +372,6 @@ def run(
         model_info["fallbacks"] = model_names[1:]
     meta = {
         "step": "identify_potential_levers",
-        "system_prompt_sha256": prompt_sha256,
         "model": model_info,
         "workers": workers,
         "system": _collect_system_info(),
@@ -400,13 +391,13 @@ def run(
 
     if workers <= 1:
         for plan_dir in pending_dirs:
-            _run_plan_task(plan_dir, output_dir, system_prompt,
+            _run_plan_task(plan_dir, output_dir,
                            model_names, events_path, outputs_path)
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(
-                    _run_plan_task, plan_dir, output_dir, system_prompt,
+                    _run_plan_task, plan_dir, output_dir,
                     model_names, events_path, outputs_path,
                 ): plan_dir
                 for plan_dir in pending_dirs
@@ -417,13 +408,7 @@ def run(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run IdentifyPotentialLevers with a candidate system prompt."
-    )
-    parser.add_argument(
-        "--system-prompt-file",
-        required=True,
-        type=Path,
-        help="Path to a text file containing the candidate system prompt.",
+        description="Run IdentifyPotentialLevers against baseline training data."
     )
     parser.add_argument(
         "--baseline-dir",
@@ -459,8 +444,6 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    system_prompt = args.system_prompt_file.read_text().strip()
-
     if args.plan_dir:
         plan_dirs = [args.plan_dir]
     elif args.baseline_dir:
@@ -482,7 +465,7 @@ def main():
     else:
         parser.error("Either --prompt-lab-dir or --output-dir is required.")
 
-    run(system_prompt, plan_dirs, output_dir, args.models)
+    run(plan_dirs, output_dir, args.models)
 
     # Summarize from outputs.jsonl
     outputs_path = output_dir.parent / "outputs.jsonl"

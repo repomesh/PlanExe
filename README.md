@@ -183,12 +183,12 @@ the repo root.
 # Create a plan from a text prompt
 ./planexe create_plan \
     --plan-text "Small coffee shop in Copenhagen, Denmark" \
-    --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+    --output-dir ./planexe-outputs/1984-12-31/MyCoffeeShop_v1
 
 # Or: read the plan prompt from a file
 ./planexe create_plan \
     --plan-file my_plan.txt \
-    --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+    --output-dir ./planexe-outputs/1984-12-31/MyCoffeeShop_v1
 ```
 
 The script creates the run directory if it does not exist and writes:

@@ -1,4 +1,4 @@
-# Proposal: Two-Pass Pipeline with Adversarial Refinement
+# Proposal: Two-Pass Pipeline with Structured Adversarial Refinement
 
 **Status:** Draft  
 **Date:** 2026-03-16  
@@ -6,29 +6,30 @@
 
 ---
 
-## Problem
+## Observation
 
-`PremiseAttackTask` runs early in the pipeline and produces adversarial findings — identifying physically impossible premises, unvalidated assumptions, and high-risk framing. These findings are recorded in the output but have no downstream effect. The rest of the pipeline runs identically regardless of how damning the adversarial verdict is.
+When given a deliberately unviable premise — a startup commercializing faster-than-light cargo delivery using Einstein-Rosen bridges stabilized by exotic matter, seeking $50M Series A, promising first delivery in 36 months — the pipeline behaves interestingly:
 
-### Observed behavior: red-team prompt
-
-When given a deliberately unviable premise — a startup commercializing faster-than-light cargo delivery using Einstein-Rosen bridges stabilized by exotic matter, seeking $50M Series A, promising first delivery in 36 months — `PremiseAttackTask` correctly identifies the fatal flaw:
+**PremiseAttackTask** correctly identifies the fatal flaw:
 
 > *"The premise is fundamentally non-viable because it conflates theoretical mathematical solutions with engineering reality while ignoring the insurmountable physical constraints of exotic matter and energy requirements. The proposal ignores that stabilizing an Alcubierre drive requires negative energy densities equivalent to the mass-energy of Jupiter, a resource magnitude impossible to source or contain within a $50M budget."*  
 > — PremiseAttack output, REJECT verdict
 
-Despite this, the downstream pipeline continues and produces a 60-task business plan: market sizing, Series A structure, team composition, patent strategy, WBS, Gantt chart. However — and this is the interesting finding — `MakeAssumptionsTask` does absorb the adversarial context and responds to it:
+**Downstream tasks absorb this finding and pivot:** `MakeAssumptionsTask` reframes the entire company around a quantum logistics spin-off, explicitly calling FTL "physically impossible" throughout. `ProjectPlan` follows suit — "WarpDrive Quantum Logistics LLC", "Impossibility Certification report", abandoning FTL as the primary product. `SWOTTask` lists "Fundamental Physical Impossibility" as the first weakness.
 
-> *"Given the physical impossibility of exotic matter, what is the specific financial contingency plan to pivot the $50M Series A into viable adjacent technologies (e.g., quantum logistics) before capital exhaustion?"*  
-> **Assumption:** The company will immediately allocate 60% of the Series A funding to a spin-off entity focused on quantum computing for logistics optimization, treating the FTL project as a long-term R&D incubator rather than an immediate product launch.
+The pipeline is already doing significant self-correction via implicit context propagation. PremiseAttack findings reach downstream tasks because all tasks receive accumulated prior context.
 
-This shows partial propagation: `MakeAssumptionsTask` acknowledges the impossibility and pivots its assumptions to a quantum computing framing. But the executive summary, risk register, and WBS continue to plan the original FTL product without this correction. The adversarial finding reached one task and not others.
+---
 
-### Observed behavior: prompt misread
+## Problem
 
-When a prompt describes an indirect thermal coupling architecture (laptop waste heat → absorber plate → water reservoir → incubator chamber), downstream tasks have been observed building a plan for a different device entirely — one with direct chip-to-egg heat transfer — without referencing the architecture described in the prompt. The PremiseAttack output correctly identified the mismatch, but subsequent tasks did not have this correction in context.
+The implicit self-correction works — but it has two limitations:
 
-In both cases, adversarial findings exist in the output directory but are not consumed by the tasks that follow.
+**1. The pivot is user-invisible.** A user who asked for an FTL startup plan receives a quantum logistics company plan instead, with no explicit notification that the plan was revised due to adversarial findings. The executive summary may present the pivoted plan as if it were the original intent.
+
+**2. The correction is implicit, not auditable.** There is no record of *which* assumptions were revised because of PremiseAttack findings, *which* risks were added, or *which* sections of the plan changed between the "naive" run and the adversarially-informed version. A reviewer cannot easily distinguish "the model planned this because it's a good idea" from "the model planned this because PremiseAttack told it the original idea was impossible."
+
+A two-pass model makes the correction explicit, auditable, and user-visible — without changing the fact that Pass 1 runs unconstrained.
 
 ---
 
@@ -36,83 +37,36 @@ In both cases, adversarial findings exist in the output directory but are not co
 
 ### Pass 1 — Unconstrained Generation (current pipeline, unchanged)
 
-The full pipeline runs as today. `PremiseAttackTask` fires early and records its findings. All downstream tasks complete normally. No blocking, no gating.
+The full pipeline runs as today. `PremiseAttackTask` fires early and records its findings. All downstream tasks complete normally. The implicit context propagation continues to work as observed.
 
-**Goal:** Preserve creative output. `PremiseAttackTask` is intentionally harsh — it will find problems with any plan. Blocking the pipeline on its output would prevent legitimate plans from completing.
+**Goal:** Preserve creative output and the existing implicit correction behavior. Do not block or gate on PremiseAttack findings.
 
-### Pass 2 — Targeted Adversarial Refinement (new)
+### Pass 2 — Structured Adversarial Refinement (new)
 
-A second, lightweight pass that ingests:
-- The full Pass 1 output directory
-- `PremiseAttackTask` findings
-- `RedlineGate` findings (when implemented)
+A second, lightweight pass that produces an explicit record of adversarially-motivated changes:
 
-Pass 2 re-runs only the tasks most implicated by adversarial findings. Tasks that are structural (Gantt, document lists, schedule) are skipped. Tasks that depend on assumptions flagged as invalid are re-run with adversarial context prepended.
+- Which assumptions were flagged as invalidated by PremiseAttack
+- Which risks were added to the risk register specifically because of PremiseAttack findings
+- A revised executive summary that explicitly acknowledges the adversarial finding and the pivot it triggered
+- A diff between Pass 1 and Pass 2 outputs for the affected sections
 
-**Candidate tasks for re-run in Pass 2:**
-- `MakeAssumptionsTask` — re-run with PremiseAttack output in context
-- `IdentifyRisksTask` — extend risk register with PremiseAttack-flagged risks
-- `ExecutiveSummaryTask` — revise to acknowledge key adversarial findings
-- `QuestionsAndAnswersTask` — add entries addressing rejection criteria
+Pass 2 does not re-run the full pipeline. It re-runs only:
+- `MakeAssumptionsTask` — produce a marked version (which assumptions are adversarially-informed)
+- `IdentifyRisksTask` — add risks explicitly flagged by PremiseAttack
+- `ExecutiveSummaryTask` — produce a version that names the adversarial finding and the resulting pivot
 
-**Tasks that do NOT re-run:**
-- WBS, Gantt, schedule (structural)
-- Team composition
-- Document lists
-- Financial model (unless PremiseAttack specifically flags financial assumptions)
+### Output
 
-### Expected output for the warp drive example
-
-**Pass 1 executive summary (current behavior):**
-> *"WarpDrive Inc. is positioned to capture significant share of the time-sensitive cargo market. With a $50M Series A and a 12-person physics team, first commercial deliveries are projected within 36 months..."*
-
-**Pass 2 executive summary (proposed):**
-> *"WarpDrive Inc.'s premise rests on a physics assumption — stable exotic matter — that has no known production pathway. Adversarial review flagged this as a fundamental blocker, not an engineering risk. The following plan is framed as a 10-year research roadmap contingent on exotic matter discovery, not a 36-month commercialization timeline. Key assumptions marked UNVALIDATED should be treated as research targets, not business inputs."*
-
----
-
-## Implementation Sketch
-
-```python
-# Conceptual only — not a PR-ready implementation
-
-class Pass2RefinementPipeline:
-    """
-    Runs targeted task re-execution using Pass 1 outputs + adversarial findings.
-    Only re-runs tasks implicated by premise_attack_score or redline_gate_score.
-    """
-
-    def should_rerun(self, task_name: str, premise_attack_result: dict) -> bool:
-        unanimous_reject = all(
-            r.get('verdict') == 'REJECT'
-            for r in premise_attack_result.get('attacks', [])
-        )
-        if unanimous_reject and task_name in ASSUMPTION_DEPENDENT_TASKS:
-            return True
-        return False
-
-    def inject_adversarial_context(self, system_prompt: str, findings: str) -> str:
-        return f"""ADVERSARIAL FINDINGS FROM PREMISE REVIEW:
-{findings}
-
-Consider the above findings when generating your output. Where the findings
-identify physically impossible or financially unviable assumptions, acknowledge
-them explicitly and plan accordingly.
-
----
-
-{system_prompt}"""
-```
+Pass 2 writes to a `/refined/` subdirectory. The original Pass 1 output is preserved unchanged. Both are available to the user.
 
 ---
 
 ## Benefits
 
-1. **Preserves creativity** — Pass 1 runs unconstrained. Legitimate plans are not blocked by an adversarial agent that is intentionally harsh on all input.
-2. **Gives adversarial findings teeth** — Pass 2 ensures rejection signals reach the assumptions register, risk register, and executive summary.
-3. **Efficient** — Pass 2 re-runs 3–5 tasks, not the full pipeline. Runtime overhead is small.
-4. **Auditable** — Pass 1 output is preserved unchanged. Reviewers can compare before/after refinement.
-5. **Graceful degradation** — If PremiseAttack produces no unanimous rejections, Pass 2 is a no-op.
+1. **Makes implicit correction explicit** — Users see why the plan differs from what they submitted, not just that it does.
+2. **Auditable** — Reviewers can identify which parts of the plan were adversarially motivated vs. organically generated.
+3. **No disruption to Pass 1** — The existing implicit propagation continues to work. Pass 2 is additive.
+4. **Graceful degradation** — If PremiseAttack produces no significant findings, Pass 2 is a no-op.
 
 ---
 

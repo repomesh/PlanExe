@@ -28,7 +28,7 @@ Each iteration produces a numbered analysis directory in PlanExe-prompt-lab:
 
 ```
 analysis/1_identify_potential_levers/
-  meta.json           ← provenance: prompt, history runs, PR info
+  meta.json           ← provenance: history runs, PR info
   insight_claude.md   ← quality analysis (Claude Code)
   insight_codex.md    ← quality analysis (Codex)
   code_claude.md      ← code review (Claude Code)
@@ -58,13 +58,13 @@ verdict confirms improvement.
 
 ```bash
 # From PlanExe-prompt-lab repo:
-python analysis/prepare_iteration.py identify_potential_levers 326     # Phase 0: verify PR, resolve prompt, pre-create history dirs
+python analysis/prepare_iteration.py identify_potential_levers 326     # Phase 0: verify PR, pre-create history dirs
 python analysis/run_analysis.py analysis/12_identify_potential_levers   # Phases 1-4: insight → code review → synthesis → assessment
 ```
 
 `prepare_iteration.py` replaces the former `create_analysis_dir.py` and
-`update_meta_pr.py` — it handles PR verification, prompt resolution, history
-dir pre-creation, and meta.json population in a single step.
+`update_meta_pr.py` — it handles PR verification, history dir pre-creation,
+and meta.json population in a single step.
 
 `run_analysis.py` orchestrates the four analysis phases sequentially. Each
 phase is resumable (skipped if output files already exist). Individual phases
@@ -85,24 +85,24 @@ which has the required llama_index dependencies.
 ```bash
 # Auto-increment into prompt-lab history/
 /opt/homebrew/bin/python3.11 -m self_improve.runner \
-    --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 
 # Or manual output directory
 /opt/homebrew/bin/python3.11 -m self_improve.runner \
-    --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --output-dir /path/to/my_run/outputs \
     --model ollama-llama3.1
 ```
 
+The runner always uses the `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT` constant
+from PlanExe's code — there is no external prompt file or CLI override.
+
 ### Options
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--system-prompt-file` | Yes | Path to a text file containing the candidate system prompt |
 | `--baseline-dir` | No | Directory containing plan subdirectories (process all) |
 | `--plan-dir` | No | Single plan directory to process (overrides `--baseline-dir`) |
 | `--prompt-lab-dir` | No | Path to PlanExe-prompt-lab repo (auto-creates history run dir) |
@@ -121,7 +121,6 @@ script handles this automatically for models in its `CUSTOM_PROFILE_MODELS` dict
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
 /opt/homebrew/bin/python3.11 -m self_improve.runner \
-    --system-prompt-file candidate.txt \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model anthropic-claude-haiku-4-5-pinned
@@ -133,7 +132,7 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ```
 <run-dir>/
-  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
+  meta.json          # written at start: step name, model, workers, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
@@ -146,17 +145,10 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ## Quick Start
 
-Extract the current default system prompt to a file, then run against a single plan:
+Run against a single plan:
 
 ```bash
-/opt/homebrew/bin/python3.11 -c "
-import sys; sys.path.insert(0, 'worker_plan')
-from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
-print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
-" > baseline_prompt.txt
-
 /opt/homebrew/bin/python3.11 -m self_improve.runner \
-    --system-prompt-file baseline_prompt.txt \
     --plan-dir /path/to/baseline/train/20250321_silo \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
@@ -167,10 +159,9 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 ```
 PlanExe/                              PlanExe-prompt-lab/
   self_improve/                     baseline/train/       ← gold-standard outputs
-    runner.py                           prompts/              ← registered system prompts
-    register_prompt.py                  history/              ← runner output per model
+    runner.py                           history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment
-    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + prompt + history dirs
+    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history dirs
                                           run_analysis.py       ← Phases 1-4 orchestrator
   llm_config/                           run_optimization_iteration.py
     baseline.json
@@ -242,9 +233,9 @@ Full analysis artifacts for each iteration are in
 2. **No hardcoded English keywords in validators.** PlanExe users create plans
    in many languages. All validation must be language-agnostic.
 3. **Never delete from the history directory.** Runs are permanent records.
-4. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file`
-   from `prompts/`, not the Python constant. Register new prompts via
-   `register_prompt.py` after code changes.
+4. **The runner always uses the code constant.** There is no external prompt file
+   or CLI override. To change the prompt, modify `identify_potential_levers.py`
+   and merge the PR before running experiments.
 
 ## Architecture
 

@@ -301,6 +301,17 @@ def _history_run_dir(prompt_lab_dir: Path, step_name: str) -> Path:
     raise RuntimeError(f"Could not allocate history run dir after 50 attempts (last: {run_dir})")
 
 
+class _ThreadFilter(logging.Filter):
+    """Only accept log records from a specific thread."""
+
+    def __init__(self, thread_id: int):
+        super().__init__()
+        self.thread_id = thread_id
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.thread == self.thread_id
+
+
 def _run_plan_task(
     plan_dir: Path,
     output_dir: Path,
@@ -310,27 +321,45 @@ def _run_plan_task(
 ) -> PlanResult:
     """Run a single plan and record events/output. Thread-safe."""
     plan_name = plan_dir.name
-    _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
-    pr = run_single_plan(plan_dir, output_dir, model_names)
+    # Set up per-plan log file at outputs/<plan_name>/log.txt.
+    plan_log_dir = output_dir / plan_name
+    plan_log_dir.mkdir(parents=True, exist_ok=True)
+    plan_log_path = plan_log_dir / "log.txt"
+    file_handler = logging.FileHandler(plan_log_path)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    thread_filter = _ThreadFilter(threading.current_thread().ident)
+    file_handler.addFilter(thread_filter)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
 
-    if pr.status == "ok":
-        _emit_event(events_path, "run_single_plan_complete",
-                    plan_name=plan_name,
-                    duration_seconds=pr.duration_seconds)
-    else:
-        _emit_event(events_path, "run_single_plan_error",
-                    plan_name=plan_name, error=pr.error,
-                    duration_seconds=pr.duration_seconds)
+    try:
+        _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
-    if pr.calls_succeeded is not None and pr.calls_succeeded < 3:
-        _emit_event(events_path, "partial_recovery",
-                    plan_name=plan_name,
-                    calls_succeeded=pr.calls_succeeded,
-                    expected_calls=3)
+        pr = run_single_plan(plan_dir, output_dir, model_names)
 
-    _append_jsonl(outputs_path, asdict(pr))
-    return pr
+        if pr.status == "ok":
+            _emit_event(events_path, "run_single_plan_complete",
+                        plan_name=plan_name,
+                        duration_seconds=pr.duration_seconds)
+        else:
+            _emit_event(events_path, "run_single_plan_error",
+                        plan_name=plan_name, error=pr.error,
+                        duration_seconds=pr.duration_seconds)
+
+        if pr.calls_succeeded is not None and pr.calls_succeeded < 3:
+            _emit_event(events_path, "partial_recovery",
+                        plan_name=plan_name,
+                        calls_succeeded=pr.calls_succeeded,
+                        expected_calls=3)
+
+        _append_jsonl(outputs_path, asdict(pr))
+        return pr
+    finally:
+        root_logger.removeHandler(file_handler)
+        file_handler.close()
 
 
 def run(

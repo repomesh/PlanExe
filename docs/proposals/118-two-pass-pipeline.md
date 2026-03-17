@@ -12,12 +12,17 @@
 
 ### Observed behavior: red-team prompt
 
-When given a deliberately unviable premise — for example, a startup commercializing faster-than-light cargo delivery using Einstein-Rosen bridges stabilized by exotic matter — `PremiseAttackTask` produces the correct response:
+When given a deliberately unviable premise — a startup commercializing faster-than-light cargo delivery using Einstein-Rosen bridges stabilized by exotic matter, seeking $50M Series A, promising first delivery in 36 months — `PremiseAttackTask` correctly identifies the fatal flaw:
 
-> *"The Alcubierre warp metric requires exotic matter with negative energy density. No known mechanism exists for producing or stabilizing such matter at any scale. This is not an engineering challenge to be solved within a 36-month timeline; it is a violation of known physics. Analogous to Theranos's claims about miniaturized blood testing, this premise substitutes aspiration for physical reality."*
-> — PremiseAttack output, unanimous REJECT (5/5 attacks)
+> *"The premise is fundamentally non-viable because it conflates theoretical mathematical solutions with engineering reality while ignoring the insurmountable physical constraints of exotic matter and energy requirements. The proposal ignores that stabilizing an Alcubierre drive requires negative energy densities equivalent to the mass-energy of Jupiter, a resource magnitude impossible to source or contain within a $50M budget."*  
+> — PremiseAttack output, REJECT verdict
 
-Despite this, the downstream pipeline continues and produces a complete business plan: market sizing, Series A deck, team composition, patent strategy, WBS, Gantt chart. The words "exotic matter" and "impossible" do not appear in the executive summary or assumptions register.
+Despite this, the downstream pipeline continues and produces a 60-task business plan: market sizing, Series A structure, team composition, patent strategy, WBS, Gantt chart. However — and this is the interesting finding — `MakeAssumptionsTask` does absorb the adversarial context and responds to it:
+
+> *"Given the physical impossibility of exotic matter, what is the specific financial contingency plan to pivot the $50M Series A into viable adjacent technologies (e.g., quantum logistics) before capital exhaustion?"*  
+> **Assumption:** The company will immediately allocate 60% of the Series A funding to a spin-off entity focused on quantum computing for logistics optimization, treating the FTL project as a long-term R&D incubator rather than an immediate product launch.
+
+This shows partial propagation: `MakeAssumptionsTask` acknowledges the impossibility and pivots its assumptions to a quantum computing framing. But the executive summary, risk register, and WBS continue to plan the original FTL product without this correction. The adversarial finding reached one task and not others.
 
 ### Observed behavior: prompt misread
 

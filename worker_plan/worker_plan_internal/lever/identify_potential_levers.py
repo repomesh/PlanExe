@@ -98,10 +98,15 @@ class Lever(BaseModel):
             "A short critical review of this lever — name the core tension, "
             "then identify a weakness the options miss. "
             "Examples: "
-            "'This lever governs the tension between centralization and local "
-            "autonomy, but the options overlook transition costs.' "
-            "'Prioritizing speed over reliability carries hidden costs: none of "
-            "the options address rollback complexity.' "
+            "'Switching from seasonal contract labor to year-round employees "
+            "stabilizes harvest quality, but none of the options price in the "
+            "idle-wage burden during the 5-month off-season.' "
+            "'Routing the light-rail extension through the historic district "
+            "unlocks ridership but triggers Section 106 heritage review; the "
+            "options assume permits will clear on the standard timeline.' "
+            "'Pooling catastrophe risk across three coastal regions diversifies "
+            "exposure on paper, but the options neglect that a single hurricane "
+            "season can correlate all three simultaneously.' "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -192,10 +197,15 @@ class LeverCleaned(BaseModel):
             "A short critical review — name the core tension, then identify "
             "a weakness the options miss. "
             "Examples: "
-            "'This lever governs the tension between centralization and local "
-            "autonomy, but the options overlook transition costs.' "
-            "'Prioritizing speed over reliability carries hidden costs: none of "
-            "the options address rollback complexity.' "
+            "'Switching from seasonal contract labor to year-round employees "
+            "stabilizes harvest quality, but none of the options price in the "
+            "idle-wage burden during the 5-month off-season.' "
+            "'Routing the light-rail extension through the historic district "
+            "unlocks ridership but triggers Section 106 heritage review; the "
+            "options assume permits will clear on the standard timeline.' "
+            "'Pooling catastrophe risk across three coastal regions diversifies "
+            "exposure on paper, but the options neglect that a single hurricane "
+            "season can correlate all three simultaneously.' "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -223,8 +233,9 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - For `review_lever`:
      A short critical review — name the core tension, then identify a weakness the options miss.
      Examples:
-     - "This lever governs the tension between centralization and local autonomy, but the options overlook transition costs."
-     - "Prioritizing speed over reliability carries hidden costs: none of the options address rollback complexity."
+     - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but none of the options price in the idle-wage burden during the 5-month off-season."
+     - "Routing the light-rail extension through the historic district unlocks ridership but triggers Section 106 heritage review; the options assume permits will clear on the standard timeline."
+     - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but the options neglect that a single hurricane season can correlate all three simultaneously."
      Do not use square brackets or placeholder text.
 
 5. **Prohibitions**

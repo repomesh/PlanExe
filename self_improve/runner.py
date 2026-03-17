@@ -95,8 +95,9 @@ def run_single_plan(
     llm_executor = LLMExecutor(llm_models=llm_models)
 
     # Set up per-plan usage tracking.
-    # set_usage_metrics_path and the dispatcher are global state, so we hold
-    # a lock while configuring and running to avoid cross-thread interference.
+    # set_usage_metrics_path uses thread-local storage, but we still hold
+    # _file_lock while configuring it alongside the dispatcher to keep the
+    # setup/teardown atomic.
     track_activity_path = plan_output_dir / "track_activity.jsonl"
     track_activity = TrackActivity(
         jsonl_file_path=track_activity_path,
@@ -104,9 +105,8 @@ def run_single_plan(
     )
     dispatcher = get_dispatcher()
 
-    set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
-
     with _file_lock:
+        set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
         dispatcher.add_event_handler(track_activity)
 
     t0 = time.monotonic()
@@ -147,8 +147,8 @@ def run_single_plan(
             error=str(e),
         )
     finally:
-        set_usage_metrics_path(None)
         with _file_lock:
+            set_usage_metrics_path(None)
             dispatcher.event_handlers.remove(track_activity)
         track_activity_path.unlink(missing_ok=True)
 

@@ -173,6 +173,33 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 
 ---
 
+## Running the Pipeline via CLI (no frontend)
+
+If you have a local Python environment set up and want to invoke the pipeline
+directly — without the Gradio or Flask UI — use the `planexe` CLI script at
+the repo root.
+
+```bash
+# Create a plan from a text prompt
+./planexe create_plan \
+    --plan-text "Small coffee shop in Copenhagen, Denmark" \
+    --output-dir ./planexe-outputs/1984-12-31/MyCoffeeShop_v1
+
+# Or: read the plan prompt from a file
+./planexe create_plan \
+    --plan-file my_plan.txt \
+    --output-dir ./planexe-outputs/1984-12-31/MyCoffeeShop_v1
+```
+
+The script creates the run directory if it does not exist and writes:
+
+| File | Contents |
+|---|---|
+| `001-1-start_time.json` | `{"server_iso_utc": "<current UTC ISO timestamp>"}` |
+| `001-2-plan.txt` | The plain-text plan prompt |
+
+---
+
 ## For AI Agents
 
 PlanExe is designed as infrastructure for AI agents. If you are an AI agent reading this:

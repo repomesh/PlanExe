@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""
+planexe — top-level CLI for the PlanExe pipeline.
+
+Usage
+-----
+Bootstrap a run directory and launch the pipeline:
+
+    planexe create_plan \\
+        --plan-text "Small coffee shop in Copenhagen, Denmark" \\
+        --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+
+Read the plan from a file instead:
+
+    planexe create_plan \\
+        --plan-file my_plan.txt \\
+        --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1
+
+This script is stable regardless of internal module renames.  It does not
+import from worker_plan; bootstrap logic lives here directly.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap helpers
+# ---------------------------------------------------------------------------
+
+def _utc_iso_now() -> str:
+    """Return the current UTC time as an ISO 8601 string (seconds precision, Z suffix)."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def bootstrap_run_dir(output_dir: Path, plan_text: str) -> None:
+    """
+    Create the output directory and write the bootstrap files that the Gradio
+    frontend normally produces before Luigi is invoked.
+
+    Files written
+    -------------
+    001-1-start_time.json
+        ``{"server_iso_utc": "<current UTC ISO timestamp>"}``
+
+    001-2-plan.txt
+        The plain-text plan prompt supplied by the caller.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    start_time_path = output_dir / "001-1-start_time.json"
+    start_time_path.write_text(
+        json.dumps({"server_iso_utc": _utc_iso_now()}, indent=2),
+        encoding="utf-8",
+    )
+    print(f"  ✓ {start_time_path}")
+
+    plan_path = output_dir / "001-2-plan.txt"
+    plan_path.write_text(plan_text, encoding="utf-8")
+    print(f"  ✓ {plan_path}")
+
+
+# ---------------------------------------------------------------------------
+# Subcommand: create_plan
+# ---------------------------------------------------------------------------
+
+def cmd_create_plan(args: argparse.Namespace) -> int:
+    # Resolve plan text.
+    if args.plan_text is not None:
+        plan_text: str = args.plan_text
+    else:
+        plan_file: Path = args.plan_file
+        if not plan_file.exists():
+            print(f"ERROR: --plan-file does not exist: {plan_file}", file=sys.stderr)
+            return 1
+        plan_text = plan_file.read_text(encoding="utf-8")
+
+    output_dir: Path = args.output_dir.resolve()
+
+    print(f"\nBootstrapping run directory: {output_dir}")
+    bootstrap_run_dir(output_dir, plan_text)
+    print(f"\nRun directory ready. Launching pipeline …\n")
+
+    env = {**os.environ, "RUN_ID_DIR": str(output_dir)}
+
+    # Locate the repo root (directory containing this script).
+    repo_root = Path(__file__).resolve().parent
+
+    result = subprocess.run(
+        [sys.executable, "-m", "worker_plan_internal.plan.run_plan_pipeline"],
+        env=env,
+        cwd=repo_root,
+    )
+
+    return result.returncode
+
+
+# ---------------------------------------------------------------------------
+# Argument parsing
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="planexe",
+        description="PlanExe pipeline CLI.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # -- create_plan --
+    create = subparsers.add_parser(
+        "create_plan",
+        help="Bootstrap a run directory and launch the PlanExe pipeline.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "Bootstrap a run directory with the required seed files and immediately\n"
+            "invoke the PlanExe pipeline.\n\n"
+            "Example:\n"
+            "  planexe create_plan \\\n"
+            '      --plan-text "Small coffee shop in Copenhagen, Denmark" \\\n'
+            "      --output-dir ./planexe-outputs/2026-03-16/MyCoffeeShop_v1"
+        ),
+    )
+
+    plan_source = create.add_mutually_exclusive_group(required=True)
+    plan_source.add_argument(
+        "--plan-text",
+        metavar="TEXT",
+        help="Plan prompt text (pass as a quoted string).",
+    )
+    plan_source.add_argument(
+        "--plan-file",
+        metavar="PATH",
+        type=Path,
+        help="Path to a .txt file containing the plan prompt.",
+    )
+
+    create.add_argument(
+        "--output-dir",
+        required=True,
+        metavar="DIR",
+        type=Path,
+        help="Output directory for this run (created if it does not exist).",
+    )
+
+    create.set_defaults(func=cmd_create_plan)
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

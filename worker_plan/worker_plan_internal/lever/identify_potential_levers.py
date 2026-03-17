@@ -161,9 +161,6 @@ class DocumentDetails(BaseModel):
         min_length=5,
         description="Propose 5 to 7 levers."
     )
-    summary: str = Field(
-        description="One sentence prescribing a concrete addition to a specific lever. Example: \"Add 'partner with a regional distributor' to Supply Chain Strategy.\""
-    )
 
 class LeverCleaned(BaseModel):
     """
@@ -229,9 +226,6 @@ You are an expert strategic analyst. Generate solution space parameters followin
      - "This lever governs the tension between centralization and local autonomy, but the options overlook transition costs."
      - "Prioritizing speed over reliability carries hidden costs: none of the options address rollback complexity."
      Do not use square brackets or placeholder text.
-   - For `summary`:
-     One sentence prescribing a concrete addition to a specific lever.
-     Example: "Add 'partner with a regional distributor for last-mile logistics' to Supply Chain Strategy."
 
 5. **Prohibitions**
    - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:")
@@ -243,7 +237,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
 6. **Option Structure**
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions
-   - Each option should be a concrete, actionable approach — not a vague aspiration
+   - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
 """
 
 @dataclass
@@ -279,9 +273,7 @@ class IdentifyPotentialLevers:
                 names_list = ", ".join(f'"{n}"' for n in generated_lever_names)
                 prompt_content = (
                     f"Generate 5 to 7 MORE levers with completely different names. "
-                    f"Do NOT reuse any of these already-generated names: [{names_list}]\n"
-                    f"Each option must be a complete strategic sentence (at least 15 words with an action verb), not a short label.\n"
-                    f"Do not invent percentages, cost savings, or performance deltas — use qualitative language unless the project document supplies the number.\n\n"
+                    f"Do NOT reuse any of these already-generated names: [{names_list}]\n\n"
                     f"{user_prompt}"
                 )
 

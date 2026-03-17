@@ -30,27 +30,21 @@ has an assessment verdict (YES/NO/CONDITIONAL).
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
-                    │     Step 3: Analysis pipeline         │
-                    │                                       │
-                    │  Phase 0: create_analysis_dir.py      │
-                    │    (diff history vs already-analyzed)  │
-                    │                                       │
-                    │  Phase 1: run_insight.py               │
-                    │    (Claude + Codex in parallel)        │
-                    │                                       │
-                    │  Phase 2: run_code_review.py           │
-                    │    (Claude + Codex in parallel)        │
-                    │                                       │
-                    │  Phase 3: run_synthesis.py              │
-                    │    (Claude only — reconciles analyses) │
-                    │                                       │
-                    │  Phase 4: run_assessment.py             │
-                    │    (compare before vs after, verdict)  │
+                    │     Step 3: Prepare iteration          │
+                    │  prepare_iteration.py <step> <PR#>     │
+                    │    (verify PR, resolve prompt,          │
+                    │     pre-create history dirs,            │
+                    │     write analysis meta.json)           │
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
-                    │     Register PR in meta.json          │
-                    │  update_meta_pr.py <dir> <PR#>        │
+                    │     Step 4: Analysis pipeline          │
+                    │  run_analysis.py <analysis_dir>        │
+                    │                                       │
+                    │  Phase 1: insight (parallel agents)    │
+                    │  Phase 2: code review (parallel agents)│
+                    │  Phase 3: synthesis (single agent)     │
+                    │  Phase 4: assessment (before vs after) │
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
@@ -79,13 +73,17 @@ experiments, and runs the full analysis pipeline. Supports `--skip-implement`,
 # Step 2: run experiments for specific models
 python run_optimization_iteration.py --skip-implement --models haiku,llama
 
-# Step 3: analysis phases individually
-python analysis/create_analysis_dir.py identify_potential_levers      # Phase 0
-python analysis/run_insight.py analysis/1_identify_potential_levers    # Phase 1
-python analysis/run_code_review.py analysis/1_identify_potential_levers # Phase 2
-python analysis/run_synthesis.py analysis/1_identify_potential_levers   # Phase 3
-python analysis/update_meta_pr.py analysis/1_identify_potential_levers 268  # Register PR
-python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 4
+# Step 3: prepare iteration (verify PR, resolve prompt, pre-create history dirs)
+python analysis/prepare_iteration.py identify_potential_levers 326
+
+# Step 4: run all analysis phases (insight → code review → synthesis → assessment)
+python analysis/run_analysis.py analysis/12_identify_potential_levers
+
+# Or run individual phases:
+python analysis/run_insight.py analysis/12_identify_potential_levers     # Phase 1
+python analysis/run_code_review.py analysis/12_identify_potential_levers # Phase 2
+python analysis/run_synthesis.py analysis/12_identify_potential_levers   # Phase 3
+python analysis/run_assessment.py analysis/12_identify_potential_levers  # Phase 4
 ```
 
 ## Two-Repo Architecture
@@ -105,12 +103,12 @@ PlanExe/                              PlanExe-prompt-lab/
     register_prompt.py                  history/                 ← runner output per model
   worker_plan/.../                      analysis/                ← insight/review/synthesis/assessment
     identify_potential_levers.py          AGENTS.md
-  llm_config/                             create_analysis_dir.py
-    baseline.json                         run_insight.py
-    anthropic_claude.json                 run_code_review.py
-                                          run_synthesis.py
-                                          run_assessment.py
-                                          update_meta_pr.py
+  llm_config/                             prepare_iteration.py   ← Phase 0: PR + prompt + history dirs
+    baseline.json                         run_analysis.py        ← Phases 1-4 orchestrator
+    anthropic_claude.json                 run_insight.py         ← Phase 1 (called by run_analysis.py)
+                                          run_code_review.py     ← Phase 2 (called by run_analysis.py)
+                                          run_synthesis.py       ← Phase 3 (called by run_analysis.py)
+                                          run_assessment.py      ← Phase 4 (called by run_analysis.py)
                                         run_optimization_iteration.py
 ```
 

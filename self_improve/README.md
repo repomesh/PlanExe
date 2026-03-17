@@ -54,16 +54,27 @@ See `run_optimization_iteration.py --help` for all options.
 create PR → run experiments → run analysis → read verdict → merge only if
 verdict confirms improvement.
 
-### Running analysis phases individually
+### Running analysis phases
 
 ```bash
 # From PlanExe-prompt-lab repo:
-python analysis/create_analysis_dir.py identify_potential_levers       # Phase 0
-python analysis/run_insight.py analysis/1_identify_potential_levers     # Phase 1
-python analysis/run_code_review.py analysis/1_identify_potential_levers # Phase 2
-python analysis/run_synthesis.py analysis/1_identify_potential_levers   # Phase 3
-python analysis/update_meta_pr.py analysis/1_identify_potential_levers 268
-python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 4
+python analysis/prepare_iteration.py identify_potential_levers 326     # Phase 0: verify PR, resolve prompt, pre-create history dirs
+python analysis/run_analysis.py analysis/12_identify_potential_levers   # Phases 1-4: insight → code review → synthesis → assessment
+```
+
+`prepare_iteration.py` replaces the former `create_analysis_dir.py` and
+`update_meta_pr.py` — it handles PR verification, prompt resolution, history
+dir pre-creation, and meta.json population in a single step.
+
+`run_analysis.py` orchestrates the four analysis phases sequentially. Each
+phase is resumable (skipped if output files already exist). Individual phases
+can still be run directly if needed:
+
+```bash
+python analysis/run_insight.py analysis/12_identify_potential_levers     # Phase 1
+python analysis/run_code_review.py analysis/12_identify_potential_levers # Phase 2
+python analysis/run_synthesis.py analysis/12_identify_potential_levers   # Phase 3
+python analysis/run_assessment.py analysis/12_identify_potential_levers  # Phase 4
 ```
 
 ## Runner Usage
@@ -159,8 +170,9 @@ PlanExe/                              PlanExe-prompt-lab/
     runner.py                           prompts/              ← registered system prompts
     register_prompt.py                  history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment
-    identify_potential_levers.py        run_optimization_iteration.py
-  llm_config/
+    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + prompt + history dirs
+                                          run_analysis.py       ← Phases 1-4 orchestrator
+  llm_config/                           run_optimization_iteration.py
     baseline.json
     anthropic_claude.json
 ```

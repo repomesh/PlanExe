@@ -10,7 +10,6 @@ Usage:
         --model ollama-llama3.1
 """
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -30,10 +29,7 @@ if _worker_plan_dir not in sys.path:
     sys.path.insert(0, _worker_plan_dir)
 
 from llama_index.core.instrumentation import get_dispatcher
-from worker_plan_internal.lever.identify_potential_levers import (
-    IdentifyPotentialLevers,
-    IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT,
-)
+from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName
 from worker_plan_internal.llm_util.track_activity import TrackActivity
 from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
@@ -368,9 +364,6 @@ def run(
         if completed:
             logger.info(f"Resuming: {len(completed)} plan(s) already completed, skipping them")
 
-    system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
-    prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
-
     workers = _resolve_workers(model_names)
 
     # Write meta.json (overwrite on resume is fine — same content)
@@ -379,7 +372,6 @@ def run(
         model_info["fallbacks"] = model_names[1:]
     meta = {
         "step": "identify_potential_levers",
-        "system_prompt_sha256": prompt_sha256,
         "model": model_info,
         "workers": workers,
         "system": _collect_system_info(),

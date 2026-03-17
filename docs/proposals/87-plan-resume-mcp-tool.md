@@ -73,7 +73,7 @@ From the module docstring:
 In order to resume an unfinished run.
 Insert the run_id_dir of the thing you want to resume.
 If it's an already finished run, then remove the "999-pipeline_complete.txt" file.
-PROMPT> RUN_ID_DIR=/absolute/path/to/PlanExe_20250216_150332 python -m worker_plan_internal.plan.run_plan_pipeline
+PROMPT> ./planexe create_plan --run-id-dir /absolute/path/to/PlanExe_20250216_150332
 ```
 
 Luigi skips tasks that already have output files. No code changes needed in the pipeline itself — just don't overwrite the existing directory.

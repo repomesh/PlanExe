@@ -5,10 +5,10 @@ an iterative loop: implement a fix, test across models, analyze results, and
 decide whether to keep or revert. Each iteration produces an auditable trail
 with a PR, quantitative comparison, and a keeper verdict.
 
-Currently optimizing the `IdentifyPotentialLevers` step (14 iterations
-completed, 109 history runs). The runner infrastructure (progress tracking,
-CLI, output structure) is shared across steps; each new step requires only a
-custom adapter.
+Currently optimizing the `IdentifyPotentialLevers` step (23 iterations
+completed). The runner infrastructure (progress tracking, CLI, output
+structure) is shared across steps; each new step requires only a custom
+adapter.
 
 See [proposal 117](../docs/proposals/117-system-prompt-optimizer.md) for the
 full design and current status.
@@ -222,6 +222,15 @@ Removed models:
 | 12 | [#286](https://github.com/PlanExeOrg/PlanExe/pull/286) | Remove max_length=7 hard constraint on levers | YES |
 | 13 | [#289](https://github.com/PlanExeOrg/PlanExe/pull/289) | Add options count and review format validators | CONDITIONAL |
 | 14 | [#292](https://github.com/PlanExeOrg/PlanExe/pull/292) | Recover partial results when a call fails | YES |
+| 15 | [#294](https://github.com/PlanExeOrg/PlanExe/pull/294) | Consolidate review_lever prompt to prevent format alternation | YES |
+| 16 | [#295](https://github.com/PlanExeOrg/PlanExe/pull/295) | Continue loop after call failure instead of breaking | YES |
+| 17 | [#296](https://github.com/PlanExeOrg/PlanExe/pull/296) | Auto-correct review_lever before hard-rejecting | CONDITIONAL |
+| 18 | [#297](https://github.com/PlanExeOrg/PlanExe/pull/297) | Simplify lever prompt to restore content quality | YES |
+| 19 | [#299](https://github.com/PlanExeOrg/PlanExe/pull/299) | Remove bracket placeholders and fragile English-only validator | CONDITIONAL |
+| 20 | [#309](https://github.com/PlanExeOrg/PlanExe/pull/309) | Add option-quality reminder to call-2/3 prompts | YES |
+| 21 | [#313](https://github.com/PlanExeOrg/PlanExe/pull/313) | Add anti-fabrication reminder to call-2/3 prompts | CONDITIONAL |
+| 22 | [#316](https://github.com/PlanExeOrg/PlanExe/pull/316) | Replace two-bullet review_lever prompt with single flowing example | CONDITIONAL |
+| 23 | [#326](https://github.com/PlanExeOrg/PlanExe/pull/326) | Add second review_lever example to break template lock | KEEP |
 
 Full analysis artifacts for each iteration are in
 [PlanExe-prompt-lab/analysis/](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis).

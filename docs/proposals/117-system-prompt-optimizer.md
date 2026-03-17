@@ -8,19 +8,20 @@ By the end of this prompt optimization, the overall plan quality should have bee
 I want to track metrics for how much improvement have happened.
 
 
-## Status (2026-03-16)
+## Status (2026-03-17)
 
 ### Infrastructure
 
 - **Data repo**: [PlanExe-prompt-lab](https://github.com/PlanExeOrg/PlanExe-prompt-lab) — holds baseline data, run history, registered prompts, and analysis artifacts.
 - **Baseline data**: 5 train plans × 9 verify plans, extracted from zips into `baseline/train/` and `baseline/verify/`.
 - **Runner** (`self_improve/runner.py`): re-executes a single pipeline step with a candidate system prompt against baseline plans. Auto-incrementing history in `history/{bucket}/{counter}_{step}/`. Supports `--system-prompt-file`, `--model`, `--prompt-lab-dir`, resume, and parallel workers.
-- **Analysis pipeline** (4 phases in `analysis/`):
-  - Phase 0: `create_analysis_dir.py` — creates analysis dir with unanalyzed runs.
+- **Analysis pipeline** (5 phases in `analysis/`):
+  - Phase 0: `prepare_iteration.py` — verifies PR state, resolves prompt, pre-creates history dirs, and writes analysis `meta.json` with PR info. Replaces the former `create_analysis_dir.py` + `update_meta_pr.py`.
   - Phase 1: `run_insight.py` — Claude Code + Codex in parallel produce independent `insight_*.md` files with quantitative metrics and PR impact verdicts.
   - Phase 2: `run_code_review.py` — both agents review PlanExe source code, producing `code_*.md` with file:line references.
   - Phase 3: `run_synthesis.py` — single agent reconciles all findings into `synthesis.md` with top 5 ranked directions.
   - Phase 4: `run_assessment.py` — before/after comparison, metric table, keeper verdict (YES/NO/CONDITIONAL), and evaluation of the synthesis recommendation for the next iteration.
+  - `run_analysis.py` — orchestrates phases 1–4 sequentially; stops hard on first phase failure.
 - **`run_optimization_iteration.py`** — orchestrates a full loop: implement recommendation → create PR → run experiments → run analysis pipeline. Supports `--skip-implement`, `--skip-runner`, `--skip-analysis`, `--models`.
 - **Conventions**: [`analysis/AGENTS.md`](https://github.com/PlanExeOrg/PlanExe-prompt-lab/blob/main/analysis/AGENTS.md).
 
@@ -44,7 +45,7 @@ Removed: GLM (PR #266, schema-echoing), StepFun (removed from config), nemotron 
 
 Currently optimizing: `identify_potential_levers` (the first step after plan intake).
 
-109 history runs completed (runs 00–108), 15 analysis rounds (0–14).
+24 analysis rounds (0–23).
 
 | Iter | PR | Change | Verdict | Runs | Analysis |
 |------|-----|--------|---------|------|----------|
@@ -63,6 +64,15 @@ Currently optimizing: `identify_potential_levers` (the first step after plan int
 | 12 | [#286](https://github.com/PlanExeOrg/PlanExe/pull/286) | Remove max_length=7 hard constraint on levers | YES | 88–94 | [analysis/12](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/12_identify_potential_levers) |
 | 13 | [#289](https://github.com/PlanExeOrg/PlanExe/pull/289) | Add options count and review format validators | CONDITIONAL | 95–101 | [analysis/13](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/13_identify_potential_levers) |
 | 14 | [#292](https://github.com/PlanExeOrg/PlanExe/pull/292) | Recover partial results when a call fails | YES | 102–108 | [analysis/14](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/14_identify_potential_levers) |
+| 15 | [#294](https://github.com/PlanExeOrg/PlanExe/pull/294) | Consolidate review_lever prompt to prevent format alternation | YES | 09–16 | [analysis/15](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/15_identify_potential_levers) |
+| 16 | [#295](https://github.com/PlanExeOrg/PlanExe/pull/295) | Continue loop after call failure instead of breaking | YES | 17–23 | [analysis/16](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/16_identify_potential_levers) |
+| 17 | [#296](https://github.com/PlanExeOrg/PlanExe/pull/296) | Auto-correct review_lever before hard-rejecting | CONDITIONAL | 24–30 | [analysis/17](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/17_identify_potential_levers) |
+| 18 | [#297](https://github.com/PlanExeOrg/PlanExe/pull/297) | Simplify lever prompt to restore content quality | YES | 31–37 | [analysis/18](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/18_identify_potential_levers) |
+| 19 | [#299](https://github.com/PlanExeOrg/PlanExe/pull/299) | Remove bracket placeholders and fragile English-only validator | CONDITIONAL | 38–45 | [analysis/19](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/19_identify_potential_levers) |
+| 20 | [#309](https://github.com/PlanExeOrg/PlanExe/pull/309) | Add option-quality reminder to call-2/3 prompts | YES | 46–52 | [analysis/20](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/20_identify_potential_levers) |
+| 21 | [#313](https://github.com/PlanExeOrg/PlanExe/pull/313) | Add anti-fabrication reminder to call-2/3 prompts | CONDITIONAL | 53–59 | [analysis/21](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/21_identify_potential_levers) |
+| 22 | [#316](https://github.com/PlanExeOrg/PlanExe/pull/316) | Replace two-bullet review_lever prompt with single flowing example | CONDITIONAL | 60–66 | [analysis/22](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/22_identify_potential_levers) |
+| 23 | [#326](https://github.com/PlanExeOrg/PlanExe/pull/326) | Add second review_lever example to break template lock | KEEP | 67–73 | [analysis/23](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis/23_identify_potential_levers) |
 
 ### Key Improvements So Far
 
@@ -91,16 +101,18 @@ Comparing iteration 0 (baseline) to iteration 14 (current state):
 
 ### Current State of `identify_potential_levers.py`
 
-After 14 iterations, the step has these characteristics:
+After 23 iterations, the step has these characteristics:
 
 - System prompt says "5 to 7 levers per response", schema has `min_length=5` (no `max_length` — downstream dedup handles extras)
 - Follow-up calls use novelty-aware prompts (exclude already-generated lever names)
 - Each LLM call gets a fresh context (no chat history accumulation)
 - Naming guidance says "avoid formulaic patterns or repeated prefixes" (no template)
-- Pydantic validators: `check_option_count` (exactly 3 options), `check_review_format` (requires "Controls" + "Weakness:")
+- Pydantic validators: `check_option_count` (exactly 3 options), `check_review_format` (structural only — min length + no bracket placeholders, language-agnostic)
 - Partial result recovery: if call 2 or 3 fails, keep levers from prior successful calls instead of discarding everything
 - Quality gate: duplicate name filter (language-agnostic)
-- Registered prompt: `prompt_2` (aligned with code changes)
+- `review_lever` prompt uses two structurally distinct examples to prevent template lock
+- `OPTIMIZE_INSTRUCTIONS` documents 6 known problems (including template lock)
+- Registered prompt: `prompt_7`
 
 ### Not Started
 
@@ -111,12 +123,10 @@ After 14 iterations, the step has these characteristics:
 
 ### Next Steps
 
-1. **Fix the `review_lever` prompt** — replace two-bullet instruction with a single combined example. Weaker models (llama3.1) interpret "Controls..." and "Weakness:..." as two alternative formats and alternate between them, causing call-1 failures. Full cross-agent consensus on this as the dominant remaining reliability issue.
-2. **Change `break` to `continue` after call-2 failure** — allow call-3 to run even if call-2 fails. Currently a call-2 failure silently suppresses call-3. Output could double from ~7 to ~14 levers when only call-2 fails.
-3. **Add partial-recovery telemetry** — emit an event in `events.jsonl` when partial recovery triggers. Currently the `break` exits silently with no audit trail.
-4. **Fix qwen3 consequence contamination** — ~67% of qwen3 levers copy `review_lever` text verbatim into `consequences`. No validator or repair pass touches this yet.
-5. **Build a deterministic evaluator** — compute metrics (uniqueness, option count, template leakage, format compliance) without LLM calls. Makes assessment reproducible and fast.
-6. **Move to the next pipeline step** once `identify_potential_levers` is stable.
+1. **Reduce remaining llama3.1 template lock** — after iteration 23, llama3.1 still shows ~71% template lock on "This lever governs the tension". Consider adding an explicit anti-pattern prohibition.
+2. **Address gpt-5-nano second-example lock** — gpt-5-nano swapped one template lock for another (now copies the second example's format). May need a third structurally distinct example or different approach.
+3. **Build a deterministic evaluator** — compute metrics (uniqueness, option count, template leakage, format compliance) without LLM calls. Makes assessment reproducible and fast.
+4. **Move to the next pipeline step** once `identify_potential_levers` is stable.
 
 
 ## Stage 1 - one improvement iteration
@@ -324,12 +334,12 @@ prompts/
     prompt_2_long-sha-here.txt
 analysis/
   AGENTS.md                         # conventions for analysis artifacts
-  create_analysis_dir.py            # phase 0: create analysis dir with unanalyzed runs
+  prepare_iteration.py              # phase 0: verify PR, resolve prompt, pre-create history dirs
+  run_analysis.py                   # orchestrates phases 1-4 sequentially
   run_insight.py                    # phase 1: Claude + Codex insight in parallel
   run_code_review.py                # phase 2: Claude + Codex code review in parallel
   run_synthesis.py                  # phase 3: Claude synthesis (single agent)
   run_assessment.py                 # phase 4: before/after comparison + verdict
-  update_meta_pr.py                 # register PR info in meta.json
   0_identify_potential_levers/      # pre-fix analysis (runs 00-08)
     meta.json
     insight_claude.md

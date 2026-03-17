@@ -2,7 +2,7 @@
 
 ## What this does
 
-Optimizes system prompts and validation logic for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers` (14 iterations completed, 109 history runs); will extend to other pipeline tasks.
+Optimizes system prompts and validation logic for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers` (23 iterations completed); will extend to other pipeline tasks.
 
 ## Optimization Flow
 

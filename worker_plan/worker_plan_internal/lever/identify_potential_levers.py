@@ -66,6 +66,10 @@ Known problems to guard against
   perfectly valid levers whenever the model responds in the prompt's
   language. Prefer structural checks (field count, JSON shape) over
   language-dependent string matching.
+- Single-example template lock. When the prompt provides exactly one
+  review_lever example, weaker models reproduce that exact syntax 90–100%
+  of the time. Always provide at least two structurally distinct examples
+  to give models variety to draw from.
 """
 
 class Lever(BaseModel):
@@ -91,9 +95,13 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "A short critical review of this lever (two sentences). "
-            "Example: 'This lever governs the tension between centralization "
-            "and local autonomy, but the options overlook transition costs.' "
+            "A short critical review of this lever — name the core tension, "
+            "then identify a weakness the options miss. "
+            "Examples: "
+            "'This lever governs the tension between centralization and local "
+            "autonomy, but the options overlook transition costs.' "
+            "'Prioritizing speed over reliability carries hidden costs: none of "
+            "the options address rollback complexity.' "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -184,10 +192,13 @@ class LeverCleaned(BaseModel):
     )
     review: str = Field(
         description=(
-            "Two sentences. First sentence names the core tension this lever "
-            "controls. Second sentence identifies a weakness the options miss. "
-            "Example: 'Controls centralization vs. local autonomy. "
-            "Weakness: The options fail to account for transition costs.' "
+            "A short critical review — name the core tension, then identify "
+            "a weakness the options miss. "
+            "Examples: "
+            "'This lever governs the tension between centralization and local "
+            "autonomy, but the options overlook transition costs.' "
+            "'Prioritizing speed over reliability carries hidden costs: none of "
+            "the options address rollback complexity.' "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -212,9 +223,11 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - Ensure levers challenge core project assumptions
 
 4. **Validation Protocols**
-   - For `review_lever` (one field, two sentences):
+   - For `review_lever`:
      A short critical review — name the core tension, then identify a weakness the options miss.
-     Example: "This lever governs the tension between centralization and local autonomy, but the options overlook transition costs."
+     Examples:
+     - "This lever governs the tension between centralization and local autonomy, but the options overlook transition costs."
+     - "Prioritizing speed over reliability carries hidden costs: none of the options address rollback complexity."
      Do not use square brackets or placeholder text.
    - For `summary`:
      One sentence prescribing a concrete addition to a specific lever.

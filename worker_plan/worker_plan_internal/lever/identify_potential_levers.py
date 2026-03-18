@@ -284,12 +284,13 @@ class IdentifyPotentialLevers:
             content=system_prompt,
         )
 
-        total_calls = 3
+        min_levers = 15
+        max_calls = 5
         responses: list[DocumentDetails] = []
         metadata_list: list[dict] = []
         generated_lever_names: list[str] = []
 
-        for call_index in range(1, total_calls + 1):
+        for call_index in range(1, max_calls + 1):
             if call_index == 1:
                 prompt_content = user_prompt
             else:
@@ -300,7 +301,7 @@ class IdentifyPotentialLevers:
                     f"{user_prompt}"
                 )
 
-            logger.info(f"Processing call {call_index} of {total_calls}")
+            logger.info(f"Processing call {call_index} of {max_calls} (have {len(generated_lever_names)} levers, need {min_levers})")
             call_messages = [
                 system_message,
                 ChatMessage(
@@ -337,7 +338,7 @@ class IdentifyPotentialLevers:
                 if len(responses) == 0:
                     raise llm_error from e
                 logger.warning(
-                    f"Call {call_index} of {total_calls} failed [{llm_error.error_id}], "
+                    f"Call {call_index} of {max_calls} failed [{llm_error.error_id}], "
                     f"continuing with {len(responses)} prior call(s)."
                 )
                 continue
@@ -345,6 +346,10 @@ class IdentifyPotentialLevers:
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)
             metadata_list.append(result["metadata"])
+
+            if len(generated_lever_names) >= min_levers:
+                logger.info(f"Reached {len(generated_lever_names)} levers after {call_index} calls, stopping.")
+                break
 
         # from the raw_responses, extract the levers into a flatten list
         levers_raw: list[Lever] = []

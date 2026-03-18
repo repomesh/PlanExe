@@ -32,9 +32,11 @@ from llama_index.core.instrumentation import get_dispatcher
 from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName
 from worker_plan_internal.llm_util.track_activity import TrackActivity
-from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path
+from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path, record_usage_metric
 
 logger = logging.getLogger(__name__)
+
+
 
 # Lock for thread-safe writes to shared files and global state
 _file_lock = threading.Lock()
@@ -147,6 +149,77 @@ def run_single_plan(
             set_usage_metrics_path(None)
             dispatcher.event_handlers.remove(track_activity)
         track_activity_path.unlink(missing_ok=True)
+        _maybe_generate_activity_overview(plan_output_dir)
+
+
+def _maybe_generate_activity_overview(plan_output_dir: Path) -> None:
+    """Generate activity_overview.json from usage_metrics.jsonl if missing.
+
+    This covers backends (e.g. Anthropic) where LlamaIndex instrumentation
+    events don't fire, so TrackActivity never writes activity_overview.json,
+    but the Anthropic httpx hook has written token counts to usage_metrics.jsonl.
+    """
+    overview_path = plan_output_dir / "activity_overview.json"
+    if overview_path.exists():
+        return
+
+    metrics_path = plan_output_dir / "usage_metrics.jsonl"
+    if not metrics_path.exists():
+        return
+
+    models: dict[str, dict] = {}
+    for line in metrics_path.read_text().splitlines():
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except Exception:
+            continue
+        if not row.get("success"):
+            continue
+        # Only generate if we have token counts (otherwise nothing useful to add)
+        input_tokens = row.get("input_tokens")
+        output_tokens = row.get("output_tokens")
+        if input_tokens is None and output_tokens is None:
+            continue
+
+        model_name = row.get("model", "unknown")
+        stats = models.setdefault(model_name, {
+            "total_cost": 0.0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "thinking_tokens": 0,
+            "total_tokens": 0,
+            "calls": 0,
+        })
+        inp = int(input_tokens or 0)
+        out = int(output_tokens or 0)
+        think = int(row.get("thinking_tokens") or 0)
+        cost = float(row.get("cost_usd") or 0.0)
+        stats["input_tokens"] += inp
+        stats["output_tokens"] += out
+        stats["thinking_tokens"] += think
+        stats["total_tokens"] += inp + out + think
+        stats["total_cost"] += cost
+        stats["calls"] += 1
+
+    if not models:
+        return
+
+    overview = {
+        "last_updated": datetime.now().isoformat(),
+        "models": models,
+        "total_cost": sum(m["total_cost"] for m in models.values()),
+        "total_input_tokens": sum(m["input_tokens"] for m in models.values()),
+        "total_output_tokens": sum(m["output_tokens"] for m in models.values()),
+        "total_thinking_tokens": sum(m["thinking_tokens"] for m in models.values()),
+        "total_tokens": sum(m["total_tokens"] for m in models.values()),
+    }
+    try:
+        overview_path.write_text(json.dumps(overview, indent=2, sort_keys=True))
+        logger.info("Generated %s from usage_metrics.jsonl", overview_path)
+    except Exception as exc:
+        logger.warning("Failed to generate activity_overview.json: %s", exc)
 
 
 def _run_cmd(cmd: list[str]) -> str | None:

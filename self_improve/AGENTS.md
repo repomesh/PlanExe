@@ -110,9 +110,6 @@ PlanExe/                              PlanExe-prompt-lab/
                                         run_optimization_iteration.py
 ```
 
-> **Note:** `register_prompt.py` was removed. Prompt registration is now
-> handled by `prepare_iteration.py` in PlanExe-prompt-lab.
-
 ## Analysis Artifacts Per Iteration
 
 Each iteration produces a numbered directory in `analysis/`:

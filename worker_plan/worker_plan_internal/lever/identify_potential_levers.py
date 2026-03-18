@@ -86,13 +86,6 @@ class Lever(BaseModel):
     name: str = Field(
         description="Name of this lever."
     )
-    lever_classification: str = Field(
-        description=(
-            "Brief classification: category and what this lever controls. "
-            "Format: 'category — what this lever decides'. "
-            "Example: 'governance — who oversees the review process'."
-        )
-    )
     consequences: str = Field(
         description=(
             "What happens when this lever is pulled? Describe the direct effect and "
@@ -115,14 +108,13 @@ class Lever(BaseModel):
             "Do not use square brackets or placeholder text."
         )
     )
-
-    @field_validator('lever_classification', mode='after')
-    @classmethod
-    def check_lever_classification(cls, v):
-        """Ensure lever_classification is a substantive phrase, not a single word."""
-        if len(v) < 10:
-            raise ValueError(f"lever_classification is too short ({len(v)} chars); expected at least 10")
-        return v
+    lever_classification: str = Field(
+        description=(
+            "Brief classification: category and what this lever controls. "
+            "Format: 'category — what this lever decides'. "
+            "Example: 'governance — who oversees the review process'."
+        )
+    )
 
     @field_validator('options', mode='before')
     @classmethod
@@ -162,10 +154,18 @@ class Lever(BaseModel):
         - minimum length (at least 50 characters)
         - no square-bracket placeholders (e.g. [Tension A])
         """
-        if len(v) < 50:
-            raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 50")
+        if len(v) < 10:
+            raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 10")
         if '[' in v or ']' in v:
             raise ValueError("review_lever must not contain square-bracket placeholders")
+        return v
+
+    @field_validator('lever_classification', mode='after')
+    @classmethod
+    def check_lever_classification(cls, v):
+        """Ensure lever_classification is a substantive phrase, not a single word."""
+        if len(v) < 10:
+            raise ValueError(f"lever_classification is too short ({len(v)} chars); expected at least 10")
         return v
 
 class DocumentDetails(BaseModel):

@@ -64,6 +64,26 @@ def get_usage_metrics_path() -> Optional[Path]:
     return getattr(_thread_local, "usage_metrics_path", None)
 
 
+def set_captured_llm_usage(usage: dict | None, model: str | None = None) -> None:
+    """Store captured LLM usage data (e.g. from an httpx hook) in thread-local storage.
+
+    This is consumed by ``pop_captured_llm_usage`` in LLMExecutor to enrich
+    usage metrics for backends that bypass LlamaIndex instrumentation
+    (e.g. Anthropic).
+    """
+    _thread_local.captured_usage = usage
+    _thread_local.captured_model = model
+
+
+def pop_captured_llm_usage() -> tuple[dict | None, str | None]:
+    """Retrieve and clear captured LLM usage data from thread-local storage."""
+    usage = getattr(_thread_local, "captured_usage", None)
+    model = getattr(_thread_local, "captured_model", None)
+    _thread_local.captured_usage = None
+    _thread_local.captured_model = None
+    return usage, model
+
+
 def record_usage_metric(
     model: str,
     duration_seconds: float,

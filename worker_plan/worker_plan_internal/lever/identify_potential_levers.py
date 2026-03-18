@@ -13,7 +13,7 @@ PROMPT> python -m worker_plan_internal.lever.identify_potential_levers
 import json
 import logging
 from pathlib import Path
-from typing import ClassVar, Optional
+from typing import Optional
 from dataclasses import dataclass
 import uuid
 from llama_index.core.llms.llm import LLM
@@ -86,16 +86,11 @@ class Lever(BaseModel):
     name: str = Field(
         description="Name of this lever."
     )
-    lever_type: str = Field(
+    lever_classification: str = Field(
         description=(
-            "Category of this lever. Must be one of: "
-            "methodology, execution, governance, dissemination, product, operations."
-        )
-    )
-    decision_axis: str = Field(
-        description=(
-            "One sentence describing the controllable choice this lever represents. "
-            "Use the template: 'This lever controls X by choosing between A, B, and C.'"
+            "Brief classification: category and what this lever controls. "
+            "Format: 'category — what this lever decides'. "
+            "Example: 'governance — who oversees the review process'."
         )
     )
     consequences: str = Field(
@@ -121,25 +116,12 @@ class Lever(BaseModel):
         )
     )
 
-    VALID_LEVER_TYPES: ClassVar[set[str]] = {"methodology", "execution", "governance", "dissemination", "product", "operations"}
-
-    @field_validator('lever_type', mode='after')
+    @field_validator('lever_classification', mode='after')
     @classmethod
-    def normalize_lever_type(cls, v):
-        """Normalize and validate lever_type against the allowed set."""
-        normalized = v.strip().lower()
-        if normalized not in cls.VALID_LEVER_TYPES:
-            raise ValueError(
-                f"lever_type must be one of {sorted(cls.VALID_LEVER_TYPES)}, got {v!r}"
-            )
-        return normalized
-
-    @field_validator('decision_axis', mode='after')
-    @classmethod
-    def check_decision_axis(cls, v):
-        """Ensure decision_axis is a substantive sentence, not a label."""
-        if len(v) < 20:
-            raise ValueError(f"decision_axis is too short ({len(v)} chars); expected at least 20")
+    def check_lever_classification(cls, v):
+        """Ensure lever_classification is a substantive phrase, not a single word."""
+        if len(v) < 10:
+            raise ValueError(f"lever_classification is too short ({len(v)} chars); expected at least 10")
         return v
 
     @field_validator('options', mode='before')
@@ -210,11 +192,8 @@ class LeverCleaned(BaseModel):
     name: str = Field(
         description="Name of this lever."
     )
-    lever_type: str = Field(
-        description="Category: methodology, execution, governance, dissemination, product, or operations."
-    )
-    decision_axis: str = Field(
-        description="One sentence describing the controllable choice this lever represents."
+    lever_classification: str = Field(
+        description="Brief classification: category and what this lever decides."
     )
     consequences: str = Field(
         description=(
@@ -245,8 +224,10 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
 2. **Lever Classification**
-   - `lever_type`: classify each lever as one of: methodology, execution, governance, dissemination, product, operations.
-   - `decision_axis`: write one sentence describing the controllable choice. Use the template: "This lever controls X by choosing between A, B, and C." The axis must be a single, crisp decision — not a topic or workstream.
+   - `lever_classification`: a brief phrase with the category and what the lever decides.
+   - Format: "category — what this lever decides".
+   - Categories: methodology, execution, governance, dissemination, product, operations.
+   - Examples: "governance — who oversees the review process", "methodology — which data collection approach to use", "execution — how to sequence the rollout phases".
 
 3. **Lever Quality Standards**
    - Consequences: describe the direct effect of pulling this lever, then at least one downstream implication or trade-off. Be concise and grounded — only cite specific numbers if the project context provides evidence for them. Do not fabricate percentages or cost estimates. Target length: 2–4 sentences.
@@ -383,8 +364,7 @@ class IdentifyPotentialLevers:
             lever_cleaned = LeverCleaned(
                 lever_id=lever_id,
                 name=lever.name,
-                lever_type=lever.lever_type,
-                decision_axis=lever.decision_axis,
+                lever_classification=lever.lever_classification,
                 consequences=lever.consequences,
                 options=lever.options,
                 review=lever.review_lever,

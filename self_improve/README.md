@@ -163,7 +163,7 @@ PlanExe/                              PlanExe-prompt-lab/
   self_improve/                     baseline/train/       ← gold-standard outputs
     runner.py                           history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment
-    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history + prompt registration
+    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history dirs
                                           run_analysis.py       ← Phases 1-4 orchestrator
   llm_config/                           run_optimization_iteration.py
     baseline.json

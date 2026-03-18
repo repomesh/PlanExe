@@ -118,6 +118,15 @@ shows as 0.0 in `activity_overview.json`.
 OpenRouter returns cost directly in usage responses, so the `pricing` field
 serves as a cross-check there.
 
+### Anthropic Token Capture
+
+LlamaIndex's Anthropic integration bypasses `self.chat()` and instrumentation
+events never fire, so token counts are lost. PlanExe works around this by
+patching `httpx.Client.send` to intercept the raw Anthropic API response and
+capture the `usage` dict. This hook is installed automatically when any LLM
+config is loaded (via `llm_factory._load_llm_config()`). The captured tokens
+are used for both `usage_metrics.jsonl` and `activity_overview.json`.
+
 ## Adding a New Model
 
 1. Choose the appropriate profile file (or create entries in multiple profiles).

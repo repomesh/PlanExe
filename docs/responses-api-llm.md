@@ -150,7 +150,7 @@ When modifying this file:
 ### Quick smoke test
 
 ```bash
-cd /path/to/PlanExe2026
+cd /path/to/PlanExe
 source .venv/bin/activate
 python3 -c "
 import os

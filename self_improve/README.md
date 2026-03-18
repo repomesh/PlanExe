@@ -51,8 +51,9 @@ python run_optimization_iteration.py --skip-implement --skip-runner
 See `run_optimization_iteration.py --help` for all options.
 
 **Important:** Do NOT merge the PR before the verdict. The correct order is:
-create PR → run experiments → run analysis → read verdict → merge only if
-verdict confirms improvement.
+create PR → run experiments → run analysis → read verdict → post verdict as a
+comment on the PR → merge only if verdict confirms improvement. The PR comment
+creates a permanent record of why the PR was merged or closed.
 
 ### Running analysis phases
 
@@ -96,8 +97,9 @@ which has the required llama_index dependencies.
     --model ollama-llama3.1
 ```
 
-The runner always uses the `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT` constant
-from PlanExe's code — there is no external prompt file or CLI override.
+The runner imports and executes the step's source files directly from PlanExe's
+code — there is no external prompt file or CLI override. Changes to system
+prompts, Pydantic schemas, or validation logic all take effect at run time.
 
 ### Options
 
@@ -161,7 +163,7 @@ PlanExe/                              PlanExe-prompt-lab/
   self_improve/                     baseline/train/       ← gold-standard outputs
     runner.py                           history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment
-    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history dirs
+    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history + prompt registration
                                           run_analysis.py       ← Phases 1-4 orchestrator
   llm_config/                           run_optimization_iteration.py
     baseline.json
@@ -232,13 +234,15 @@ Full analysis artifacts for each iteration are in
 ## Critical Rules
 
 1. **Do NOT merge PRs before the verdict.** Create PR → run experiments → run
-   analysis → read verdict → merge only if confirmed.
+   analysis → read verdict → post verdict as a comment on the PR → merge only
+   if confirmed.
 2. **No hardcoded English keywords in validators.** PlanExe users create plans
    in many languages. All validation must be language-agnostic.
 3. **Never delete from the history directory.** Runs are permanent records.
-4. **The runner always uses the code constant.** There is no external prompt file
-   or CLI override. To change the prompt, modify `identify_potential_levers.py`
-   on the PR branch before running experiments.
+4. **The runner imports and executes the step's source files directly.** There is
+   no external prompt file or CLI override. To change the prompt, Pydantic schema,
+   or validation logic, modify the source file on the PR branch before running
+   experiments.
 5. **Verify the runner is on the PR branch, not main.** The runner imports code
    from PlanExe, so it must be on the PR branch to test the PR's changes.
    `run_optimization_iteration.py` verifies this automatically. Iteration 24

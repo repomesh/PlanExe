@@ -110,6 +110,9 @@ PlanExe/                              PlanExe-prompt-lab/
                                         run_optimization_iteration.py
 ```
 
+> **Note:** `register_prompt.py` was removed. Prompt registration is now
+> handled by `prepare_iteration.py` in PlanExe-prompt-lab.
+
 ## Analysis Artifacts Per Iteration
 
 Each iteration produces a numbered directory in `analysis/`:
@@ -153,8 +156,9 @@ format, content depth, and cross-call duplication.
 ## Critical Rules
 
 1. **Do NOT merge PRs before the verdict.** The correct order is: create PR → run
-   experiments on the branch → run analysis → read verdict → merge only if the
-   verdict confirms improvement. Merging before collecting evidence defeats the
+   experiments on the branch → run analysis → read verdict → post verdict as a
+   comment on the PR → merge only if the verdict confirms improvement. The PR
+   comment creates a permanent record of why the PR was merged or closed. Merging before collecting evidence defeats the
    purpose of the iteration.
 
 2. **No hardcoded English keywords in validators.** PlanExe users create plans in
@@ -166,10 +170,10 @@ format, content depth, and cross-call duplication.
    even if flawed. Analysis can note that a run was problematic, but the artifacts
    must remain.
 
-4. **The runner always uses the code constant.** There is no external prompt file
-   or CLI override — the runner uses `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT`
-   from PlanExe's code. To change the prompt, modify `identify_potential_levers.py`
-   on the PR branch before running experiments.
+4. **The runner imports and executes the step's source files directly.** There is
+   no external prompt file or CLI override. To change the prompt, Pydantic schema,
+   or validation logic, modify the source file on the PR branch before running
+   experiments.
 
 5. **Verify the runner is on the PR branch, not main.** The runner imports code
    from PlanExe, so it must be on the PR branch to test the PR's changes.

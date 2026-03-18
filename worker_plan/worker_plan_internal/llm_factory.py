@@ -58,6 +58,11 @@ def _load_llm_config(model_profile: Optional[ModelProfileEnum | str]) -> PlanExe
         load_pricing_from_llm_config(planexe_llmconfig.llm_config_dict)
     except Exception:
         logger.debug("Failed to load model pricing from config", exc_info=True)
+    try:
+        from worker_plan_internal.llm_util.usage_metrics import install_anthropic_usage_hook
+        install_anthropic_usage_hook()
+    except Exception:
+        logger.debug("Failed to install Anthropic usage hook", exc_info=True)
     return planexe_llmconfig
 
 

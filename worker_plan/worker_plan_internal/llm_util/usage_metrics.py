@@ -84,6 +84,46 @@ def pop_captured_llm_usage() -> tuple[dict | None, str | None]:
     return usage, model
 
 
+def install_anthropic_usage_hook() -> None:
+    """Patch ``httpx.Client.send`` to capture token usage from Anthropic API responses.
+
+    LlamaIndex's Anthropic integration overrides ``structured_predict()`` and
+    bypasses ``self.chat()``, so instrumentation events never fire and token
+    counts / costs are lost.  This hook intercepts the raw HTTP response from
+    ``api.anthropic.com``, extracts the ``usage`` dict, and stores it via
+    ``set_captured_llm_usage`` so that ``LLMExecutor._record_attempt_token_metrics``
+    can include token counts and estimated cost.
+
+    Safe to call multiple times (idempotent).  Only patches if ``httpx`` is
+    available.
+    """
+    try:
+        import httpx
+    except ImportError:
+        return
+
+    if getattr(httpx.Client, "_planexe_usage_patched", False):
+        return
+
+    original_send = httpx.Client.send
+
+    def _patched_send(self, *args, **kwargs):
+        response = original_send(self, *args, **kwargs)
+        try:
+            url = str(response.url) if hasattr(response, "url") else ""
+            if "anthropic.com" in url and response.status_code == 200:
+                data = response.json()
+                if isinstance(data, dict) and "usage" in data:
+                    set_captured_llm_usage(data["usage"], data.get("model", "unknown"))
+        except Exception:
+            pass
+        return response
+
+    httpx.Client.send = _patched_send
+    httpx.Client._planexe_usage_patched = True
+    logger.info("Installed Anthropic httpx usage hook")
+
+
 def record_usage_metric(
     model: str,
     duration_seconds: float,

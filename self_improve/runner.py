@@ -32,55 +32,11 @@ from llama_index.core.instrumentation import get_dispatcher
 from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName
 from worker_plan_internal.llm_util.track_activity import TrackActivity
-from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path, record_usage_metric, set_captured_llm_usage
+from worker_plan_internal.llm_util.usage_metrics import set_usage_metrics_path, record_usage_metric
 
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Anthropic usage capture
-# ---------------------------------------------------------------------------
-# LlamaIndex's Anthropic integration overrides structured_predict() and
-# bypasses self.chat(), so instrumentation events never fire and token
-# counts / costs are lost.  We work around this by patching the httpx
-# client used by the Anthropic SDK to capture the raw API response's
-# ``usage`` dict and feed it into TrackActivity + record_usage_metric.
-# ---------------------------------------------------------------------------
-
-def _install_anthropic_usage_hook(model_names: list[str]) -> None:
-    """Patch httpx.Client.send to capture usage from Anthropic API responses.
-
-    Only patches if an Anthropic model is in the model list.
-    Safe to call multiple times (idempotent).
-    """
-    if not any("anthropic" in name for name in model_names):
-        return
-
-    try:
-        import httpx
-    except ImportError:
-        return
-
-    if getattr(httpx.Client, "_planexe_usage_patched", False):
-        return
-
-    original_send = httpx.Client.send
-
-    def _patched_send(self, *args, **kwargs):
-        response = original_send(self, *args, **kwargs)
-        try:
-            url = str(response.url) if hasattr(response, "url") else ""
-            if "anthropic.com" in url and response.status_code == 200:
-                data = response.json()
-                if isinstance(data, dict) and "usage" in data:
-                    set_captured_llm_usage(data["usage"], data.get("model", "unknown"))
-        except Exception:
-            pass
-        return response
-
-    httpx.Client.send = _patched_send
-    httpx.Client._planexe_usage_patched = True
-    logger.info("Installed Anthropic httpx usage hook")
 
 # Lock for thread-safe writes to shared files and global state
 _file_lock = threading.Lock()
@@ -495,9 +451,6 @@ def run(
       - events.jsonl    (one level above output_dir) — significant events as they happen
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Install Anthropic usage hook before any LLM calls.
-    _install_anthropic_usage_hook(model_names)
 
     run_dir = output_dir.parent
 

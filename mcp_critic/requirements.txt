@@ -1,0 +1,9 @@
+# mcp_critic dependencies
+# All heavy deps (mcp, pydantic, llama-index-core, httpx) are already
+# present in the main project's requirements. This file lists only
+# what is needed if running mcp_critic in isolation.
+
+mcp
+pydantic
+llama-index-core
+httpx

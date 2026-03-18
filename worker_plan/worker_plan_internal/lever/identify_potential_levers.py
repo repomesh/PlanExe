@@ -104,16 +104,7 @@ class Lever(BaseModel):
         description=(
             "A short critical review of this lever — name the core tension, "
             "then identify a weakness the options miss. "
-            "Examples: "
-            "'Switching from seasonal contract labor to year-round employees "
-            "stabilizes harvest quality, but none of the options price in the "
-            "idle-wage burden during the 5-month off-season.' "
-            "'Routing the light-rail extension through the historic district "
-            "unlocks ridership but triggers Section 106 heritage review; the "
-            "options assume permits will clear on the standard timeline.' "
-            "'Pooling catastrophe risk across three coastal regions diversifies "
-            "exposure on paper, but the options neglect that a single hurricane "
-            "season can correlate all three simultaneously.' "
+            "See system prompt section 4 for examples. "
             "Do not use square brackets or placeholder text."
         )
     )
@@ -232,7 +223,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
      Examples:
      - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but none of the options price in the idle-wage burden during the 5-month off-season."
      - "Routing the light-rail extension through the historic district unlocks ridership but triggers Section 106 heritage review; the options assume permits will clear on the standard timeline."
-     - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but the options neglect that a single hurricane season can correlate all three simultaneously."
+     - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but a regional hurricane season can correlate all three simultaneously — correlation risk absent from every option."
      Do not use square brackets or placeholder text.
 
 5. **Prohibitions**

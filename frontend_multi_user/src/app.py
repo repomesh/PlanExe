@@ -470,7 +470,11 @@ class MyFlaskApp:
                     conn.execute(text("ALTER TABLE user_account ADD COLUMN IF NOT EXISTS frontend_multi_user_config JSON"))
 
         def _ensure_multi_api_key_columns() -> None:
-            """Add columns for multi-API-key support (idempotent)."""
+            """Add columns for multi-API-key support (idempotent).
+
+            Each ALTER runs in its own transaction so one failure does not
+            poison the rest (PostgreSQL aborts the entire transaction on error).
+            """
             statements = (
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS key_plaintext VARCHAR(64)",
@@ -478,12 +482,12 @@ class MyFlaskApp:
                 "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
                 "ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
             )
-            with self.db.engine.begin() as conn:
-                for stmt in statements:
-                    try:
+            for stmt in statements:
+                try:
+                    with self.db.engine.begin() as conn:
                         conn.execute(text(stmt))
-                    except Exception as exc:
-                        logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
+                except Exception as exc:
+                    logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
         def _ensure_step_count_columns() -> None:
             insp = inspect(self.db.engine)
@@ -527,13 +531,16 @@ class MyFlaskApp:
             created before the TaskState → PlanState Python rename
             (proposal 74).  Fresh databases will have ``planstate``.
             We try both names.
+
+            Each ALTER TYPE runs in its own transaction so a failure for
+            one enum name does not poison the attempt for the other.
             """
-            with self.db.engine.begin() as conn:
-                for type_name in ("taskstate", "planstate"):
-                    try:
+            for type_name in ("taskstate", "planstate"):
+                try:
+                    with self.db.engine.begin() as conn:
                         conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
-                    except Exception as exc:
-                        logger.debug("ALTER TYPE %s: %s", type_name, exc)
+                except Exception as exc:
+                    logger.debug("ALTER TYPE %s: %s", type_name, exc)
 
         def _ensure_last_progress_at_column() -> None:
             insp = inspect(self.db.engine)
@@ -587,23 +594,37 @@ class MyFlaskApp:
                     self.db.session.add(nonce_item)
                 self.db.session.commit()
 
+        # Arbitrary but fixed advisory-lock key used to serialize
+        # db.create_all() across concurrent gunicorn workers so they
+        # don't race on CREATE TABLE / CREATE TYPE statements.
+        _ADVISORY_LOCK_KEY = 820_191_001
+
         def _create_tables_with_retry(attempts: int = 5, delay_seconds: float = 2.0) -> None:
             last_exc: Optional[Exception] = None
             for attempt in range(1, attempts + 1):
                 try:
                     with self.app.app_context():
-                        self.db.create_all()
-                        _ensure_planitem_artifact_columns()
-                        _ensure_token_metrics_columns()
-                        _ensure_fractional_credit_columns()
-                        _ensure_user_account_columns()
-                        _ensure_multi_api_key_columns()
-                        _ensure_step_count_columns()
-                        _ensure_failure_diagnostic_columns()
-                        _ensure_stopped_state()
-                        _ensure_last_progress_at_column()
-                        _ensure_planitem_indexes()
-                        _seed_initial_records()
+                        # Acquire a session-level advisory lock so only one
+                        # worker runs DDL at a time.  Other workers block
+                        # here until the lock is released.
+                        with self.db.engine.connect() as lock_conn:
+                            lock_conn.execute(text(f"SELECT pg_advisory_lock({_ADVISORY_LOCK_KEY})"))
+                            try:
+                                self.db.create_all()
+                                _ensure_planitem_artifact_columns()
+                                _ensure_token_metrics_columns()
+                                _ensure_fractional_credit_columns()
+                                _ensure_user_account_columns()
+                                _ensure_multi_api_key_columns()
+                                _ensure_step_count_columns()
+                                _ensure_failure_diagnostic_columns()
+                                _ensure_stopped_state()
+                                _ensure_last_progress_at_column()
+                                _ensure_planitem_indexes()
+                                _seed_initial_records()
+                            finally:
+                                lock_conn.execute(text(f"SELECT pg_advisory_unlock({_ADVISORY_LOCK_KEY})"))
+                                lock_conn.commit()
                     return
                 except OperationalError as exc:
                     last_exc = exc
@@ -706,7 +727,14 @@ class MyFlaskApp:
         # 2nd time, the os.environ is the original environment of the shell + the .env content.
         # If it was the same in both cases, it would be easier to reason about the environment variables.
         # On following hot reloads, the os.environ continues to be the original environment of the shell + the .env content.
-        logger.info(f"MyFlaskApp._start_check. environment variables: {os.environ}")
+        # Log environment variable names with sensitive values redacted.
+        # This lets operators see WHICH vars are set without leaking secrets.
+        _sensitive_substrings = ("SECRET", "KEY", "PASSWORD", "TOKEN")
+        redacted_env = {
+            k: ("***REDACTED***" if any(s in k.upper() for s in _sensitive_substrings) else v)
+            for k, v in os.environ.items()
+        }
+        logger.info(f"MyFlaskApp._start_check. environment variables: {redacted_env}")
 
         issue_count = 0
         if not self.path_to_python.exists():

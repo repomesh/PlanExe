@@ -1,8 +1,8 @@
-# Agent instructions for prompt_optimizer
+# Agent instructions for self_improve
 
 ## What this does
 
-Optimizes system prompts for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers`; will extend to other pipeline tasks.
+Optimizes system prompts and validation logic for pipeline steps in `run_plan_pipeline.py`. Re-executes a step with a candidate system prompt against baseline training data and captures the output. Currently supports `IdentifyPotentialLevers` (26 iterations completed); will extend to other pipeline tasks.
 
 ## Optimization Flow
 
@@ -30,27 +30,20 @@ has an assessment verdict (YES/NO/CONDITIONAL).
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
-                    │     Step 3: Analysis pipeline         │
-                    │                                       │
-                    │  Phase 0: create_analysis_dir.py      │
-                    │    (diff history vs already-analyzed)  │
-                    │                                       │
-                    │  Phase 1: run_insight.py               │
-                    │    (Claude + Codex in parallel)        │
-                    │                                       │
-                    │  Phase 2: run_code_review.py           │
-                    │    (Claude + Codex in parallel)        │
-                    │                                       │
-                    │  Phase 3: run_synthesis.py              │
-                    │    (Claude only — reconciles analyses) │
-                    │                                       │
-                    │  Phase 4: run_assessment.py             │
-                    │    (compare before vs after, verdict)  │
+                    │     Step 3: Prepare iteration          │
+                    │  prepare_iteration.py <step> <PR#>     │
+                    │    (verify PR, pre-create history       │
+                    │     dirs, write analysis meta.json)     │
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
-                    │     Register PR in meta.json          │
-                    │  update_meta_pr.py <dir> <PR#>        │
+                    │     Step 4: Analysis pipeline          │
+                    │  run_analysis.py <analysis_dir>        │
+                    │                                       │
+                    │  Phase 1: insight (parallel agents)    │
+                    │  Phase 2: code review (parallel agents)│
+                    │  Phase 3: synthesis (single agent)     │
+                    │  Phase 4: assessment (before vs after) │
                     └──────────────┬───────────────────────┘
                                    │
                     ┌──────────────▼───────────────────────┐
@@ -79,38 +72,41 @@ experiments, and runs the full analysis pipeline. Supports `--skip-implement`,
 # Step 2: run experiments for specific models
 python run_optimization_iteration.py --skip-implement --models haiku,llama
 
-# Step 3: analysis phases individually
-python analysis/create_analysis_dir.py identify_potential_levers      # Phase 0
-python analysis/run_insight.py analysis/1_identify_potential_levers    # Phase 1
-python analysis/run_code_review.py analysis/1_identify_potential_levers # Phase 2
-python analysis/run_synthesis.py analysis/1_identify_potential_levers   # Phase 3
-python analysis/update_meta_pr.py analysis/1_identify_potential_levers 268  # Register PR
-python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 4
+# Step 3: prepare iteration (verify PR, pre-create history dirs)
+python analysis/prepare_iteration.py identify_potential_levers 326
+
+# Step 4: run all analysis phases (insight → code review → synthesis → assessment)
+python analysis/run_analysis.py analysis/12_identify_potential_levers
+
+# Or run individual phases:
+python analysis/run_insight.py analysis/12_identify_potential_levers     # Phase 1
+python analysis/run_code_review.py analysis/12_identify_potential_levers # Phase 2
+python analysis/run_synthesis.py analysis/12_identify_potential_levers   # Phase 3
+python analysis/run_assessment.py analysis/12_identify_potential_levers  # Phase 4
 ```
 
 ## Two-Repo Architecture
 
 The optimizer spans two repositories:
 
-- **PlanExe** (`prompt_optimizer/runner.py`, pipeline step source code) —
+- **PlanExe** (`self_improve/runner.py`, pipeline step source code) —
   the code being optimized. PRs are created here.
 - **PlanExe-prompt-lab** (data repo) — baseline training data, history
-  outputs, registered prompts, and analysis artifacts. No PRs; commits
+  outputs, and analysis artifacts. No PRs; commits
   directly to main.
 
 ```
 PlanExe/                              PlanExe-prompt-lab/
-  prompt_optimizer/                     baseline/train/          ← gold-standard outputs
-    runner.py                           prompts/                 ← registered system prompts
-    register_prompt.py                  history/                 ← runner output per model
+  self_improve/                     baseline/train/          ← gold-standard outputs
+    runner.py                           history/                 ← runner output per model
   worker_plan/.../                      analysis/                ← insight/review/synthesis/assessment
     identify_potential_levers.py          AGENTS.md
-  llm_config/                             create_analysis_dir.py
-    baseline.json                         run_insight.py
-    anthropic_claude.json                 run_code_review.py
-                                          run_synthesis.py
-                                          run_assessment.py
-                                          update_meta_pr.py
+  llm_config/                             prepare_iteration.py   ← Phase 0: PR + history dirs
+    baseline.json                         run_analysis.py        ← Phases 1-4 orchestrator
+    anthropic_claude.json                 run_insight.py         ← Phase 1 (called by run_analysis.py)
+                                          run_code_review.py     ← Phase 2 (called by run_analysis.py)
+                                          run_synthesis.py       ← Phase 3 (called by run_analysis.py)
+                                          run_assessment.py      ← Phase 4 (called by run_analysis.py)
                                         run_optimization_iteration.py
 ```
 
@@ -120,7 +116,7 @@ Each iteration produces a numbered directory in `analysis/`:
 
 ```
 analysis/1_identify_potential_levers/
-  meta.json           ← provenance: prompt, history runs, PR info
+  meta.json           ← provenance: history runs, PR info
   insight_claude.md   ← independent quality analysis (Claude Code)
   insight_codex.md    ← independent quality analysis (Codex)
   code_claude.md      ← code review informed by insights (Claude Code)
@@ -133,7 +129,6 @@ The `meta.json` links to the PR being evaluated:
 
 ```json
 {
-  "prompt": "identify_potential_levers/prompt_0_fa5dfb88...txt",
   "pr_url": "https://github.com/PlanExeOrg/PlanExe/pull/268",
   "pr_title": "fix: remove doubled user prompt (B1)",
   "pr_description": "...",
@@ -171,10 +166,15 @@ format, content depth, and cross-call duplication.
    even if flawed. Analysis can note that a run was problematic, but the artifacts
    must remain.
 
-4. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file`
-   from the registered prompt in `prompts/`, not the `SYSTEM_PROMPT` constant in
-   Python code. Code-level prompt changes are invisible to experiments until a new
-   prompt file is registered via `register_prompt.py`.
+4. **The runner always uses the code constant.** There is no external prompt file
+   or CLI override — the runner uses `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT`
+   from PlanExe's code. To change the prompt, modify `identify_potential_levers.py`
+   on the PR branch before running experiments.
+
+5. **Verify the runner is on the PR branch, not main.** The runner imports code
+   from PlanExe, so it must be on the PR branch to test the PR's changes.
+   `run_optimization_iteration.py` verifies this automatically. Iteration 24
+   was invalidated because the runner ran against main.
 
 ## Prerequisites
 
@@ -184,21 +184,10 @@ format, content depth, and cross-call duplication.
 - Ollama running locally with a model (e.g. `ollama-llama3.1`)
 - Baseline training data at: `/Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/`
 
-## Extract the default system prompt
-
-```bash
-/opt/homebrew/bin/python3.11 -c "
-import sys; sys.path.insert(0, 'worker_plan')
-from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
-print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
-" > /tmp/baseline_prompt.txt
-```
-
 ## Run against a single plan (auto-increment history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
     --model ollama-llama3.1
@@ -207,8 +196,7 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 ## Run against all baseline plans (auto-increment history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
     --model ollama-llama3.1
@@ -221,8 +209,7 @@ Anthropic models live in `llm_config/anthropic_claude.json`, which is not loaded
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
     --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab \
     --model anthropic-claude-haiku-4-5-pinned
@@ -237,8 +224,7 @@ The `run_optimization_iteration.py` script handles the Anthropic env vars automa
 ## Run with manual output dir (no history)
 
 ```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --plan-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train/20250321_silo \
     --output-dir /tmp/prompt_opt_run/outputs \
     --model ollama-llama3.1
@@ -247,7 +233,7 @@ The `run_optimization_iteration.py` script handles the Anthropic env vars automa
 ## Monitor progress during a run
 
 ```bash
-tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/events.jsonl
+tail -f /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/1/08_identify_potential_levers/events.jsonl
 ```
 
 ## Resume an interrupted run
@@ -256,10 +242,9 @@ Re-run the same command. Plans with status `ok` in `outputs.jsonl` are skipped. 
 
 ```bash
 # Same command as before — skips already-completed plans
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file /tmp/baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/baseline/train \
-    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/0/88_identify_potential_levers/outputs \
+    --output-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab/history/1/08_identify_potential_levers/outputs \
     --model ollama-llama3.1
 ```
 
@@ -269,7 +254,7 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ```
 history/0/00_identify_potential_levers/
-  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
+  meta.json          # written at start: step name, model, workers, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
@@ -305,20 +290,6 @@ With `workers > 1`, plans run in parallel using a thread pool. Thread safety:
 - `20260308_sovereign_identity`
 - `20260310_hong_kong_game`
 - `20260311_parasomnia_research_unit`
-
-## Register a system prompt
-
-Saves the current system prompt for a step into the prompt-lab repo. Auto-increments the index and skips duplicates (by SHA256). The runner picks the last sorted prompt file from `prompts/{step}/`, so registering a new prompt automatically makes it the active one for subsequent experiments.
-
-```bash
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.register_prompt \
-    --step identify_potential_levers \
-    --prompt-lab-dir /Users/neoneye/git/PlanExeGroup/PlanExe-prompt-lab
-```
-
-Output: `prompts/identify_potential_levers/prompt_{index}_{sha256}.txt`
-
-Available steps: `identify_potential_levers`
 
 ## Architecture notes
 

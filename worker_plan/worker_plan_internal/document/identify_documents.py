@@ -250,6 +250,15 @@ Based *only* on the **project description provided by the user**, generate the f
 - Adhere strictly to the Pydantic schema and field definitions.
 """
 
+OPTIMIZE_INSTRUCTIONS = """Output constraints (critical — JSON truncation is the known failure mode):
+- documents_to_create: maximum 6 items total across both passes
+- documents_to_find: maximum 6 items total across both passes
+- steps_to_create / steps_to_find: maximum 3 items per document
+- All string fields: maximum 120 characters
+- If token pressure rises, shorten descriptions — never truncate JSON mid-string
+- Prefer breadth over depth: cover more document types briefly rather than fewer in detail
+"""
+
 @dataclass
 class IdentifyDocuments:
     """

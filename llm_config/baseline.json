@@ -131,6 +131,7 @@
     "ollama-llama3.1": {
         "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
+        "self_improve_sequential": true,
         "class": "Ollama",
         "arguments": {
             "model": "llama3.1:latest",
@@ -143,6 +144,7 @@
     "docker-ollama-llama3.1": {
         "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
         "luigi_workers": 1,
+        "self_improve_sequential": true,
         "class": "Ollama",
         "arguments": {
             "model": "llama3.1:latest",
@@ -156,6 +158,7 @@
     "ollama-qwen2.5-coder": {
         "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
+        "self_improve_sequential": true,
         "class": "Ollama",
         "arguments": {
             "model": "qwen2.5-coder:latest",
@@ -168,6 +171,7 @@
     "lmstudio-qwen2.5-7b-instruct-1m": {
         "comment": "This runs on your own computer. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in .venv on the host computer. No use of docker.",
         "luigi_workers": 1,
+        "self_improve_sequential": true,
         "class": "LMStudio",
         "arguments": {
             "model_name": "qwen2.5-7b-instruct-1m",
@@ -181,6 +185,7 @@
     "docker-lmstudio-qwen2.5-7b-instruct-1m": {
         "comment": "This runs on your own computer. Requires LM Studio to be installed. Great for inspecting the request/response. PlanExe runs in a Docker container, and ollama is installed on the host the computer.",
         "luigi_workers": 1,
+        "self_improve_sequential": true,
         "class": "LMStudio",
         "arguments": {
             "model_name": "qwen2.5-7b-instruct-1m",

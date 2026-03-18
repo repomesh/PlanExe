@@ -17,6 +17,46 @@ from worker_plan_internal.llm_util.llm_errors import LLMChatError
 
 logger = logging.getLogger(__name__)
 
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: generate assumptions that fill genuine information gaps in the user's
+prompt — grounded, reasonable, and specific to this plan's context.
+
+Pipeline context
+----------------
+MakeAssumptions is one of the earliest tasks in the Luigi pipeline.
+Downstream tasks depend on high-quality assumptions. Its output is used by
+IdentifyRisks, governance phases, and the final plan review.
+Assumptions that are vague or obviously inferable add noise without value.
+Assumptions that misread the prompt produce a plan built on a false foundation.
+
+Known problems to guard against
+---------------------------------
+- Restating what the prompt already says. If the user explicitly states a
+  budget, timeline, or team size, do not restate it as an assumption. Assumptions
+  should address what the prompt does NOT specify.
+- Missing budget. A common user error is to omit the budget entirely (e.g.,
+  "budget: 0", "N/A", "I don't know"). In this case, MakeAssumptions should
+  establish a realistic budget estimate based on the project scope — not
+  assume zero or skip the budget entirely.
+- Aspirational assumptions presented as reasonable. "It is assumed the team
+  will work cohesively" and "stakeholders will remain engaged throughout" are
+  optimistic assertions, not grounded assumptions. Assumptions should reflect
+  what is plausible given the prompt's constraints, not what would be ideal.
+- Eight-questions-exactly rigidity. The system prompt requests exactly eight
+  questions across eight critical areas. This structure exists to enforce
+  breadth, not to force padding. If a plan genuinely only has five meaningful
+  unknowns, do not invent three more to hit the count. Quality over compliance.
+- Assumptions that anticipate failure rather than plan for success. The
+  assumption phase should identify what we're taking for granted in order to
+  proceed — not pre-enumerate all the ways the plan might fail (that's
+  IdentifyRisks's job).
+- Language and locale assumptions. PlanExe receives prompts in many languages
+  (Chinese, Japanese, Arabic, German, etc.). Do not assume English-language
+  resources, English-speaking team members, or US/UK regulatory frameworks
+  unless the prompt explicitly sets that context. Locale-specific assumptions
+  (currency, law, language) must be grounded in the prompt's geography.
+"""
+
 class QuestionAssumptionItem(BaseModel):
     item_index: int = Field(description="Index in the list")
     question: str = Field(description="Question to clarify and refine the user's description")

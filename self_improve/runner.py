@@ -3,14 +3,13 @@ Run the IdentifyPotentialLevers pipeline step with a candidate system prompt
 against baseline training data and capture the output.
 
 Usage:
-    python -m prompt_optimizer.runner \
+    python -m self_improve.runner \
         --system-prompt-file candidate.txt \
         --baseline-dir /path/to/baseline/train \
         --prompt-lab-dir /path/to/PlanExe-prompt-lab \
         --model ollama-llama3.1
 """
 import argparse
-import hashlib
 import json
 import logging
 import os
@@ -72,12 +71,12 @@ class PlanResult:
     status: str
     duration_seconds: float
     error: str | None = None
+    calls_succeeded: int | None = None
 
 
 def run_single_plan(
     plan_dir: Path,
     output_dir: Path,
-    system_prompt: str,
     model_names: list[str],
 ) -> PlanResult:
     """
@@ -94,8 +93,9 @@ def run_single_plan(
     llm_executor = LLMExecutor(llm_models=llm_models)
 
     # Set up per-plan usage tracking.
-    # set_usage_metrics_path and the dispatcher are global state, so we hold
-    # a lock while configuring and running to avoid cross-thread interference.
+    # set_usage_metrics_path uses thread-local storage, but we still hold
+    # _file_lock while configuring it alongside the dispatcher to keep the
+    # setup/teardown atomic.
     track_activity_path = plan_output_dir / "track_activity.jsonl"
     track_activity = TrackActivity(
         jsonl_file_path=track_activity_path,
@@ -103,17 +103,14 @@ def run_single_plan(
     )
     dispatcher = get_dispatcher()
 
-    set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
-
     with _file_lock:
+        set_usage_metrics_path(plan_output_dir / "usage_metrics.jsonl")
         dispatcher.add_event_handler(track_activity)
 
     t0 = time.monotonic()
     try:
         user_prompt = load_user_prompt(plan_dir)
-        result = IdentifyPotentialLevers.execute(
-            llm_executor, user_prompt, system_prompt=system_prompt
-        )
+        result = IdentifyPotentialLevers.execute(llm_executor, user_prompt)
 
         raw_path = plan_output_dir / "002-9-potential_levers_raw.json"
         clean_path = plan_output_dir / "002-10-potential_levers.json"
@@ -121,11 +118,20 @@ def run_single_plan(
         result.save_clean(str(clean_path))
 
         duration = time.monotonic() - t0
+
+        expected_calls = 3
+        actual_calls = len(result.responses)
+        if actual_calls < expected_calls:
+            logger.warning(
+                f"{plan_name}: partial recovery — {actual_calls}/{expected_calls} calls succeeded"
+            )
+
         logger.info(f"{plan_name}: {len(result.levers)} levers in {duration:.1f}s")
         return PlanResult(
             name=plan_name,
             status="ok",
             duration_seconds=round(duration, 2),
+            calls_succeeded=actual_calls,
         )
     except Exception as e:
         duration = time.monotonic() - t0
@@ -137,8 +143,8 @@ def run_single_plan(
             error=str(e),
         )
     finally:
-        set_usage_metrics_path(None)
         with _file_lock:
+            set_usage_metrics_path(None)
             dispatcher.event_handlers.remove(track_activity)
         track_activity_path.unlink(missing_ok=True)
 
@@ -275,45 +281,88 @@ def _next_history_counter(history_dir: Path) -> int:
 
 
 def _history_run_dir(prompt_lab_dir: Path, step_name: str) -> Path:
-    """Create and return the next history run directory."""
+    """Create and return the next history run directory.
+
+    Uses mkdir without exist_ok so that parallel processes that race on the
+    same counter will fail and retry with the next number instead of silently
+    sharing a directory.
+    """
     history_dir = prompt_lab_dir / "history"
     counter = _next_history_counter(history_dir)
-    bucket = str(counter // 100)
-    entry = f"{counter % 100:02d}_{step_name}"
-    run_dir = history_dir / bucket / entry
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
+    for _ in range(50):
+        bucket = str(counter // 100)
+        entry = f"{counter % 100:02d}_{step_name}"
+        run_dir = history_dir / bucket / entry
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            return run_dir
+        except FileExistsError:
+            counter += 1
+    raise RuntimeError(f"Could not allocate history run dir after 50 attempts (last: {run_dir})")
+
+
+class _ThreadFilter(logging.Filter):
+    """Only accept log records from a specific thread."""
+
+    def __init__(self, thread_id: int):
+        super().__init__()
+        self.thread_id = thread_id
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.thread == self.thread_id
 
 
 def _run_plan_task(
     plan_dir: Path,
     output_dir: Path,
-    system_prompt: str,
     model_names: list[str],
     events_path: Path,
     outputs_path: Path,
 ) -> PlanResult:
     """Run a single plan and record events/output. Thread-safe."""
     plan_name = plan_dir.name
-    _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
-    pr = run_single_plan(plan_dir, output_dir, system_prompt, model_names)
+    # Set up per-plan log file at outputs/<plan_name>/log.txt.
+    plan_log_dir = output_dir / plan_name
+    plan_log_dir.mkdir(parents=True, exist_ok=True)
+    plan_log_path = plan_log_dir / "log.txt"
+    file_handler = logging.FileHandler(plan_log_path)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
+    )
+    thread_filter = _ThreadFilter(threading.current_thread().ident)
+    file_handler.addFilter(thread_filter)
+    root_logger = logging.getLogger()
+    root_logger.addHandler(file_handler)
 
-    if pr.status == "ok":
-        _emit_event(events_path, "run_single_plan_complete",
-                    plan_name=plan_name,
-                    duration_seconds=pr.duration_seconds)
-    else:
-        _emit_event(events_path, "run_single_plan_error",
-                    plan_name=plan_name, error=pr.error,
-                    duration_seconds=pr.duration_seconds)
+    try:
+        _emit_event(events_path, "run_single_plan_start", plan_name=plan_name)
 
-    _append_jsonl(outputs_path, asdict(pr))
-    return pr
+        pr = run_single_plan(plan_dir, output_dir, model_names)
+
+        if pr.status == "ok":
+            _emit_event(events_path, "run_single_plan_complete",
+                        plan_name=plan_name,
+                        duration_seconds=pr.duration_seconds)
+        else:
+            _emit_event(events_path, "run_single_plan_error",
+                        plan_name=plan_name, error=pr.error,
+                        duration_seconds=pr.duration_seconds)
+
+        if pr.calls_succeeded is not None and pr.calls_succeeded < 3:
+            _emit_event(events_path, "partial_recovery",
+                        plan_name=plan_name,
+                        calls_succeeded=pr.calls_succeeded,
+                        expected_calls=3)
+
+        _append_jsonl(outputs_path, asdict(pr))
+        return pr
+    finally:
+        root_logger.removeHandler(file_handler)
+        file_handler.close()
 
 
 def run(
-    system_prompt: str,
     plan_dirs: list[Path],
     output_dir: Path,
     model_names: list[str],
@@ -344,8 +393,6 @@ def run(
         if completed:
             logger.info(f"Resuming: {len(completed)} plan(s) already completed, skipping them")
 
-    prompt_sha256 = hashlib.sha256(system_prompt.encode()).hexdigest()
-
     workers = _resolve_workers(model_names)
 
     # Write meta.json (overwrite on resume is fine — same content)
@@ -354,7 +401,6 @@ def run(
         model_info["fallbacks"] = model_names[1:]
     meta = {
         "step": "identify_potential_levers",
-        "system_prompt_sha256": prompt_sha256,
         "model": model_info,
         "workers": workers,
         "system": _collect_system_info(),
@@ -374,13 +420,13 @@ def run(
 
     if workers <= 1:
         for plan_dir in pending_dirs:
-            _run_plan_task(plan_dir, output_dir, system_prompt,
+            _run_plan_task(plan_dir, output_dir,
                            model_names, events_path, outputs_path)
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
                 pool.submit(
-                    _run_plan_task, plan_dir, output_dir, system_prompt,
+                    _run_plan_task, plan_dir, output_dir,
                     model_names, events_path, outputs_path,
                 ): plan_dir
                 for plan_dir in pending_dirs
@@ -391,13 +437,7 @@ def run(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run IdentifyPotentialLevers with a candidate system prompt."
-    )
-    parser.add_argument(
-        "--system-prompt-file",
-        required=True,
-        type=Path,
-        help="Path to a text file containing the candidate system prompt.",
+        description="Run IdentifyPotentialLevers against baseline training data."
     )
     parser.add_argument(
         "--baseline-dir",
@@ -433,8 +473,6 @@ def main():
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
-    system_prompt = args.system_prompt_file.read_text().strip()
-
     if args.plan_dir:
         plan_dirs = [args.plan_dir]
     elif args.baseline_dir:
@@ -456,7 +494,7 @@ def main():
     else:
         parser.error("Either --prompt-lab-dir or --output-dir is required.")
 
-    run(system_prompt, plan_dirs, output_dir, args.models)
+    run(plan_dirs, output_dir, args.models)
 
     # Summarize from outputs.jsonl
     outputs_path = output_dir.parent / "outputs.jsonl"

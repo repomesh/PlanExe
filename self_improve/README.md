@@ -5,10 +5,10 @@ an iterative loop: implement a fix, test across models, analyze results, and
 decide whether to keep or revert. Each iteration produces an auditable trail
 with a PR, quantitative comparison, and a keeper verdict.
 
-Currently optimizing the `IdentifyPotentialLevers` step (11 iterations
-completed, 88 history runs). The runner infrastructure (progress tracking,
-CLI, output structure) is shared across steps; each new step requires only a
-custom adapter.
+Currently optimizing the `IdentifyPotentialLevers` step (26 iterations
+completed). The runner infrastructure (progress tracking, CLI, output
+structure) is shared across steps; each new step requires only a custom
+adapter.
 
 See [proposal 117](../docs/proposals/117-system-prompt-optimizer.md) for the
 full design and current status.
@@ -28,7 +28,7 @@ Each iteration produces a numbered analysis directory in PlanExe-prompt-lab:
 
 ```
 analysis/1_identify_potential_levers/
-  meta.json           ← provenance: prompt, history runs, PR info
+  meta.json           ← provenance: history runs, PR info
   insight_claude.md   ← quality analysis (Claude Code)
   insight_codex.md    ← quality analysis (Codex)
   code_claude.md      ← code review (Claude Code)
@@ -54,16 +54,27 @@ See `run_optimization_iteration.py --help` for all options.
 create PR → run experiments → run analysis → read verdict → merge only if
 verdict confirms improvement.
 
-### Running analysis phases individually
+### Running analysis phases
 
 ```bash
 # From PlanExe-prompt-lab repo:
-python analysis/create_analysis_dir.py identify_potential_levers       # Phase 0
-python analysis/run_insight.py analysis/1_identify_potential_levers     # Phase 1
-python analysis/run_code_review.py analysis/1_identify_potential_levers # Phase 2
-python analysis/run_synthesis.py analysis/1_identify_potential_levers   # Phase 3
-python analysis/update_meta_pr.py analysis/1_identify_potential_levers 268
-python analysis/run_assessment.py analysis/1_identify_potential_levers  # Phase 4
+python analysis/prepare_iteration.py identify_potential_levers 326     # Phase 0: verify PR, pre-create history dirs
+python analysis/run_analysis.py analysis/12_identify_potential_levers   # Phases 1-4: insight → code review → synthesis → assessment
+```
+
+`prepare_iteration.py` replaces the former `create_analysis_dir.py` and
+`update_meta_pr.py` — it handles PR verification, history dir pre-creation,
+and meta.json population in a single step.
+
+`run_analysis.py` orchestrates the four analysis phases sequentially. Each
+phase is resumable (skipped if output files already exist). Individual phases
+can still be run directly if needed:
+
+```bash
+python analysis/run_insight.py analysis/12_identify_potential_levers     # Phase 1
+python analysis/run_code_review.py analysis/12_identify_potential_levers # Phase 2
+python analysis/run_synthesis.py analysis/12_identify_potential_levers   # Phase 3
+python analysis/run_assessment.py analysis/12_identify_potential_levers  # Phase 4
 ```
 
 ## Runner Usage
@@ -73,25 +84,25 @@ which has the required llama_index dependencies.
 
 ```bash
 # Auto-increment into prompt-lab history/
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file candidate.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
 
 # Or manual output directory
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file candidate.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /path/to/baseline/train \
     --output-dir /path/to/my_run/outputs \
     --model ollama-llama3.1
 ```
 
+The runner always uses the `IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT` constant
+from PlanExe's code — there is no external prompt file or CLI override.
+
 ### Options
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--system-prompt-file` | Yes | Path to a text file containing the candidate system prompt |
 | `--baseline-dir` | No | Directory containing plan subdirectories (process all) |
 | `--plan-dir` | No | Single plan directory to process (overrides `--baseline-dir`) |
 | `--prompt-lab-dir` | No | Path to PlanExe-prompt-lab repo (auto-creates history run dir) |
@@ -109,8 +120,7 @@ script handles this automatically for models in its `CUSTOM_PROFILE_MODELS` dict
 ```bash
 PLANEXE_MODEL_PROFILE=custom \
 PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json \
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file candidate.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --baseline-dir /path/to/baseline/train \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model anthropic-claude-haiku-4-5-pinned
@@ -122,7 +132,7 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ```
 <run-dir>/
-  meta.json          # written at start: step name, system_prompt SHA256, model, workers, system
+  meta.json          # written at start: step name, model, workers, system
   outputs.jsonl      # one row per completed plan: {name, status, duration_seconds, error}
   events.jsonl       # timestamped events: run_single_plan_start, _complete, _error
   outputs/
@@ -135,17 +145,10 @@ With `--prompt-lab-dir`, outputs go to `history/{counter // 100}/{counter % 100:
 
 ## Quick Start
 
-Extract the current default system prompt to a file, then run against a single plan:
+Run against a single plan:
 
 ```bash
-/opt/homebrew/bin/python3.11 -c "
-import sys; sys.path.insert(0, 'worker_plan')
-from worker_plan_internal.lever.identify_potential_levers import IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT
-print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
-" > baseline_prompt.txt
-
-/opt/homebrew/bin/python3.11 -m prompt_optimizer.runner \
-    --system-prompt-file baseline_prompt.txt \
+/opt/homebrew/bin/python3.11 -m self_improve.runner \
     --plan-dir /path/to/baseline/train/20250321_silo \
     --prompt-lab-dir /path/to/PlanExe-prompt-lab \
     --model ollama-llama3.1
@@ -155,12 +158,12 @@ print(IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip())
 
 ```
 PlanExe/                              PlanExe-prompt-lab/
-  prompt_optimizer/                     baseline/train/       ← gold-standard outputs
-    runner.py                           prompts/              ← registered system prompts
-    register_prompt.py                  history/              ← runner output per model
+  self_improve/                     baseline/train/       ← gold-standard outputs
+    runner.py                           history/              ← runner output per model
   worker_plan/.../                      analysis/             ← insight/review/synthesis/assessment
-    identify_potential_levers.py        run_optimization_iteration.py
-  llm_config/
+    identify_potential_levers.py          prepare_iteration.py  ← Phase 0: PR + history dirs
+                                          run_analysis.py       ← Phases 1-4 orchestrator
+  llm_config/                           run_optimization_iteration.py
     baseline.json
     anthropic_claude.json
 ```
@@ -180,13 +183,16 @@ Each plan runs in its own thread with an independent `LLMExecutor`. Usage metric
 
 | Alias | Model | Status |
 |-------|-------|--------|
-| llama | ollama-llama3.1 | Working (5/5) |
+| llama | ollama-llama3.1 | Working (3-5/5) |
 | gpt-oss | openrouter-openai-gpt-oss-20b | Working (4-5/5) |
 | gpt5-nano | openai-gpt-5-nano | Working (5/5) |
 | qwen | openrouter-qwen3-30b-a3b | Working (5/5) |
 | gpt4o-mini | openrouter-openai-gpt-4o-mini | Working (5/5) |
-| haiku | anthropic-claude-haiku-4-5-pinned | Working (4/5) |
-| nemotron | openrouter-nvidia-nemotron-3-nano-30b-a3b | Broken (0/5 all iterations) |
+| gemini-flash | openrouter-gemini-2.0-flash-001 | Working (5/5) — added iter 13 |
+| haiku | anthropic-claude-haiku-4-5-pinned | Working (4-5/5) |
+
+Removed models:
+- `nemotron` (openrouter-nvidia-nemotron-3-nano-30b-a3b) — 0/5 all iterations, structural incompatibility
 
 ## Iteration History
 
@@ -204,6 +210,21 @@ Each plan runs in its own thread with an independent `LLMExecutor`. Usage metric
 | 9 | [#279](https://github.com/PlanExeOrg/PlanExe/pull/279) | Remove naming template | YES |
 | 10 | [#281](https://github.com/PlanExeOrg/PlanExe/pull/281) | Keyword quality gate (reverted in [#282](https://github.com/PlanExeOrg/PlanExe/pull/282)) | NO |
 | 11 | [#283](https://github.com/PlanExeOrg/PlanExe/pull/283) | RetryConfig in runner (reverted in [#284](https://github.com/PlanExeOrg/PlanExe/pull/284)) | NO |
+| 12 | [#286](https://github.com/PlanExeOrg/PlanExe/pull/286) | Remove max_length=7 hard constraint on levers | YES |
+| 13 | [#289](https://github.com/PlanExeOrg/PlanExe/pull/289) | Add options count and review format validators | CONDITIONAL |
+| 14 | [#292](https://github.com/PlanExeOrg/PlanExe/pull/292) | Recover partial results when a call fails | YES |
+| 15 | [#294](https://github.com/PlanExeOrg/PlanExe/pull/294) | Consolidate review_lever prompt to prevent format alternation | YES |
+| 16 | [#295](https://github.com/PlanExeOrg/PlanExe/pull/295) | Continue loop after call failure instead of breaking | YES |
+| 17 | [#296](https://github.com/PlanExeOrg/PlanExe/pull/296) | Auto-correct review_lever before hard-rejecting | CONDITIONAL |
+| 18 | [#297](https://github.com/PlanExeOrg/PlanExe/pull/297) | Simplify lever prompt to restore content quality | YES |
+| 19 | [#299](https://github.com/PlanExeOrg/PlanExe/pull/299) | Remove bracket placeholders and fragile English-only validator | CONDITIONAL |
+| 20 | [#309](https://github.com/PlanExeOrg/PlanExe/pull/309) | Add option-quality reminder to call-2/3 prompts | YES |
+| 21 | [#313](https://github.com/PlanExeOrg/PlanExe/pull/313) | Add anti-fabrication reminder to call-2/3 prompts | CONDITIONAL |
+| 22 | [#316](https://github.com/PlanExeOrg/PlanExe/pull/316) | Replace two-bullet review_lever prompt with single flowing example | CONDITIONAL |
+| 23 | [#326](https://github.com/PlanExeOrg/PlanExe/pull/326) | Add second review_lever example to break template lock | KEEP |
+| 24 | [#334](https://github.com/PlanExeOrg/PlanExe/pull/334) | (INVALID — runner ran against main, not PR branch) | INVALID |
+| 25 | [#334](https://github.com/PlanExeOrg/PlanExe/pull/334) | Remove unused summary field, slim call-2/3 prefix | YES |
+| 26 | [#337](https://github.com/PlanExeOrg/PlanExe/pull/337) | Replace generic review_lever examples with domain-specific ones | YES |
 
 Full analysis artifacts for each iteration are in
 [PlanExe-prompt-lab/analysis/](https://github.com/PlanExeOrg/PlanExe-prompt-lab/tree/main/analysis).
@@ -215,9 +236,13 @@ Full analysis artifacts for each iteration are in
 2. **No hardcoded English keywords in validators.** PlanExe users create plans
    in many languages. All validation must be language-agnostic.
 3. **Never delete from the history directory.** Runs are permanent records.
-4. **Registered prompts vs code prompts.** The runner uses `--system-prompt-file`
-   from `prompts/`, not the Python constant. Register new prompts via
-   `register_prompt.py` after code changes.
+4. **The runner always uses the code constant.** There is no external prompt file
+   or CLI override. To change the prompt, modify `identify_potential_levers.py`
+   on the PR branch before running experiments.
+5. **Verify the runner is on the PR branch, not main.** The runner imports code
+   from PlanExe, so it must be on the PR branch to test the PR's changes.
+   `run_optimization_iteration.py` verifies this automatically. Iteration 24
+   was invalidated because the runner ran against main.
 
 ## Architecture
 

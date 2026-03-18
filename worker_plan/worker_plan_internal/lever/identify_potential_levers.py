@@ -24,6 +24,61 @@ from worker_plan_internal.llm_util.llm_errors import LLMChatError
 
 logger = logging.getLogger(__name__)
 
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: produce levers that lead to realistic, feasible, actionable plans that
+humans or AI agents can actually execute.
+
+Pipeline context
+----------------
+This step (IdentifyPotentialLevers) is part of a 6-step solution-space
+exploration pipeline inside run_plan_pipeline.py:
+
+  1. IdentifyPotentialLevers  ← you are here
+  2. DeduplicateLevers        — removes near-duplicate levers
+  3. EnrichLevers             — adds description, synergy, and conflict text
+  4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
+  5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
+  6. ScenarioSelection        — picks the best-fitting scenario
+
+Over-generation is fine; step 2 handles extras. Quality of content matters more
+than hitting an exact count.
+
+Known problems to guard against
+--------------------------------
+- Overly optimistic scenarios. The downstream scenario picker tends to choose
+  the most ambitious option unless the levers themselves offer grounded,
+  pragmatic choices. Each lever's options should include at least one
+  conservative, low-risk path — not just aspirational moonshots.
+- Fabricated numbers. Do not invent percentages, cost savings, market-share
+  figures, or performance deltas. If the project context supplies a number,
+  cite it; otherwise use qualitative language.
+- Hype and marketing copy. Words like "game-changing", "revolutionary",
+  "cutting-edge", "disruptive", and "breakthrough" erode credibility.
+  Use plain, concrete language instead.
+- Vague aspirations posing as options. Each option must be a specific,
+  actionable approach — something a project manager could actually schedule
+  and resource — not a slogan.
+- Fragile English-only validation. PlanExe receives initial prompts in many
+  non-English languages (Chinese, Japanese, Arabic, German, etc.). Validators
+  and auto-correct logic must not rely on English keywords like "Controls",
+  "Weakness:", "versus"/"vs." being present in the LLM output. Hard-coded
+  English substring checks (e.g. `'Controls ' not in response_str`) will reject
+  perfectly valid levers whenever the model responds in the prompt's
+  language. Prefer structural checks (field count, JSON shape) over
+  language-dependent string matching.
+- Single-example template lock. When the prompt provides exactly one
+  review_lever example, weaker models reproduce that exact syntax 90–100%
+  of the time. Always provide at least two structurally distinct examples
+  to give models variety to draw from.
+- Template-lock migration. Replacing a copyable opener does not eliminate
+  template lock — weaker models shift to copying subphrases within the
+  new examples (e.g. "the options neglect", "the options assume").
+  Examples must avoid reusable transitional phrases that fit any domain.
+  The agriculture example ("but none of the options price in the
+  idle-wage burden during the 5-month off-season") is the correct
+  structural template: its critique is domain-specific and non-portable.
+"""
+
 class Lever(BaseModel):
     lever_index: int = Field(
         description="Index of this lever."
@@ -33,15 +88,12 @@ class Lever(BaseModel):
     )
     consequences: str = Field(
         description=(
-            "Required format: 'Immediate: [direct first-order effect] → "
-            "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
-            "Strategic: [long-term implication for the project]'. "
-            "All three labels and at least one quantitative estimate are mandatory. "
-            "The Systemic or Strategic clause MUST name an explicit trade-off between two competing forces "
-            "(e.g. 'This accelerates delivery but increases defect risk'). "
+            "What happens when this lever is pulled? Describe the direct effect and "
+            "at least one downstream implication or trade-off. Be concise and grounded — "
+            "only cite numbers if the project context provides evidence for them. "
             "Do NOT include 'Controls ... vs.', 'Weakness:', or other review/critique text in this field — "
             "those belong exclusively in review_lever. "
-            "Target length: 3–5 sentences (approximately 60–120 words)."
+            "Target length: 2–4 sentences."
         )
     )
     options: list[str] = Field(
@@ -50,10 +102,10 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "Required format: Two sentences. "
-            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
-            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
-            "Both sentences are mandatory in every response."
+            "A short critical review of this lever — name the core tension, "
+            "then identify a weakness the options miss. "
+            "See system prompt section 4 for examples. "
+            "Do not use square brackets or placeholder text."
         )
     )
 
@@ -70,6 +122,37 @@ class Lever(BaseModel):
                 pass
         return v
 
+    @field_validator('options', mode='after')
+    @classmethod
+    def check_option_count(cls, v):
+        """Reject levers with fewer than 3 options.
+
+        Run 82 (llama, gta_game) produced levers with 2 options that
+        silently passed validation and shipped to downstream tasks which
+        assume at least 3 options per lever. Over-generation (>3) is
+        tolerable; under-generation is not.
+        """
+        if len(v) < 3:
+            raise ValueError(f"options must have at least 3 items, got {len(v)}")
+        return v
+
+    @field_validator('review_lever', mode='after')
+    @classmethod
+    def check_review_format(cls, v):
+        """Structural validation only — no English keyword checks.
+
+        PlanExe receives prompts in many non-English languages, so the
+        validator must not rely on English markers like "Controls" or
+        "Weakness:". Instead we enforce structural properties:
+        - minimum length (at least 50 characters)
+        - no square-bracket placeholders (e.g. [Tension A])
+        """
+        if len(v) < 50:
+            raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 50")
+        if '[' in v or ']' in v:
+            raise ValueError("review_lever must not contain square-bracket placeholders")
+        return v
+
 class DocumentDetails(BaseModel):
     strategic_rationale: Optional[str] = Field(
         default=None,
@@ -81,9 +164,6 @@ class DocumentDetails(BaseModel):
     levers: list[Lever] = Field(
         min_length=5,
         description="Propose 5 to 7 levers."
-    )
-    summary: str = Field(
-        description="Are these levers well picked? Are they well balanced? Are they well thought out? Point out flaws. 100 words."
     )
 
 class LeverCleaned(BaseModel):
@@ -99,28 +179,23 @@ class LeverCleaned(BaseModel):
     )
     consequences: str = Field(
         description=(
-            "Required format: 'Immediate: [direct first-order effect] → "
-            "Systemic: [second-order impact with a measurable indicator, e.g. a % change or cost delta] → "
-            "Strategic: [long-term implication for the project]'. "
-            "All three labels and at least one quantitative estimate are mandatory. "
-            "The Systemic or Strategic clause MUST name an explicit trade-off between two competing forces "
-            "(e.g. 'This accelerates delivery but increases defect risk'). "
+            "What happens when this lever is pulled? Describe the direct effect and "
+            "at least one downstream implication or trade-off. Be concise and grounded — "
+            "only cite numbers if the project context provides evidence for them. "
             "Do NOT include 'Controls ... vs.', 'Weakness:', or other review/critique text in this field — "
             "those belong exclusively in review_lever. "
-            "Target length: 3–5 sentences (approximately 60–120 words)."
+            "Target length: 2–4 sentences."
         )
     )
     options: list[str] = Field(
         description="Exactly 3 options for this lever. No more, no fewer. Each option must be a complete "
                     "strategic approach (a full sentence with an action verb), not a label."
     )
+    # This field description is never serialized to an LLM — LeverCleaned is
+    # only used for cleaned output. Prompt-facing examples live in Lever.review_lever
+    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 4.
     review: str = Field(
-        description=(
-            "Required format: Two sentences. "
-            "Sentence 1: 'Controls [Tension A] vs. [Tension B].' "
-            "Sentence 2: 'Weakness: The options fail to consider [specific factor].' "
-            "Both sentences are mandatory in every response."
-        )
+        description="A short critical review — names the core tension, then identifies a weakness the options miss."
     )
 
 IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT = """
@@ -131,14 +206,10 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
 2. **Lever Quality Standards**
-   - Consequences MUST:
-     • Chain three SPECIFIC effects: "Immediate: [effect] → Systemic: [impact] → Strategic: [implication]"
-     • Include measurable outcomes: "Systemic: [a specific, domain-relevant second-order impact with a measurable indicator, such as a % change, capacity shift, or cost delta]"
-     • Explicitly describe trade-offs between core tensions
+   - Consequences: describe the direct effect of pulling this lever, then at least one downstream implication or trade-off. Be concise and grounded — only cite specific numbers if the project context provides evidence for them. Do not fabricate percentages or cost estimates. Target length: 2–4 sentences.
    - Options MUST:
-     • Represent distinct strategic pathways (not just labels)
-     • Include at least one unconventional/innovative approach
-     • Show clear progression: conservative → moderate → radical
+     • Represent genuinely distinct strategic pathways (not just labels)
+     • Include at least one unconventional or non-obvious approach
      • NO prefixes (e.g., "Option A:", "Choice 1:")
 
 3. **Strategic Framing**
@@ -148,23 +219,24 @@ You are an expert strategic analyst. Generate solution space parameters followin
 
 4. **Validation Protocols**
    - For `review_lever`:
-     • State the trade-off explicitly: "Controls [Tension A] vs. [Tension B]."
-     • Identify a specific weakness: "Weakness: The options fail to consider [specific factor]."
-   - For `summary`:
-     • Identify ONE critical missing dimension
-     • Prescribe CONCRETE addition: "Add '[full strategic option]' to [lever]"
+     A short critical review — name the core tension, then identify a weakness the options miss.
+     Examples:
+     - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but none of the options price in the idle-wage burden during the 5-month off-season."
+     - "Routing the light-rail extension through the historic district unlocks ridership but triggers Section 106 heritage review; the options assume permits will clear on the standard timeline."
+     - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but a regional hurricane season can correlate all three simultaneously — correlation risk absent from every option."
+     Do not use square brackets or placeholder text.
 
 5. **Prohibitions**
-   - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:", "Conservative:", "Moderate:", "Radical:")
+   - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:")
    - NO generic option labels (e.g., "Optimize X", "Tolerate Y")
-   - NO placeholder consequences
-   - NO "[specific innovative option]" placeholders
-   - NO value sets without clear strategic progression
+   - NO placeholder consequences or bracket-wrapped templates
+   - NO fabricated statistics or percentages without evidence from the project context
+   - NO marketing language (e.g., "game-changing", "cutting-edge", "revolutionary")
 
-6. **Option Structure Enforcement**
-   - Radical option must include emerging tech/business model
+6. **Option Structure**
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions
+   - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
 """
 
 @dataclass
@@ -176,16 +248,13 @@ class IdentifyPotentialLevers:
     metadata: dict
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, user_prompt: str, system_prompt: Optional[str] = None) -> 'IdentifyPotentialLevers':
+    def execute(cls, llm_executor: LLMExecutor, user_prompt: str) -> 'IdentifyPotentialLevers':
         if not isinstance(llm_executor, LLMExecutor):
             raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(user_prompt, str):
             raise ValueError("Invalid user_prompt.")
 
-        if system_prompt is None:
-            system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
-        else:
-            system_prompt = system_prompt.strip()
+        system_prompt = IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT.strip()
         system_message = ChatMessage(
             role=MessageRole.SYSTEM,
             content=system_prompt,
@@ -237,7 +306,17 @@ class IdentifyPotentialLevers:
                 llm_error = LLMChatError(cause=e)
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
-                raise llm_error from e
+                # If earlier calls succeeded, keep their levers instead of
+                # discarding everything. A single validator rejection (e.g.,
+                # one lever with 2 options) should not wipe out 10+ valid
+                # levers from prior calls.
+                if len(responses) == 0:
+                    raise llm_error from e
+                logger.warning(
+                    f"Call {call_index} of {total_calls} failed [{llm_error.error_id}], "
+                    f"continuing with {len(responses)} prior call(s)."
+                )
+                continue
 
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)

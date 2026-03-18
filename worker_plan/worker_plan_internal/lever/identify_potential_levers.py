@@ -13,7 +13,7 @@ PROMPT> python -m worker_plan_internal.lever.identify_potential_levers
 import json
 import logging
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 from dataclasses import dataclass
 import uuid
 from llama_index.core.llms.llm import LLM
@@ -86,6 +86,18 @@ class Lever(BaseModel):
     name: str = Field(
         description="Name of this lever."
     )
+    lever_type: str = Field(
+        description=(
+            "Category of this lever. Must be one of: "
+            "methodology, execution, governance, dissemination, product, operations."
+        )
+    )
+    decision_axis: str = Field(
+        description=(
+            "One sentence describing the controllable choice this lever represents. "
+            "Use the template: 'This lever controls X by choosing between A, B, and C.'"
+        )
+    )
     consequences: str = Field(
         description=(
             "What happens when this lever is pulled? Describe the direct effect and "
@@ -104,10 +116,31 @@ class Lever(BaseModel):
         description=(
             "A short critical review of this lever — name the core tension, "
             "then identify a weakness the options miss. "
-            "See system prompt section 4 for examples. "
+            "See system prompt section 5 for examples. "
             "Do not use square brackets or placeholder text."
         )
     )
+
+    VALID_LEVER_TYPES: ClassVar[set[str]] = {"methodology", "execution", "governance", "dissemination", "product", "operations"}
+
+    @field_validator('lever_type', mode='after')
+    @classmethod
+    def normalize_lever_type(cls, v):
+        """Normalize and validate lever_type against the allowed set."""
+        normalized = v.strip().lower()
+        if normalized not in cls.VALID_LEVER_TYPES:
+            raise ValueError(
+                f"lever_type must be one of {sorted(cls.VALID_LEVER_TYPES)}, got {v!r}"
+            )
+        return normalized
+
+    @field_validator('decision_axis', mode='after')
+    @classmethod
+    def check_decision_axis(cls, v):
+        """Ensure decision_axis is a substantive sentence, not a label."""
+        if len(v) < 20:
+            raise ValueError(f"decision_axis is too short ({len(v)} chars); expected at least 20")
+        return v
 
     @field_validator('options', mode='before')
     @classmethod
@@ -177,6 +210,12 @@ class LeverCleaned(BaseModel):
     name: str = Field(
         description="Name of this lever."
     )
+    lever_type: str = Field(
+        description="Category: methodology, execution, governance, dissemination, product, or operations."
+    )
+    decision_axis: str = Field(
+        description="One sentence describing the controllable choice this lever represents."
+    )
     consequences: str = Field(
         description=(
             "What happens when this lever is pulled? Describe the direct effect and "
@@ -193,7 +232,7 @@ class LeverCleaned(BaseModel):
     )
     # This field description is never serialized to an LLM — LeverCleaned is
     # only used for cleaned output. Prompt-facing examples live in Lever.review_lever
-    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 4.
+    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 5.
     review: str = Field(
         description="A short critical review — names the core tension, then identifies a weakness the options miss."
     )
@@ -205,19 +244,23 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - You must generate 5 to 7 levers per response.
    - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
-2. **Lever Quality Standards**
+2. **Lever Classification**
+   - `lever_type`: classify each lever as one of: methodology, execution, governance, dissemination, product, operations.
+   - `decision_axis`: write one sentence describing the controllable choice. Use the template: "This lever controls X by choosing between A, B, and C." The axis must be a single, crisp decision — not a topic or workstream.
+
+3. **Lever Quality Standards**
    - Consequences: describe the direct effect of pulling this lever, then at least one downstream implication or trade-off. Be concise and grounded — only cite specific numbers if the project context provides evidence for them. Do not fabricate percentages or cost estimates. Target length: 2–4 sentences.
    - Options MUST:
      • Represent genuinely distinct strategic pathways (not just labels)
      • Include at least one unconventional or non-obvious approach
      • NO prefixes (e.g., "Option A:", "Choice 1:")
 
-3. **Strategic Framing**
+4. **Strategic Framing**
    - Name each lever using language drawn directly from the project's own domain — avoid formulaic patterns or repeated prefixes
    - Frame options as complete strategic approaches
    - Ensure levers challenge core project assumptions
 
-4. **Validation Protocols**
+5. **Validation Protocols**
    - For `review_lever`:
      A short critical review — name the core tension, then identify a weakness the options miss.
      Examples:
@@ -226,14 +269,14 @@ You are an expert strategic analyst. Generate solution space parameters followin
      - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but a regional hurricane season can correlate all three simultaneously — correlation risk absent from every option."
      Do not use square brackets or placeholder text.
 
-5. **Prohibitions**
+6. **Prohibitions**
    - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:")
    - NO generic option labels (e.g., "Optimize X", "Tolerate Y")
    - NO placeholder consequences or bracket-wrapped templates
    - NO fabricated statistics or percentages without evidence from the project context
    - NO marketing language (e.g., "game-changing", "cutting-edge", "revolutionary")
 
-6. **Option Structure**
+7. **Option Structure**
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions
    - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
@@ -340,6 +383,8 @@ class IdentifyPotentialLevers:
             lever_cleaned = LeverCleaned(
                 lever_id=lever_id,
                 name=lever.name,
+                lever_type=lever.lever_type,
+                decision_axis=lever.decision_axis,
                 consequences=lever.consequences,
                 options=lever.options,
                 review=lever.review_lever,

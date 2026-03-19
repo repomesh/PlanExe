@@ -28,15 +28,14 @@ python -m mcp_critic.server
       "args": ["-m", "mcp_critic.server"],
       "cwd": "/path/to/PlanExe",
       "env": {
-        "PLANEXE_MODEL_PROFILE": "baseline",
-        "PYTHONPATH": "/path/to/PlanExe/worker_plan"
+        "PLANEXE_MODEL_PROFILE": "baseline"
       }
     }
   }
 }
 ```
 
-> **Python 3.13+ note:** Python 3.13 introduced a security change that skips `.pth` files containing `import` statements in virtual environments. This silently breaks the editable install's `worker_plan_internal` package finder, causing a `ModuleNotFoundError` on every tool call. Setting `PYTHONPATH` to the `worker_plan` directory is the fix. Without it the server starts but all tool calls fail.
+> **Troubleshooting — `ModuleNotFoundError: No module named 'worker_plan_internal'`:** This means the editable install's `.pth` file is being skipped. On macOS this can happen if the venv's `site-packages` directory has the hidden flag set (Python 3.13 skips hidden `.pth` files). Fix: `chflags -R nohidden /path/to/PlanExe/.venv/lib/python3.13/site-packages/` then reinstall with `pip install -e worker_plan/`.
 
 ## Configuration
 

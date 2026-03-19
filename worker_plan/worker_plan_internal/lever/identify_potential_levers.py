@@ -99,6 +99,9 @@ class Lever(BaseModel):
     Renaming fields or changing descriptions is a prompt change — test with
     a self_improve iteration before merging. See OPTIMIZE_INSTRUCTIONS above.
     """
+    # Counting aid: models use this to track how many levers they've generated.
+    # Without it, models over-generate 8-12 per call instead of 5-7.
+    # Not passed to LeverCleaned — its value is in regulating output count.
     lever_index: int = Field(
         description="Index of this lever."
     )

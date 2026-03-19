@@ -35,8 +35,6 @@ python -m mcp_critic.server
 }
 ```
 
-> **Troubleshooting — `ModuleNotFoundError: No module named 'worker_plan_internal'`:** This means the editable install's `.pth` file is being skipped. On macOS this can happen if the venv's `site-packages` directory has the hidden flag set (Python 3.13 skips hidden `.pth` files). Fix: `chflags -R nohidden /path/to/PlanExe/.venv/lib/python3.13/site-packages/` then reinstall with `pip install -e worker_plan/`.
-
 ## Configuration
 
 | Env var | Description |

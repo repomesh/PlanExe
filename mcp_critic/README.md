@@ -67,7 +67,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Build a social media platform for cats that monetizes via pet food subscriptions",
+  "prompt": "Build a social media platform for cats that monetizes via dog food subscriptions",
   "format": "json"
 }
 ```
@@ -85,7 +85,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Open a dental clinic in Copenhagen targeting families. Budget 2.5M DKK.",
+  "prompt": "Open a artisanal ice cream shop in Antarctica targeting penguin researchers",
   "model_profile": "premium"
 }
 ```
@@ -95,7 +95,7 @@ The `critique` tool also accepts:
 ```json
 {
   "prompt": "Replace all government tax collection with a blockchain-based voluntary contribution system",
-  "tools": ["premise_attack", "premortem"],
+  "tools": ["premise_attack", "premortem", "swot"],
   "model_profile": "baseline",
   "format": "markdown"
 }

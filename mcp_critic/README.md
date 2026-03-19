@@ -52,8 +52,8 @@ All tools accept these optional parameters in addition to `prompt`:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `format` | `"json"` \| `"markdown"` | `"json"` | Response format. Use `"json"` for structured output (machine-readable), `"markdown"` for human-readable prose. |
-| `model_profile` | `"baseline"` \| `"premium"` \| `"frontier"` \| `"custom"` | env default | Override the model tier for this call. `baseline` is fastest/cheapest; `frontier` uses the most capable model. Overrides `PLANEXE_MODEL_PROFILE` env var for the duration of the call. |
+| `format` | `"json"` or `"markdown"` | `"json"` | Response format. Use `"json"` for structured output (machine-readable), `"markdown"` for human-readable prose. |
+| `model_profile` | `"baseline"` or `"premium"` or `"frontier"` or `"custom"` | env default | Override the model tier for this call. `baseline` is fastest/cheapest; `frontier` uses the most capable model. Overrides `PLANEXE_MODEL_PROFILE` env var for the duration of the call. |
 
 The `critique` tool also accepts:
 

@@ -61,8 +61,7 @@ all models in priority order from the active llm_config profile.
 
 ```json
 {
-  "prompt": "Launch a rocket startup targeting Mars cargo delivery within 5 years, $200M seed",
-  "speed_vs_detail": "fast_but_skip_details"
+  "prompt": "Launch a rocket startup targeting Mars cargo delivery within 5 years, $200M seed"
 }
 ```
 

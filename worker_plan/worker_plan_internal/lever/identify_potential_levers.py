@@ -104,18 +104,10 @@ class Lever(BaseModel):
         description=(
             "A short critical review of this lever — name the core tension, "
             "then identify a weakness the options miss. "
-            "See system prompt section 5 for examples. "
+            "See system prompt section 4 for examples. "
             "Do not use square brackets or placeholder text."
         )
     )
-    lever_classification: str = Field(
-        description=(
-            "Brief classification: category and what this lever controls. "
-            "Format: 'category — what this lever decides'. "
-            "Example: 'governance — who oversees the review process'."
-        )
-    )
-
     @field_validator('options', mode='before')
     @classmethod
     def parse_options(cls, v):
@@ -151,21 +143,14 @@ class Lever(BaseModel):
         PlanExe receives prompts in many non-English languages, so the
         validator must not rely on English markers like "Controls" or
         "Weakness:". Instead we enforce structural properties:
-        - minimum length (at least 50 characters)
+        - minimum length: 10 chars (hard limit). The enrich step adds
+          detail later, so 50 chars is the soft target but not enforced here.
         - no square-bracket placeholders (e.g. [Tension A])
         """
         if len(v) < 10:
             raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 10")
         if '[' in v or ']' in v:
             raise ValueError("review_lever must not contain square-bracket placeholders")
-        return v
-
-    @field_validator('lever_classification', mode='after')
-    @classmethod
-    def check_lever_classification(cls, v):
-        """Ensure lever_classification is a substantive phrase, not a single word."""
-        if len(v) < 10:
-            raise ValueError(f"lever_classification is too short ({len(v)} chars); expected at least 10")
         return v
 
 class DocumentDetails(BaseModel):
@@ -191,9 +176,6 @@ class LeverCleaned(BaseModel):
     )
     name: str = Field(
         description="Name of this lever."
-    )
-    lever_classification: str = Field(
-        description="Brief classification: category and what this lever decides."
     )
     consequences: str = Field(
         description=(
@@ -223,25 +205,19 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - You must generate 5 to 7 levers per response.
    - Each lever's `options` field must contain exactly 3 qualitative strategic choices as plain strings.
 
-2. **Lever Classification**
-   - `lever_classification`: a brief phrase with the category and what the lever decides.
-   - Format: "category — what this lever decides".
-   - Categories: methodology, execution, governance, dissemination, product, operations.
-   - Examples: "governance — who oversees the review process", "methodology — which data collection approach to use", "execution — how to sequence the rollout phases".
-
-3. **Lever Quality Standards**
+2. **Lever Quality Standards**
    - Consequences: describe the direct effect of pulling this lever, then at least one downstream implication or trade-off. Be concise and grounded — only cite specific numbers if the project context provides evidence for them. Do not fabricate percentages or cost estimates. Target length: 2–4 sentences.
    - Options MUST:
      • Represent genuinely distinct strategic pathways (not just labels)
      • Include at least one unconventional or non-obvious approach
      • NO prefixes (e.g., "Option A:", "Choice 1:")
 
-4. **Strategic Framing**
+3. **Strategic Framing**
    - Name each lever using language drawn directly from the project's own domain — avoid formulaic patterns or repeated prefixes
    - Frame options as complete strategic approaches
    - Ensure levers challenge core project assumptions
 
-5. **Validation Protocols**
+4. **Validation Protocols**
    - For `review_lever`:
      A short critical review — name the core tension, then identify a weakness the options miss.
      Examples:
@@ -250,14 +226,14 @@ You are an expert strategic analyst. Generate solution space parameters followin
      - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but a regional hurricane season can correlate all three simultaneously — correlation risk absent from every option."
      Do not use square brackets or placeholder text.
 
-6. **Prohibitions**
+5. **Prohibitions**
    - NO prefixes/labels in options (e.g., "Option A:", "Choice 1:")
    - NO generic option labels (e.g., "Optimize X", "Tolerate Y")
    - NO placeholder consequences or bracket-wrapped templates
    - NO fabricated statistics or percentages without evidence from the project context
    - NO marketing language (e.g., "game-changing", "cutting-edge", "revolutionary")
 
-7. **Option Structure**
+6. **Option Structure**
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions
    - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
@@ -369,7 +345,6 @@ class IdentifyPotentialLevers:
             lever_cleaned = LeverCleaned(
                 lever_id=lever_id,
                 name=lever.name,
-                lever_classification=lever.lever_classification,
                 consequences=lever.consequences,
                 options=lever.options,
                 review=lever.review_lever,

@@ -93,6 +93,12 @@ Known problems to guard against
 """
 
 class Lever(BaseModel):
+    """Schema sent to the LLM for structured output generation.
+
+    Field names and descriptions here directly influence LLM output quality.
+    Renaming fields or changing descriptions is a prompt change — test with
+    a self_improve iteration before merging. See OPTIMIZE_INSTRUCTIONS above.
+    """
     lever_index: int = Field(
         description="Index of this lever."
     )
@@ -168,6 +174,9 @@ class Lever(BaseModel):
         return v
 
 class DocumentDetails(BaseModel):
+    # Chain-of-thought field: forces the LLM to reason about the project's
+    # trade-offs before generating levers. Not passed downstream — its value
+    # is in improving lever quality, not in being read. Do NOT remove.
     strategic_rationale: Optional[str] = Field(
         default=None,
         description="A concise strategic analysis (around 100 words) of the project's core tensions and trade-offs. This rationale must JUSTIFY why the selected levers are the most critical levers for decision-making. For example, explain how the chosen levers navigate the fundamental conflicts between speed, cost, scope, and quality."
@@ -181,9 +190,11 @@ class DocumentDetails(BaseModel):
     )
 
 class LeverCleaned(BaseModel):
-    """
-    The Lever class has some ugly field names, that guide the LLM for what to generate. Changing them and the LLM can't generate as good results.
-    This class has nicer field names for the final output.
+    """Cleaned output schema — never sent to an LLM.
+
+    Maps Lever's LLM-facing field names (e.g. review_lever) to cleaner
+    names (e.g. review) for downstream consumption. Field descriptions
+    here are for documentation only and have no effect on LLM output.
     """
     lever_id: str = Field(
         description="A uuid that identifies this lever. The levers can be deduplicated and preserve their lever_id without leaving gaps in the numbering."
@@ -272,6 +283,8 @@ class IdentifyPotentialLevers:
             content=system_prompt,
         )
 
+        # Adaptive loop: keep calling until we have enough levers.
+        # Over-generation is fine — DeduplicateLeversTask handles extras.
         min_levers = 15
         max_calls = 5
         responses: list[DocumentDetails] = []

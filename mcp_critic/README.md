@@ -76,7 +76,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Launch a rocket startup targeting Mars cargo delivery within 5 years, $200M seed",
+  "prompt": "Launch a business that cleans and reassembles human skeletons for sale to universities and medical schools",
   "format": "markdown"
 }
 ```

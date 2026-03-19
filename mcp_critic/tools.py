@@ -27,7 +27,7 @@ def run_premise_attack(
         output_format: "json" (default) or "markdown".
 
     Returns:
-        dict with keys: verdict, lenses, metadata (json) or markdown (str).
+        dict with keys: lenses, metadata (json) or markdown (str).
     """
     from worker_plan_internal.diagnostics.premise_attack import (
         PremiseAttack,
@@ -70,12 +70,7 @@ def run_premise_attack(
         if name not in models_used:
             models_used.append(name)
 
-    # Derive overall verdict: REJECT if any lens rejects (bottom_line starts with REJECT)
-    has_reject = any("REJECT" in (l.get("bottom_line") or "").upper() for l in lenses)
-    verdict = "REJECT" if has_reject else "PROCEED"
-
     return {
-        "verdict": verdict,
         "lenses": lenses,
         "metadata": {
             "duration_seconds": result.metadata.get("duration", int(time.perf_counter() - start)),
@@ -202,7 +197,7 @@ def run_critique(
     output_format: str = "json",
 ) -> dict:
     """
-    Run all (or selected) critic tools and return a combined verdict.
+    Run all (or selected) critic tools and return combined analysis.
 
     Args:
         prompt: The plan to critique.

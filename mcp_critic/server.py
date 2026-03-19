@@ -127,10 +127,10 @@ async def handle_list_tools() -> list[Tool]:
         Tool(
             name="premise_attack",
             description=(
-                "Run PremiseAttack: a 5-lens ensemble that attacks the fundamental WHY of a plan. "
+                "Run PremiseAttack: a 5-lens devil's advocate that attacks the fundamental WHY of a plan. "
                 "Lenses: Integrity, Accountability, Spectrum, Cascade, Escalation. "
-                "Each lens independently produces reasons to reject, second-order effects, evidence, and a bottom line. "
-                "Returns a combined verdict (REJECT/PROCEED) with per-lens details."
+                "Each lens independently finds reasons the plan could fail, with second-order effects, evidence, and a bottom line. "
+                "Always critical by design — the value is in the quality of the criticism, not a pass/fail verdict."
             ),
             inputSchema=PREMISE_ATTACK_INPUT_SCHEMA,
             annotations=ToolAnnotations(

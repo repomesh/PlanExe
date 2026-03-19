@@ -11,7 +11,7 @@
             "api_key": "${ANTHROPIC_API_KEY}",
             "temperature": 1.0,
             "timeout": 120.0,
-            "max_tokens": 16000,
+            "max_tokens": 8192,
             "max_retries": 5
         },
         "pricing": {
@@ -31,7 +31,7 @@
             "api_key": "${ANTHROPIC_API_KEY}",
             "temperature": 1.0,
             "timeout": 120.0,
-            "max_tokens": 16000,
+            "max_tokens": 8192,
             "max_retries": 5
         },
         "pricing": {

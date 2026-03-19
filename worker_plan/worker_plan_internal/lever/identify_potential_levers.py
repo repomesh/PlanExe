@@ -108,7 +108,6 @@ class Lever(BaseModel):
             "Do not use square brackets or placeholder text."
         )
     )
-
     @field_validator('options', mode='before')
     @classmethod
     def parse_options(cls, v):
@@ -144,11 +143,12 @@ class Lever(BaseModel):
         PlanExe receives prompts in many non-English languages, so the
         validator must not rely on English markers like "Controls" or
         "Weakness:". Instead we enforce structural properties:
-        - minimum length (at least 50 characters)
+        - minimum length: 10 chars (hard limit). The enrich step adds
+          detail later, so 50 chars is the soft target but not enforced here.
         - no square-bracket placeholders (e.g. [Tension A])
         """
-        if len(v) < 50:
-            raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 50")
+        if len(v) < 10:
+            raise ValueError(f"review_lever is too short ({len(v)} chars); expected at least 10")
         if '[' in v or ']' in v:
             raise ValueError("review_lever must not contain square-bracket placeholders")
         return v
@@ -193,7 +193,7 @@ class LeverCleaned(BaseModel):
     )
     # This field description is never serialized to an LLM — LeverCleaned is
     # only used for cleaned output. Prompt-facing examples live in Lever.review_lever
-    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 4.
+    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 5.
     review: str = Field(
         description="A short critical review — names the core tension, then identifies a weakness the options miss."
     )
@@ -260,12 +260,13 @@ class IdentifyPotentialLevers:
             content=system_prompt,
         )
 
-        total_calls = 3
+        min_levers = 15
+        max_calls = 5
         responses: list[DocumentDetails] = []
         metadata_list: list[dict] = []
         generated_lever_names: list[str] = []
 
-        for call_index in range(1, total_calls + 1):
+        for call_index in range(1, max_calls + 1):
             if call_index == 1:
                 prompt_content = user_prompt
             else:
@@ -276,7 +277,7 @@ class IdentifyPotentialLevers:
                     f"{user_prompt}"
                 )
 
-            logger.info(f"Processing call {call_index} of {total_calls}")
+            logger.info(f"Processing call {call_index} of {max_calls} (have {len(generated_lever_names)} levers, need {min_levers})")
             call_messages = [
                 system_message,
                 ChatMessage(
@@ -313,7 +314,7 @@ class IdentifyPotentialLevers:
                 if len(responses) == 0:
                     raise llm_error from e
                 logger.warning(
-                    f"Call {call_index} of {total_calls} failed [{llm_error.error_id}], "
+                    f"Call {call_index} of {max_calls} failed [{llm_error.error_id}], "
                     f"continuing with {len(responses)} prior call(s)."
                 )
                 continue
@@ -321,6 +322,10 @@ class IdentifyPotentialLevers:
             generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
             responses.append(result["chat_response"].raw)
             metadata_list.append(result["metadata"])
+
+            if len(generated_lever_names) >= min_levers:
+                logger.info(f"Reached {len(generated_lever_names)} levers after {call_index} calls, stopping.")
+                break
 
         # from the raw_responses, extract the levers into a flatten list
         levers_raw: list[Lever] = []

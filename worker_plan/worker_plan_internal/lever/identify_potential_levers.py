@@ -140,7 +140,7 @@ class Lever(BaseModel):
     def check_option_count(cls, v):
         """Reject levers with fewer than 3 options.
 
-        Run 82 (llama, gta_game) produced levers with 2 options that
+        Some models produce levers with 2 options that
         silently passed validation and shipped to downstream tasks which
         assume at least 3 options per lever. Over-generation (>3) is
         tolerable; under-generation is not.
@@ -205,11 +205,8 @@ class LeverCleaned(BaseModel):
         description="Exactly 3 options for this lever. No more, no fewer. Each option must be a complete "
                     "strategic approach (a full sentence with an action verb), not a label."
     )
-    # This field description is never serialized to an LLM — LeverCleaned is
-    # only used for cleaned output. Prompt-facing examples live in Lever.review_lever
-    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 4.
     review: str = Field(
-        description="A short critical review — names the core tension, then identifies a weakness the options miss."
+        description="Critical review of this lever."
     )
 
 IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT = """

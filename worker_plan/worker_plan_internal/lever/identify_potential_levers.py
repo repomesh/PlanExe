@@ -83,6 +83,13 @@ Known problems to guard against
 - Verbosity amplification. Models mirror example verbosity, not just
   structure. Keep review_lever examples concise and enforce a length
   cap in the system prompt to prevent output overflow.
+- Field-description template lock. A Pydantic field description
+  containing a structural phrase (e.g. "name the core tension") is
+  read as a literal instruction — models start every output with
+  "The tension is…". Describe the required content ("identify the
+  primary trade-off and the specific gap") not the expected sentence
+  structure. The system-prompt examples alone cannot override a
+  structural cue embedded in the field description.
 """
 
 class Lever(BaseModel):
@@ -108,8 +115,9 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "A short critical review of this lever — name the core tension, "
-            "then identify a weakness the options miss. "
+            "A short critical review: identify the primary trade-off "
+            "this lever introduces, then state the specific gap the "
+            "three options leave unaddressed. "
             "See system prompt section 4 for examples. "
             "Do not use square brackets or placeholder text."
         )
@@ -225,7 +233,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
 
 4. **Validation Protocols**
    - For `review_lever`:
-     A short critical review — name the core tension, then identify a weakness the options miss.
+     A short critical review — identify the primary trade-off this lever introduces, then state the specific gap the three options leave unaddressed.
      Examples:
      - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but the idle-wage burden during the 5-month off-season adds a fixed cost that erases the per-unit savings unless utilization reaches year-round levels."
      - "Each additional clinical site requires its own IRB approval, site-initiation visit, and staff credentialing — a sequential overhead that compounds rather than parallelizes, so doubling site count does not halve enrollment time."
@@ -240,7 +248,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - NO marketing language (e.g., "game-changing", "cutting-edge", "revolutionary")
 
 6. **Length Limits**
-   - Keep each `review_lever` under 2 sentences (aim for 20–40 words). Name the tension and the missed weakness concisely.
+   - Keep each `review_lever` to one sentence (20–40 words). State the trade-off and the gap concisely.
    - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions

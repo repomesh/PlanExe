@@ -19,6 +19,18 @@ import logging
 import sys
 from typing import Any, Optional
 
+try:
+    import worker_plan_internal  # noqa: F401
+except ModuleNotFoundError:
+    print(
+        "ERROR: worker_plan_internal is not importable.\n"
+        "Make sure you have installed the project with:\n"
+        "    pip install -e worker_plan/\n"
+        "from the PlanExe root directory.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations

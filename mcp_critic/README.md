@@ -76,7 +76,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Launch a business that cleans and reassembles human skeletons for sale to universities and medical schools",
+  "prompt": "Start a human composting (terramation) facility in a conservative rural county — first-mover advantage but navigating funeral industry regulations and community resistance",
   "format": "markdown"
 }
 ```

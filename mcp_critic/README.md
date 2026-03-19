@@ -85,7 +85,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Open a artisanal ice cream shop in Antarctica targeting penguin researchers",
+  "prompt": "Compete in the regional bodybuilding championship as a veteran athlete facing hungry newcomers with better genetics and more time to train",
   "model_profile": "premium"
 }
 ```
@@ -113,22 +113,4 @@ for t in tools:
 "
 ```
 
-## Architecture
 
-```
-External Agent / MCP Client
-    │
-    ▼
-mcp_critic/server.py     — MCP server, tool definitions, async handlers
-    │
-    ▼
-mcp_critic/tools.py      — sync wrappers around diagnostic classes
-    │
-    ├── PremiseAttack.execute()     (worker_plan_internal/diagnostics/premise_attack.py)
-    ├── Premortem.execute()         (worker_plan_internal/diagnostics/premortem.py)
-    └── swot_phase2_conduct_analysis()  (worker_plan_internal/swot/swot_phase2_conduct_analysis.py)
-
-mcp_critic/config.py     — LLMExecutor construction from env vars
-```
-
-No diagnostic code is copied — all logic is imported from `worker_plan_internal`.

@@ -240,7 +240,6 @@ async def handle_premortem(arguments: dict[str, Any]) -> CallToolResult:
     from mcp_critic.tools import run_premortem
 
     prompt = arguments.get("prompt", "")
-    speed_vs_detail = "all_details_but_slow"  # Always full detail for consumers
     model_profile = arguments.get("model_profile") or None
     output_format = arguments.get("format", "json")
 
@@ -250,7 +249,6 @@ async def handle_premortem(arguments: dict[str, Any]) -> CallToolResult:
             None,
             lambda: run_premortem(
                 prompt=prompt,
-                speed_vs_detail=speed_vs_detail,
                 model_profile=model_profile,
                 output_format=output_format,
             ),

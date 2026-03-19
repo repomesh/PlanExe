@@ -82,7 +82,6 @@ def run_premise_attack(
 
 def run_premortem(
     prompt: str,
-    speed_vs_detail: str = "all_details_but_slow",
     model_profile: Optional[str] = None,
     output_format: str = "json",
 ) -> dict:
@@ -91,7 +90,6 @@ def run_premortem(
 
     Args:
         prompt: The plan to analyze for failure modes.
-        speed_vs_detail: "fast_but_skip_details" or "all_details_but_slow".
         model_profile: Optional model profile.
         output_format: "json" (default) or "markdown".
 
@@ -103,16 +101,10 @@ def run_premortem(
 
     llm_executor = build_llm_executor(model_profile=model_profile)
 
-    svd_map = {
-        "fast_but_skip_details": SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS,
-        "all_details_but_slow": SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
-    }
-    svd = svd_map.get(speed_vs_detail.lower(), SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS)
-
     try:
         result = Premortem.execute(
             llm_executor=llm_executor,
-            speed_vs_detail=svd,
+            speed_vs_detail=SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
             user_prompt=prompt,
         )
     except Exception as e:

@@ -193,7 +193,7 @@ class LeverCleaned(BaseModel):
     )
     # This field description is never serialized to an LLM — LeverCleaned is
     # only used for cleaned output. Prompt-facing examples live in Lever.review_lever
-    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 5.
+    # and IDENTIFY_POTENTIAL_LEVERS_SYSTEM_PROMPT section 4.
     review: str = Field(
         description="A short critical review — names the core tension, then identifies a weakness the options miss."
     )

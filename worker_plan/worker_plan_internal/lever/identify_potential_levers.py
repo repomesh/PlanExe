@@ -74,9 +74,10 @@ Known problems to guard against
   template lock — weaker models shift to copying subphrases within the
   new examples (e.g. "the options neglect", "the options assume").
   Examples must avoid reusable transitional phrases that fit any domain.
-  The agriculture example ("but none of the options price in the
-  idle-wage burden during the 5-month off-season") is the correct
-  structural template: its critique is domain-specific and non-portable.
+  Each example must name a domain-specific mechanism or constraint
+  directly (e.g. "the idle-wage burden adds a fixed cost", "a mandatory
+  45–180-day public comment period") rather than referencing "the options"
+  as grammatical subject. No two examples should share a sentence pattern.
 """
 
 class Lever(BaseModel):
@@ -221,9 +222,9 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - For `review_lever`:
      A short critical review — name the core tension, then identify a weakness the options miss.
      Examples:
-     - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but none of the options price in the idle-wage burden during the 5-month off-season."
-     - "Routing the light-rail extension through the historic district unlocks ridership but triggers Section 106 heritage review; the options assume permits will clear on the standard timeline."
-     - "Pooling catastrophe risk across three coastal regions diversifies exposure on paper, but a regional hurricane season can correlate all three simultaneously — correlation risk absent from every option."
+     - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but the idle-wage burden during the 5-month off-season adds a fixed cost that erases the per-unit savings unless utilization reaches year-round levels."
+     - "Section 106 heritage review for the historic-district alignment triggers a mandatory 45–180-day public comment period that falls entirely outside the project schedule — any opening date committed before permits clear is betting on the minimum review timeline, not the median."
+     - "Pooling catastrophe risk across three coastal regions reduces expected annual loss on paper, but a single regional hurricane season can correlate all three simultaneously, turning the diversification assumption into a concentration risk at the worst possible moment."
      Do not use square brackets or placeholder text.
 
 5. **Prohibitions**

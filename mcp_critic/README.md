@@ -46,6 +46,21 @@ python -m mcp_critic.server
 If neither `LLM_MODEL` nor `PLANEXE_MODEL_PROFILE` is set, the server uses
 all models in priority order from the active llm_config profile.
 
+## Parameters
+
+All tools accept these optional parameters in addition to `prompt`:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `format` | `"json"` \| `"markdown"` | `"json"` | Response format. Use `"json"` for structured output (machine-readable), `"markdown"` for human-readable prose. |
+| `model_profile` | `"baseline"` \| `"premium"` \| `"frontier"` \| `"custom"` | env default | Override the model tier for this call. `baseline` is fastest/cheapest; `frontier` uses the most capable model. Overrides `PLANEXE_MODEL_PROFILE` env var for the duration of the call. |
+
+The `critique` tool also accepts:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `tools` | `string[]` | all three | Which tools to run. Any subset of `["premise_attack", "premortem", "swot"]`. Partial results are returned if any tool fails. |
+
 ## Example calls
 
 ### premise_attack
@@ -61,7 +76,8 @@ all models in priority order from the active llm_config profile.
 
 ```json
 {
-  "prompt": "Launch a rocket startup targeting Mars cargo delivery within 5 years, $200M seed"
+  "prompt": "Launch a rocket startup targeting Mars cargo delivery within 5 years, $200M seed",
+  "format": "markdown"
 }
 ```
 
@@ -69,7 +85,8 @@ all models in priority order from the active llm_config profile.
 
 ```json
 {
-  "prompt": "Open a dental clinic in Copenhagen targeting families. Budget 2.5M DKK."
+  "prompt": "Open a dental clinic in Copenhagen targeting families. Budget 2.5M DKK.",
+  "model_profile": "premium"
 }
 ```
 

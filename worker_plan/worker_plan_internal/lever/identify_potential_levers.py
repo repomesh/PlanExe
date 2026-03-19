@@ -75,9 +75,14 @@ Known problems to guard against
   new examples (e.g. "the options neglect", "the options assume").
   Examples must avoid reusable transitional phrases that fit any domain.
   Each example must name a domain-specific mechanism or constraint
-  directly (e.g. "the idle-wage burden adds a fixed cost", "a mandatory
-  45–180-day public comment period") rather than referencing "the options"
-  as grammatical subject. No two examples should share a sentence pattern.
+  directly rather than referencing "the options" as grammatical subject.
+  No two examples should share a sentence pattern or rhetorical
+  structure. Span at least three distinct domains. Do NOT add explicit
+  prohibitions naming banned phrases — small models treat the
+  prohibition text as a template and copy the banned phrases.
+- Verbosity amplification. Models mirror example verbosity, not just
+  structure. Keep review_lever examples concise and enforce a length
+  cap in the system prompt to prevent output overflow.
 """
 
 class Lever(BaseModel):
@@ -223,7 +228,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
      A short critical review — name the core tension, then identify a weakness the options miss.
      Examples:
      - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but the idle-wage burden during the 5-month off-season adds a fixed cost that erases the per-unit savings unless utilization reaches year-round levels."
-     - "Section 106 heritage review for the historic-district alignment triggers a mandatory 45–180-day public comment period that falls entirely outside the project schedule — any opening date committed before permits clear is betting on the minimum review timeline, not the median."
+     - "Each additional clinical site requires its own IRB approval, site-initiation visit, and staff credentialing — a sequential overhead that compounds rather than parallelizes, so doubling site count does not halve enrollment time."
      - "Pooling catastrophe risk across three coastal regions reduces expected annual loss on paper, but a single regional hurricane season can correlate all three simultaneously, turning the diversification assumption into a concentration risk at the worst possible moment."
      Do not use square brackets or placeholder text.
 
@@ -234,10 +239,11 @@ You are an expert strategic analyst. Generate solution space parameters followin
    - NO fabricated statistics or percentages without evidence from the project context
    - NO marketing language (e.g., "game-changing", "cutting-edge", "revolutionary")
 
-6. **Option Structure**
+6. **Length Limits**
+   - Keep each `review_lever` under 2 sentences (aim for 20–40 words). Name the tension and the missed weakness concisely.
+   - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
    - Maintain parallel grammatical structure across options
    - Ensure options are self-contained descriptions
-   - Each option should be a concrete, actionable approach (at least 15 words with an action verb) — not a short label or vague aspiration
 """
 
 @dataclass
@@ -308,11 +314,11 @@ class IdentifyPotentialLevers:
                 llm_error = LLMChatError(cause=e)
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
-                # If earlier calls succeeded, keep their levers instead of
-                # discarding everything. A single validator rejection (e.g.,
-                # one lever with 2 options) should not wipe out 10+ valid
-                # levers from prior calls.
-                if len(responses) == 0:
+                # Let the adaptive loop retry — even first-call failures
+                # may be stochastic (e.g. llama3.1 producing 2 options on
+                # one attempt but 3 on the next). The loop has max_calls=5,
+                # so persistent failures will exhaust retries naturally.
+                if len(responses) == 0 and call_index == max_calls:
                     raise llm_error from e
                 logger.warning(
                     f"Call {call_index} of {max_calls} failed [{llm_error.error_id}], "

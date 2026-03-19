@@ -87,7 +87,7 @@ def run_premise_attack(
 
 def run_premortem(
     prompt: str,
-    speed_vs_detail: str = "fast_but_skip_details",
+    speed_vs_detail: str = "all_details_but_slow",
     model_profile: Optional[str] = None,
     output_format: str = "json",
 ) -> dict:

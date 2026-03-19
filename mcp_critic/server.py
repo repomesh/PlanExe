@@ -63,15 +63,7 @@ PREMORTEM_INPUT_SCHEMA = {
             "type": "string",
             "description": "The plan to analyze for failure modes.",
         },
-        "speed_vs_detail": {
-            "type": "string",
-            "enum": ["fast_but_skip_details", "all_details_but_slow"],
-            "default": "fast_but_skip_details",
-            "description": (
-                "fast_but_skip_details: 3 assumptions + 3 failure modes (1 LLM call). "
-                "all_details_but_slow: 9 assumptions + 9 failure modes (3 LLM calls)."
-            ),
-        },
+
         "model_profile": MODEL_PROFILE_SCHEMA,
         "format": OUTPUT_FORMAT_SCHEMA,
     },
@@ -154,7 +146,7 @@ async def handle_list_tools() -> list[Tool]:
                 "Run Premortem: imagine the project has failed and work backward. "
                 "Produces assumptions_to_kill (foundational beliefs to validate immediately) "
                 "and failure_modes (causal failure stories with tripwires, playbooks, and stop rules). "
-                "Use fast_but_skip_details for quick analysis or all_details_but_slow for comprehensive coverage."
+                "Runs comprehensive analysis with full detail."
             ),
             inputSchema=PREMORTEM_INPUT_SCHEMA,
             annotations=ToolAnnotations(
@@ -248,7 +240,7 @@ async def handle_premortem(arguments: dict[str, Any]) -> CallToolResult:
     from mcp_critic.tools import run_premortem
 
     prompt = arguments.get("prompt", "")
-    speed_vs_detail = arguments.get("speed_vs_detail", "fast_but_skip_details")
+    speed_vs_detail = "all_details_but_slow"  # Always full detail for consumers
     model_profile = arguments.get("model_profile") or None
     output_format = arguments.get("format", "json")
 

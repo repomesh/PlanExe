@@ -85,7 +85,7 @@ The `critique` tool also accepts:
 
 ```json
 {
-  "prompt": "Compete in the regional bodybuilding championship as a veteran athlete facing hungry newcomers with better genetics and more time to train",
+  "prompt": "Organize a regional bodybuilding competition in a small town — strong local gym community but threatened by a new CrossFit franchise and limited sponsorship budget",
   "model_profile": "premium"
 }
 ```

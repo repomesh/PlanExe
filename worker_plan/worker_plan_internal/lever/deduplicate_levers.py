@@ -27,26 +27,51 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 
 logger = logging.getLogger(__name__)
 
-OPTIMIZE_INSTRUCTIONS = """
-Known failure modes (for the self-improve optimization loop, not injected into the LLM prompt):
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: consolidate a brainstormed list of levers into a deduplicated,
+prioritized set by scoring each lever on a Likert scale (-2 to +2).
+The surviving levers (score >= 1) should be distinct, grounded, and
+actionable — ready for enrichment and scenario generation downstream.
 
-1. Blanket-primary: Weak models score nearly every lever as 2,
-   performing zero removals. Watch for runs where all scores are >= 1.
-2. Over-inclusion: Mid-tier models keep 10-12 of 15 levers instead of the
-   expected 5-8. Check the score distribution.
-3. Hierarchy-direction errors: Models score -1 on the general lever and keep
-   the narrow one — reversed from correct behavior.
-4. Chain absorption: When lever A overlaps B and B overlaps C, all three end
-   up removed except C. Check that the surviving lever is the most general.
-5. Calibration capping: Narrow ranges act as stopping signals — models stop
-   scoring negatively once they hit a threshold.
-6. Definition mirroring: Weak models copy the score definition verbatim into
-   every justification (e.g. "addresses a real concern but does not gate the
-   core outcome"), producing content-free boilerplate. The model loses the
-   ability to distinguish levers from each other, which also suppresses
-   negative scores. Fix: the prompt uses a conditional question test ("If this
-   lever were handled wrong, would the project fail?") rather than a reusable
-   dictionary definition.
+Pipeline context
+----------------
+This step (DeduplicateLevers) is part of a 6-step solution-space
+exploration pipeline inside run_plan_pipeline.py:
+
+  1. IdentifyPotentialLevers  — brainstorms 15-20 raw levers
+  2. DeduplicateLevers        ← you are here
+  3. EnrichLevers             — adds description, synergy, and conflict text
+  4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
+  5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
+  6. ScenarioSelection        — picks the best-fitting scenario
+
+Step 1 intentionally over-generates. This step's job is to remove
+near-duplicates and tag each surviving lever as primary (strategic) or
+secondary (operational). Over-removal is worse than over-inclusion —
+step 4 handles further filtering. The classification field (primary/
+secondary) is consumed by downstream steps for prioritization.
+
+Known problems to guard against
+--------------------------------
+- Blanket-primary. Weak models score nearly every lever as 2,
+  performing zero removals. Watch for runs where all scores are >= 1.
+- Over-inclusion. Mid-tier models keep 10-12 of 15 levers instead of
+  the expected 5-8. Check the score distribution.
+- Hierarchy-direction errors. Models score -1 on the general lever
+  and keep the narrow one — reversed from correct behavior. The more
+  general lever should survive; the specific one should be removed.
+- Chain absorption. When lever A overlaps B and B overlaps C, all
+  three end up removed except C. Check that the surviving lever is
+  the most general.
+- Calibration capping. Narrow calibration ranges act as stopping
+  signals — models stop scoring negatively once they hit a threshold.
+- Definition mirroring. Weak models copy the score definition verbatim
+  into every justification (e.g. "addresses a real concern but does
+  not gate the core outcome"), producing content-free boilerplate.
+  The model loses the ability to distinguish levers from each other,
+  which also suppresses negative scores. Fix: the prompt uses a
+  conditional question test ("If this lever were handled wrong, would
+  the project fail?") rather than a reusable dictionary definition.
 """
 
 # --- Pydantic Models ---

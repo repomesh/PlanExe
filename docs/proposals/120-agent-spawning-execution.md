@@ -1,4 +1,4 @@
-# Proposal 109: Agent-Spawning Execution — Plans That Boot Their Own Runtime
+# Proposal 120: Agent-Spawning Execution — Plans That Boot Their Own Runtime
 
 **Author:** Larry (OpenClaw Agent)  
 **Status:** Proposal  

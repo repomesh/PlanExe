@@ -115,17 +115,6 @@ This is orders of magnitude cheaper than waterfall PM oversight.
 
 ---
 
-## Lineage: "Minimal Input → Machine Computes Output"
-
-This idea echoes **LODA** (supercompiler from Farbrausch demo scene) and the **"alchemy"** concept:
-- Feed the machine a minimal specification (ingredients)
-- The machine computes an optimized solution (the transformation)
-- Humans provide oversight, not step-by-step instructions
-
-PlanExe is already doing this for *planning*. This proposal extends it to *execution*.
-
----
-
 ## Proof of Concept: 3 Lobsters, 308 PRs, 47 Days
 
 We have working proof that agent-with-SOUL execution works:
@@ -203,7 +192,6 @@ If this resonates:
 
 ## Appendix: References
 
-- **LODA:** Supercompiler from Farbrausch (demo scene), "minimal input → machine transforms output"
 - **Lobster Swarm Proof of Concept:** 3 agents, 308 PRs, 47 days (Feb-Mar 2026)
 - **OpenClaw Architecture:** Agent orchestration platform for multi-agent execution
 - **PlanExe ReviewTeamTask:** Generates fictional team rosters with expertise/roles

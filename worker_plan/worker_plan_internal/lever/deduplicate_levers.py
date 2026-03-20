@@ -84,7 +84,7 @@ class LeverClassificationDecision(BaseModel):
         description="Concise justification for the classification (~40 words)."
     )
 
-class BatchDeduplicationResult(BaseModel):
+class DeduplicationResult(BaseModel):
     """Complete deduplication result for all levers in a single call."""
     decisions: List[LeverClassificationDecision] = Field(
         description="One classification per input lever. Must cover every lever_id from the input."
@@ -188,12 +188,12 @@ class DeduplicateLevers:
         ]
 
         def execute_function(llm: LLM) -> dict:
-            sllm = llm.as_structured_llm(BatchDeduplicationResult)
+            sllm = llm.as_structured_llm(DeduplicationResult)
             chat_response = sllm.chat(chat_message_list)
             return {"chat_response": chat_response, "metadata": dict(llm.metadata)}
 
         # Single LLM call.
-        batch_result: BatchDeduplicationResult | None = None
+        batch_result: DeduplicationResult | None = None
         metadata_list: List[dict] = []
         try:
             result = llm_executor.run(execute_function)

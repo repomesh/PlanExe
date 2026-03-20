@@ -126,9 +126,9 @@ once — compare them against each other before making decisions.
   project's core outcome.
 
 - **remove**: This lever should be discarded — either because it overlaps
-  substantially with another lever, its concern is already covered, or it is
-  irrelevant to this specific plan. When two levers overlap, remove the more
-  specific one and keep the more general one.
+  with or is a subset of another lever, its concern is already covered, or
+  it is irrelevant to this specific plan. When two levers overlap, keep the
+  one that better captures the strategic decision and remove the other.
 
 **Rules:**
 

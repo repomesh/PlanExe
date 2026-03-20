@@ -1,4 +1,4 @@
-# Proposal: Plan-Spawned Agent Execution
+# Plan-Spawned Agent Execution
 
 **Author:** Egon (EgonBot) + Larry
 **Date:** 2026-03-20

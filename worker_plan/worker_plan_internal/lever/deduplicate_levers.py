@@ -111,9 +111,9 @@ class OutputLever(InputLever):
 
 
 DEDUPLICATE_SYSTEM_PROMPT = """
-You are deduplicating a set of strategic levers for a project plan. Your task
-is to classify every lever and provide a justification. You see all levers at
-once — compare them against each other before making decisions.
+You are triaging a set of strategic levers for a project plan. Your task is to
+classify every lever and provide a justification. You see all levers at once —
+compare them against each other before making decisions.
 
 **Classifications:**
 

@@ -108,7 +108,6 @@ class LeverDecision(BaseModel):
     """Stored decision for each lever (used in response output)."""
     lever_id: str
     score: Literal[-2, -1, 0, 1, 2]
-    classification: Literal["primary", "secondary", "remove"]
     justification: str
 
 class InputLever(BaseModel):
@@ -245,7 +244,6 @@ class DeduplicateLevers:
                 decisions.append(LeverDecision(
                     lever_id=score_decision.lever_id,
                     score=score_decision.score,
-                    classification=_score_to_classification(score_decision.score),
                     justification=score_decision.justification,
                 ))
 
@@ -257,7 +255,6 @@ class DeduplicateLevers:
                 decisions.append(LeverDecision(
                     lever_id=lever.lever_id,
                     score=2,
-                    classification="primary",
                     justification="Not scored by LLM. Keeping as primary to avoid data loss.",
                 ))
 
@@ -275,7 +272,7 @@ class DeduplicateLevers:
 
             output_lever = OutputLever(
                 **lever.model_dump(),
-                classification=lever_decision.classification,
+                classification=_score_to_classification(lever_decision.score),
                 deduplication_justification=deduplication_justification,
             )
             output_levers.append(output_lever)

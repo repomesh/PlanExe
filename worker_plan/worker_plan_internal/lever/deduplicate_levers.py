@@ -88,11 +88,7 @@ class LeverScoreDecision(BaseModel):
         )
     )
     justification: str = Field(
-        description=(
-            "Concise justification for the score (~40-80 words). "
-            "Explain what makes this lever relevant or irrelevant to the plan. "
-            "Do not reuse the score definition as your justification."
-        )
+        description="Concise justification for the score (~40-80 words)."
     )
 
 class BatchDeduplicationResult(BaseModel):
@@ -159,9 +155,7 @@ to score how relevant each lever is to this specific plan.
 - Score every lever in the input. Do not skip any.
 - Read the project context carefully. A lever that sounds important in general
   may be irrelevant to this specific plan, and vice versa.
-- Each justification must explain your reasoning in terms of the plan — what
-  makes this lever relevant or irrelevant here. Do not reuse the score
-  definitions as your justification.
+- Each justification must explain your reasoning in terms of the plan.
 - When two levers cover similar ground, score the more general one higher and
   the more specific one lower.
 - Expect 25-50% of levers to score 0 or below. If you score everything 1 or

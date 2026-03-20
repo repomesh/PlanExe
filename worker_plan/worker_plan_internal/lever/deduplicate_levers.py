@@ -71,7 +71,7 @@ Known problems to guard against
 # --- Pydantic Models ---
 
 class LeverClassificationDecision(BaseModel):
-    """Classification decision for a single lever in the batch."""
+    """Classification decision for a single lever."""
     lever_id: str = Field(description="The lever_id being classified.")
     classification: Literal["primary", "secondary", "remove"] = Field(
         description=(

@@ -27,6 +27,28 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 
 logger = logging.getLogger(__name__)
 
+OPTIMIZE_INSTRUCTIONS = """
+Known failure modes (for the self-improve optimization loop, not injected into the LLM prompt):
+
+1. Blanket-primary: Weak models score nearly every lever as 2,
+   performing zero removals. Watch for runs where all scores are >= 1.
+2. Over-inclusion: Mid-tier models keep 10-12 of 15 levers instead of the
+   expected 5-8. Check the score distribution.
+3. Hierarchy-direction errors: Models score -1 on the general lever and keep
+   the narrow one — reversed from correct behavior.
+4. Chain absorption: When lever A overlaps B and B overlaps C, all three end
+   up removed except C. Check that the surviving lever is the most general.
+5. Calibration capping: Narrow ranges act as stopping signals — models stop
+   scoring negatively once they hit a threshold.
+6. Definition mirroring: Weak models copy the score definition verbatim into
+   every justification (e.g. "addresses a real concern but does not gate the
+   core outcome"), producing content-free boilerplate. The model loses the
+   ability to distinguish levers from each other, which also suppresses
+   negative scores. Fix: the prompt uses a conditional question test ("If this
+   lever were handled wrong, would the project fail?") rather than a reusable
+   dictionary definition.
+"""
+
 # --- Pydantic Models ---
 
 class LeverScoreDecision(BaseModel):
@@ -124,29 +146,6 @@ every lever on a 5-point Likert scale and provide a justification.
 - Compare all levers against each other before assigning scores. You see the
   full list at once — use that global view.
 """
-
-OPTIMIZE_INSTRUCTIONS = """
-Known failure modes (for the self-improve optimization loop, not injected into the LLM prompt):
-
-1. Blanket-primary: Weak models score nearly every lever as 2,
-   performing zero removals. Watch for runs where all scores are >= 1.
-2. Over-inclusion: Mid-tier models keep 10-12 of 15 levers instead of the
-   expected 5-8. Check the score distribution.
-3. Hierarchy-direction errors: Models score -1 on the general lever and keep
-   the narrow one — reversed from correct behavior.
-4. Chain absorption: When lever A overlaps B and B overlaps C, all three end
-   up removed except C. Check that the surviving lever is the most general.
-5. Calibration capping: Narrow ranges act as stopping signals — models stop
-   scoring negatively once they hit a threshold.
-6. Definition mirroring: Weak models copy the score definition verbatim into
-   every justification (e.g. "addresses a real concern but does not gate the
-   core outcome"), producing content-free boilerplate. The model loses the
-   ability to distinguish levers from each other, which also suppresses
-   negative scores. Fix: the prompt uses a conditional question test ("If this
-   lever were handled wrong, would the project fail?") rather than a reusable
-   dictionary definition.
-"""
-
 
 @dataclass
 class DeduplicateLevers:

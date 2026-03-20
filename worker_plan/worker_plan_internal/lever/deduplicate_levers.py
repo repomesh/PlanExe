@@ -81,7 +81,7 @@ class LeverClassificationDecision(BaseModel):
         )
     )
     justification: str = Field(
-        description="Concise justification for the classification (~40 words)."
+        description="Concise justification for the classification (~20-30 words)."
     )
 
 class DeduplicationResult(BaseModel):

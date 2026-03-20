@@ -224,15 +224,15 @@ class DeduplicateLevers:
                     justification=decision.justification,
                 ))
 
-        # Handle missing decisions — any lever not classified defaults to primary.
+        # Handle missing decisions — any lever not classified defaults to secondary.
         classified_ids = {d.lever_id for d in decisions}
         for lever in input_levers:
             if lever.lever_id not in classified_ids:
-                logger.warning(f"Lever {lever.lever_id}: not classified by LLM. Defaulting to primary.")
+                logger.warning(f"Lever {lever.lever_id}: not classified by LLM. Defaulting to secondary.")
                 decisions.append(LeverDecision(
                     lever_id=lever.lever_id,
-                    classification="primary",
-                    justification="Not classified by LLM. Keeping as primary to avoid data loss.",
+                    classification="secondary",
+                    justification="Not classified by LLM. Keeping as secondary to avoid data loss.",
                 ))
 
         # Build output levers (keep primary + secondary).

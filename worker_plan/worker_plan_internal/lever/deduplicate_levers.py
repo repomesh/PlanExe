@@ -1,15 +1,11 @@
 """
 The identify_potential_levers.py script creates a list of levers, some of which are duplicates.
-This script deduplicates the list using a single-call Likert scoring approach.
+This script deduplicates the list using a single batch LLM call.
 
-Each lever is scored on a 5-point scale:
-  2 = primary (essential strategic decision)
-  1 = secondary (useful but supporting)
-  0 = borderline
- -1 = overlapping (absorbed by another lever)
- -2 = irrelevant (fully redundant)
-
-Levers scoring >= 1 are kept; levers scoring <= 0 are removed.
+Each lever is classified as:
+  primary   — essential strategic decision, kept
+  secondary — useful but supporting, kept
+  remove    — redundant or overlapping, discarded
 
 PROMPT> python -m worker_plan_internal.lever.deduplicate_levers
 
@@ -29,9 +25,9 @@ logger = logging.getLogger(__name__)
 
 OPTIMIZE_INSTRUCTIONS = """\
 Goal: consolidate a brainstormed list of levers into a deduplicated,
-prioritized set by scoring each lever on a Likert scale (-2 to +2).
-The surviving levers (score >= 1) should be distinct, grounded, and
-actionable — ready for enrichment and scenario generation downstream.
+prioritized set. The surviving levers (primary + secondary) should be
+distinct, grounded, and actionable — ready for enrichment and scenario
+generation downstream.
 
 Pipeline context
 ----------------
@@ -53,54 +49,51 @@ secondary) is consumed by downstream steps for prioritization.
 
 Known problems to guard against
 --------------------------------
-- Blanket-primary. Weak models score nearly every lever as 2,
-  performing zero removals. Watch for runs where all scores are >= 1.
+- Blanket-primary. Weak models classify nearly every lever as primary,
+  performing zero removals. Watch for runs where remove count is 0.
 - Over-inclusion. Mid-tier models keep 10-12 of 15 levers instead of
-  the expected 5-8. Check the score distribution.
-- Hierarchy-direction errors. Models score -1 on the general lever
-  and keep the narrow one — reversed from correct behavior. The more
-  general lever should survive; the specific one should be removed.
+  the expected 5-8. Check the classification distribution.
+- Hierarchy-direction errors. Models remove the general lever and keep
+  the narrow one — reversed from correct behavior. The more general
+  lever should survive; the specific one should be removed.
 - Chain absorption. When lever A overlaps B and B overlaps C, all
   three end up removed except C. Check that the surviving lever is
   the most general.
 - Calibration capping. Narrow calibration ranges act as stopping
-  signals — models stop scoring negatively once they hit a threshold.
-- Definition mirroring. Weak models copy the score definition verbatim
-  into every justification (e.g. "addresses a real concern but does
-  not gate the core outcome"), producing content-free boilerplate.
+  signals — models stop removing once they hit a threshold.
+- Definition mirroring. Weak models copy the classification definition
+  verbatim into every justification, producing content-free boilerplate.
   The model loses the ability to distinguish levers from each other,
-  which also suppresses negative scores. Fix: the prompt uses a
-  conditional question test ("If this lever were handled wrong, would
-  the project fail?") rather than a reusable dictionary definition.
+  which also suppresses remove decisions. Fix: use conditional question
+  tests rather than reusable dictionary definitions.
 """
 
 # --- Pydantic Models ---
 
-class LeverScoreDecision(BaseModel):
-    """Score decision for a single lever."""
-    lever_id: str = Field(description="The lever_id being scored.")
-    score: Literal[-2, -1, 0, 1, 2] = Field(
+class LeverClassificationDecision(BaseModel):
+    """Classification decision for a single lever in the batch."""
+    lever_id: str = Field(description="The lever_id being classified.")
+    classification: Literal["primary", "secondary", "remove"] = Field(
         description=(
-            "How relevant is this lever to this specific project plan? "
-            "2 = highly relevant, 1 = somewhat relevant, 0 = borderline, "
-            "-1 = low relevance or overlaps a better lever, "
-            "-2 = irrelevant or fully redundant."
+            "primary: essential strategic decision, "
+            "secondary: useful but supporting, "
+            "remove: redundant or overlapping with another lever."
         )
     )
     justification: str = Field(
-        description="Concise justification for the score (~40-80 words)."
+        description="Concise justification for the classification (~40-80 words)."
     )
 
 class BatchDeduplicationResult(BaseModel):
     """Complete deduplication result for all levers in a single call."""
-    decisions: List[LeverScoreDecision] = Field(
-        description="One score decision per input lever. Must cover every lever_id from the input."
+    decisions: List[LeverClassificationDecision] = Field(
+        description="One classification per input lever. Must cover every lever_id from the input."
     )
 
 class LeverDecision(BaseModel):
     """Stored decision for each lever (used in response output)."""
     lever_id: str
-    score: Literal[-2, -1, 0, 1, 2]
+    classification: Literal["primary", "secondary", "remove"]
     justification: str
 
 class InputLever(BaseModel):
@@ -117,52 +110,39 @@ class OutputLever(InputLever):
     deduplication_justification: str
 
 
-def _score_to_classification(score: int) -> Literal["primary", "secondary", "remove"]:
-    """Map a Likert score to a classification label."""
-    if score >= 2:
-        return "primary"
-    elif score >= 1:
-        return "secondary"
-    else:
-        return "remove"
-
-
 DEDUPLICATE_SYSTEM_PROMPT = """
-You are evaluating a set of strategic levers for a project plan. Your task is
-to score how relevant each lever is to this specific plan.
+You are deduplicating a set of strategic levers for a project plan. Your task
+is to classify every lever and provide a justification. You see all levers at
+once — compare them against each other before making decisions.
 
-**Scoring scale:**
+**Classifications:**
 
-- **2** (highly relevant): This lever directly addresses a core challenge or
-  opportunity in the plan. The plan would be significantly weaker without it.
+- **primary**: This lever is an essential strategic decision for the plan.
+  Ask: "If this lever were handled badly, would the project fail or succeed
+  in a fundamentally different way?" If yes, classify as primary.
 
-- **1** (somewhat relevant): This lever addresses a real concern in the plan
-  but is not central to the project's success.
+- **secondary**: This lever addresses a real concern in the plan but is not
+  a top-level strategic choice. It matters for delivery but does not gate the
+  project's core outcome.
 
-- **0** (borderline): Marginal relevance. Could be included or excluded
-  without significant impact on the plan.
-
-- **-1** (low relevance): This lever adds little value — either because it
-  overlaps substantially with a more relevant lever, or because it addresses
-  a concern that is peripheral to this plan.
-
-- **-2** (irrelevant): This lever does not meaningfully contribute to the plan.
-  It is redundant, off-topic, or its concern is already fully covered by
-  other levers.
+- **remove**: This lever is redundant — it overlaps substantially with another
+  lever, or its concern is already covered. State which lever it overlaps with
+  in your justification. When two levers overlap, remove the more specific one
+  and keep the more general one.
 
 **Rules:**
 
-- Score every lever in the input. Do not skip any.
-- Read the project context carefully. A lever that sounds important in general
-  may be irrelevant to this specific plan, and vice versa.
-- Each justification must explain your reasoning in terms of the plan.
-- When two levers cover similar ground, score the more general one higher and
-  the more specific one lower.
-- Expect 25-50% of levers to score 0 or below. If you score everything 1 or
-  2, reconsider — the input almost always contains overlap and redundancy.
-- You see the full list at once. Compare all levers against each other before
-  assigning scores.
+- Classify every lever in the input. Do not skip any.
+- Each justification must explain your reasoning for this specific lever.
+- When uncertain between primary and secondary, prefer primary — a false
+  positive is recoverable downstream.
+- When uncertain between removing and keeping, prefer secondary over remove
+  to avoid discarding a potentially important lever.
+- Expect to remove 25-50% of the input levers. If you classify everything as
+  primary or secondary, reconsider — the input almost always contains
+  near-duplicates and overlap.
 """
+
 
 @dataclass
 class DeduplicateLevers:
@@ -178,9 +158,8 @@ class DeduplicateLevers:
         """
         Executes the deduplication process using a single batch LLM call.
 
-        All levers are scored simultaneously on a Likert scale (-2 to +2).
-        Levers scoring >= 1 are kept as primary (2) or secondary (1).
-        Levers scoring <= 0 are removed.
+        All levers are classified simultaneously as primary, secondary, or remove.
+        Primary and secondary levers are kept; removed levers are discarded.
         """
         try:
             input_levers = [InputLever(**lever) for lever in raw_levers_list]
@@ -190,7 +169,7 @@ class DeduplicateLevers:
         if not input_levers:
             raise ValueError("No input levers to deduplicate.")
 
-        logger.info(f"Starting deduplication for {len(input_levers)} levers (single-call scoring).")
+        logger.info(f"Starting deduplication for {len(input_levers)} levers (single batch call).")
 
         levers_json = json.dumps([lever.model_dump() for lever in input_levers], indent=2)
 
@@ -199,8 +178,8 @@ class DeduplicateLevers:
         # Build the single prompt with all levers.
         user_prompt = (
             f"**Project Context:**\n{project_context}\n\n"
-            f"**Levers to score ({len(input_levers)} total):**\n{levers_json}\n\n"
-            f"Score every lever on the Likert scale (-2 to +2) with a justification."
+            f"**Levers to classify ({len(input_levers)} total):**\n{levers_json}\n\n"
+            f"Classify every lever as primary, secondary, or remove."
         )
 
         chat_message_list = [
@@ -225,38 +204,43 @@ class DeduplicateLevers:
         except Exception as e:
             logger.error(f"Batch deduplication call failed: {e}")
 
-        # Build decisions from the batch result.
+        # Build decisions from the batch result, guarding against duplicate lever_ids.
         decisions: List[LeverDecision] = []
         input_lever_ids = {lever.lever_id for lever in input_levers}
+        seen_ids: set[str] = set()
 
         if batch_result is not None:
-            for score_decision in batch_result.decisions:
-                if score_decision.lever_id not in input_lever_ids:
-                    logger.warning(f"LLM returned score for unknown lever_id: '{score_decision.lever_id}'. Skipping.")
+            for decision in batch_result.decisions:
+                if decision.lever_id not in input_lever_ids:
+                    logger.warning(f"LLM returned classification for unknown lever_id: '{decision.lever_id}'. Skipping.")
                     continue
+                if decision.lever_id in seen_ids:
+                    logger.warning(f"LLM returned duplicate lever_id: '{decision.lever_id}'. Keeping first entry.")
+                    continue
+                seen_ids.add(decision.lever_id)
                 decisions.append(LeverDecision(
-                    lever_id=score_decision.lever_id,
-                    score=score_decision.score,
-                    justification=score_decision.justification,
+                    lever_id=decision.lever_id,
+                    classification=decision.classification,
+                    justification=decision.justification,
                 ))
 
-        # Handle missing decisions — any lever not scored defaults to primary.
-        scored_ids = {d.lever_id for d in decisions}
+        # Handle missing decisions — any lever not classified defaults to primary.
+        classified_ids = {d.lever_id for d in decisions}
         for lever in input_levers:
-            if lever.lever_id not in scored_ids:
-                logger.warning(f"Lever {lever.lever_id}: not scored by LLM. Defaulting to primary (score 2).")
+            if lever.lever_id not in classified_ids:
+                logger.warning(f"Lever {lever.lever_id}: not classified by LLM. Defaulting to primary.")
                 decisions.append(LeverDecision(
                     lever_id=lever.lever_id,
-                    score=2,
-                    justification="Not scored by LLM. Keeping as primary to avoid data loss.",
+                    classification="primary",
+                    justification="Not classified by LLM. Keeping as primary to avoid data loss.",
                 ))
 
-        # Build output levers (keep score >= 1).
+        # Build output levers (keep primary + secondary).
         decisions_by_id = {d.lever_id: d for d in decisions}
         output_levers = []
         for lever in input_levers:
             lever_decision = decisions_by_id[lever.lever_id]
-            if lever_decision.score < 1:
+            if lever_decision.classification == "remove":
                 continue
 
             deduplication_justification = lever_decision.justification.strip()
@@ -265,10 +249,19 @@ class DeduplicateLevers:
 
             output_lever = OutputLever(
                 **lever.model_dump(),
-                classification=_score_to_classification(lever_decision.score),
+                classification=lever_decision.classification,
                 deduplication_justification=deduplication_justification,
             )
             output_levers.append(output_lever)
+
+        # Minimum lever count warning.
+        min_expected = max(3, len(input_levers) // 4)
+        if len(output_levers) < min_expected:
+            logger.warning(
+                f"Only {len(output_levers)} levers survived deduplication "
+                f"(expected at least {min_expected} from {len(input_levers)} inputs). "
+                f"Downstream steps may receive a degenerate input."
+            )
 
         logger.info(
             f"Deduplication complete: {len(output_levers)} kept, "

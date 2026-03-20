@@ -81,19 +81,16 @@ class LeverScoreDecision(BaseModel):
     lever_id: str = Field(description="The lever_id being scored.")
     score: Literal[-2, -1, 0, 1, 2] = Field(
         description=(
-            "Relevance score: "
-            "2 (primary — essential strategic decision that gates the project's success), "
-            "1 (secondary — addresses a real concern but not a top-level strategic choice), "
-            "0 (borderline — marginal value, could go either way), "
-            "-1 (overlapping — significantly overlaps another lever, state which lever_id in justification), "
-            "-2 (irrelevant — fully redundant, removing it loses nothing)."
+            "How relevant is this lever to this specific project plan? "
+            "2 = highly relevant, 1 = somewhat relevant, 0 = borderline, "
+            "-1 = low relevance or overlaps a better lever, "
+            "-2 = irrelevant or fully redundant."
         )
     )
     justification: str = Field(
         description=(
             "Concise justification for the score (~40-80 words). "
-            "For score -1, state which lever_id absorbs this one and why. "
-            "For score 2, explain why this lever is essential. "
+            "Explain what makes this lever relevant or irrelevant to the plan. "
             "Do not reuse the score definition as your justification."
         )
     )
@@ -135,40 +132,42 @@ def _score_to_classification(score: int) -> Literal["primary", "secondary", "rem
 
 
 DEDUPLICATE_SYSTEM_PROMPT = """
-You are evaluating a set of strategic levers for a project. Your task is to score
-every lever on a 5-point Likert scale and provide a justification.
+You are evaluating a set of strategic levers for a project plan. Your task is
+to score how relevant each lever is to this specific plan.
 
 **Scoring scale:**
 
-- **2** (primary): Lever is an essential strategic decision — it directly gates
-  the project's success or failure. Ask: "If this lever were handled wrong,
-  would the project fail in a fundamentally different way?" If yes, score 2.
+- **2** (highly relevant): This lever directly addresses a core challenge or
+  opportunity in the plan. The plan would be significantly weaker without it.
 
-- **1** (secondary): Lever addresses a real project concern but does not gate
-  the core outcome. It matters for delivery quality but is not a top-level
-  strategic choice.
+- **1** (somewhat relevant): This lever addresses a real concern in the plan
+  but is not central to the project's success.
 
-- **0** (borderline): Marginal value. Could be kept or removed without
-  significant impact. Use sparingly — most levers should have a clear
-  positive or negative score.
+- **0** (borderline): Marginal relevance. Could be included or excluded
+  without significant impact on the plan.
 
-- **-1** (overlapping): Lever significantly overlaps with another lever.
-  State the lever_id it overlaps with in your justification. When two levers
-  overlap, score -1 on the more specific one, keeping the more general one.
+- **-1** (low relevance): This lever adds little value — either because it
+  overlaps substantially with a more relevant lever, or because it addresses
+  a concern that is peripheral to this plan.
 
-- **-2** (irrelevant): Fully redundant. Removing this lever loses no meaningful
-  detail. The concern it raises is already fully covered elsewhere.
+- **-2** (irrelevant): This lever does not meaningfully contribute to the plan.
+  It is redundant, off-topic, or its concern is already fully covered by
+  other levers.
 
 **Rules:**
 
 - Score every lever in the input. Do not skip any.
-- Each justification must name the specific lever and explain your reasoning.
-  Do not reuse the score definition text as your justification.
-- When uncertain between keeping and removing, prefer keeping (score 1 over 0).
-- Expect to score 25-50% of levers at 0 or below. If you score everything
-  1 or 2, reconsider — the input almost always contains near-duplicates.
-- Compare all levers against each other before assigning scores. You see the
-  full list at once — use that global view.
+- Read the project context carefully. A lever that sounds important in general
+  may be irrelevant to this specific plan, and vice versa.
+- Each justification must explain your reasoning in terms of the plan — what
+  makes this lever relevant or irrelevant here. Do not reuse the score
+  definitions as your justification.
+- When two levers cover similar ground, score the more general one higher and
+  the more specific one lower.
+- Expect 25-50% of levers to score 0 or below. If you score everything 1 or
+  2, reconsider — the input almost always contains overlap and redundancy.
+- You see the full list at once. Compare all levers against each other before
+  assigning scores.
 """
 
 @dataclass

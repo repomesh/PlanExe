@@ -77,11 +77,11 @@ class LeverClassificationDecision(BaseModel):
         description=(
             "primary: essential strategic decision, "
             "secondary: useful but supporting, "
-            "remove: redundant or overlapping with another lever."
+            "remove: redundant, overlapping with another lever, or irrelevant to this plan."
         )
     )
     justification: str = Field(
-        description="Concise justification for the classification (~40-80 words)."
+        description="Concise justification for the classification (~40 words)."
     )
 
 class BatchDeduplicationResult(BaseModel):
@@ -125,10 +125,10 @@ once — compare them against each other before making decisions.
   a top-level strategic choice. It matters for delivery but does not gate the
   project's core outcome.
 
-- **remove**: This lever is redundant — it overlaps substantially with another
-  lever, or its concern is already covered. State which lever it overlaps with
-  in your justification. When two levers overlap, remove the more specific one
-  and keep the more general one.
+- **remove**: This lever should be discarded — either because it overlaps
+  substantially with another lever, its concern is already covered, or it is
+  irrelevant to this specific plan. When two levers overlap, remove the more
+  specific one and keep the more general one.
 
 **Rules:**
 

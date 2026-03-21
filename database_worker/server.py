@@ -15,7 +15,8 @@ PGDATABASE = os.environ.get("PGDATABASE", "planexe")
 PGUSER = os.environ.get("PGUSER", "planexe")
 PGPASSWORD = os.environ.get("PGPASSWORD", "planexe")
 API_KEY = os.environ.get("PLANEXE_DATABASE_WORKER_API_KEY", "")
-PORT = int(os.environ.get("PLANEXE_DATABASE_WORKER_PORT", "8002"))
+# Railway injects PORT; fall back to PLANEXE_DATABASE_WORKER_PORT for Docker Compose.
+PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_DATABASE_WORKER_PORT", "8002"))
 
 # zstd typically compresses better and faster than gzip, so it's preferred.
 # pg_dump >= 16 supports -Z zstd natively; also requires the zstd binary.

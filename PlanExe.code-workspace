@@ -37,6 +37,12 @@
 		},
 		{
 			"path": "mcp_local"
+		},
+		{
+			"path": "database_worker"
+		},
+		{
+			"path": "llm_config"
 		}
 	],
 	"settings": {

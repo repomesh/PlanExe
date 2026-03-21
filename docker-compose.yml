@@ -224,11 +224,11 @@ services:
       database_postgres:
         condition: service_healthy
     environment:
-      PGHOST: database_postgres
-      PGPORT: "5432"
-      PGDATABASE: ${PLANEXE_POSTGRES_DB:-planexe}
-      PGUSER: ${PLANEXE_POSTGRES_USER:-planexe}
-      PGPASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
+      PLANEXE_POSTGRES_HOST: database_postgres
+      PLANEXE_POSTGRES_PORT: "5432"
+      PLANEXE_POSTGRES_DB: ${PLANEXE_POSTGRES_DB:-planexe}
+      PLANEXE_POSTGRES_USER: ${PLANEXE_POSTGRES_USER:-planexe}
+      PLANEXE_POSTGRES_PASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
       PLANEXE_DATABASE_WORKER_API_KEY: ${PLANEXE_DATABASE_WORKER_API_KEY:-}
     restart: unless-stopped
 

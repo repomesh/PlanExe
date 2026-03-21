@@ -14,7 +14,7 @@ This page covers common Docker workflows and troubleshooting.
 
 Simons typical workflow.
 
-While making code changes, I do this.
+While making code changes, I use `./rebuild.sh`, that does this:
 
 ```bash
 docker compose down --remove-orphans

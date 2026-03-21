@@ -9,11 +9,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PGHOST = os.environ.get("PGHOST", "database_postgres")
-PGPORT = os.environ.get("PGPORT", "5432")
-PGDATABASE = os.environ.get("PGDATABASE", "planexe")
-PGUSER = os.environ.get("PGUSER", "planexe")
-PGPASSWORD = os.environ.get("PGPASSWORD", "planexe")
+PGHOST = os.environ.get("PLANEXE_POSTGRES_HOST", "database_postgres")
+PGPORT = os.environ.get("PLANEXE_POSTGRES_PORT", "5432")
+PGDATABASE = os.environ.get("PLANEXE_POSTGRES_DB", "planexe")
+PGUSER = os.environ.get("PLANEXE_POSTGRES_USER", "planexe")
+PGPASSWORD = os.environ.get("PLANEXE_POSTGRES_PASSWORD", "planexe")
 API_KEY = os.environ.get("PLANEXE_DATABASE_WORKER_API_KEY", "")
 # Railway injects PORT; fall back to PLANEXE_DATABASE_WORKER_PORT for Docker Compose.
 PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_DATABASE_WORKER_PORT", "8002"))

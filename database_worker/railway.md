@@ -7,18 +7,18 @@ This service provides database backup (via `pg_dump`) and is called by `frontend
 ## Service variables example
 
 ```
-PGHOST="${{shared.PLANEXE_POSTGRES_HOST}}"
-PGPORT="5432"
-PGDATABASE="planexe"
-PGUSER="planexe"
-PGPASSWORD="${{shared.PLANEXE_POSTGRES_PASSWORD}}"
+PLANEXE_POSTGRES_HOST="${{shared.PLANEXE_POSTGRES_HOST}}"
+PLANEXE_POSTGRES_PORT="5432"
+PLANEXE_POSTGRES_DB="planexe"
+PLANEXE_POSTGRES_USER="planexe"
+PLANEXE_POSTGRES_PASSWORD="${{shared.PLANEXE_POSTGRES_PASSWORD}}"
 PLANEXE_DATABASE_WORKER_API_KEY="${{shared.PLANEXE_DATABASE_WORKER_API_KEY}}"
 ```
 
 ## Required Environment Variables
 
-- `PGHOST` — Postgres host. On Railway, use the internal hostname (e.g. `postgres.railway.internal`). The Docker Compose default `database_postgres` does not resolve on Railway.
-- `PGPASSWORD` — Postgres password.
+- `PLANEXE_POSTGRES_HOST` — Postgres host. On Railway, use the internal hostname (e.g. `postgres.railway.internal`). The Docker Compose default `database_postgres` does not resolve on Railway.
+- `PLANEXE_POSTGRES_PASSWORD` — Postgres password.
 
 ## Optional Environment Variables
 

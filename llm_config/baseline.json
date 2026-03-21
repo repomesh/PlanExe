@@ -136,7 +136,7 @@
         "arguments": {
             "model": "llama3.1:latest",
             "temperature": 0.5,
-            "request_timeout": 120.0,
+            "request_timeout": 180.0,
             "is_function_calling_model": false
         },
         "pricing_kind": "free"
@@ -150,7 +150,7 @@
             "model": "llama3.1:latest",
             "base_url": "http://host.docker.internal:11434",
             "temperature": 0.5,
-            "request_timeout": 120.0,
+            "request_timeout": 180.0,
             "is_function_calling_model": false
         },
         "pricing_kind": "free"

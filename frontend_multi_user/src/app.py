@@ -2006,6 +2006,83 @@ class MyFlaskApp:
             info["error"] = str(e)
         return info
 
+    def _get_purge_activity_info(self) -> dict[str, Any]:
+        """Compute how much space each retention level would free by NULLing run_track_activity_jsonl."""
+        from sqlalchemy import text
+        info: dict[str, Any] = {"error": None, "total_rows": 0, "rows_with_data": 0, "total_data_mb": 0.0, "options": []}
+        try:
+            with self.db.engine.connect() as conn:
+                row = conn.execute(text(
+                    "SELECT count(*), "
+                    "count(run_track_activity_jsonl), "
+                    "coalesce(sum(octet_length(run_track_activity_jsonl)), 0) "
+                    "FROM task_item"
+                )).fetchone()
+                if row:
+                    info["total_rows"] = row[0]
+                    info["rows_with_data"] = row[1]
+                    info["total_data_mb"] = round(row[2] / (1024 * 1024), 2)
+
+                for keep_n in [10, 25, 50, 100, 250, 500]:
+                    result = conn.execute(text(
+                        "SELECT coalesce(sum(octet_length(run_track_activity_jsonl)), 0), count(*) "
+                        "FROM task_item "
+                        "WHERE run_track_activity_jsonl IS NOT NULL "
+                        "AND id NOT IN ("
+                        "  SELECT id FROM task_item "
+                        "  ORDER BY timestamp_created DESC "
+                        "  LIMIT :keep_n"
+                        ")"
+                    ), {"keep_n": keep_n}).fetchone()
+                    if result:
+                        info["options"].append({
+                            "keep_n": keep_n,
+                            "purgeable_rows": result[1],
+                            "savings_bytes": result[0],
+                            "savings_mb": round(result[0] / (1024 * 1024), 2),
+                        })
+        except Exception as e:
+            logger.exception("Failed to query purge activity info")
+            info["error"] = str(e)
+        return info
+
+    def _purge_activity_data(self, keep_n: int) -> dict[str, Any]:
+        """NULL out run_track_activity_jsonl for all rows except the latest keep_n."""
+        from sqlalchemy import text
+        result: dict[str, Any] = {"error": None, "purged_rows": 0}
+        try:
+            with self.db.engine.connect() as conn:
+                row = conn.execute(text(
+                    "UPDATE task_item "
+                    "SET run_track_activity_jsonl = NULL, run_track_activity_bytes = NULL "
+                    "WHERE run_track_activity_jsonl IS NOT NULL "
+                    "AND id NOT IN ("
+                    "  SELECT id FROM task_item "
+                    "  ORDER BY timestamp_created DESC "
+                    "  LIMIT :keep_n"
+                    ")"
+                ), {"keep_n": keep_n})
+                result["purged_rows"] = row.rowcount
+                conn.commit()
+        except Exception as e:
+            logger.exception("Failed to purge activity data")
+            result["error"] = str(e)
+        return result
+
+    def _vacuum_task_item(self) -> dict[str, Any]:
+        """Run VACUUM FULL on task_item to reclaim disk space."""
+        from sqlalchemy import text
+        result: dict[str, Any] = {"error": None}
+        try:
+            with self.db.engine.connect() as conn:
+                conn.execution_options(isolation_level="AUTOCOMMIT").execute(
+                    text("VACUUM FULL task_item")
+                )
+        except Exception as e:
+            logger.exception("Failed to vacuum task_item")
+            result["error"] = str(e)
+        return result
+
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
             PlanItem.query
@@ -2977,13 +3054,28 @@ class MyFlaskApp:
                 refresh_seconds=refresh_seconds,
             )
 
-        @self.app.route('/admin/db-size')
+        @self.app.route('/admin/database', methods=['GET', 'POST'])
         @admin_required
-        def admin_db_size():
+        def admin_database():
+            purge_result = None
+            vacuum_result = None
+            if request.method == 'POST':
+                action = request.form.get('action', '')
+                if action == 'purge':
+                    keep_n = int(request.form.get('keep_n', '50') or '50')
+                    if keep_n not in (10, 25, 50, 100, 250, 500):
+                        keep_n = 50
+                    purge_result = self._purge_activity_data(keep_n)
+                elif action == 'vacuum':
+                    vacuum_result = self._vacuum_task_item()
             size_info = self._get_database_size_info()
+            purge_info = self._get_purge_activity_info()
             return self.admin.index_view.render(
-                "admin/db_size.html",
+                "admin/database.html",
                 size_info=size_info,
+                purge_info=purge_info,
+                purge_result=purge_result,
+                vacuum_result=vacuum_result,
             )
 
         @self.app.route('/ping/stream')

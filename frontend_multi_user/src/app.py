@@ -2083,6 +2083,17 @@ class MyFlaskApp:
             result["error"] = str(e)
         return result
 
+    def _proxy_backup_response(self) -> requests.Response:
+        """Start a streaming GET to the database_worker backup endpoint."""
+        worker_url = os.environ.get("PLANEXE_DATABASE_WORKER_URL", "http://database_worker:8002")
+        api_key = os.environ.get("PLANEXE_DATABASE_WORKER_API_KEY", "")
+        headers = {}
+        if api_key:
+            headers["X-Database-Worker-Key"] = api_key
+        resp = requests.get(f"{worker_url}/backup", headers=headers, stream=True, timeout=600)
+        resp.raise_for_status()
+        return resp
+
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
             PlanItem.query
@@ -3077,6 +3088,24 @@ class MyFlaskApp:
                 purge_result=purge_result,
                 vacuum_result=vacuum_result,
             )
+
+        @self.app.route('/admin/database/backup')
+        @admin_required
+        def admin_database_backup():
+            try:
+                upstream = self._proxy_backup_response()
+                return Response(
+                    upstream.iter_content(chunk_size=256 * 1024),
+                    mimetype=upstream.headers.get('Content-Type', 'application/octet-stream'),
+                    headers={
+                        'Content-Disposition': upstream.headers.get(
+                            'Content-Disposition', 'attachment; filename="planexe_backup.sql.gz"'
+                        ),
+                    },
+                )
+            except Exception as e:
+                logger.exception("Failed to proxy database backup")
+                return jsonify({"error": str(e)}), 502
 
         @self.app.route('/ping/stream')
         @login_required

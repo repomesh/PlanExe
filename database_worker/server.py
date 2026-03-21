@@ -9,11 +9,11 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-PGHOST = os.environ.get("PLANEXE_POSTGRES_HOST", "database_postgres")
-PGPORT = os.environ.get("PLANEXE_POSTGRES_PORT", "5432")
-PGDATABASE = os.environ.get("PLANEXE_POSTGRES_DB", "planexe")
-PGUSER = os.environ.get("PLANEXE_POSTGRES_USER", "planexe")
-PGPASSWORD = os.environ.get("PLANEXE_POSTGRES_PASSWORD", "planexe")
+POSTGRES_HOST = os.environ.get("PLANEXE_POSTGRES_HOST", "database_postgres")
+POSTGRES_PORT = os.environ.get("PLANEXE_POSTGRES_PORT", "5432")
+POSTGRES_DB = os.environ.get("PLANEXE_POSTGRES_DB", "planexe")
+POSTGRES_USER = os.environ.get("PLANEXE_POSTGRES_USER", "planexe")
+POSTGRES_PASSWORD = os.environ.get("PLANEXE_POSTGRES_PASSWORD", "planexe")
 API_KEY = os.environ.get("PLANEXE_DATABASE_WORKER_API_KEY", "")
 # Railway injects PORT; fall back to PLANEXE_DATABASE_WORKER_PORT for Docker Compose.
 PORT = int(os.environ.get("PORT") or os.environ.get("PLANEXE_DATABASE_WORKER_PORT", "8002"))
@@ -66,15 +66,15 @@ class BackupHandler(BaseHTTPRequestHandler):
         logger.info("Starting database backup: %s (%s)", filename, "zstd" if _HAS_ZSTD else "gzip")
 
         env = os.environ.copy()
-        env["PGPASSWORD"] = PGPASSWORD
+        env["PGPASSWORD"] = POSTGRES_PASSWORD  # pg_dump reads PGPASSWORD from env
 
         proc = subprocess.Popen(
             [
                 "pg_dump",
-                "-h", PGHOST,
-                "-p", PGPORT,
-                "-U", PGUSER,
-                "-d", PGDATABASE,
+                "-h", POSTGRES_HOST,
+                "-p", POSTGRES_PORT,
+                "-U", POSTGRES_USER,
+                "-d", POSTGRES_DB,
                 "--no-owner",
                 "--no-privileges",
                 "-Z", compress_flag,

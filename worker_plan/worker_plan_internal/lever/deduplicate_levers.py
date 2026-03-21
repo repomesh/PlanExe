@@ -1,11 +1,15 @@
 """
 The identify_potential_levers.py script creates a list of levers, some of which are duplicates.
-This script deduplicates the list.
+This script deduplicates the list using a single batch LLM call.
+
+Each lever is classified as:
+  primary   — essential strategic decision, kept
+  secondary — useful but supporting, kept
+  remove    — redundant or overlapping, discarded
 
 PROMPT> python -m worker_plan_internal.lever.deduplicate_levers
 
 """
-from enum import Enum
 import json
 import logging
 import os
@@ -19,23 +23,77 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 
 logger = logging.getLogger(__name__)
 
-class LeverClassification(str, Enum):
-    keep   = "keep"
-    absorb = "absorb"
-    remove = "remove"
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: consolidate a brainstormed list of levers into a deduplicated,
+prioritized set. The surviving levers (primary + secondary) should be
+distinct, grounded, and actionable — ready for enrichment and scenario
+generation downstream.
+
+Pipeline context
+----------------
+This step (DeduplicateLevers) is part of a 6-step solution-space
+exploration pipeline inside run_plan_pipeline.py:
+
+  1. IdentifyPotentialLevers  — brainstorms 15-20 raw levers
+  2. DeduplicateLevers        ← you are here
+  3. EnrichLevers             — adds description, synergy, and conflict text
+  4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
+  5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
+  6. ScenarioSelection        — picks the best-fitting scenario
+
+Step 1 intentionally over-generates. This step's job is to remove
+near-duplicates and tag each surviving lever as primary (strategic) or
+secondary (operational). Over-removal is worse than over-inclusion —
+step 4 handles further filtering. The classification field (primary/
+secondary) is consumed by downstream steps for prioritization.
+
+Known problems to guard against
+--------------------------------
+- Blanket-primary. Weak models classify nearly every lever as primary,
+  performing zero removals. Watch for runs where remove count is 0.
+- Over-inclusion. Mid-tier models keep 10-12 of 15 levers instead of
+  the expected 5-8. Check the classification distribution.
+- Hierarchy-direction errors. Models remove the general lever and keep
+  the narrow one — reversed from correct behavior. The more general
+  lever should survive; the specific one should be removed.
+- Chain absorption. When lever A overlaps B and B overlaps C, all
+  three end up removed except C. Check that the surviving lever is
+  the most general.
+- Calibration capping. Narrow calibration ranges act as stopping
+  signals — models stop removing once they hit a threshold.
+- Definition mirroring. Weak models copy the classification definition
+  verbatim into every justification, producing content-free boilerplate.
+  The model loses the ability to distinguish levers from each other,
+  which also suppresses remove decisions. Fix: use conditional question
+  tests rather than reusable dictionary definitions.
+"""
+
+# --- Pydantic Models ---
 
 class LeverClassificationDecision(BaseModel):
-    """Minimal per-lever schema. lever_id is assigned by code, not the LLM."""
-    classification: Literal["keep", "absorb", "remove"] = Field(
-        description="What should happen to this lever: keep (distinct), absorb (overlaps another), or remove (fully redundant)."
+    """Classification decision for a single lever."""
+    lever_id: str = Field(description="The lever_id being classified.")
+    classification: Literal["primary", "secondary", "remove"] = Field(
+        description=(
+            "primary: essential strategic decision, "
+            "secondary: useful but supporting, "
+            "remove: redundant, overlapping with another lever, or irrelevant to this plan."
+        )
     )
     justification: str = Field(
-        description="A concise justification for the classification (~80 words). If absorbing, state which lever id it merges into."
+        description="Concise justification for the classification (~20-30 words)."
+    )
+
+class DeduplicationResult(BaseModel):
+    """Complete deduplication result for all levers in a single call."""
+    decisions: List[LeverClassificationDecision] = Field(
+        description="One classification per input lever. Must cover every lever_id from the input."
     )
 
 class LeverDecision(BaseModel):
+    """Stored decision for each lever (used in response output)."""
     lever_id: str
-    classification: Literal["keep", "absorb", "remove"]
+    classification: Literal["primary", "secondary", "remove"]
     justification: str
 
 class InputLever(BaseModel):
@@ -47,56 +105,44 @@ class InputLever(BaseModel):
     review: str
 
 class OutputLever(InputLever):
-    """The InputLever and the deduplication justification."""
+    """A lever that survived deduplication, with its classification and justification."""
+    classification: Literal["primary", "secondary"]
     deduplication_justification: str
 
 
-def _build_compact_history(
-    system_message_with_context: str,
-    prior_decisions: List[LeverDecision],
-) -> List[ChatMessage]:
-    """Option C: replace full conversation history with a compact summary in the system message."""
-    summary = "\n".join(
-        f"- [{d.lever_id}] {d.classification}: {d.justification[:80]}..."
-        for d in prior_decisions
-    )
-    return [
-        ChatMessage(role=MessageRole.SYSTEM, content=(
-            f"{system_message_with_context}\n\n"
-            f"**Prior decisions (compacted):**\n{summary}"
-        )),
-    ]
-
-
-def _call_llm(chat_message_list: List[ChatMessage], llm: LLM) -> dict:
-    """Execute a structured LLM call for a single lever classification."""
-    sllm = llm.as_structured_llm(LeverClassificationDecision)
-    chat_response = sllm.chat(chat_message_list)
-    return {"chat_response": chat_response, "metadata": dict(llm.metadata)}
-
-
 DEDUPLICATE_SYSTEM_PROMPT = """
-Evaluate each of the provided strategic levers individually. Classify every lever explicitly into one of:
+You are triaging a set of strategic levers for a project plan. Your task is to
+classify every lever and provide a justification. You see all levers at once —
+compare them against each other before making decisions.
 
-- keep: Lever is distinct, unique, and essential.
-- absorb: Lever overlaps significantly with another lever. Explicitly state the lever ID it should be merged into.
-- remove: Lever is fully redundant. Removing it loses no meaningful detail. Use this sparingly.
+**Classifications:**
 
-Provide concise, explicit justifications mentioning lever IDs clearly. Always prefer "absorb" over "remove" to retain important details.
+- **primary**: This lever is an essential strategic decision for the plan.
+  Ask: "If this lever were handled badly, would the project fail or succeed
+  in a fundamentally different way?" If yes, classify as primary.
 
-Always provide a justification for the classification. Explain why the lever is distinct from others. Don't use the same uninformative boilerplate.
+- **secondary**: This lever addresses a real concern in the plan but is not
+  a top-level strategic choice. It matters for delivery but does not gate the
+  project's core outcome.
 
-Respect Hierarchy: When absorbing, merge the more specific lever into the more general one.
-Don't take the more general lever and absorb it into a narrower one.
-Also compare a lever against the group of already-merged levers.
+- **remove**: This lever should be discarded — either because it overlaps
+  with or is a subset of another lever, its concern is already covered, or
+  it is irrelevant to this specific plan. When two levers overlap, keep the
+  one that better captures the strategic decision and remove the other.
 
-Use "keep" if you lack understanding of what the lever is doing. This way a potential important lever is not getting removed.
-Describe what the issue is in the justification.
+**Rules:**
 
-Don't play it too safe, so you fail to perform the core task: consolidate the levers and get rid of the duplicates.
-
-You must classify and justify **every lever** provided in the input.
+- Classify every lever in the input. Do not skip any.
+- Each justification must explain your reasoning for this specific lever.
+- When uncertain between primary and secondary, prefer primary — a false
+  positive is recoverable downstream.
+- When uncertain between removing and keeping, prefer secondary over remove
+  to avoid discarding a potentially important lever.
+- Expect to remove 25-50% of the input levers. If you classify everything as
+  primary or secondary, reconsider — the input almost always contains
+  near-duplicates and overlap.
 """
+
 
 @dataclass
 class DeduplicateLevers:
@@ -110,14 +156,10 @@ class DeduplicateLevers:
     @classmethod
     def execute(cls, llm_executor: LLMExecutor, project_context: str, raw_levers_list: List[dict]) -> 'DeduplicateLevers':
         """
-        Executes the deduplication process.
+        Executes the deduplication process using a single batch LLM call.
 
-        Args:
-            llm_executor: The configured LLMExecutor instance.
-            raw_levers_list: A list of dictionaries, each representing a lever.
-
-        Returns:
-            An instance of DeduplicateLevers containing the results.
+        All levers are classified simultaneously as primary, secondary, or remove.
+        Primary and secondary levers are kept; removed levers are discarded.
         """
         try:
             input_levers = [InputLever(**lever) for lever in raw_levers_list]
@@ -127,136 +169,111 @@ class DeduplicateLevers:
         if not input_levers:
             raise ValueError("No input levers to deduplicate.")
 
-        logger.info(f"Starting deduplication for {len(input_levers)} levers.")
+        logger.info(f"Starting deduplication for {len(input_levers)} levers (single batch call).")
 
         levers_json = json.dumps([lever.model_dump() for lever in input_levers], indent=2)
 
         system_prompt = DEDUPLICATE_SYSTEM_PROMPT.strip()
 
-        # Build a summary of all levers for comparison context (shared across all per-lever calls).
-        all_levers_summary = "\n".join(
-            f"- [{lever.lever_id}] {lever.name}: {lever.consequences[:120]}..."
-            for lever in input_levers
-        )
-
-        decisions: List[LeverDecision] = []
-        metadata_list: List[dict] = []
-
-        # Initialise conversation with full context in the system message (option A).
-        # System message carries project context + lever summary so the first USER
-        # message is the first lever — no dangling USER→USER before the first ASSISTANT.
-        system_message_with_context = (
-            f"{system_prompt}\n\n"
+        # Build the single prompt with all levers.
+        user_prompt = (
             f"**Project Context:**\n{project_context}\n\n"
-            f"**All levers under review:**\n{all_levers_summary}"
+            f"**Levers to classify ({len(input_levers)} total):**\n{levers_json}\n\n"
+            f"Classify every lever as primary, secondary, or remove."
         )
-        chat_message_list: List[ChatMessage] = [
-            ChatMessage(role=MessageRole.SYSTEM, content=system_message_with_context),
+
+        chat_message_list = [
+            ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
+            ChatMessage(role=MessageRole.USER, content=user_prompt),
         ]
 
-        # Closure captures chat_message_list by variable reference, so rebinding
-        # after compaction is visible on the next call without redefining the function.
         def execute_function(llm: LLM) -> dict:
-            return _call_llm(chat_message_list, llm)
+            sllm = llm.as_structured_llm(DeduplicationResult)
+            chat_response = sllm.chat(chat_message_list)
+            return {"chat_response": chat_response, "metadata": dict(llm.metadata)}
 
-        for lever in input_levers:
-            lever_json = json.dumps(lever.model_dump(), indent=2)
-            lever_prompt = (
-                f"Classify this lever (keep / absorb / remove) with a justification:\n{lever_json}"
-            )
-            chat_message_list.append(ChatMessage(role=MessageRole.USER, content=lever_prompt))
+        # Single LLM call.
+        batch_result: DeduplicationResult | None = None
+        metadata_list: List[dict] = []
+        try:
+            result = llm_executor.run(execute_function)
+            batch_result = result["chat_response"].raw
+            metadata_list.append(result.get("metadata", {}))
+        except PipelineStopRequested:
+            raise
+        except Exception as e:
+            logger.error(f"Batch deduplication call failed: {e}")
 
-            decision: LeverClassificationDecision | None = None
-            result = None
+        # Build decisions from the batch result, guarding against duplicate lever_ids.
+        decisions: List[LeverDecision] = []
+        input_lever_ids = {lever.lever_id for lever in input_levers}
+        seen_ids: set[str] = set()
 
-            # First attempt with full conversation history.
-            try:
-                result = llm_executor.run(execute_function)
-                metadata_list.append(result.get("metadata", {}))
-            except PipelineStopRequested:
-                raise
-            except Exception as e:
-                # Option C: compact history and retry once.
-                logger.warning(f"Lever {lever.lever_id}: call failed ({e}). Compacting history and retrying.")
-                chat_message_list = _build_compact_history(system_message_with_context, decisions)
-                chat_message_list.append(ChatMessage(role=MessageRole.USER, content=lever_prompt))
-
-            # Second attempt with compacted history (only reached if first attempt failed).
-            if result is None:
-                try:
-                    result = llm_executor.run(execute_function)
-                    metadata_list.append(result.get("metadata", {}))
-                except PipelineStopRequested:
-                    raise
-                except Exception as e2:
-                    logger.warning(f"Lever {lever.lever_id}: failed after compaction ({e2}). Skipping lever.")
-
-            # Process whichever attempt succeeded.
-            if result is not None:
-                raw = result["chat_response"].raw
-                if raw is not None:
-                    decision = raw
-                    chat_message_list.append(ChatMessage(
-                        role=MessageRole.ASSISTANT,
-                        content=json.dumps({"classification": decision.classification, "justification": decision.justification}),
-                    ))
-                else:
-                    logger.warning(f"Lever {lever.lever_id}: returned None raw.")
-
-            if decision is None:
-                logger.warning(f"Lever {lever.lever_id}: classification failed. Defaulting to keep.")
-                decision = LeverClassificationDecision(
-                    classification=LeverClassification.keep,
-                    justification="Classification failed after retries. Keeping this lever to avoid data loss."
-                )
-                chat_message_list.append(ChatMessage(
-                    role=MessageRole.ASSISTANT,
-                    content=json.dumps({"classification": decision.classification, "justification": decision.justification}),
+        if batch_result is not None:
+            for decision in batch_result.decisions:
+                if decision.lever_id not in input_lever_ids:
+                    logger.warning(f"LLM returned classification for unknown lever_id: '{decision.lever_id}'. Skipping.")
+                    continue
+                if decision.lever_id in seen_ids:
+                    logger.warning(f"LLM returned duplicate lever_id: '{decision.lever_id}'. Keeping first entry.")
+                    continue
+                seen_ids.add(decision.lever_id)
+                decisions.append(LeverDecision(
+                    lever_id=decision.lever_id,
+                    classification=decision.classification,
+                    justification=decision.justification,
                 ))
 
-            decisions.append(LeverDecision(
-                lever_id=lever.lever_id,
-                classification=decision.classification,
-                justification=decision.justification,
-            ))
+        # Handle missing decisions — any lever not classified defaults to secondary.
+        classified_ids = {d.lever_id for d in decisions}
+        for lever in input_levers:
+            if lever.lever_id not in classified_ids:
+                logger.warning(f"Lever {lever.lever_id}: not classified by LLM. Defaulting to secondary.")
+                decisions.append(LeverDecision(
+                    lever_id=lever.lever_id,
+                    classification="secondary",
+                    justification="Not classified by LLM. Keeping as secondary to avoid data loss.",
+                ))
 
-        # Perform the deduplication.
+        # Build output levers (keep primary + secondary).
         decisions_by_id = {d.lever_id: d for d in decisions}
         output_levers = []
         for lever in input_levers:
-            lever_decision = decisions_by_id.get(lever.lever_id)
-            if not lever_decision:
-                # Missing decision for this lever. Keep it.
-                deduplication_justification = "Missing deduplication justification. Keeping this lever."
-                output_lever = OutputLever(
-                    **lever.model_dump(),
-                    deduplication_justification=deduplication_justification
-                )
-                output_levers.append(output_lever)
+            lever_decision = decisions_by_id[lever.lever_id]
+            if lever_decision.classification == "remove":
                 continue
 
-            # Check if this is a keeper
-            if lever_decision.classification != LeverClassification.keep:
-                # This is not a keeper
-                continue
-
-            # This is a keeper
             deduplication_justification = lever_decision.justification.strip()
             if len(deduplication_justification) == 0:
                 deduplication_justification = "Empty explanation. Keeping this lever."
 
             output_lever = OutputLever(
                 **lever.model_dump(),
-                deduplication_justification=deduplication_justification
+                classification=lever_decision.classification,
+                deduplication_justification=deduplication_justification,
             )
             output_levers.append(output_lever)
 
+        # Minimum lever count warning.
+        min_expected = max(3, len(input_levers) // 4)
+        if len(output_levers) < min_expected:
+            logger.warning(
+                f"Only {len(output_levers)} levers survived deduplication "
+                f"(expected at least {min_expected} from {len(input_levers)} inputs). "
+                f"Downstream steps may receive a degenerate input."
+            )
+
+        logger.info(
+            f"Deduplication complete: {len(output_levers)} kept, "
+            f"{len(input_levers) - len(output_levers)} removed."
+        )
+
         return cls(
-            user_prompt=levers_json,
+            user_prompt=project_context,
             system_prompt=system_prompt,
             response=decisions,
             deduplicated_levers=output_levers,
-            metadata=metadata_list
+            metadata=metadata_list,
         )
 
     def to_dict(self, include_response=True, include_deduplicated_levers=True, include_metadata=True, include_system_prompt=True, include_user_prompt=True) -> dict:

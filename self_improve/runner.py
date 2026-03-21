@@ -152,7 +152,7 @@ def _run_deduplicate(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExe
         name=plan_name,
         status="ok",
         duration_seconds=0,  # filled by caller
-        calls_succeeded=len(result.response),
+        calls_succeeded=1,  # single batch call
     )
 
 

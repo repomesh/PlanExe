@@ -1971,6 +1971,41 @@ class MyFlaskApp:
 
         return telemetry
 
+    def _get_database_size_info(self) -> dict[str, Any]:
+        """Query PostgreSQL for database size and per-table breakdown."""
+        from sqlalchemy import text
+        info: dict[str, Any] = {"error": None, "database_name": None, "total_bytes": 0, "total_mb": 0.0, "tables": []}
+        try:
+            with self.db.engine.connect() as conn:
+                row = conn.execute(text(
+                    "SELECT current_database(), pg_database_size(current_database())"
+                )).fetchone()
+                if row:
+                    info["database_name"] = row[0]
+                    info["total_bytes"] = row[1]
+                    info["total_mb"] = round(row[1] / (1024 * 1024), 2)
+
+                tables = conn.execute(text(
+                    "SELECT schemaname, tablename, "
+                    "pg_total_relation_size(schemaname || '.' || tablename) AS total_bytes, "
+                    "pg_relation_size(schemaname || '.' || tablename) AS table_bytes, "
+                    "pg_total_relation_size(schemaname || '.' || tablename) - pg_relation_size(schemaname || '.' || tablename) AS index_bytes "
+                    "FROM pg_tables WHERE schemaname = 'public' "
+                    "ORDER BY total_bytes DESC"
+                )).fetchall()
+                for t in tables:
+                    info["tables"].append({
+                        "name": t[1],
+                        "total_bytes": t[2],
+                        "total_mb": round(t[2] / (1024 * 1024), 2),
+                        "table_mb": round(t[3] / (1024 * 1024), 2),
+                        "index_mb": round(t[4] / (1024 * 1024), 2),
+                    })
+        except Exception as e:
+            logger.exception("Failed to query database size")
+            info["error"] = str(e)
+        return info
+
     def _build_reconciliation_report(self, max_tasks: int, tolerance_usd: float) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         tasks = (
             PlanItem.query
@@ -2940,6 +2975,15 @@ class MyFlaskApp:
                 max_tasks=max_tasks,
                 tolerance_usd=tolerance_usd,
                 refresh_seconds=refresh_seconds,
+            )
+
+        @self.app.route('/admin/db-size')
+        @admin_required
+        def admin_db_size():
+            size_info = self._get_database_size_info()
+            return self.admin.index_view.render(
+                "admin/db_size.html",
+                size_info=size_info,
             )
 
         @self.app.route('/ping/stream')

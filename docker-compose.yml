@@ -197,6 +197,8 @@ services:
       PLANEXE_FRONTEND_MULTIUSER_DB_PASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
       PLANEXE_FRONTEND_MULTIUSER_ADMIN_USERNAME: ${PLANEXE_FRONTEND_MULTIUSER_ADMIN_USERNAME:-admin}
       PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD: ${PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD:-admin}
+      PLANEXE_DATABASE_WORKER_URL: ${PLANEXE_DATABASE_WORKER_URL:-http://database_worker:8002}
+      PLANEXE_DATABASE_WORKER_API_KEY: ${PLANEXE_DATABASE_WORKER_API_KEY:-}
     ports:
       - "${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}:5000"
     volumes:
@@ -212,6 +214,23 @@ services:
     # Use on-failure so config errors (exit 0) stop the container immediately
     # instead of restart-looping. Runtime crashes (exit != 0) still restart.
     restart: on-failure
+
+  database_worker:
+    build:
+      context: .
+      dockerfile: database_worker/Dockerfile
+    container_name: database_worker
+    depends_on:
+      database_postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: database_postgres
+      PGPORT: "5432"
+      PGDATABASE: ${PLANEXE_POSTGRES_DB:-planexe}
+      PGUSER: ${PLANEXE_POSTGRES_USER:-planexe}
+      PGPASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
+      PLANEXE_DATABASE_WORKER_API_KEY: ${PLANEXE_DATABASE_WORKER_API_KEY:-}
+    restart: unless-stopped
 
   mcp_cloud:
     build:

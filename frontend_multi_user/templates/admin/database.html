@@ -123,6 +123,21 @@
     .btn-purge:hover {
       background: #a93226;
     }
+    .btn-backup {
+      background: #27ae60;
+      color: #fff;
+      border: none;
+      padding: 0.6rem 1.5rem;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-backup:hover {
+      background: #219a52;
+      color: #fff;
+    }
   </style>
 {% endblock %}
 
@@ -174,6 +189,14 @@
     </tbody>
   </table>
   {% endif %}
+
+  <div class="purge-section">
+    <h3>Backup</h3>
+    <p class="purge-stats">
+      Download a compressed snapshot of all database tables (<code>COPY TO</code> format, gzipped).
+    </p>
+    <a href="/admin/database/backup" class="btn-backup">Download Backup</a>
+  </div>
 
   {% if purge_result %}
     {% if purge_result.error %}

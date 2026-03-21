@@ -1,0 +1,244 @@
+{% extends 'admin/master.html' %}
+
+{% block head_css %}
+  {{ super() }}
+  <style>
+    .dbsize-wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      color: #222;
+    }
+    .dbsize-total {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 2rem;
+      align-items: baseline;
+    }
+    .dbsize-total .big-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #2c3e50;
+    }
+    .dbsize-total .label {
+      color: #666;
+      font-size: 0.95rem;
+    }
+    table.dbsize-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+    .dbsize-table th,
+    .dbsize-table td {
+      border: 1px solid #ddd;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+    }
+    .dbsize-table th {
+      background: #f7f7f7;
+      text-align: left;
+    }
+    .dbsize-table td.num {
+      text-align: right;
+      font-family: monospace;
+    }
+    .bar-cell {
+      width: 120px;
+    }
+    .bar {
+      height: 14px;
+      background: #3498db;
+      border-radius: 3px;
+      min-width: 1px;
+    }
+    .error-banner {
+      margin: 1rem 0;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border: 1px solid #e0b4b4;
+      background: #fff6f6;
+      color: #8a1f1f;
+      font-weight: 600;
+    }
+    .success-banner {
+      margin: 1rem 0;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      border: 1px solid #b4e0b4;
+      background: #f6fff6;
+      color: #1f8a1f;
+      font-weight: 600;
+    }
+    .purge-section {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-top: 1.5rem;
+    }
+    .purge-section h3 {
+      margin-top: 0;
+    }
+    .purge-options {
+      margin: 1rem 0;
+    }
+    .purge-option {
+      padding: 0.5rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .purge-option label {
+      cursor: pointer;
+      flex: 1;
+    }
+    .savings-badge {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #666;
+    }
+    .savings-badge.has-savings {
+      color: #b30000;
+      font-weight: 600;
+    }
+    .purge-stats {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 0.75rem;
+    }
+    .btn-purge {
+      background: #c0392b;
+      color: #fff;
+      border: none;
+      padding: 0.6rem 1.5rem;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .btn-purge:hover {
+      background: #a93226;
+    }
+  </style>
+{% endblock %}
+
+{% block body %}
+<div class="dbsize-wrap">
+  <h2>Database Size</h2>
+
+  {% if size_info.error %}
+  <div class="error-banner">
+    Error querying database size: {{ size_info.error }}
+  </div>
+  {% else %}
+  <div class="dbsize-total">
+    <div>
+      <div class="big-number">{{ size_info.total_mb }} MB</div>
+      <div class="label">Total database size</div>
+    </div>
+    <div>
+      <div class="label">Database: <strong>{{ size_info.database_name }}</strong></div>
+    </div>
+  </div>
+
+  {% if size_info.tables %}
+  <h3>Per-table breakdown</h3>
+  <table class="dbsize-table">
+    <thead>
+      <tr>
+        <th>Table</th>
+        <th>Total (MB)</th>
+        <th>Data (MB)</th>
+        <th>Indexes (MB)</th>
+        <th class="bar-cell"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in size_info.tables %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td class="num">{{ t.total_mb }}</td>
+        <td class="num">{{ t.table_mb }}</td>
+        <td class="num">{{ t.index_mb }}</td>
+        <td class="bar-cell">
+          {% if size_info.tables[0].total_bytes > 0 %}
+          <div class="bar" style="width: {{ (t.total_bytes / size_info.tables[0].total_bytes * 100) | int }}%"></div>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if purge_result %}
+    {% if purge_result.error %}
+    <div class="error-banner">Purge failed: {{ purge_result.error }}</div>
+    {% else %}
+    <div class="success-banner">Purged run_track_activity_jsonl from {{ purge_result.purged_rows }} row(s).</div>
+    {% endif %}
+  {% endif %}
+
+  {% if purge_info and not purge_info.error %}
+  <div class="purge-section">
+    <h3>Purge run_track_activity_jsonl</h3>
+    <div class="purge-stats">
+      {{ purge_info.rows_with_data }} of {{ purge_info.total_rows }} tasks have activity data
+      ({{ purge_info.total_data_mb }} MB total)
+    </div>
+    <form method="POST" onsubmit="return confirm('This will permanently NULL out run_track_activity_jsonl for older rows. Continue?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="purge">
+      <div class="purge-options">
+        {% for opt in purge_info.options %}
+        <div class="purge-option">
+          <input type="radio" name="keep_n" id="keep_{{ opt.keep_n }}" value="{{ opt.keep_n }}"
+            {% if opt.keep_n == 50 %}checked{% endif %}>
+          <label for="keep_{{ opt.keep_n }}">
+            Keep latest <strong>{{ opt.keep_n }}</strong> tasks
+          </label>
+          <span class="savings-badge {% if opt.savings_mb > 0 %}has-savings{% endif %}">
+            {% if opt.purgeable_rows > 0 %}
+              purge {{ opt.purgeable_rows }} rows, save {{ opt.savings_mb }} MB
+            {% else %}
+              nothing to purge
+            {% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn-purge">Purge Activity Data</button>
+    </form>
+  </div>
+  {% elif purge_info and purge_info.error %}
+  <div class="error-banner">Failed to load purge info: {{ purge_info.error }}</div>
+  {% endif %}
+
+  {% if vacuum_result %}
+    {% if vacuum_result.error %}
+    <div class="error-banner">Vacuum failed: {{ vacuum_result.error }}</div>
+    {% else %}
+    <div class="success-banner">VACUUM FULL task_item completed. Disk space reclaimed.</div>
+    {% endif %}
+  {% endif %}
+
+  <div class="purge-section">
+    <h3>Vacuum</h3>
+    <p class="purge-stats">
+      Run <code>VACUUM FULL task_item</code> to rewrite the table and reclaim disk space.
+      This locks the table briefly.
+    </p>
+    <form method="POST" onsubmit="return confirm('This will lock the task_item table while it rewrites it. Continue?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="vacuum">
+      <button type="submit" class="btn-purge" style="background: #2980b9;">Vacuum task_item</button>
+    </form>
+  </div>
+
+  {% endif %}
+</div>
+{% endblock %}

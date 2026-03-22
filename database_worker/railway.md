@@ -4,7 +4,7 @@ Deploy database_worker (PlanExe database maintenance service) to Railway as an i
 
 This service provides database backup (via `pg_dump`) and is called by `frontend_multi_user`. It should **not** be exposed publicly.
 
-## Service variables example
+## Env vars
 
 ```
 PLANEXE_POSTGRES_HOST="${{shared.PLANEXE_POSTGRES_HOST}}"

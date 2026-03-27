@@ -1102,7 +1102,7 @@ class MyFlaskApp:
 
         stripe.api_key = stripe_secret
         try:
-            session_obj = stripe.checkout.Session.retrieve(checkout_session_id)
+            session_obj: Any = stripe.checkout.Session.retrieve(checkout_session_id)
         except Exception as exc:
             self._record_event(
                 EventType.GENERIC_ERROR,
@@ -2816,7 +2816,7 @@ class MyFlaskApp:
                 },
             )
             try:
-                session_obj = stripe.checkout.Session.create(
+                session_obj: Any = stripe.checkout.Session.create(
                     mode="payment",
                     success_url=success_url,
                     cancel_url=cancel_url,
@@ -2875,6 +2875,7 @@ class MyFlaskApp:
             sig_header = request.headers.get("Stripe-Signature")
             event_id = None
             event_type = None
+            event: Any = None
             try:
                 if webhook_secret:
                     event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)

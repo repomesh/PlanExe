@@ -702,7 +702,7 @@ async def plan_create(
                 "Optional plan start date in ISO 8601 format with timezone offset "
                 "(e.g. '2025-06-15T09:00:00+02:00'). "
                 "When omitted, the plan starts now. "
-                "Use this to recreate historical plans with their original start date."
+                "Use this to set a past or future start date for the plan."
             ),
         ),
     ] = None,

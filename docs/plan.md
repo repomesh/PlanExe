@@ -32,6 +32,8 @@ Why?
 > will it be able to adapt to a changing world. Re-plan in real-time when a shipment is delayed, a machine breaks down, or an unexpected storm hits.
 > quiet, compounding errors, security oversights, and cost blowouts.
 
+My initial plan was to create something ala [OpenClaw](https://openclaw.ai/).
+
 
 ## Execute the plan
 
@@ -40,15 +42,46 @@ Currently it's up to humans to execute a plan. How can this be automated?
 Ideally take an entire plan and go with it.
 
 
-## Improve plan
+## OpenClaw
 
-**Prompt optimizing with A/B testing:** Make tiny tweaks to one system prompt at a time, and see how it compares to baseline.
-If most generated plans gets improved, then keep the new system prompt.
-Verify across multiple LLMs/reasoning models, that the new system prompt makes an improvement.
+If someone want to sponsor a MacMini for this, since I don't want to risk my own computer getting wrecked.
+
+I already have OpenClaw agents creating plans via docker and via the MCP interface, and sending PRs with fixes and ideas for improvements. I want to turn this into some a skill that other OpenClaw agents can use.
+
+- OpenClaw integration with PlanExe
+- Create an openclaw skill for creating plans with PlanExe.
+- video for using OpenClaw with PlanExe, having nanobanana integration as well, so a nice thumbnail can be generated.
+- have openclaw again invoke mcp.planexe.org, and turn it into a skill.
+- publish a planexe skill on https://www.clawhub.ai/
+- raise awareness of PlanExe on MoltBook.
+
+
+## Self improve
+
+Make tiny tweaks to one piece of code or prompt at a time, and see how it compares to baseline.
+If most generated plans gets improved, then keep the new code.
+Verify across multiple LLMs/reasoning models, that the new code makes an improvement.
 Store the new system prompt in the repo.
 Find weaknesses that are common for the generated plans.
 Pick the earliest task in the pipeline that impact this weakness.
 Schedule this weakness for the next A/B test improvement iteration.
+
+I want the `self_improve` loop to 
+- I suspect that my self_improve code puts claude on too much work, since the outputted analysis documents are very similar, and I run out of tokens quickly.
+- automate: After an analysis, comment on the PR with the verdict, so one later knows if it’s a KEEP or REJECT.
+- There is no need for the levers to be perfect. There is going to be a 2nd phase that cleans the levers up with a reasoning model.
+- If only insight_claude.md gets generated and no insight_codex.md, then there is no need to come to an agreement between the 2 models, so skip run_code.py, run_synthesis.py, run_assessment.py
+
+Make it easier to resume from the `PlanExe-prompt-lab/baseline`, where the `identify-potential-levers` have been replaced by the outputted levers of the best run. Then regenerate the following files. This makes it possible to generate plans from baseline and see if the levers are really making a significant improvement, or worsened or if it’s a tie.
+Currently I have to do several manual steps, where I have to copy files around.
+I'm terrible at SKILL.md, so I'm not at a place where I can easily automate this.
+
+---
+
+## Directions to go
+
+**Ask for expert help:** Establish contact between people, for reviewing a plan, for executing the plan, for getting funding.
+The “Ask for expert help” section, serve the content from planexe.org. Either as an iframe or as javascript or be generated dynamic?
 
 **Boost initial prompt:** The `initial prompt` has the biggest impact on the generated plan, if it's bad then the final plan is bad.
 If it's well written, concise, there is a higher chance for a realistic/feasible plan.
@@ -80,6 +113,7 @@ In the future I want to do multiple iterations, until the plan is of a reasonabl
 **Validate the plan with deep research:** Currently there is no validation.
 It's up to humans to be skeptic about the plan, does this make sense, check everything.
 There may be issues with: assumptions, numbers, flaws.
+Identify claims in PlanExe’s output, that needs to be verified or stronger evidence.
 
 **Money:** Currently the LLMs make up numbers.
 Alternate between these: Tweak the plan. Tweak the budget. Repeat.
@@ -97,15 +131,28 @@ Obtain info about what resources the user has available, and if they are willing
 
 ## MCP - Polishing of MCP flow via planexe.org
 
-As of 2026-mar-13, I'm focusing on improving MCP.
-PlanExe is already working with OpenClaw.
-But it's not as smooth as I would like.
+As of 2026-mar-27, I'm focusing on improving MCP. It is not as smooth as I would like.
 
 The user adds credits here. Start with 5 USD, so you can create around 3 plans.
 [https://home.planexe.org/](https://home.planexe.org/)
 
 The agents use the api here. When AI agents connect to the MCP interface, the credits are consumed. Between 1-2 USD per plan creation.
 [https://mcp.planexe.org/mcp](https://mcp.planexe.org/mcp)
+
+There are several ways already to connect to planexe via mcp. So I'm hesitant about adding another package to maintain. Deploy to pypi a planexe package, so the mcp config becomes like this.
+```json
+{
+  "mcpServers": {
+    "planexe": {
+      "command": "uvx",
+      "args": [
+        "planexe"
+      ]
+    }
+  }
+}
+```
+
 
 
 ## MCP - BYOK
@@ -124,6 +171,22 @@ I want to capture the reasoning, since it may be helpful for troubleshooting.
 Or for other AIs to assess the reasoning steps leading up to the response.
 
 
+## Railway volume kludge
+
+Currently the docker-compose.yml mounts the `/run` dir. Inside Railway it's ugly.
+
+Get rid of the “/run” volume. And instead use the worker services file system.
+
+
+## Database gz -> zstd
+
+Replace gz with zstd in PlanExe, for wasting less space. So when I store stuff in the database, then zstd it is.
+
+
+---
+
+# Low priority issues
+
 ## Table of content
 
 Currently the generated report has expandable/collapsible sections. There is an overwhelming amount of content inside each sections.
@@ -139,14 +202,17 @@ Get rid of some of the many user prompt logging statements, so the log.txt is le
 These user prompts are saved to the `track_activity.jsonl` file already. So having them in the log.txt is redundant.
 
 
-## SSL when connecting with the database
-
-I can't afford the pro plan to have a dedicated Postgres server.
-Currently when connecting to Railway, it's via a TCP Proxy and it's unencrypted.
-Either upgrade to pro, or use SSL certificates within the "database_postgres" Dockerfile.
-
 ## Not a priority - Debugging
 
 Get step-by-step debugging working again.
 Now that I have switched to Docker, I have multiple python projects in the same repo, that use different incompatible packages.
 With vibe-coding, I can't recall last time I have debugged anything.
+
+## MCP tweaks
+
+**Prepare create**, create a PlanItem, and allow setting various attributes, BEFORE creating the plan.
+The `start date` may be interesting to simulate plans created in the past/future. Currently all plans gets started on todays date.
+
+**upload zip and resume**, upload a zip with a plan and have PlanExe resume from it. Inside home.planexe.org, so users can do the same. This makes it possible to do edit the files, and resume from that data.
+
+**submit feedback**, how do you perceive PlanExe (mcp interface, the generated report), can it be improved.

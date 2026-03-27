@@ -271,6 +271,7 @@ class PlanCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
+    start_date: Optional[str] = None
 
 class PlanStatusRequest(BaseModel):
     plan_id: str

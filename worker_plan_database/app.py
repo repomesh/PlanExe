@@ -1309,7 +1309,15 @@ def process_pending_tasks() -> bool:
         run_id_dir.mkdir(parents=True, exist_ok=True)
 
     # write the start time to the run_id_dir
-    start_time: datetime = datetime.now().astimezone()
+    # If a start_date was provided via plan_create parameters, use it instead of now.
+    start_date_str = parameters.get("start_date") if parameters else None
+    if start_date_str:
+        start_time = datetime.fromisoformat(start_date_str)
+        if start_time.tzinfo is None:
+            start_time = start_time.astimezone()
+        logger.info("Using provided start_date for plan %s: %s", task_id, start_date_str)
+    else:
+        start_time = datetime.now().astimezone()
     start_time_file = StartTime.create(local_time=start_time)
     start_time_file.save(str(run_id_dir / FilenameEnum.START_TIME.value))
 

@@ -142,6 +142,7 @@ Create a new planning task. This is the main entry point for generating plans.
     "arguments": {
       "prompt": "Create a project launch plan for Q2 2026",
       "model_profile": "premium",
+      "start_date": "2026-04-01T20:55:00+02:00",
       "user_api_key": "your_optional_api_key"
     }
   }
@@ -151,6 +152,7 @@ Create a new planning task. This is the main entry point for generating plans.
 **Parameter Guide:**
 - `prompt` (required): Your planning request in natural language. Write as flowing prose (not structured markdown), typically 300-800 words.
 - `model_profile` (optional): One of `"baseline"`, `"premium"`, `"frontier"`, or `"custom"`. Defaults to `"baseline"`.
+- `start_date` (optional): Plan start date in ISO 8601 format with timezone offset (e.g. `"2026-04-01T20:55:00+02:00"`). When omitted, the plan starts now.
 - `user_api_key` (optional): Your PlanExe API key (if not set in environment)
 
 **Returns:** `task_id` for polling status and retrieving results.

@@ -84,9 +84,10 @@ Example call:
 {"prompt": "Weekly meetup for humans where participants are randomly paired every 5 minutes..."}
 ```
 
-Optional visible argument:
+Optional visible arguments:
 ```text
 model_profile: "baseline" | "premium" | "frontier" | "custom"
+start_date: ISO 8601 with timezone offset (e.g. "2025-06-15T20:55:00+02:00")
 ```
 
 Example with visible `model_profile`:

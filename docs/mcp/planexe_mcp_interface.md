@@ -233,6 +233,10 @@ Use the returned `profile` values directly in `plan_create.model_profile`.
       "enum": ["baseline", "premium", "frontier", "custom"],
       "default": "baseline"
     },
+    "start_date": {
+      "type": "string",
+      "description": "Optional plan start date in ISO 8601 format with timezone offset (e.g. '2025-06-15T20:55:00+02:00'). When omitted, the plan starts now."
+    },
     "user_api_key": { "type": "string" }
   },
   "required": ["prompt"]

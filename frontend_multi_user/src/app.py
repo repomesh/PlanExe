@@ -3281,6 +3281,10 @@ class MyFlaskApp:
             parameters.pop('nonce', None)
             parameters.pop('redirect_to_plan', None)
 
+            # Remove empty start_date so it doesn't get stored as "".
+            if not parameters.get("start_date"):
+                parameters.pop("start_date", None)
+
             # Normalize model profile to a known value with backward-compatible baseline default.
             raw_profile = parameters.get("model_profile")
             parameters["model_profile"] = normalize_model_profile(raw_profile).value

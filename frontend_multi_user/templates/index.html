@@ -489,6 +489,71 @@
     .model-profile-option:hover {
         background: var(--color-bg-soft);
     }
+    /* ── Start date picker ─────────────────────────── */
+    .start-date-wrapper {
+        display: flex;
+        align-items: center;
+    }
+    .start-date-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 6px 8px;
+        background: none;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        font-family: var(--font-sans);
+        font-size: 0.8rem;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s;
+    }
+    .start-date-toggle:hover {
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
+    .start-date-toggle svg {
+        width: 14px;
+        height: 14px;
+    }
+    .start-date-row {
+        display: none;
+        align-items: center;
+        gap: 8px;
+    }
+    .start-date-row.open {
+        display: flex;
+    }
+    .start-date-row input[type="date"] {
+        padding: 6px 10px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        font-family: var(--font-sans);
+        font-size: 0.82rem;
+        color: var(--color-text);
+        background: var(--color-bg);
+        outline: none;
+        transition: border-color 0.15s;
+    }
+    .start-date-row input[type="datetime-local"]:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .start-date-clear {
+        padding: 4px 8px;
+        background: none;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius);
+        font-family: var(--font-sans);
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        cursor: pointer;
+        transition: border-color 0.15s, color 0.15s;
+    }
+    .start-date-clear:hover {
+        border-color: var(--color-primary);
+        color: var(--color-primary);
+    }
     .btn-start-plan {
         display: inline-flex;
         align-items: center;
@@ -578,7 +643,19 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
+            <input type="hidden" name="start_date" id="start-date-hidden" value="">
             <div class="new-plan-footer">
+                <div class="start-date-wrapper">
+                    <button type="button" class="start-date-toggle" id="start-date-toggle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                        Set start date
+                    </button>
+                    <div class="start-date-row" id="start-date-row">
+                        <input type="date" id="start-date-input">
+                        <button type="button" class="start-date-clear" id="start-date-clear">Clear</button>
+                    </div>
+                </div>
+                <div class="footer-spacer"></div>
                 <div class="model-profile-inline model-profile-picker">
                     {% set default_profile_option = model_profile_options[0] %}
                     <input type="hidden" name="model_profile" id="model-profile" value="{{ default_profile_option.value }}">
@@ -600,7 +677,6 @@
                         {% endfor %}
                     </div>
                 </div>
-                <div class="footer-spacer"></div>
                 <button type="submit" class="btn-start-plan" id="btn-start-plan" title="Generate a plan from your prompt" {% if not can_create_plan %}disabled{% endif %}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                     {% if not can_create_plan %}
@@ -704,6 +780,54 @@
             }
         });
     });
+</script>
+{% endif %}
+{% if user %}
+<script>
+    (function() {
+        var toggle = document.getElementById('start-date-toggle');
+        var row = document.getElementById('start-date-row');
+        var dateInput = document.getElementById('start-date-input');
+        var hiddenDate = document.getElementById('start-date-hidden');
+        var clearBtn = document.getElementById('start-date-clear');
+
+        if (!toggle || !row || !dateInput || !hiddenDate || !clearBtn) return;
+
+        toggle.addEventListener('click', function() {
+            var isOpen = row.classList.contains('open');
+            if (isOpen) {
+                row.classList.remove('open');
+                toggle.style.display = '';
+            } else {
+                row.classList.add('open');
+                toggle.style.display = 'none';
+            }
+        });
+
+        clearBtn.addEventListener('click', function() {
+            dateInput.value = '';
+            hiddenDate.value = '';
+            row.classList.remove('open');
+            toggle.style.display = '';
+        });
+
+        function toISO8601WithOffset(dateStr) {
+            // dateStr is "YYYY-MM-DD" from the date input.
+            // Build a local Date at 20:55 to get the correct timezone offset.
+            var d = new Date(dateStr + 'T20:55:00');
+            if (isNaN(d.getTime())) return '';
+            var off = -d.getTimezoneOffset();
+            var sign = off >= 0 ? '+' : '-';
+            var absOff = Math.abs(off);
+            var hh = String(Math.floor(absOff / 60)).padStart(2, '0');
+            var mm = String(absOff % 60).padStart(2, '0');
+            return dateStr + 'T20:55:00' + sign + hh + ':' + mm;
+        }
+
+        dateInput.addEventListener('change', function() {
+            hiddenDate.value = dateInput.value ? toISO8601WithOffset(dateInput.value) : '';
+        });
+    })();
 </script>
 {% endif %}
 {% if user %}

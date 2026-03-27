@@ -695,6 +695,17 @@ async def plan_create(
         ModelProfileInput,
         Field(description="Model profile: baseline, premium, frontier, custom. Call model_profiles to inspect options."),
     ] = "baseline",
+    start_date: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "Optional plan start date in ISO 8601 format with timezone offset "
+                "(e.g. '2025-06-15T09:00:00+02:00'). "
+                "When omitted, the plan starts now. "
+                "Use this to set a past or future start date for the plan."
+            ),
+        ),
+    ] = None,
 ) -> CallToolResult:
     """Create a new PlanExe task. Use example_prompts first for example prompts."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
@@ -702,6 +713,8 @@ async def plan_create(
         "prompt": prompt,
         "model_profile": model_profile,
     }
+    if start_date:
+        arguments["start_date"] = start_date
     if authenticated_user_api_key:
         arguments["user_api_key"] = authenticated_user_api_key
     return await handle_plan_create(

@@ -41,6 +41,7 @@ class PlanCreateRequest(BaseModel):
     prompt: str
     model_profile: Optional[ModelProfileInput] = None
     user_api_key: Optional[str] = None
+    start_date: Optional[str] = None
 
 
 class PlanStatusRequest(BaseModel):
@@ -362,6 +363,16 @@ PLAN_CREATE_INPUT_SCHEMA = {
             "type": ["string", "null"],
             "default": None,
             "description": "Optional user API key for credits and attribution.",
+        },
+        "start_date": {
+            "type": ["string", "null"],
+            "default": None,
+            "description": (
+                "Optional plan start date in ISO 8601 format with timezone offset "
+                "(e.g. '2025-06-15T09:00:00+02:00'). "
+                "When omitted, the plan starts now. "
+                "Use this to set a past or future start date for the plan."
+            ),
         },
     },
     "required": ["prompt"],
@@ -970,6 +981,8 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         payload["model_profile"] = req.model_profile
     if req.user_api_key:
         payload["user_api_key"] = req.user_api_key
+    if req.start_date:
+        payload["start_date"] = req.start_date
 
     metadata = arguments.get("metadata")
     if isinstance(metadata, dict):

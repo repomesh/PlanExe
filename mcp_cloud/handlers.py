@@ -125,6 +125,10 @@ async def handle_plan_create(arguments: dict[str, Any]) -> CallToolResult:
         model_profile = metadata_model_profile
 
     merged_config = _merge_plan_create_config(None, model_profile)
+    if req.start_date:
+        if merged_config is None:
+            merged_config = {}
+        merged_config["start_date"] = req.start_date
     require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
     user_context = None
     if req.user_api_key:

@@ -66,6 +66,7 @@ class StartRunRequest(BaseModel):
     model_profile: str = Field(DEFAULT_MODEL_PROFILE.value, description="LLM model profile (baseline, premium, frontier, custom).")
     openrouter_api_key: Optional[str] = Field(None, description="Optional OpenRouter API key.")
     run_id: Optional[str] = Field(None, description="Existing run ID to retry.")
+    start_date: Optional[str] = Field(None, description="Optional ISO 8601 start date with timezone offset for the plan.")
 
 
 class StartRunResponse(BaseModel):
@@ -205,7 +206,13 @@ def create_run_directory(request: StartRunRequest) -> tuple[str, Path]:
             raise HTTPException(status_code=404, detail=f"Run directory does not exist: {run_dir}")
         return request.run_id, run_dir.resolve()
 
-    start_time = datetime.now().astimezone()
+    # If a start_date was provided, use it instead of now.
+    if request.start_date:
+        start_time = datetime.fromisoformat(request.start_date)
+        if start_time.tzinfo is None:
+            start_time = start_time.astimezone()
+    else:
+        start_time = datetime.now().astimezone()
     run_id = generate_run_id()
     run_dir = RUN_BASE_PATH / run_id
     if run_dir.exists():

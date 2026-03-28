@@ -127,6 +127,54 @@ class TestSendFeedbackTool(unittest.TestCase):
                 }))
             self.assertFalse(result.isError, f"Category {category} should be accepted")
 
+    def test_feedback_invalid_user_api_key(self):
+        """Invalid user_api_key returns INVALID_USER_API_KEY error."""
+        with patch("mcp_cloud.handlers._resolve_user_from_api_key", return_value=None):
+            result = asyncio.run(handle_send_feedback({
+                "category": "suggestion",
+                "message": "test",
+                "user_api_key": "pex_bad_key",
+            }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_USER_API_KEY")
+
+    def test_feedback_requires_key_when_env_set(self):
+        """When PLANEXE_MCP_REQUIRE_USER_KEY is true, missing key returns error."""
+        with patch.dict("os.environ", {"PLANEXE_MCP_REQUIRE_USER_KEY": "true"}):
+            result = asyncio.run(handle_send_feedback({
+                "category": "suggestion",
+                "message": "test",
+            }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "USER_API_KEY_REQUIRED")
+
+    def test_feedback_no_key_when_not_required(self):
+        """When key is not required and not provided, feedback succeeds."""
+        with patch.dict("os.environ", {"PLANEXE_MCP_REQUIRE_USER_KEY": "false"}), \
+             patch("mcp_cloud.handlers._create_feedback_sync"):
+            result = asyncio.run(handle_send_feedback({
+                "category": "suggestion",
+                "message": "test",
+            }))
+
+        self.assertFalse(result.isError)
+
+    def test_feedback_passes_user_id_from_api_key(self):
+        """Valid user_api_key resolves user_id and passes it to _create_feedback_sync."""
+        user_context = {"user_id": "user-42", "credits_balance": 10.0}
+        with patch("mcp_cloud.handlers._resolve_user_from_api_key", return_value=user_context), \
+             patch("mcp_cloud.handlers._create_feedback_sync") as mock_create:
+            asyncio.run(handle_send_feedback({
+                "category": "compliment",
+                "message": "Great tool!",
+                "user_api_key": "pex_valid",
+            }))
+
+        call_kwargs = mock_create.call_args
+        self.assertEqual(call_kwargs.kwargs["user_id"], "user-42")
+
     def test_feedback_captures_plan_snapshot(self):
         """When plan_id is provided, plan snapshot is passed to _create_feedback_sync."""
         plan_snapshot = {

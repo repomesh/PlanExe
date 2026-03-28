@@ -803,6 +803,7 @@ async def send_feedback(
     severity: Optional[str] = Field(default=None, description="Optional severity: low, medium, or high."),
 ) -> CallToolResult:
     """Submit structured feedback about plan quality, workflow, or the MCP interface."""
+    authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {"category": category, "message": message}
     if plan_id is not None:
         arguments["plan_id"] = plan_id
@@ -810,6 +811,8 @@ async def send_feedback(
         arguments["rating"] = rating
     if severity is not None:
         arguments["severity"] = severity
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
     return await handle_send_feedback(arguments)
 
 

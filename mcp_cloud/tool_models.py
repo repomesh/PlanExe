@@ -519,6 +519,10 @@ class SendFeedbackInput(BaseModel):
         default=None,
         description="Optional severity for issue reports: low, medium, or high.",
     )
+    user_api_key: Optional[str] = Field(
+        default=None,
+        description="Optional user API key for authentication and attribution.",
+    )
 
 
 class SendFeedbackOutput(BaseModel):

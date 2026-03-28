@@ -688,8 +688,8 @@ async def handle_send_feedback(arguments: dict[str, Any]) -> CallToolResult:
     """Accept structured feedback from MCP clients.
 
     Fire-and-forget: always returns success to the caller even if DB write fails.
-    The only client-visible errors are INVALID_FEEDBACK (bad input) and
-    PLAN_NOT_FOUND (plan_id provided but not found).
+    The only client-visible errors are INVALID_FEEDBACK (bad input),
+    PLAN_NOT_FOUND (plan_id provided but not found), and auth errors.
     """
     try:
         req = SendFeedbackRequest(**arguments)
@@ -700,6 +700,28 @@ async def handle_send_feedback(arguments: dict[str, Any]) -> CallToolResult:
             structuredContent=response,
             isError=True,
         )
+
+    # Auth check — same pattern as plan_create.
+    require_user_key = os.environ.get("PLANEXE_MCP_REQUIRE_USER_KEY", "false").lower() in ("1", "true", "yes", "on")
+    user_context = None
+    if req.user_api_key:
+        user_context = _resolve_user_from_api_key(req.user_api_key.strip())
+        if not user_context:
+            response = {"error": {"code": "INVALID_USER_API_KEY", "message": "Invalid user_api_key. Verify your key or create an account at https://home.planexe.org/"}}
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=True,
+            )
+    elif require_user_key:
+        response = {"error": {"code": "USER_API_KEY_REQUIRED", "message": "user_api_key is required for send_feedback. Create an account at https://home.planexe.org/"}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    user_id = str(user_context["user_id"]) if user_context else None
 
     # If plan_id is provided, validate it exists and capture a snapshot.
     plan_snapshot = None
@@ -734,7 +756,7 @@ async def handle_send_feedback(arguments: dict[str, Any]) -> CallToolResult:
             plan_id=req.plan_id,
             rating=req.rating,
             severity=req.severity,
-            user_id=None,  # TODO: resolve from auth context when available
+            user_id=user_id,
             plan_snapshot=plan_snapshot,
         )
     except Exception:

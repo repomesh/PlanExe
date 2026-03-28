@@ -11,10 +11,10 @@ Add a `send_feedback` MCP tool that allows LLM consumers to submit structured fe
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `category` | enum | yes | One of: `sse_issue`, `status_staleness`, `queue_delay`, `file_visibility`, `plan_quality`, `tool_description`, `workflow`, `performance`, `error_handling`, `suggestion`, `compliment`, `other` |
-| `message` | string | yes | Free-text feedback (concise, actionable) |
+| `category` | enum | yes | One of: `mcp` (MCP tools), `plan` (generated plan), `code` (PlanExe source code), `other` |
+| `message` | string | yes | Free-text feedback. Include environment context if reporting an issue. |
 | `plan_id` | string\|null | no | UUID to attach feedback to a specific plan |
-| `rating` | integer 1-5\|null | no | Satisfaction score |
+| `rating` | integer 1-5\|null | no | 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive |
 
 ## Response
 

@@ -16,7 +16,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         """Minimal feedback with only required fields succeeds."""
         with patch("mcp_cloud.handlers._create_feedback_sync"):
             result = asyncio.run(handle_send_feedback({
-                "category": "suggestion",
+                "category": "mcp",
                 "message": "Add dark mode support",
             }))
 
@@ -37,7 +37,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=plan_snapshot), \
              patch("mcp_cloud.handlers._create_feedback_sync"):
             result = asyncio.run(handle_send_feedback({
-                "category": "plan_quality",
+                "category": "plan",
                 "message": "The SWOT section is too generic",
                 "plan_id": "aaa-111",
                 "rating": 3,
@@ -59,7 +59,7 @@ class TestSendFeedbackTool(unittest.TestCase):
     def test_feedback_missing_message(self):
         """Missing required message field returns INVALID_FEEDBACK error."""
         result = asyncio.run(handle_send_feedback({
-            "category": "suggestion",
+            "category": "mcp",
         }))
 
         self.assertTrue(result.isError)
@@ -69,7 +69,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         """plan_id that doesn't exist returns PLAN_NOT_FOUND error."""
         with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=None):
             result = asyncio.run(handle_send_feedback({
-                "category": "plan_quality",
+                "category": "plan",
                 "message": "test feedback",
                 "plan_id": "nonexistent-uuid",
             }))
@@ -80,7 +80,7 @@ class TestSendFeedbackTool(unittest.TestCase):
     def test_feedback_rating_out_of_range(self):
         """Rating outside 1-5 returns INVALID_FEEDBACK error."""
         result = asyncio.run(handle_send_feedback({
-            "category": "compliment",
+            "category": "other",
             "message": "Great tool!",
             "rating": 10,
         }))
@@ -101,12 +101,8 @@ class TestSendFeedbackTool(unittest.TestCase):
         self.assertEqual(result.structuredContent["message"], "Feedback received. Thank you.")
 
     def test_feedback_all_categories_accepted(self):
-        """All 12 defined categories are accepted."""
-        categories = [
-            "sse_issue", "status_staleness", "queue_delay", "file_visibility",
-            "plan_quality", "tool_description", "workflow", "performance",
-            "error_handling", "suggestion", "compliment", "other",
-        ]
+        """All 4 defined categories are accepted."""
+        categories = ["mcp", "plan", "code", "other"]
         for category in categories:
             with patch("mcp_cloud.handlers._create_feedback_sync"):
                 result = asyncio.run(handle_send_feedback({
@@ -119,7 +115,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         """Invalid user_api_key returns INVALID_USER_API_KEY error."""
         with patch("mcp_cloud.handlers._resolve_user_from_api_key", return_value=None):
             result = asyncio.run(handle_send_feedback({
-                "category": "suggestion",
+                "category": "mcp",
                 "message": "test",
                 "user_api_key": "pex_bad_key",
             }))
@@ -131,7 +127,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         """When PLANEXE_MCP_REQUIRE_USER_KEY is true, missing key returns error."""
         with patch.dict("os.environ", {"PLANEXE_MCP_REQUIRE_USER_KEY": "true"}):
             result = asyncio.run(handle_send_feedback({
-                "category": "suggestion",
+                "category": "mcp",
                 "message": "test",
             }))
 
@@ -143,7 +139,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         with patch.dict("os.environ", {"PLANEXE_MCP_REQUIRE_USER_KEY": "false"}), \
              patch("mcp_cloud.handlers._create_feedback_sync"):
             result = asyncio.run(handle_send_feedback({
-                "category": "suggestion",
+                "category": "mcp",
                 "message": "test",
             }))
 
@@ -155,7 +151,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         with patch("mcp_cloud.handlers._resolve_user_from_api_key", return_value=user_context), \
              patch("mcp_cloud.handlers._create_feedback_sync") as mock_create:
             asyncio.run(handle_send_feedback({
-                "category": "compliment",
+                "category": "other",
                 "message": "Great tool!",
                 "user_api_key": "pex_valid",
             }))
@@ -174,7 +170,7 @@ class TestSendFeedbackTool(unittest.TestCase):
         with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=plan_snapshot) as mock_get, \
              patch("mcp_cloud.handlers._create_feedback_sync") as mock_create:
             asyncio.run(handle_send_feedback({
-                "category": "plan_quality",
+                "category": "plan",
                 "message": "Report looks great",
                 "plan_id": "test-uuid",
             }))

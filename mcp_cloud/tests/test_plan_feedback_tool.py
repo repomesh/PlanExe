@@ -1,0 +1,153 @@
+import asyncio
+import unittest
+from unittest.mock import patch
+
+from mcp.types import CallToolResult
+from mcp_cloud.app import handle_list_tools, handle_plan_feedback
+
+
+class TestPlanFeedbackTool(unittest.TestCase):
+    def test_plan_feedback_tool_listed(self):
+        tools = asyncio.run(handle_list_tools())
+        tool_names = {tool.name for tool in tools}
+        self.assertIn("plan_feedback", tool_names)
+
+    def test_feedback_success_minimal(self):
+        """Minimal feedback with only required fields succeeds."""
+        with patch("mcp_cloud.handlers._create_feedback_sync"):
+            result = asyncio.run(handle_plan_feedback({
+                "category": "suggestion",
+                "message": "Add dark mode support",
+            }))
+
+        self.assertIsInstance(result, CallToolResult)
+        self.assertFalse(result.isError)
+        self.assertIn("feedback_id", result.structuredContent)
+        self.assertIn("received_at", result.structuredContent)
+        self.assertEqual(result.structuredContent["message"], "Feedback received. Thank you.")
+
+    def test_feedback_success_all_fields(self):
+        """Feedback with all optional fields succeeds."""
+        plan_snapshot = {
+            "plan_id": "aaa-111",
+            "state": "processing",
+            "progress_percentage": 42.0,
+            "current_step": "SWOT Analysis",
+        }
+        with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=plan_snapshot), \
+             patch("mcp_cloud.handlers._create_feedback_sync"):
+            result = asyncio.run(handle_plan_feedback({
+                "category": "plan_quality",
+                "message": "The SWOT section is too generic",
+                "plan_id": "aaa-111",
+                "rating": 3,
+                "severity": "medium",
+            }))
+
+        self.assertFalse(result.isError)
+        self.assertIn("feedback_id", result.structuredContent)
+
+    def test_feedback_invalid_category(self):
+        """Invalid category returns INVALID_FEEDBACK error."""
+        result = asyncio.run(handle_plan_feedback({
+            "category": "nonexistent_category",
+            "message": "test",
+        }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_FEEDBACK")
+
+    def test_feedback_missing_message(self):
+        """Missing required message field returns INVALID_FEEDBACK error."""
+        result = asyncio.run(handle_plan_feedback({
+            "category": "suggestion",
+        }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_FEEDBACK")
+
+    def test_feedback_plan_not_found(self):
+        """plan_id that doesn't exist returns PLAN_NOT_FOUND error."""
+        with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=None):
+            result = asyncio.run(handle_plan_feedback({
+                "category": "plan_quality",
+                "message": "test feedback",
+                "plan_id": "nonexistent-uuid",
+            }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "PLAN_NOT_FOUND")
+
+    def test_feedback_rating_out_of_range(self):
+        """Rating outside 1-5 returns INVALID_FEEDBACK error."""
+        result = asyncio.run(handle_plan_feedback({
+            "category": "compliment",
+            "message": "Great tool!",
+            "rating": 10,
+        }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_FEEDBACK")
+
+    def test_feedback_invalid_severity(self):
+        """Invalid severity value returns INVALID_FEEDBACK error."""
+        result = asyncio.run(handle_plan_feedback({
+            "category": "sse_issue",
+            "message": "SSE stream keeps dropping",
+            "severity": "critical",
+        }))
+
+        self.assertTrue(result.isError)
+        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_FEEDBACK")
+
+    def test_feedback_db_failure_returns_success(self):
+        """DB write failure is logged but success is returned (fire-and-forget)."""
+        with patch("mcp_cloud.handlers._create_feedback_sync", side_effect=RuntimeError("DB is down")):
+            result = asyncio.run(handle_plan_feedback({
+                "category": "other",
+                "message": "test feedback",
+            }))
+
+        self.assertFalse(result.isError)
+        self.assertIn("feedback_id", result.structuredContent)
+        self.assertEqual(result.structuredContent["message"], "Feedback received. Thank you.")
+
+    def test_feedback_all_categories_accepted(self):
+        """All 12 defined categories are accepted."""
+        categories = [
+            "sse_issue", "status_staleness", "queue_delay", "file_visibility",
+            "plan_quality", "tool_description", "workflow", "performance",
+            "error_handling", "suggestion", "compliment", "other",
+        ]
+        for category in categories:
+            with patch("mcp_cloud.handlers._create_feedback_sync"):
+                result = asyncio.run(handle_plan_feedback({
+                    "category": category,
+                    "message": f"Test {category}",
+                }))
+            self.assertFalse(result.isError, f"Category {category} should be accepted")
+
+    def test_feedback_captures_plan_snapshot(self):
+        """When plan_id is provided, plan snapshot is passed to _create_feedback_sync."""
+        plan_snapshot = {
+            "plan_id": "test-uuid",
+            "state": "completed",
+            "progress_percentage": 100.0,
+            "current_step": "Report Generation",
+        }
+        with patch("mcp_cloud.handlers._get_plan_snapshot_for_feedback_sync", return_value=plan_snapshot) as mock_get, \
+             patch("mcp_cloud.handlers._create_feedback_sync") as mock_create:
+            asyncio.run(handle_plan_feedback({
+                "category": "plan_quality",
+                "message": "Report looks great",
+                "plan_id": "test-uuid",
+            }))
+
+        mock_get.assert_called_once_with("test-uuid")
+        # Verify plan_snapshot was passed through
+        call_kwargs = mock_create.call_args
+        self.assertEqual(call_kwargs.kwargs["plan_snapshot"], plan_snapshot)
+
+
+if __name__ == "__main__":
+    unittest.main()

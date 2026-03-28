@@ -38,6 +38,7 @@ from database_api.model_user_account import UserAccount
 from database_api.model_user_api_key import UserApiKey
 from database_api.model_credit_history import CreditHistory  # noqa: F401
 from database_api.model_token_metrics import TokenMetrics  # noqa: F401
+from database_api.model_feedback import FeedbackItem  # noqa: F401
 
 print("[startup] db_setup.py: creating Flask app", file=sys.stderr, flush=True)
 app = Flask(__name__)
@@ -232,6 +233,8 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
     "The zip contains the intermediary pipeline files (md, json, csv) that fed the report. "
+    "Use plan_feedback to report issues or share observations about plan quality, workflow friction, or the MCP interface. "
+    "Feedback is fire-and-forget and never blocks the workflow. "
     "New users: create an account and obtain an API key at https://home.planexe.org/ ."
 )
 
@@ -298,3 +301,10 @@ class PlanListRequest(BaseModel):
 class ModelProfilesRequest(BaseModel):
     """No input parameters."""
     pass
+
+class PlanFeedbackRequest(BaseModel):
+    category: str
+    message: str
+    plan_id: Optional[str] = None
+    rating: Optional[int] = None
+    severity: Optional[str] = None

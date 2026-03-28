@@ -14,6 +14,7 @@ from worker_plan_api.pipeline_version import PIPELINE_VERSION
 
 from mcp_cloud.db_setup import app, db, PlanItem, PlanState, EventItem, EventType
 from database_api.model_credit_history import CreditHistory
+from database_api.model_feedback import FeedbackItem
 
 logger = logging.getLogger(__name__)
 
@@ -481,6 +482,67 @@ def _list_plans_sync(user_id: Optional[str], limit: int) -> list[dict[str, Any]]
                 "prompt_excerpt": (row.prompt_excerpt or "").strip()[:PROMPT_EXCERPT_MAX_LENGTH],
             })
         return results
+
+
+# ---------------------------------------------------------------------------
+# Feedback
+# ---------------------------------------------------------------------------
+
+def _get_plan_snapshot_for_feedback_sync(plan_id: str) -> Optional[dict[str, Any]]:
+    """Return a lightweight plan snapshot for embedding in feedback, or None if not found."""
+    with app.app_context():
+        try:
+            plan_uuid = uuid.UUID(plan_id)
+        except ValueError:
+            return None
+        row = (
+            db.session.query(
+                PlanItem.id,
+                PlanItem.state,
+                PlanItem.progress_percentage,
+                PlanItem.current_step,
+            )
+            .filter(PlanItem.id == plan_uuid)
+            .first()
+        )
+        if row is None:
+            return None
+        return {
+            "plan_id": str(row.id),
+            "state": get_plan_state_mapping(row.state),
+            "progress_percentage": float(row.progress_percentage or 0.0),
+            "current_step": row.current_step,
+        }
+
+
+def _create_feedback_sync(
+    feedback_id: str,
+    received_at: datetime,
+    category: str,
+    message: str,
+    plan_id: Optional[str],
+    rating: Optional[int],
+    severity: Optional[str],
+    user_id: Optional[str],
+    plan_snapshot: Optional[dict[str, Any]],
+) -> None:
+    """Persist a feedback entry to the database. Raises on failure."""
+    with app.app_context():
+        item = FeedbackItem(
+            id=feedback_id,
+            received_at=received_at,
+            category=category,
+            message=message,
+            plan_id=plan_id,
+            rating=rating,
+            severity=severity,
+            user_id=user_id,
+            plan_progress_pct=plan_snapshot["progress_percentage"] if plan_snapshot else None,
+            plan_state=plan_snapshot["state"] if plan_snapshot else None,
+            plan_current_step=plan_snapshot["current_step"] if plan_snapshot else None,
+        )
+        db.session.add(item)
+        db.session.commit()
 
 
 # ---------------------------------------------------------------------------

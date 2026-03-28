@@ -313,6 +313,7 @@ TOOL_DEFINITIONS = [
         name="send_feedback",
         description=(
             "Submit your feedback about PlanExe. "
+            "Especially useful for reporting SSE reliability issues, plan_status inconsistencies, or plan quality impressions. "
             "Callable at any point — before, during, or after plan creation. "
             "Feedback is fire-and-forget: it never blocks the workflow and always returns quickly. "
             "Use category to classify: mcp (MCP tools), plan (generated plan), code (PlanExe source), docs (documentation), other. "

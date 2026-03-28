@@ -210,10 +210,6 @@ With vibe-coding, I can't recall last time I have debugged anything.
 
 ## MCP tweaks
 
-**submit feedback**, how do you perceive PlanExe (mcp interface, the generated report), can it be improved.
-Have the AIs that interact with PlanExe provide their feedback of how they perceived interacting with the mcp interface,
-and ways it can be made better, what kind of hickups they encountered.
-
 **plan clone**, copy an existing plan and edit parts of it.
 
 **plan wait**, block until the plan creation have finished.

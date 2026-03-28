@@ -48,6 +48,7 @@ from database_api.model_user_api_key import UserApiKey
 from database_api.model_credit_history import CreditHistory
 from database_api.model_payment_record import PaymentRecord
 from database_api.model_token_metrics import TokenMetrics, TokenMetricsSummary
+from database_api.model_feedback import FeedbackItem
 from planexe_modelviews import WorkerItemView, PlanItemView, NonceItemView, TokenMetricsView, AdminOnlyModelView, UserAccountView
 logger = logging.getLogger(__name__)
 
@@ -684,6 +685,7 @@ class MyFlaskApp:
         self.admin.add_view(AdminOnlyModelView(model=CreditHistory, session=self.db.session, name="Credit History"))
         self.admin.add_view(AdminOnlyModelView(model=PaymentRecord, session=self.db.session, name="Payments"))
         self.admin.add_view(TokenMetricsView(model=TokenMetrics, session=self.db.session, name="Token Metrics"))
+        self.admin.add_view(AdminOnlyModelView(model=FeedbackItem, session=self.db.session, name="Feedback"))
 
         self._setup_routes()
 

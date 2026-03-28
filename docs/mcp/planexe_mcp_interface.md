@@ -598,8 +598,7 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
   "category": "plan",
   "message": "The SWOT section felt too generic for my industry.",
   "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
-  "rating": 3,
-  "user_api_key": "pex_..."
+  "rating": 3
 }
 ```
 
@@ -611,7 +610,8 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
 | `message` | string | yes | Free-text feedback. Be concise and actionable. If reporting an issue, include relevant context about your environment (e.g. client name, OS, connection method). |
 | `plan_id` | string | no | UUID to attach feedback to a specific plan |
 | `rating` | integer 1-5 | no | Sentiment: 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive |
-| `user_api_key` | string | no | User API key for authentication and attribution |
+
+Authentication is via the `X-API-Key` header, not a request parameter (see §10.4).
 
 **Response**
 
@@ -625,7 +625,7 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
 
 **Authentication**
 
-Same as `plan_create`: when `PLANEXE_MCP_REQUIRE_USER_KEY` is set, a valid `user_api_key` is required. On developer servers without the env var, feedback works without a key.
+Same as `plan_create`: the caller is identified by the `X-API-Key` header. When `PLANEXE_MCP_REQUIRE_USER_KEY` is set, a valid key is required. On developer servers without the env var, feedback works without a key.
 
 **Behavioral guarantees**
 

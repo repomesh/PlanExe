@@ -515,10 +515,6 @@ class SendFeedbackInput(BaseModel):
         le=5,
         description="Optional satisfaction score from 1 (poor) to 5 (excellent).",
     )
-    severity: Optional[Literal["low", "medium", "high"]] = Field(
-        default=None,
-        description="Optional severity for issue reports: low, medium, or high.",
-    )
     user_api_key: Optional[str] = Field(
         default=None,
         description="Optional user API key for authentication and attribution.",

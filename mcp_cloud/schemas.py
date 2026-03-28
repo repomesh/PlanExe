@@ -317,7 +317,7 @@ TOOL_DEFINITIONS = [
             "Feedback is fire-and-forget: it never blocks the workflow and always returns quickly. "
             "Use category to classify the feedback (e.g. plan_quality, suggestion, sse_issue). "
             "Optionally attach feedback to a specific plan via plan_id. "
-            "Use rating (1-5) for satisfaction scores and severity (low/medium/high) for issue reports."
+            "Use rating (1-5) for satisfaction scores."
         ),
         input_schema=SEND_FEEDBACK_INPUT_SCHEMA,
         output_schema=SEND_FEEDBACK_OUTPUT_SCHEMA,

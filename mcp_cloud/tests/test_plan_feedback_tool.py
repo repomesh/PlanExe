@@ -41,7 +41,6 @@ class TestSendFeedbackTool(unittest.TestCase):
                 "message": "The SWOT section is too generic",
                 "plan_id": "aaa-111",
                 "rating": 3,
-                "severity": "medium",
             }))
 
         self.assertFalse(result.isError)
@@ -84,17 +83,6 @@ class TestSendFeedbackTool(unittest.TestCase):
             "category": "compliment",
             "message": "Great tool!",
             "rating": 10,
-        }))
-
-        self.assertTrue(result.isError)
-        self.assertEqual(result.structuredContent["error"]["code"], "INVALID_FEEDBACK")
-
-    def test_feedback_invalid_severity(self):
-        """Invalid severity value returns INVALID_FEEDBACK error."""
-        result = asyncio.run(handle_send_feedback({
-            "category": "sse_issue",
-            "message": "SSE stream keeps dropping",
-            "severity": "critical",
         }))
 
         self.assertTrue(result.isError)

@@ -755,7 +755,6 @@ async def handle_send_feedback(arguments: dict[str, Any]) -> CallToolResult:
             message=req.message,
             plan_id=req.plan_id,
             rating=req.rating,
-            severity=req.severity,
             user_id=user_id,
             plan_snapshot=plan_snapshot,
         )

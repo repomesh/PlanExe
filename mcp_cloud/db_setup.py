@@ -307,5 +307,4 @@ class SendFeedbackRequest(BaseModel):
     message: str
     plan_id: Optional[str] = None
     rating: Optional[int] = None
-    severity: Optional[str] = None
     user_api_key: Optional[str] = None

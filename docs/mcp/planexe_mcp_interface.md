@@ -599,7 +599,6 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
   "message": "The SWOT section felt too generic for my industry.",
   "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
   "rating": 3,
-  "severity": "medium",
   "user_api_key": "pex_..."
 }
 ```
@@ -612,7 +611,6 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
 | `message` | string | yes | Free-text feedback (concise, actionable) |
 | `plan_id` | string | no | UUID to attach feedback to a specific plan |
 | `rating` | integer 1-5 | no | Satisfaction score |
-| `severity` | enum | no | `low`, `medium`, or `high` (for issue reports) |
 | `user_api_key` | string | no | User API key for authentication and attribution |
 
 **Response**

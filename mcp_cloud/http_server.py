@@ -800,7 +800,6 @@ async def send_feedback(
     message: str = Field(..., description="Free-text feedback. Be concise and actionable."),
     plan_id: Optional[str] = Field(default=None, description="Optional plan UUID to attach this feedback to."),
     rating: Optional[int] = Field(default=None, ge=1, le=5, description="Optional satisfaction score (1-5)."),
-    severity: Optional[str] = Field(default=None, description="Optional severity: low, medium, or high."),
 ) -> CallToolResult:
     """Submit structured feedback about plan quality, workflow, or the MCP interface."""
     authenticated_user_api_key = _get_authenticated_user_api_key()
@@ -809,8 +808,6 @@ async def send_feedback(
         arguments["plan_id"] = plan_id
     if rating is not None:
         arguments["rating"] = rating
-    if severity is not None:
-        arguments["severity"] = severity
     if authenticated_user_api_key:
         arguments["user_api_key"] = authenticated_user_api_key
     return await handle_send_feedback(arguments)

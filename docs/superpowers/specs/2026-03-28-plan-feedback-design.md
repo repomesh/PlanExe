@@ -15,7 +15,6 @@ Add a `send_feedback` MCP tool that allows LLM consumers to submit structured fe
 | `message` | string | yes | Free-text feedback (concise, actionable) |
 | `plan_id` | string\|null | no | UUID to attach feedback to a specific plan |
 | `rating` | integer 1-5\|null | no | Satisfaction score |
-| `severity` | enum\|null | no | `low`, `medium`, or `high` (for issue reports) |
 
 ## Response
 
@@ -59,7 +58,6 @@ Add a `send_feedback` MCP tool that allows LLM consumers to submit structured fe
 | `message` | TEXT | Free-text feedback |
 | `plan_id` | VARCHAR(36) | Nullable, references task_item(id) |
 | `rating` | INTEGER | Nullable, 1-5 |
-| `severity` | VARCHAR(8) | Nullable: low/medium/high |
 | `user_id` | VARCHAR(36) | Nullable, resolved from auth context |
 | `plan_progress_pct` | FLOAT | Nullable, snapshot at feedback time |
 | `plan_state` | VARCHAR(16) | Nullable, snapshot at feedback time |
@@ -124,5 +122,4 @@ Follow existing test patterns (e.g., `test_plan_create_tool.py`):
 - Invalid category returns INVALID_FEEDBACK
 - Invalid plan_id returns PLAN_NOT_FOUND
 - Rating out of range returns INVALID_FEEDBACK
-- Invalid severity returns INVALID_FEEDBACK
 - DB write failure still returns success (fire-and-forget)

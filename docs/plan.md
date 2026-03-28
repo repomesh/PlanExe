@@ -210,9 +210,16 @@ With vibe-coding, I can't recall last time I have debugged anything.
 
 ## MCP tweaks
 
+**submit feedback**, how do you perceive PlanExe (mcp interface, the generated report), can it be improved.
+Have the AIs that interact with PlanExe provide their feedback of how they perceived interacting with the mcp interface,
+and ways it can be made better, what kind of hickups they encountered.
+
+**plan clone**, copy an existing plan and edit parts of it.
+
+**plan wait**, block until the plan creation have finished.
+
+**account_status**, check credit balance proactively before submitting a plan.
+
 **Prepare create**, create a PlanItem, and allow setting various attributes, BEFORE creating the plan.
-The `start date` may be interesting to simulate plans created in the past/future. Currently all plans gets started on todays date.
 
 **upload zip and resume**, upload a zip with a plan and have PlanExe resume from it. Inside home.planexe.org, so users can do the same. This makes it possible to do edit the files, and resume from that data.
-
-**submit feedback**, how do you perceive PlanExe (mcp interface, the generated report), can it be improved.

@@ -492,6 +492,20 @@ def update_task_progress_with_retry(
     return False
 
 
+def _update_zip_snapshot(task_id: str, zip_bytes: bytes) -> None:
+    """Store an intermediate zip snapshot in the PlanItem record.
+
+    Called periodically during processing so that mcp_cloud can list
+    intermediate files via list_files_from_zip_snapshot() even when
+    the worker filesystem is not shared (e.g. Railway deployment).
+    """
+    task = db.session.get(PlanItem, task_id)
+    if task is None:
+        return
+    task.run_zip_snapshot = zip_bytes
+    db.session.commit()
+
+
 class ServerExecutePipeline(ExecutePipeline):
     def __init__(
         self,
@@ -508,6 +522,7 @@ class ServerExecutePipeline(ExecutePipeline):
             model_profile=model_profile,
         )
         self.task_id = task_id
+        self._last_snapshot_step: int = 0
 
     def _handle_task_completion(self, parameters: HandleTaskCompletionParameters) -> None:
         """Called after each Luigi step completes.
@@ -623,6 +638,24 @@ class ServerExecutePipeline(ExecutePipeline):
             _charge_incremental_usage(self.task_id, self.run_id_dir)
         except Exception as exc:
             logger.warning("Incremental billing failed for task %s: %s", self.task_id, exc)
+
+        # Periodically snapshot intermediate files so remote mcp_cloud can
+        # list them via list_files_from_zip_snapshot() during processing.
+        # Without this, Railway deployments show files_count=0 until completion
+        # because the worker filesystem is not shared with mcp_cloud.
+        steps_done = parameters.progress.steps_completed or 0
+        if steps_done > 0 and steps_done % 5 == 0 and steps_done != self._last_snapshot_step:
+            self._last_snapshot_step = steps_done
+            try:
+                snap_bytes = create_zip_bytes(self.run_id_dir)
+                _update_zip_snapshot(self.task_id, snap_bytes)
+                logger.debug("Intermediate zip snapshot saved for task %s at step %d", self.task_id, steps_done)
+            except Exception as exc:
+                logger.warning("Intermediate zip snapshot failed for task %s: %s", self.task_id, exc)
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
 
 # Every time a LLM/reasoning model is used, it gets registered in the "track_activity" file.
 # The llm_executor_uuid is written to stdout, and referenced in the "track_activity" file, so it's possible to

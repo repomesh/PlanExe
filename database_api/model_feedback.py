@@ -25,9 +25,6 @@ class FeedbackItem(db.Model):
     # Optional satisfaction score (1-5).
     rating = db.Column(db.Integer, nullable=True)
 
-    # Optional severity for issue reports (low/medium/high).
-    severity = db.Column(db.String(8), nullable=True)
-
     # User who submitted the feedback (resolved from auth context).
     user_id = db.Column(db.String(36), nullable=True)
 

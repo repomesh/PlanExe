@@ -34,7 +34,7 @@ from mcp_cloud.db_setup import (  # noqa: F401
     PlanResumeRequest,
     PlanFileInfoRequest,
     PlanListRequest,
-    PlanFeedbackRequest,
+    SendFeedbackRequest,
     ModelProfilesRequest,
     PlanItem,
     PlanState,
@@ -147,8 +147,8 @@ from mcp_cloud.schemas import (  # noqa: F401
     EXAMPLE_PLANS_OUTPUT_SCHEMA,
     PLAN_LIST_INPUT_SCHEMA,
     PLAN_LIST_OUTPUT_SCHEMA,
-    PLAN_FEEDBACK_INPUT_SCHEMA,
-    PLAN_FEEDBACK_OUTPUT_SCHEMA,
+    SEND_FEEDBACK_INPUT_SCHEMA,
+    SEND_FEEDBACK_OUTPUT_SCHEMA,
     ToolDefinition,
     TOOL_DEFINITIONS,
 )
@@ -167,7 +167,7 @@ from mcp_cloud.handlers import (  # noqa: F401
     handle_plan_resume,
     handle_plan_file_info,
     handle_plan_list,
-    handle_plan_feedback,
+    handle_send_feedback,
     TOOL_HANDLERS,
 )
 

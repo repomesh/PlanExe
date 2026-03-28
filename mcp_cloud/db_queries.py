@@ -522,7 +522,6 @@ def _create_feedback_sync(
     message: str,
     plan_id: Optional[str],
     rating: Optional[int],
-    severity: Optional[str],
     user_id: Optional[str],
     plan_snapshot: Optional[dict[str, Any]],
 ) -> None:
@@ -535,7 +534,6 @@ def _create_feedback_sync(
             message=message,
             plan_id=plan_id,
             rating=rating,
-            severity=severity,
             user_id=user_id,
             plan_progress_pct=plan_snapshot["progress_percentage"] if plan_snapshot else None,
             plan_state=plan_snapshot["state"] if plan_snapshot else None,

@@ -65,7 +65,7 @@ from mcp_cloud.app import (
     handle_plan_file_info,
     handle_example_prompts,
     handle_example_plans,
-    handle_plan_feedback,
+    handle_send_feedback,
     resolve_plan_by_id,
     set_download_base_url,
     validate_download_token,
@@ -795,22 +795,22 @@ async def plan_list(
     return await handle_plan_list(arguments)
 
 
-async def plan_feedback(
-    category: str = Field(..., description="Feedback category (e.g. plan_quality, suggestion, sse_issue)."),
-    message: str = Field(..., description="Free-text feedback. Be concise and actionable."),
+async def send_feedback(
+    category: str = Field(..., description="Feedback category: mcp, plan, code, docs, or other."),
+    message: str = Field(..., description="Free-text feedback. Include environment context if reporting an issue."),
     plan_id: Optional[str] = Field(default=None, description="Optional plan UUID to attach this feedback to."),
-    rating: Optional[int] = Field(default=None, ge=1, le=5, description="Optional satisfaction score (1-5)."),
-    severity: Optional[str] = Field(default=None, description="Optional severity: low, medium, or high."),
+    rating: Optional[int] = Field(default=None, ge=1, le=5, description="Sentiment: 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive."),
 ) -> CallToolResult:
-    """Submit structured feedback about plan quality, workflow, or the MCP interface."""
+    """Submit your feedback about PlanExe."""
+    authenticated_user_api_key = _get_authenticated_user_api_key()
     arguments: dict[str, Any] = {"category": category, "message": message}
     if plan_id is not None:
         arguments["plan_id"] = plan_id
     if rating is not None:
         arguments["rating"] = rating
-    if severity is not None:
-        arguments["severity"] = severity
-    return await handle_plan_feedback(arguments)
+    if authenticated_user_api_key:
+        arguments["user_api_key"] = authenticated_user_api_key
+    return await handle_send_feedback(arguments)
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -825,7 +825,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_resume": plan_resume,
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
-        "plan_feedback": plan_feedback,
+        "send_feedback": send_feedback,
     }
     for tool_def in TOOL_DEFINITIONS:
         handler = handler_map.get(tool_def.name)

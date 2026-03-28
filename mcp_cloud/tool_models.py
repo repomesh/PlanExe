@@ -460,50 +460,38 @@ class PlanListOutput(BaseModel):
 
 
 FEEDBACK_CATEGORIES = (
-    "sse_issue",
-    "status_staleness",
-    "queue_delay",
-    "file_visibility",
-    "plan_quality",
-    "tool_description",
-    "workflow",
-    "performance",
-    "error_handling",
-    "suggestion",
-    "compliment",
+    "mcp",
+    "plan",
+    "code",
+    "docs",
     "other",
 )
 
 
-class PlanFeedbackInput(BaseModel):
+class SendFeedbackInput(BaseModel):
     category: Literal[
-        "sse_issue",
-        "status_staleness",
-        "queue_delay",
-        "file_visibility",
-        "plan_quality",
-        "tool_description",
-        "workflow",
-        "performance",
-        "error_handling",
-        "suggestion",
-        "compliment",
+        "mcp",
+        "plan",
+        "code",
+        "docs",
         "other",
     ] = Field(
         ...,
         description=(
-            "Feedback category. Use: sse_issue (SSE stream problems), "
-            "status_staleness (plan_status returning inconsistent data), "
-            "queue_delay (long queue waits), file_visibility (missing intermediate files), "
-            "plan_quality (generated plan output quality), tool_description (tool documentation clarity), "
-            "workflow (overall workflow friction), performance (speed/latency issues), "
-            "error_handling (error message quality), suggestion (feature request), "
-            "compliment (positive feedback), other (anything else)."
+            "Feedback category. Use: mcp (related to the MCP tools), "
+            "plan (related to the generated plan), "
+            "code (related to the PlanExe source code), "
+            "docs (related to documentation), "
+            "other (when it doesn't fit into any other category)."
         ),
     )
     message: str = Field(
         ...,
-        description="Free-text feedback. Be concise and actionable.",
+        description=(
+            "Free-text feedback. Be concise and actionable. "
+            "If reporting an issue, include relevant context about your environment "
+            "(e.g. client name, OS, connection method) so the issue can be reproduced."
+        ),
     )
     plan_id: Optional[str] = Field(
         default=None,
@@ -513,15 +501,18 @@ class PlanFeedbackInput(BaseModel):
         default=None,
         ge=1,
         le=5,
-        description="Optional satisfaction score from 1 (poor) to 5 (excellent).",
+        description=(
+            "Optional sentiment score. "
+            "1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive."
+        ),
     )
-    severity: Optional[Literal["low", "medium", "high"]] = Field(
+    user_api_key: Optional[str] = Field(
         default=None,
-        description="Optional severity for issue reports: low, medium, or high.",
+        description="Optional user API key for authentication and attribution.",
     )
 
 
-class PlanFeedbackOutput(BaseModel):
+class SendFeedbackOutput(BaseModel):
     feedback_id: str = Field(
         ...,
         description="Server-generated UUID for this feedback entry.",

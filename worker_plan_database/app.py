@@ -530,8 +530,40 @@ class ServerExecutePipeline(ExecutePipeline):
             except Exception:
                 pass
 
-        # Lookup the taskitem in the database by self.task_id
-        task = db.session.get(PlanItem, self.task_id)
+        # Expire cached ORM state so the next query uses a fresh DB round-trip.
+        # The heartbeat upsert above commits/rollbacks internally, which can
+        # leave the session holding a stale or closed cursor — especially under
+        # Railway's flaky private networking.  expire_all() is cheap (no I/O)
+        # and forces the subsequent get() to re-fetch from the connection pool
+        # where pool_pre_ping will validate the connection.
+        db.session.expire_all()
+
+        # Lookup the taskitem in the database by self.task_id.
+        # Retry once on transient connection errors (ResourceClosedError etc.)
+        # that can occur when the underlying connection was recycled.
+        task = None
+        for _attempt in range(2):
+            try:
+                task = db.session.get(PlanItem, self.task_id)
+                break
+            except Exception as exc:
+                logger.warning(
+                    "db.session.get(PlanItem, %r) failed (attempt %d): %s",
+                    self.task_id, _attempt + 1, exc,
+                )
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                if _attempt == 0:
+                    # Close the session to drop the broken connection and
+                    # let the pool hand out a fresh one on the next access.
+                    try:
+                        db.session.close()
+                    except Exception:
+                        pass
+                else:
+                    raise
         if task is None:
             logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
             raise Exception(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")

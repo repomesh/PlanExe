@@ -315,7 +315,7 @@ TOOL_DEFINITIONS = [
             "Submit feedback about PlanExe — issues, impressions, or suggestions. "
             "Callable at any point in the workflow; fire-and-forget, never blocks. "
             "Use category to classify: mcp (MCP tools, SSE, plan_status, workflow), "
-            "plan (generated plan output quality), code (PlanExe source), "
+            "plan (the generated output files), code (PlanExe source), "
             "docs (documentation), other. Optionally attach to a plan via plan_id. "
             "Use rating (1-5) for sentiment: 1=strong negative, 3=neutral, "
             "5=strong positive. Especially useful for reporting: SSE streams that "

@@ -14,7 +14,7 @@ Add a `send_feedback` MCP tool that allows LLM consumers to submit structured fe
 | `category` | enum | yes | One of: `mcp` (MCP tools), `plan` (generated plan), `code` (PlanExe source code), `docs` (documentation), `other` |
 | `message` | string | yes | Free-text feedback. Include environment context if reporting an issue. |
 | `plan_id` | string\|null | no | UUID to attach feedback to a specific plan |
-| `rating` | integer 1-5\|null | no | 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive |
+| `rating` | integer 1-5\|null | no | Sentiment: 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive |
 
 ## Response
 

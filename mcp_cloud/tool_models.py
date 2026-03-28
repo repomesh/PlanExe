@@ -502,7 +502,7 @@ class SendFeedbackInput(BaseModel):
         ge=1,
         le=5,
         description=(
-            "Optional satisfaction score. "
+            "Optional sentiment score. "
             "1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive."
         ),
     )

@@ -312,12 +312,12 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="send_feedback",
         description=(
-            "Submit structured feedback about PlanExe. "
+            "Submit your feedback about PlanExe. "
             "Callable at any point — before, during, or after plan creation. "
             "Feedback is fire-and-forget: it never blocks the workflow and always returns quickly. "
             "Use category to classify: mcp (MCP tools), plan (generated plan), code (PlanExe source), docs (documentation), other. "
             "Optionally attach feedback to a specific plan via plan_id. "
-            "Use rating (1-5) for satisfaction: 1=strong negative, 3=neutral, 5=strong positive."
+            "Use rating (1-5) for sentiment: 1=strong negative, 3=neutral, 5=strong positive."
         ),
         input_schema=SEND_FEEDBACK_INPUT_SCHEMA,
         output_schema=SEND_FEEDBACK_OUTPUT_SCHEMA,

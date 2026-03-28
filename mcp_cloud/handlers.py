@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Optional
 
@@ -23,6 +24,7 @@ from mcp_cloud.db_setup import (
     PlanResumeRequest,
     PlanFileInfoRequest,
     PlanListRequest,
+    PlanFeedbackRequest,
     ModelProfilesRequest,
     mcp_cloud_server,
 )
@@ -35,6 +37,8 @@ from mcp_cloud.db_queries import (
     _resume_plan_sync,
     _get_plan_for_report_sync,
     _list_plans_sync,
+    _get_plan_snapshot_for_feedback_sync,
+    _create_feedback_sync,
     get_plan_state_mapping,
     _extract_plan_create_metadata_overrides,
     _merge_plan_create_config,
@@ -680,6 +684,74 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
+async def handle_plan_feedback(arguments: dict[str, Any]) -> CallToolResult:
+    """Accept structured feedback from MCP clients.
+
+    Fire-and-forget: always returns success to the caller even if DB write fails.
+    The only client-visible errors are INVALID_FEEDBACK (bad input) and
+    PLAN_NOT_FOUND (plan_id provided but not found).
+    """
+    try:
+        req = PlanFeedbackRequest(**arguments)
+    except Exception as exc:
+        response = {"error": {"code": "INVALID_FEEDBACK", "message": str(exc)}}
+        return CallToolResult(
+            content=[TextContent(type="text", text=json.dumps(response))],
+            structuredContent=response,
+            isError=True,
+        )
+
+    # If plan_id is provided, validate it exists and capture a snapshot.
+    plan_snapshot = None
+    if req.plan_id:
+        plan_snapshot = await asyncio.to_thread(
+            _get_plan_snapshot_for_feedback_sync, req.plan_id
+        )
+        if plan_snapshot is None:
+            response = {
+                "error": {
+                    "code": "PLAN_NOT_FOUND",
+                    "message": f"Plan not found: {req.plan_id}",
+                }
+            }
+            return CallToolResult(
+                content=[TextContent(type="text", text=json.dumps(response))],
+                structuredContent=response,
+                isError=True,
+            )
+
+    feedback_id = str(uuid.uuid4())
+    received_at = datetime.now(UTC)
+
+    # Fire-and-forget: attempt DB write, log failures, always return success.
+    try:
+        await asyncio.to_thread(
+            _create_feedback_sync,
+            feedback_id=feedback_id,
+            received_at=received_at,
+            category=req.category,
+            message=req.message,
+            plan_id=req.plan_id,
+            rating=req.rating,
+            severity=req.severity,
+            user_id=None,  # TODO: resolve from auth context when available
+            plan_snapshot=plan_snapshot,
+        )
+    except Exception:
+        logger.exception("Failed to persist feedback %s (fire-and-forget)", feedback_id)
+
+    response = {
+        "feedback_id": feedback_id,
+        "received_at": received_at.isoformat().replace("+00:00", "Z"),
+        "message": "Feedback received. Thank you.",
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(response))],
+        structuredContent=response,
+        isError=False,
+    )
+
+
 TOOL_HANDLERS = {
     "example_plans": handle_example_plans,
     "example_prompts": handle_example_prompts,
@@ -691,4 +763,5 @@ TOOL_HANDLERS = {
     "plan_resume": handle_plan_resume,
     "plan_file_info": handle_plan_file_info,
     "plan_list": handle_plan_list,
+    "plan_feedback": handle_plan_feedback,
 }

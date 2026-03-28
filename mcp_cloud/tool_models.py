@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -457,6 +457,83 @@ class PlanListItem(BaseModel):
 class PlanListOutput(BaseModel):
     plans: list[PlanListItem] = Field(..., description="Plans for the authenticated user, newest first.")
     message: str = Field(..., description="Human-readable summary (e.g. how many plans were returned).")
+
+
+FEEDBACK_CATEGORIES = (
+    "sse_issue",
+    "status_staleness",
+    "queue_delay",
+    "file_visibility",
+    "plan_quality",
+    "tool_description",
+    "workflow",
+    "performance",
+    "error_handling",
+    "suggestion",
+    "compliment",
+    "other",
+)
+
+
+class PlanFeedbackInput(BaseModel):
+    category: Literal[
+        "sse_issue",
+        "status_staleness",
+        "queue_delay",
+        "file_visibility",
+        "plan_quality",
+        "tool_description",
+        "workflow",
+        "performance",
+        "error_handling",
+        "suggestion",
+        "compliment",
+        "other",
+    ] = Field(
+        ...,
+        description=(
+            "Feedback category. Use: sse_issue (SSE stream problems), "
+            "status_staleness (plan_status returning inconsistent data), "
+            "queue_delay (long queue waits), file_visibility (missing intermediate files), "
+            "plan_quality (generated plan output quality), tool_description (tool documentation clarity), "
+            "workflow (overall workflow friction), performance (speed/latency issues), "
+            "error_handling (error message quality), suggestion (feature request), "
+            "compliment (positive feedback), other (anything else)."
+        ),
+    )
+    message: str = Field(
+        ...,
+        description="Free-text feedback. Be concise and actionable.",
+    )
+    plan_id: Optional[str] = Field(
+        default=None,
+        description="Optional plan UUID to attach this feedback to a specific plan.",
+    )
+    rating: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=5,
+        description="Optional satisfaction score from 1 (poor) to 5 (excellent).",
+    )
+    severity: Optional[Literal["low", "medium", "high"]] = Field(
+        default=None,
+        description="Optional severity for issue reports: low, medium, or high.",
+    )
+
+
+class PlanFeedbackOutput(BaseModel):
+    feedback_id: str = Field(
+        ...,
+        description="Server-generated UUID for this feedback entry.",
+    )
+    received_at: str = Field(
+        ...,
+        description="UTC timestamp when the feedback was received (ISO 8601).",
+    )
+    message: str = Field(
+        ...,
+        description="Confirmation message.",
+    )
 
 
 class PlanCreateInput(BaseModel):

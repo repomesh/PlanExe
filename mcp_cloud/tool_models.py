@@ -463,6 +463,7 @@ FEEDBACK_CATEGORIES = (
     "mcp",
     "plan",
     "code",
+    "docs",
     "other",
 )
 
@@ -472,6 +473,7 @@ class SendFeedbackInput(BaseModel):
         "mcp",
         "plan",
         "code",
+        "docs",
         "other",
     ] = Field(
         ...,
@@ -479,6 +481,7 @@ class SendFeedbackInput(BaseModel):
             "Feedback category. Use: mcp (related to the MCP tools), "
             "plan (related to the generated plan), "
             "code (related to the PlanExe source code), "
+            "docs (related to documentation), "
             "other (when it doesn't fit into any other category)."
         ),
     )

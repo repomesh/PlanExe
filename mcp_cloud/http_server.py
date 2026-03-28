@@ -796,7 +796,7 @@ async def plan_list(
 
 
 async def send_feedback(
-    category: str = Field(..., description="Feedback category: mcp, plan, code, or other."),
+    category: str = Field(..., description="Feedback category: mcp, plan, code, docs, or other."),
     message: str = Field(..., description="Free-text feedback. Include environment context if reporting an issue."),
     plan_id: Optional[str] = Field(default=None, description="Optional plan UUID to attach this feedback to."),
     rating: Optional[int] = Field(default=None, ge=1, le=5, description="1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive."),

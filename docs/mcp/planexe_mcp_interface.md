@@ -607,7 +607,7 @@ Submit structured feedback about the PlanExe MCP interface, plan quality, or wor
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `category` | enum | yes | One of: `mcp` (MCP tools), `plan` (generated plan), `code` (PlanExe source code), `other` |
+| `category` | enum | yes | One of: `mcp` (MCP tools), `plan` (generated plan), `code` (PlanExe source code), `docs` (documentation), `other` |
 | `message` | string | yes | Free-text feedback. Be concise and actionable. If reporting an issue, include relevant context about your environment (e.g. client name, OS, connection method). |
 | `plan_id` | string | no | UUID to attach feedback to a specific plan |
 | `rating` | integer 1-5 | no | 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive |

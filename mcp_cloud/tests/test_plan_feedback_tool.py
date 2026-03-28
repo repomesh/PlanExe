@@ -102,7 +102,7 @@ class TestSendFeedbackTool(unittest.TestCase):
 
     def test_feedback_all_categories_accepted(self):
         """All 4 defined categories are accepted."""
-        categories = ["mcp", "plan", "code", "other"]
+        categories = ["mcp", "plan", "code", "docs", "other"]
         for category in categories:
             with patch("mcp_cloud.handlers._create_feedback_sync"):
                 result = asyncio.run(handle_send_feedback({

@@ -71,7 +71,7 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry, plan_resume): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_resume or plan_retry on failed/stopped → uses plan_file_info (and optionally plan_download via mcp_local). This document specifies those tools.
+- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry, plan_resume, send_feedback): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_resume or plan_retry on failed/stopped → uses plan_file_info (and optionally plan_download via mcp_local). Agents can call send_feedback at any time to report issues or share observations. This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
 PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: optionally call `example_plans`; call `example_prompts`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed or stopped call `plan_resume` to continue or `plan_retry` for a full restart (optional); then call `plan_file_info` (or `plan_download` via mcp_local) when completed.
@@ -587,6 +587,64 @@ Bump `PIPELINE_VERSION` whenever the pipeline changes in a way that would break 
 
 ---
 
+### 6.8 send_feedback
+
+Submit structured feedback about the PlanExe MCP interface, plan quality, or workflow experience. Callable at any point — before, during, or after plan creation. Feedback is fire-and-forget: it never blocks the workflow and always returns quickly.
+
+**Request**
+
+```json
+{
+  "category": "plan_quality",
+  "message": "The SWOT section felt too generic for my industry.",
+  "plan_id": "5e2b2a7c-8b49-4d2f-9b8f-6a3c1f05b9a1",
+  "rating": 3,
+  "severity": "medium",
+  "user_api_key": "pex_..."
+}
+```
+
+**Input**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `category` | enum | yes | One of: `sse_issue`, `status_staleness`, `queue_delay`, `file_visibility`, `plan_quality`, `tool_description`, `workflow`, `performance`, `error_handling`, `suggestion`, `compliment`, `other` |
+| `message` | string | yes | Free-text feedback (concise, actionable) |
+| `plan_id` | string | no | UUID to attach feedback to a specific plan |
+| `rating` | integer 1-5 | no | Satisfaction score |
+| `severity` | enum | no | `low`, `medium`, or `high` (for issue reports) |
+| `user_api_key` | string | no | User API key for authentication and attribution |
+
+**Response**
+
+```json
+{
+  "feedback_id": "a1b2c3d4-...",
+  "received_at": "2026-03-28T14:30:00Z",
+  "message": "Feedback received. Thank you."
+}
+```
+
+**Authentication**
+
+Same as `plan_create`: when `PLANEXE_MCP_REQUIRE_USER_KEY` is set, a valid `user_api_key` is required. On developer servers without the env var, feedback works without a key.
+
+**Behavioral guarantees**
+
+- Non-blocking: handler returns in <1 second.
+- Fire-and-forget: never gates workflow. Always returns success to the caller even if internal storage fails.
+- If `plan_id` is provided but not found, returns `PLAN_NOT_FOUND` error.
+- If category or other fields are invalid, returns `INVALID_FEEDBACK` error.
+
+**Error behavior**
+
+- Invalid fields: `INVALID_FEEDBACK` (`isError=true`).
+- Unknown plan_id: `PLAN_NOT_FOUND` (`isError=true`).
+- Invalid user_api_key: `INVALID_USER_API_KEY` (`isError=true`).
+- Key required but missing: `USER_API_KEY_REQUIRED` (`isError=true`).
+
+---
+
 ## 7. Targets
 
 ### 7.1 Standard targets
@@ -646,7 +704,7 @@ Example:
 
 ### 9.2 isError behavior
 
-- `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_resume`: unknown/invalid requests return `isError=true` with `error`.
+- `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_resume`, `send_feedback`: unknown/invalid requests return `isError=true` with `error`.
 - `model_profiles`: returns `isError=true` with `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
 - `plan_file_info`: uses mixed behavior:
   - returns `{}` (not an error) while artifacts are not ready.
@@ -668,6 +726,7 @@ Cloud/core tool codes:
 - `USER_API_KEY_REQUIRED`: deployment requires user_api_key for plan_create.
 - `INSUFFICIENT_CREDITS`: caller account has no credits for plan_create.
 - `MODEL_PROFILES_UNAVAILABLE`: model_profiles found zero available models across all profiles.
+- `INVALID_FEEDBACK`: send_feedback received invalid input (bad category, missing message, etc.).
 - `generation_failed`: plan_file_info report path when plan ended in failed.
 - `content_unavailable`: plan_file_info cannot read requested artifact bytes.
 

@@ -233,7 +233,7 @@ PLANEXE_SERVER_INSTRUCTIONS = (
     "In both cases, report the issue to PlanExe developers on GitHub: https://github.com/PlanExeOrg/PlanExe/issues . "
     "Main output: a self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. "
     "The zip contains the intermediary pipeline files (md, json, csv) that fed the report. "
-    "Use plan_feedback to report issues or share observations about plan quality, workflow friction, or the MCP interface. "
+    "Use send_feedback to report issues or share observations about plan quality, workflow friction, or the MCP interface. "
     "Feedback is fire-and-forget and never blocks the workflow. "
     "New users: create an account and obtain an API key at https://home.planexe.org/ ."
 )
@@ -302,7 +302,7 @@ class ModelProfilesRequest(BaseModel):
     """No input parameters."""
     pass
 
-class PlanFeedbackRequest(BaseModel):
+class SendFeedbackRequest(BaseModel):
     category: str
     message: str
     plan_id: Optional[str] = None

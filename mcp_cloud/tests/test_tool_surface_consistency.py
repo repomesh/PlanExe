@@ -140,7 +140,7 @@ class TestRemainingToolAnnotations(unittest.TestCase):
             "plan_resume": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
             "plan_file_info": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
             "plan_list": {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
-            "plan_feedback": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+            "send_feedback": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
         }
         for tool_name, expected_annotations in expected.items():
             with self.subTest(tool=tool_name):
@@ -207,12 +207,12 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("plan_list", cloud_tool_names)
 
-    def test_cloud_exposes_plan_feedback_tool(self):
+    def test_cloud_exposes_send_feedback_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
-        self.assertIn("plan_feedback", cloud_tool_names)
+        self.assertIn("send_feedback", cloud_tool_names)
 
-    def test_cloud_instructions_reference_plan_feedback(self):
-        self.assertIn("plan_feedback", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
+    def test_cloud_instructions_reference_send_feedback(self):
+        self.assertIn("send_feedback", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
 
     def test_cloud_instructions_reference_cloud_download_tool(self):
         self.assertIn("plan_file_info", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
@@ -387,7 +387,7 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
     def test_simple_tools_have_flat_schema(self):
         """Tools with a single success shape should not have oneOf."""
         simple_tools = ["example_plans", "example_prompts", "model_profiles",
-                        "plan_create", "plan_resume", "plan_list", "plan_feedback"]
+                        "plan_create", "plan_resume", "plan_list", "send_feedback"]
         for name in simple_tools:
             with self.subTest(tool=name):
                 tool_def = _tool_def(cloud_app.TOOL_DEFINITIONS, name)
@@ -413,7 +413,7 @@ class TestFastMCPCanonicalOutputSchema(unittest.TestCase):
             http_server.plan_resume,
             http_server.plan_file_info,
             http_server.plan_list,
-            http_server.plan_feedback,
+            http_server.send_feedback,
         ]
         for func in tool_funcs:
             with self.subTest(func=func.__name__):

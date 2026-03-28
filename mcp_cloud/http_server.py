@@ -65,7 +65,7 @@ from mcp_cloud.app import (
     handle_plan_file_info,
     handle_example_prompts,
     handle_example_plans,
-    handle_plan_feedback,
+    handle_send_feedback,
     resolve_plan_by_id,
     set_download_base_url,
     validate_download_token,
@@ -795,7 +795,7 @@ async def plan_list(
     return await handle_plan_list(arguments)
 
 
-async def plan_feedback(
+async def send_feedback(
     category: str = Field(..., description="Feedback category (e.g. plan_quality, suggestion, sse_issue)."),
     message: str = Field(..., description="Free-text feedback. Be concise and actionable."),
     plan_id: Optional[str] = Field(default=None, description="Optional plan UUID to attach this feedback to."),
@@ -810,7 +810,7 @@ async def plan_feedback(
         arguments["rating"] = rating
     if severity is not None:
         arguments["severity"] = severity
-    return await handle_plan_feedback(arguments)
+    return await handle_send_feedback(arguments)
 
 
 def _register_tools(server: FastMCP) -> None:
@@ -825,7 +825,7 @@ def _register_tools(server: FastMCP) -> None:
         "plan_resume": plan_resume,
         "plan_file_info": plan_file_info,
         "plan_list": plan_list,
-        "plan_feedback": plan_feedback,
+        "send_feedback": send_feedback,
     }
     for tool_def in TOOL_DEFINITIONS:
         handler = handler_map.get(tool_def.name)

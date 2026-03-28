@@ -1,11 +1,11 @@
-# Design: `plan_feedback` MCP Tool
+# Design: `send_feedback` MCP Tool
 
 **Date:** 2026-03-28
 **Proposal:** [127-mcp-feedback.md](../../proposals/127-mcp-feedback.md)
 
 ## Summary
 
-Add a `plan_feedback` MCP tool that allows LLM consumers to submit structured feedback about the PlanExe MCP interface, plan quality, and workflow experiences. Feedback is stored in PostgreSQL for later analysis. The tool is non-blocking and fire-and-forget: it always returns success to the caller even if storage fails internally.
+Add a `send_feedback` MCP tool that allows LLM consumers to submit structured feedback about the PlanExe MCP interface, plan quality, and workflow experiences. Feedback is stored in PostgreSQL for later analysis. The tool is non-blocking and fire-and-forget: it always returns success to the caller even if storage fails internally.
 
 ## Parameters
 
@@ -73,15 +73,15 @@ No foreign key constraint on `plan_id` to keep writes simple and avoid blocking 
 - `database_api/model_feedback.py` — SQLAlchemy model `FeedbackItem`
 
 ### Modified Files
-- `mcp_cloud/tool_models.py` — Add `PlanFeedbackInput`, `PlanFeedbackOutput` Pydantic models
+- `mcp_cloud/tool_models.py` — Add `SendFeedbackInput`, `SendFeedbackOutput` Pydantic models
 - `mcp_cloud/schemas.py` — Add schema constants and `ToolDefinition` entry
-- `mcp_cloud/handlers.py` — Add `handle_plan_feedback()`, register in `TOOL_HANDLERS`
-- `mcp_cloud/db_setup.py` — Import model, add `PlanFeedbackRequest`, update `PLANEXE_SERVER_INSTRUCTIONS`
+- `mcp_cloud/handlers.py` — Add `handle_send_feedback()`, register in `TOOL_HANDLERS`
+- `mcp_cloud/db_setup.py` — Import model, add `SendFeedbackRequest`, update `PLANEXE_SERVER_INSTRUCTIONS`
 - `mcp_cloud/db_queries.py` — Add `_create_feedback_sync()` and `_get_plan_snapshot_for_feedback_sync()`
 
 ## Handler Logic
 
-1. Parse and validate input via `PlanFeedbackRequest` (Pydantic BaseModel)
+1. Parse and validate input via `SendFeedbackRequest` (Pydantic BaseModel)
 2. If `plan_id` provided:
    - Look up plan via `_get_plan_snapshot_for_feedback_sync()`
    - If not found, return `PLAN_NOT_FOUND` error (this is the only error visible to caller)
@@ -106,7 +106,7 @@ annotations={
 ## Server Instructions Update
 
 Add to `PLANEXE_SERVER_INSTRUCTIONS`:
-> "Use plan_feedback to report issues or share observations about plan quality, workflow friction, or the MCP interface. Feedback is fire-and-forget and never blocks the workflow."
+> "Use send_feedback to report issues or share observations about plan quality, workflow friction, or the MCP interface. Feedback is fire-and-forget and never blocks the workflow."
 
 ## Behavioral Guarantees
 

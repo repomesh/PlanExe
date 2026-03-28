@@ -475,7 +475,7 @@ FEEDBACK_CATEGORIES = (
 )
 
 
-class PlanFeedbackInput(BaseModel):
+class SendFeedbackInput(BaseModel):
     category: Literal[
         "sse_issue",
         "status_staleness",
@@ -521,7 +521,7 @@ class PlanFeedbackInput(BaseModel):
     )
 
 
-class PlanFeedbackOutput(BaseModel):
+class SendFeedbackOutput(BaseModel):
     feedback_id: str = Field(
         ...,
         description="Server-generated UUID for this feedback entry.",

@@ -24,7 +24,7 @@ from mcp_cloud.db_setup import (
     PlanResumeRequest,
     PlanFileInfoRequest,
     PlanListRequest,
-    PlanFeedbackRequest,
+    SendFeedbackRequest,
     ModelProfilesRequest,
     mcp_cloud_server,
 )
@@ -684,7 +684,7 @@ async def handle_plan_list(arguments: dict[str, Any]) -> CallToolResult:
     )
 
 
-async def handle_plan_feedback(arguments: dict[str, Any]) -> CallToolResult:
+async def handle_send_feedback(arguments: dict[str, Any]) -> CallToolResult:
     """Accept structured feedback from MCP clients.
 
     Fire-and-forget: always returns success to the caller even if DB write fails.
@@ -692,7 +692,7 @@ async def handle_plan_feedback(arguments: dict[str, Any]) -> CallToolResult:
     PLAN_NOT_FOUND (plan_id provided but not found).
     """
     try:
-        req = PlanFeedbackRequest(**arguments)
+        req = SendFeedbackRequest(**arguments)
     except Exception as exc:
         response = {"error": {"code": "INVALID_FEEDBACK", "message": str(exc)}}
         return CallToolResult(
@@ -763,5 +763,5 @@ TOOL_HANDLERS = {
     "plan_resume": handle_plan_resume,
     "plan_file_info": handle_plan_file_info,
     "plan_list": handle_plan_list,
-    "plan_feedback": handle_plan_feedback,
+    "send_feedback": handle_send_feedback,
 }

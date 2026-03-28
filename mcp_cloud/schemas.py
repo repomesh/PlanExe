@@ -26,8 +26,8 @@ from mcp_cloud.tool_models import (
     PlanFileInfoReadyOutput,
     PlanListInput,
     PlanListOutput,
-    PlanFeedbackInput,
-    PlanFeedbackOutput,
+    SendFeedbackInput,
+    SendFeedbackOutput,
     ErrorDetail,
     FailureErrorDetail,
 )
@@ -75,8 +75,8 @@ EXAMPLE_PLANS_INPUT_SCHEMA = ExamplePlansInput.model_json_schema()
 EXAMPLE_PLANS_OUTPUT_SCHEMA = ExamplePlansOutput.model_json_schema()
 PLAN_LIST_INPUT_SCHEMA = PlanListInput.model_json_schema()
 PLAN_LIST_OUTPUT_SCHEMA = PlanListOutput.model_json_schema()
-PLAN_FEEDBACK_INPUT_SCHEMA = PlanFeedbackInput.model_json_schema()
-PLAN_FEEDBACK_OUTPUT_SCHEMA = PlanFeedbackOutput.model_json_schema()
+SEND_FEEDBACK_INPUT_SCHEMA = SendFeedbackInput.model_json_schema()
+SEND_FEEDBACK_OUTPUT_SCHEMA = SendFeedbackOutput.model_json_schema()
 
 
 @dataclass(frozen=True)
@@ -310,7 +310,7 @@ TOOL_DEFINITIONS = [
         },
     ),
     ToolDefinition(
-        name="plan_feedback",
+        name="send_feedback",
         description=(
             "Submit structured feedback about the PlanExe MCP interface, plan quality, or workflow experience. "
             "Callable at any point — before, during, or after plan creation. "
@@ -319,8 +319,8 @@ TOOL_DEFINITIONS = [
             "Optionally attach feedback to a specific plan via plan_id. "
             "Use rating (1-5) for satisfaction scores and severity (low/medium/high) for issue reports."
         ),
-        input_schema=PLAN_FEEDBACK_INPUT_SCHEMA,
-        output_schema=PLAN_FEEDBACK_OUTPUT_SCHEMA,
+        input_schema=SEND_FEEDBACK_INPUT_SCHEMA,
+        output_schema=SEND_FEEDBACK_OUTPUT_SCHEMA,
         annotations={
             "readOnlyHint": False,
             "destructiveHint": False,

@@ -76,10 +76,19 @@ https://planexe.org/.well-known/glama.json
 https://mcp.planexe.org/.well-known/glama.json
 
 
+### Smithery
+
+https://smithery.ai/servers/planexeorg/planexe
+
+
 ### MCP.so
 
 https://mcp.so/server/planexe/PlanExeOrg
 
 The way to edit it, has to be through [mcp.so/my-servers](https://mcp.so/my-servers).
 
+
+## Registries that are derived from the official MCP Registry
+
+https://www.pulsemcp.com/servers?q=planexe
 

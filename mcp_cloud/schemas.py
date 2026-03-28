@@ -312,12 +312,18 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="send_feedback",
         description=(
-            "Submit your feedback about PlanExe. "
-            "Callable at any point — before, during, or after plan creation. "
-            "Feedback is fire-and-forget: it never blocks the workflow and always returns quickly. "
-            "Use category to classify: mcp (MCP tools), plan (generated plan), code (PlanExe source), docs (documentation), other. "
-            "Optionally attach feedback to a specific plan via plan_id. "
-            "Use rating (1-5) for sentiment: 1=strong negative, 3=neutral, 5=strong positive."
+            "Submit feedback about PlanExe — issues, impressions, or suggestions. "
+            "Callable at any point in the workflow; fire-and-forget, never blocks. "
+            "Use category to classify: mcp (MCP tools, SSE, plan_status, workflow), "
+            "plan (the generated output files), code (PlanExe source), "
+            "docs (documentation), other. Optionally attach to a plan via plan_id. "
+            "Use rating (1-5) for sentiment: 1=strong negative, 3=neutral, "
+            "5=strong positive. Especially useful for reporting: SSE streams that "
+            "close before plan completion, plan_status returning stale or "
+            "inconsistent data, queue delays where workers are slow to pick up "
+            "plans, and impressions of plan output quality after reviewing reports. "
+            "Include specific details (plan_id, percentages, timestamps) when "
+            "reporting issues."
         ),
         input_schema=SEND_FEEDBACK_INPUT_SCHEMA,
         output_schema=SEND_FEEDBACK_OUTPUT_SCHEMA,

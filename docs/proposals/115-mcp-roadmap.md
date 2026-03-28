@@ -12,9 +12,7 @@ Have openclaw again invoke mcp.planexe.org, and turn it into a skill.
 - Submit here
     - publish on mcp discord
     - publish on mcp subreddits
-    - https://mcp.so/
     - https://github.com/punkpeye/awesome-mcp-servers
-    - https://www.pulsemcp.com/servers?q=planexe   processes weekly incoming web servers, so I should wait a few days
     - https://mcpservers.org/search?query=planexe   cost $40 to have it reviewed
     - https://www.mcp-trust.com/
 - plan_status, respond with the credits spent, and the credits available.

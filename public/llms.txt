@@ -70,29 +70,38 @@ The MCP server exposes tool-based workflows (not MCP tasks protocol):
 - plan_status
 - plan_stop
 - plan_retry
+- plan_resume
 - plan_file_info
+- plan_list
+- send_feedback
 
 Key tool inputs/outputs:
 - plan_create inputs: prompt (required), model_profile (optional: baseline | premium | frontier | custom).
 - plan_create prompt quality: for best results, provide a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 - model_profiles output: profile guidance + currently available models in each profile.
 - model_profiles returns `MODEL_PROFILES_UNAVAILABLE` when no models are available in any profile.
-- plan_create output: task_id (use this for plan_status, plan_stop, and plan_file_info).
-- plan_status output: current state and progress for a task_id.
-- plan_retry input: task_id (required), model_profile (optional; defaults to baseline).
-- plan_retry output: task_id requeued to pending, with model_profile and retried_at.
+- plan_create output: plan_id (use this for plan_status, plan_stop, plan_retry, plan_resume, and plan_file_info).
+- plan_status output: current state and progress for a plan_id.
+- plan_retry input: plan_id (required), model_profile (optional; defaults to baseline). Full restart — clears prior artifacts.
+- plan_retry output: plan_id requeued to pending, with model_profile and retried_at.
+- plan_resume input: plan_id (required), model_profile (optional; defaults to baseline). Continues from where it left off, preserving completed work.
+- plan_resume output: plan_id requeued to pending, with model_profile, resume_count, and resumed_at.
 - plan_file_info output: downloadable report/zip metadata and URLs.
+- plan_list output: recent plans for the authenticated user (plan_id, state, progress, created_at, prompt_excerpt).
+- send_feedback inputs: category (required: mcp | plan | code | docs | other), message (required), plan_id (optional), rating (optional: 1-5 sentiment).
+- send_feedback output: feedback_id, received_at. Fire-and-forget — never blocks workflow.
 - mcp_local plan_download output: includes local saved_path where artifact was written.
 
 plan_status caller contract:
 - pending: keep polling.
 - processing: keep polling.
 - completed: terminal success; download is ready.
-- failed: terminal error.
+- failed: terminal error; consider plan_resume (continue) or plan_retry (restart).
+- stopped: user called plan_stop; consider plan_resume or plan_retry.
 
 Minimal error-handling contract:
 - Errors use `{"error":{"code","message","details?"}}`.
-- Common cloud/core codes: `TASK_NOT_FOUND`, `TASK_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `generation_failed`, `content_unavailable`.
+- Common cloud/core codes: `PLAN_NOT_FOUND`, `PLAN_NOT_FAILED`, `PLAN_NOT_RESUMABLE`, `PIPELINE_VERSION_MISMATCH`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `INVALID_FEEDBACK`, `generation_failed`, `content_unavailable`.
 - Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `plan_file_info` may return `{}` while artifact output is not ready yet.
 
@@ -103,15 +112,16 @@ Recommended interaction order:
 4. Non-tool step: prepare and approve a strong prompt as flowing prose (not structured markdown), typically ~300-800 words, with objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria.
 5. Call plan_create.
 6. Poll plan_status until complete (repeat every 5 minutes).
-7. If failed, optionally call plan_retry (defaults to baseline model_profile).
+7. If failed or stopped, call plan_resume to continue from where it left off, or plan_retry for a full restart.
 8. Use plan_file_info to get download URLs.
 9. Use plan_stop if the run must be cancelled.
+10. Use send_feedback at any time to report issues or share observations.
 
 Concurrency semantics:
-- Each plan_create call creates a new task_id.
-- plan_retry reuses the same failed task_id.
+- Each plan_create call creates a new plan_id.
+- plan_retry and plan_resume reuse the same plan_id.
 - Server does not enforce a global per-client concurrency cap.
-- Client should track task_ids and usually start with 1 active task, then 2 if needed.
+- Client should track plan_ids and usually start with 1 active plan, then 2 if needed.
 
 Note:
 - plan_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
@@ -179,4 +189,4 @@ curl -X POST https://mcp.planexe.org/mcp/tools/call \
   }'
 ```
 
-Last updated: 2026-02-24
+Last updated: 2026-03-29

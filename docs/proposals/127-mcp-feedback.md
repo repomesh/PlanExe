@@ -1,10 +1,31 @@
 # PlanExe MCP Feedback Tool — Specification
 
-## Overview
+## Status
+
+**Implemented** as `send_feedback` (renamed from `plan_feedback` during implementation).
+
+- PR #401: initial implementation
+- PR #402: rename to `send_feedback`, add auth, simplify categories (mcp/plan/code/docs/other), remove severity, update descriptions
+- PR #403: docs fix (auth via header, not parameter)
+- PR #404: update llms.txt, planexe_mcp_interface.md, plan.md
+
+Key differences from original proposal:
+- Tool name: `send_feedback` (not `plan_feedback`)
+- Categories simplified to 5: `mcp`, `plan`, `code`, `docs`, `other`
+- `severity` parameter removed — callers express severity in the message
+- `rating` renamed to sentiment: 1=strong negative, 2=weak negative, 3=neutral, 4=weak positive, 5=strong positive
+- Auth uses same pattern as `plan_create` (X-API-Key header)
+- Visible in Flask admin UI as "Feedback"
+
+---
+
+## Original Proposal
+
+### Overview
 
 A new MCP tool (`plan_feedback`) that allows LLM consumers to submit structured feedback about the PlanExe MCP interface. Feedback can be tied to a specific plan or be general. The tool is non-blocking, fire-and-forget, and never gates the workflow.
 
-## Tool Name
+### Tool Name
 
 `plan_feedback`
 

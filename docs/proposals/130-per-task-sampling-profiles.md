@@ -217,14 +217,92 @@ The implementation should pass only the parameters the provider accepts. The LLM
 - **P129 (prompt dentist):** Complementary. P129 enriches the input; P130 optimizes how the pipeline processes it. Together they address both sides of the quality equation.
 - **G0DM0D3 (external):** Source of the AutoTune concept. PlanExe's advantage: we don't need context classification because the task graph already defines what each call should produce.
 
+## Extended: Per-Task Model Variant Steering (Grok 4.1 Fast)
+
+### The insight Mark identified
+
+The proposal above treats sampling parameters as knobs on a single model. But certain cheap, capable models — specifically **Grok 4.1 Fast** via OpenRouter — offer something more powerful: **two API variants of the same model with different capability surfaces.**
+
+### Grok 4.1 Fast: Two variants, one model
+
+| Variant | Price (in/out per 1M) | Reasoning | Structured Output | Sampling Params |
+|---|---|---|---|---|
+| `grok-4-1-fast-non-reasoning` | $0.20 / $0.50 | ❌ | ✅ json_schema guaranteed | ✅ temp, top_p, freq_penalty, presence_penalty |
+| `grok-4-1-fast-reasoning` | $0.20 / $0.50 | ✅ CoT | ✅ json_schema guaranteed | ⚠️ temp, top_p only — **freq/presence penalty explicitly rejected** |
+
+Source: [xAI docs — Reasoning](https://docs.x.ai/developers/model-capabilities/text/reasoning), [xAI docs — Structured Outputs](https://docs.x.ai/developers/model-capabilities/text/structured-outputs), [xAI docs — Models](https://docs.x.ai/developers/models)
+
+**Critical finding:** The xAI API returns an error if you send `presencePenalty`, `frequencyPenalty`, or `stop` to reasoning variants. This is not a soft constraint — it's a hard API rejection. The non-reasoning variant accepts all sampling parameters.
+
+### Per-task model variant + parameter matrix
+
+This extends the three-profile system above into a **two-dimensional steering matrix**: model variant × sampling profile.
+
+| Task Category | Model Variant | Temperature | top_p | freq_penalty | pres_penalty | Rationale |
+|---|---|---|---|---|---|---|
+| **Creative** (Premortem, Expert Review, Scenarios, Pitch, Team Backstories, Risk Identification, Lever Exploration) | non-reasoning | 0.8 | 0.95 | 0.5 | 0.7 | Full penalty surface for vocabulary diversity; reasoning not needed for divergent generation |
+| **Analytical** (Assumptions, Governance, Review, Self-Audit, SWOT, Pre-Project Assessment) | reasoning | 0.5 | 0.90 | n/a | n/a | CoT improves analytical depth; penalties unavailable but reasoning compensates |
+| **Structured** (WBS L1/L2/L3, Dependencies, Durations, Schedule, Purpose, Plan Type) | non-reasoning | 0.15 | 0.85 | 0.1 | 0.0 | Deterministic, schema-guaranteed output; no reasoning overhead needed |
+
+### Cost implications
+
+The 274-task BubbasHotNutSack run cost ~$3.90 on Claude (Sonnet). At Grok 4.1 Fast pricing ($0.20/$0.50 per 1M tokens), the same run could cost approximately **$0.30–0.50** — a 7–13× cost reduction.
+
+This isn't just about saving money. At these prices, you can afford to:
+- Run the same prompt 5 times with different creative profiles and pick the best
+- Use the reasoning variant for analytical tasks where CoT genuinely helps
+- Run A/B experiments comparing parameter configurations without budget anxiety
+
+### Implementation: model routing in the task profile
+
+Extend Option A from above to include a `model_variant` field:
+
+```python
+class PlanTask(luigi.Task):
+    SAMPLING_PROFILES = {
+        "structured": {
+            "model_variant": "non-reasoning",
+            "temperature": 0.15, "top_p": 0.85,
+            "frequency_penalty": 0.1, "presence_penalty": 0.0
+        },
+        "analytical": {
+            "model_variant": "reasoning",
+            "temperature": 0.5, "top_p": 0.90
+            # No frequency/presence penalty — API rejects them for reasoning variants
+        },
+        "creative": {
+            "model_variant": "non-reasoning",
+            "temperature": 0.8, "top_p": 0.95,
+            "frequency_penalty": 0.5, "presence_penalty": 0.7
+        },
+    }
+```
+
+The LLM routing layer resolves `model_variant` to the actual model ID based on the configured provider. For xAI/OpenRouter: `non-reasoning` → `x-ai/grok-4-1-fast-non-reasoning`, `reasoning` → `x-ai/grok-4-1-fast-reasoning`. For providers without variant separation (Anthropic, OpenAI), the variant field is ignored and only sampling params apply.
+
+### Provider parameter compatibility matrix
+
+| Provider | temp | top_p | freq_penalty | pres_penalty | structured output | reasoning toggle |
+|---|---|---|---|---|---|---|
+| xAI (non-reasoning) | ✅ | ✅ | ✅ | ✅ | ✅ json_schema | n/a |
+| xAI (reasoning) | ✅ | ✅ | ❌ error | ❌ error | ✅ json_schema | ✅ |
+| OpenAI | ✅ | ✅ | ✅ | ✅ | ✅ json_schema | ✅ (o-series) |
+| Anthropic | ✅ | ✅ | ❌ unsupported | ❌ unsupported | ⚠️ tool_use workaround | ❌ |
+| Ollama/local | ✅ | ✅ | varies | varies | ❌ | ❌ |
+| OpenRouter | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ (model-dependent) |
+
+The implementation must strip unsupported parameters before sending to each provider. This is already partially handled by the LLM utility layer — extending it to handle the penalty params is straightforward.
+
 ## Cost and risk
 
-- **Cost:** Zero marginal cost. Sampling parameters are metadata on existing API calls, not additional calls.
-- **Risk:** Higher temperature + penalties on creative tasks could occasionally produce outputs that fail JSON schema validation. Mitigation: structured tasks stay at conservative settings; only narrative/analysis tasks get the creative profile. The pipeline's existing retry logic handles occasional schema failures.
-- **Effort:** Option A is a half-day code change. Option B is a full day including config parsing.
+- **Cost:** Zero marginal cost for parameter changes. Model variant steering on Grok 4.1 Fast actively *reduces* cost (7–13× cheaper than Claude Sonnet).
+- **Risk:** Higher temperature + penalties on creative tasks could occasionally produce outputs that fail JSON schema validation. Mitigation: structured tasks stay at conservative settings; only narrative/analysis tasks get the creative profile. The pipeline's existing retry logic handles occasional schema failures. Grok's guaranteed structured output eliminates schema risk for structured tasks entirely.
+- **Effort:** Option A is a half-day code change for parameter profiles. Adding model variant routing adds another half-day. Option B (config-driven) is a full day including config parsing and provider compatibility layer.
 
 ## Summary
 
 PlanExe's formulaic output is not a model limitation — it's a parameter limitation. The pipeline never sets frequency or presence penalties, and uses uniform temperature across tasks with fundamentally different objectives. G0DM0D3 demonstrates that per-context sampling profiles produce dramatically different output character. PlanExe already knows what each task is (the task graph is explicit), so it doesn't need classification — just a mapping from task type to sampling profile.
 
-**Recommended priority:** High. Zero marginal cost, measurable impact, and directly addresses the "everything sounds the same" problem that undermines plan quality.
+The extended insight: models like Grok 4.1 Fast offer **two API variants** (reasoning and non-reasoning) with different parameter surfaces at the same price. Per-task steering becomes two-dimensional — select the right model variant *and* the right sampling parameters for each task. Creative tasks get full penalty control without reasoning overhead. Analytical tasks get CoT without needing penalties. Structured tasks get deterministic, schema-guaranteed output.
+
+**Recommended priority:** High. Zero marginal cost (likely cost reduction), measurable impact, and directly addresses the "everything sounds the same" problem that undermines plan quality.

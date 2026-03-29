@@ -168,9 +168,14 @@ class EnrichPotentialLevers:
             
             logger.info(f"Processing batch {i//BATCH_SIZE + 1} with {len(batch)} levers...")
 
-            lever_details_for_prompt = "\n\n".join(
-                [f"Lever ID: {lever.lever_id}\nName: {lever.name}\nOptions: {json.dumps(lever.options)}" for lever in batch]
-            )
+            lever_details_for_prompt = "\n\n".join([
+                f"Lever ID: {lever.lever_id}\n"
+                f"Name: {lever.name}\n"
+                f"Consequences: {lever.consequences}\n"
+                f"Options: {json.dumps(lever.options)}\n"
+                f"Review: {lever.review}"
+                for lever in batch
+            ])
 
             user_prompt = (
                 f"**Project Context:**\n{project_context}\n\n"

@@ -383,6 +383,25 @@ class CreateWBSLevel1Task(PlanTask):
     generation_count = 1  # single-shot, schema-guaranteed
 ```
 
+### Selection strategy: Select vs Merge
+
+**Select-1** (simple): Pick the single best candidate based on composite score. Appropriate for tasks that produce a single coherent output (ExecutiveSummary, ProjectPlan, PlanType).
+
+**Merge** (Simon's pattern, preferred for list-producing tasks): Pick the best candidate as the skeleton, then scan runners-up for **individual items the winner missed** and splice them in. The reasoning model's job shifts from "pick the winner" to "assemble the best composite from all candidates."
+
+**Merge-eligible tasks** — any task that produces a list of distinct items:
+- ExpertReviewTask: 8 expert critiques → merge unique angles from all candidates
+- PremortemTask: failure modes → merge non-overlapping failure scenarios
+- CandidateScenariosTask: possible futures → merge to span the full possibility space
+- IdentifyRisksTask: risk items → merge for coverage completeness
+- PotentialLeversTask / EnrichLeversTask: lever items → merge unique levers
+- FindTeamMembersTask: team roles → merge missing specializations
+- DraftDocumentsToFindTask / DraftDocumentsToCreateTask: document lists → merge for completeness
+
+**Example:** ExpertReviewTask generates 3 candidates, each with 8 expert critiques. Candidate B scores highest overall — but Candidate A identified a unique regulatory risk B missed, and Candidate C had a supply chain angle neither covered. The merge step grafts those two critiques into B's output → final output has 10 expert critiques covering more ground than any single candidate.
+
+**Cost:** One additional reasoning call per merged task (the merge pass). At Grok 4.1 Fast pricing, negligible (~$0.005 per merge call).
+
 ### Variant rotation for N generations
 
 When generating N candidates, rotate through different configurations:

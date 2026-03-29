@@ -116,7 +116,7 @@ dependencies = [
     "tzdata==2025.3",
     "urllib3==2.6.3",
     "uvicorn==0.40.0",
-    "websockets==15.0.1",
+    "websockets==16.0",
     "wrapt==2.0.1",
     "yarl==1.22.0",
 ]

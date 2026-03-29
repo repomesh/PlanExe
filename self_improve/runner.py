@@ -97,7 +97,7 @@ def _load_user_prompt(plan_dir: Path, input_files: list[tuple[str, str]]) -> str
     """Read input files from a plan directory and concatenate them."""
     parts = []
     for filename, label in input_files:
-        file_path = plan_dir / filename
+        file_path = plan_dir / filename.value
         content = file_path.read_text()
         parts.append(f"File '{label}':\n{content}")
     return "\n\n".join(parts)
@@ -118,8 +118,8 @@ def _run_levers(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecutor
     user_prompt = _load_user_prompt(plan_dir, _LEVERS_INPUT_FILES)
     result = IdentifyPotentialLevers.execute(llm_executor, user_prompt)
 
-    raw_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_RAW
-    clean_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_CLEAN
+    raw_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_RAW.value
+    clean_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_CLEAN.value
     result.save_raw(str(raw_path))
     result.save_clean(str(clean_path))
 
@@ -145,13 +145,13 @@ def _run_deduplicate(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExe
     plan_name = plan_dir.name
     project_context = _load_user_prompt(plan_dir, _DEDUPLICATE_INPUT_FILES)
 
-    levers_path = plan_dir / _DEDUPLICATE_LEVERS_FILE
+    levers_path = plan_dir / _DEDUPLICATE_LEVERS_FILE.value
     with open(levers_path) as f:
         raw_levers_list = json.load(f)
 
     result = DeduplicateLevers.execute(llm_executor, project_context=project_context, raw_levers_list=raw_levers_list)
 
-    raw_path = plan_output_dir / FilenameEnum.DEDUPLICATED_LEVERS_RAW
+    raw_path = plan_output_dir / FilenameEnum.DEDUPLICATED_LEVERS_RAW.value
     result.save_raw(str(raw_path))
 
     return PlanResult(
@@ -167,14 +167,14 @@ def _run_enrich(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecutor
     plan_name = plan_dir.name
     project_context = _load_user_prompt(plan_dir, _ENRICH_INPUT_FILES)
 
-    dedup_path = plan_dir / _ENRICH_DEDUPLICATED_LEVERS_FILE
+    dedup_path = plan_dir / _ENRICH_DEDUPLICATED_LEVERS_FILE.value
     with open(dedup_path) as f:
         json_dict = json.load(f)
         lever_item_list = json_dict["deduplicated_levers"]
 
     result = EnrichPotentialLevers.execute(llm_executor, project_context=project_context, raw_levers_list=lever_item_list)
 
-    raw_path = plan_output_dir / FilenameEnum.ENRICHED_LEVERS_RAW
+    raw_path = plan_output_dir / FilenameEnum.ENRICHED_LEVERS_RAW.value
     result.save_raw(str(raw_path))
 
     return PlanResult(
@@ -191,7 +191,7 @@ def _run_documents(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecu
     user_prompt = _load_user_prompt(plan_dir, _DOCUMENTS_INPUT_FILES)
 
     # Load identify_purpose_dict separately (needed by IdentifyDocuments).
-    purpose_path = plan_dir / _DOCUMENTS_PURPOSE_FILE
+    purpose_path = plan_dir / _DOCUMENTS_PURPOSE_FILE.value
     with open(purpose_path) as f:
         identify_purpose_dict = json.load(f)
 
@@ -202,10 +202,10 @@ def _run_documents(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecu
 
     result = llm_executor.run(execute_fn)
 
-    result.save_raw(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_RAW))
-    result.save_markdown(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_MARKDOWN))
-    result.save_json_documents_to_find(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_FIND_JSON))
-    result.save_json_documents_to_create(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_CREATE_JSON))
+    result.save_raw(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_RAW.value))
+    result.save_markdown(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_MARKDOWN.value))
+    result.save_json_documents_to_find(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_FIND_JSON.value))
+    result.save_json_documents_to_create(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_CREATE_JSON.value))
 
     return PlanResult(
         name=plan_name,

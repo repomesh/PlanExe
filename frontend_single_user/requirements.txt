@@ -14,6 +14,6 @@ orjson==3.11.7
 python-multipart==0.0.22
 requests==2.33.0
 websockets==16.0
-packaging==25.0
+packaging==26.0
 fsspec==2026.3.0
 python-dotenv==1.2.2

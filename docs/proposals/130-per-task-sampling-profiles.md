@@ -299,6 +299,97 @@ The implementation must strip unsupported parameters before sending to each prov
 - **Risk:** Higher temperature + penalties on creative tasks could occasionally produce outputs that fail JSON schema validation. Mitigation: structured tasks stay at conservative settings; only narrative/analysis tasks get the creative profile. The pipeline's existing retry logic handles occasional schema failures. Grok's guaranteed structured output eliminates schema risk for structured tasks entirely.
 - **Effort:** Option A is a half-day code change for parameter profiles. Adding model variant routing adds another half-day. Option B (config-driven) is a full day including config parsing and provider compatibility layer.
 
+## Extended: Best-of-N Task Selection (Simon's Pattern)
+
+### The idea
+
+Instead of running each pipeline step once and hoping the output is good, run each step **N times** with different model configurations (different sampling profiles, different model variants, or both), then use a **reasoning model to select the best output** before feeding it to the next step.
+
+This is G0DM0D3's ULTRAPLINIAN pattern applied at the pipeline task level: parallel generation → quality scoring → winner propagation.
+
+### Why this is now feasible
+
+At Grok 4.1 Fast pricing ($0.20/M in, $0.50/M out):
+
+| Strategy | Creative tasks (N=3) | Analytical tasks (N=2) | Structured tasks (N=1) | Selection overhead | Est. total pipeline cost |
+|---|---|---|---|---|---|
+| Current (1×, Claude Sonnet) | — | — | — | — | ~$3.90 |
+| P130 profiles only (1×, Grok Fast) | $0.01/task | $0.01/task | $0.005/task | none | ~$0.40 |
+| Best-of-N + selection | $0.03/task | $0.02/task | $0.005/task | ~$0.01/task (reasoning) | ~$1.00–1.50 |
+
+Even with 3× generation on creative tasks and a reasoning selection step, the pipeline stays under $2 — still 2–4× cheaper than a single Claude Sonnet run.
+
+### Selection criteria
+
+The reasoning model evaluates each candidate against:
+
+1. **Schema compliance** — binary gate. Reject any output that doesn't parse against the task's expected schema. (This is free with Grok's guaranteed structured output.)
+2. **Prompt fidelity** — does the output address the specific plan's domain, or is it generic boilerplate? Measurable via P128 grounding density (TF-IDF against the original prompt vs a PMO vocabulary baseline).
+3. **Diversity from prior steps** — penalize outputs that repeat vocabulary already present in upstream pipeline context. This prevents the pipeline from converging on a narrow vocabulary as it progresses.
+4. **Task-specific rubrics** — each task type can define what "better" means:
+   - ExpertReviewTask: experts should disagree (low cosine similarity between perspectives)
+   - PremortemTask: failure modes should be diverse and non-obvious
+   - WBS tasks: coverage completeness, no duplicate work packages
+   - CandidateScenariosTask: scenarios should span the possibility space, not cluster
+
+### Implementation sketch
+
+```python
+class PlanTask(luigi.Task):
+    # Number of parallel generations for this task
+    generation_count = 1  # default: single-shot (structured tasks)
+    
+    # Selection model (only used when generation_count > 1)
+    selection_model = "grok-4-1-fast-reasoning"
+    
+    def run_with_selection(self):
+        if self.generation_count == 1:
+            return self.generate_once()
+        
+        candidates = []
+        for i in range(self.generation_count):
+            profile = self.get_variant_profile(i)  # rotate through profiles
+            candidates.append(self.generate_with_profile(profile))
+        
+        # Filter: schema compliance
+        valid = [c for c in candidates if self.validates_schema(c)]
+        if len(valid) == 1:
+            return valid[0]
+        
+        # Select: reasoning model picks the winner
+        return self.select_best(valid, model=self.selection_model)
+```
+
+Task subclasses override `generation_count`:
+```python
+class PremortemTask(PlanTask):
+    sampling_profile = "creative"
+    generation_count = 3  # best-of-3
+
+class CreateWBSLevel1Task(PlanTask):
+    sampling_profile = "structured"
+    generation_count = 1  # single-shot, schema-guaranteed
+```
+
+### Variant rotation for N generations
+
+When generating N candidates, rotate through different configurations:
+- **Candidate 1:** Creative profile (temp 0.8, high penalties)
+- **Candidate 2:** Analytical profile (temp 0.5, moderate penalties)
+- **Candidate 3:** Wild profile (temp 1.1, high penalties, reasoning variant)
+
+This ensures the candidate pool has genuine diversity, not three rolls from the same distribution.
+
+### Parallelization
+
+The N generations per task are independent — they can run as concurrent API calls. At Grok's 600 RPM rate limit, even 3× parallel generation per task won't bottleneck. The selection step is sequential (must wait for all candidates), but it's a single short reasoning call.
+
+### Relationship to P128 compiler model
+
+Simon's pattern is essentially the P128 compiler model applied **per-step** rather than as a post-pipeline gate. The tradeoff: per-step selection catches quality issues earlier (before they propagate), but costs more in total API calls. Post-pipeline gating is cheaper but can only reject the whole plan, not fix individual weak steps.
+
+The ideal system might combine both: per-step best-of-N selection for high-variance creative tasks, plus a post-pipeline quality gate for overall coherence.
+
 ## Summary
 
 PlanExe's formulaic output is not a model limitation — it's a parameter limitation. The pipeline never sets frequency or presence penalties, and uses uniform temperature across tasks with fundamentally different objectives. G0DM0D3 demonstrates that per-context sampling profiles produce dramatically different output character. PlanExe already knows what each task is (the task graph is explicit), so it doesn't need classification — just a mapping from task type to sampling profile.

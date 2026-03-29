@@ -319,18 +319,30 @@ At Grok 4.1 Fast pricing ($0.20/M in, $0.50/M out):
 
 Even with 3× generation on creative tasks and a reasoning selection step, the pipeline stays under $2 — still 2–4× cheaper than a single Claude Sonnet run.
 
-### Selection criteria
+### Scoring rubric: 5-axis weighted selection
 
-The reasoning model evaluates each candidate against:
+G0DM0D3's ULTRAPLINIAN module achieves 82-point quality discrimination across models using a weighted 5-axis scoring system (substance, directness, completeness, relevance, structure). The axes are objective-agnostic — the same mechanism works for any quality criterion by reweighting the axes.
 
-1. **Schema compliance** — binary gate. Reject any output that doesn't parse against the task's expected schema. (This is free with Grok's guaranteed structured output.)
-2. **Prompt fidelity** — does the output address the specific plan's domain, or is it generic boilerplate? Measurable via P128 grounding density (TF-IDF against the original prompt vs a PMO vocabulary baseline).
-3. **Diversity from prior steps** — penalize outputs that repeat vocabulary already present in upstream pipeline context. This prevents the pipeline from converging on a narrow vocabulary as it progresses.
-4. **Task-specific rubrics** — each task type can define what "better" means:
-   - ExpertReviewTask: experts should disagree (low cosine similarity between perspectives)
-   - PremortemTask: failure modes should be diverse and non-obvious
-   - WBS tasks: coverage completeness, no duplicate work packages
-   - CandidateScenariosTask: scenarios should span the possibility space, not cluster
+For PlanExe, we adapt this to a **5-axis pipeline quality rubric**:
+
+| Axis | Weight | What it measures | How to compute |
+|---|---|---|---|
+| **Schema compliance** | 0.25 | Does the output parse against the task's expected schema? | Binary: 1.0 if valid JSON/schema, 0.0 if not. With Grok's guaranteed structured output, this becomes a pre-filter (reject before scoring). |
+| **Prompt fidelity** | 0.25 | Does the output address the specific plan's domain, not generic boilerplate? | TF-IDF cosine similarity between output vocabulary and the original prompt's domain terms, minus similarity to a PMO baseline vocabulary. Higher = more grounded in the user's actual plan. (P128 grounding density metric.) |
+| **Diversity from context** | 0.20 | Does this step introduce new information vs recycling upstream output? | 1 − (Jaccard similarity of this output's 3-grams against concatenated upstream pipeline outputs). Penalizes the pipeline converging on a narrow vocabulary as it progresses. |
+| **Domain vocabulary density** | 0.15 | Does the output use specific, concrete domain terms rather than abstract PMO jargon? | Ratio of domain-specific terms (extracted from the user's prompt and enriched via P129 prompt dentist) to total content words. "FDA 510(k) submission timeline" scores higher than "regulatory compliance framework." |
+| **Internal diversity** | 0.15 | Within a single output, does it present genuinely different perspectives/items? | For multi-item outputs (ExpertReview, Premortem, Scenarios): average pairwise cosine distance between items. For single-item outputs (ExecutiveSummary): vocabulary diversity ratio (unique words / total words). G0DM0D3's feedback heuristics module computes this as a 3-gram repetition score. |
+
+**Composite score:** Σ(axis_weight × axis_score) → 0–100 scale.
+
+The reasoning model receives all N candidates plus the rubric and returns the index of the winner. For efficiency, the four computable axes (all except schema compliance, which is a pre-filter) can be computed deterministically without an LLM call. The reasoning model is only needed when scores are close (within 5 points) or when task-specific judgment is required.
+
+**Axis reweighting per task type:**
+- **Creative tasks** (Premortem, Expert Review, Scenarios): boost internal diversity to 0.25, reduce schema compliance to 0.15 (narrative outputs have looser schema requirements)
+- **Structured tasks** (WBS, Dependencies, Schedule): boost schema compliance to 0.35, reduce internal diversity to 0.05 (consistent terminology is a feature, not a bug)
+- **Analytical tasks** (Governance, Assumptions, Review): balanced weights as shown above
+
+This follows G0DM0D3's core insight: the scoring axes are *objective-agnostic primitives*. The same 5-axis mechanism serves different pipeline tasks by reweighting — just as ULTRAPLINIAN's anti-refusal axis can be replaced with a pedagogical axis by changing weights without changing the scoring infrastructure.
 
 ### Implementation sketch
 
@@ -389,6 +401,75 @@ The N generations per task are independent — they can run as concurrent API ca
 Simon's pattern is essentially the P128 compiler model applied **per-step** rather than as a post-pipeline gate. The tradeoff: per-step selection catches quality issues earlier (before they propagate), but costs more in total API calls. Post-pipeline gating is cheaper but can only reject the whole plan, not fix individual weak steps.
 
 The ideal system might combine both: per-step best-of-N selection for high-variance creative tasks, plus a post-pipeline quality gate for overall coherence.
+
+## Extended: STM Post-Processing (Zero-Cost Output Cleanup)
+
+G0DM0D3's STM (Semantic Transformation Modules) are deterministic regex-based output transformers — composable, zero-cost, and immediately applicable without any model changes.
+
+### Modules directly applicable to PlanExe
+
+**Hedge Reducer** — strips hedging language:
+- "I think", "I believe", "perhaps", "maybe", "It seems like", "It appears that", "probably", "possibly", "In my opinion", "From my perspective"
+- 11 regex patterns, 100% precision on constructed test cases
+- **PlanExe targets:** ExpertReviewTask, PremortemTask, ExecutiveSummaryTask, ReviewPlanTask — all produce outputs riddled with "It's important to note that..." hedging
+
+**Direct Mode** — strips preambles:
+- "Sure!", "Of course!", "Certainly!", "I'd be happy to help", "Great question!", "Let me help you with that"
+- 10 regex patterns
+- **PlanExe targets:** Every task that produces long-form output. The model almost always opens with "Certainly, here is a comprehensive analysis..."
+
+**Implementation:** Apply as a post-processing pass after LLM generation, before writing to the pipeline output file. No model changes needed. Can be toggled per task via the profile system.
+
+```python
+class PlanTask(luigi.Task):
+    stm_modules = ["hedge_reducer", "direct_mode"]  # default for all tasks
+    
+    def post_process(self, output: str) -> str:
+        for module in self.stm_modules:
+            output = STM_REGISTRY[module].transform(output)
+        return output
+```
+
+## Extended: EMA Feedback Loop (Cross-Run Learning)
+
+G0DM0D3's feedback loop uses Exponential Moving Average (α=0.3) to learn optimal parameter adjustments from binary quality ratings per context type.
+
+### Adaptation for PlanExe
+
+After each pipeline run, individual task outputs are rated (manually or via automated heuristics). Over multiple runs, the system learns which sampling parameters produce better outputs for each task type.
+
+**Automated rating heuristics** (from G0DM0D3's `computeHeuristics`):
+- **Repetition score:** 3-gram overlap frequency (0.0 = no repetition, 1.0 = extremely repetitive)
+- **Vocabulary diversity:** unique words / total words ratio
+- **Response length:** length in characters (proxy for substance)
+- **Average sentence length:** complexity indicator
+
+**Learning curve:** G0DM0D3 shows convergence to 29–62% parameter improvement within 19 ratings, reaching maximum influence (50% weight, capped) at 20 samples. For PlanExe, this means ~5–10 pipeline runs before the system meaningfully adapts.
+
+**Per-task storage:**
+```json
+{
+  "learned_profiles": {
+    "PremortemTask": {
+      "sample_count": 12,
+      "positive_params_ema": {"temperature": 0.85, "presence_penalty": 0.72, ...},
+      "negative_params_ema": {"temperature": 0.45, "presence_penalty": 0.15, ...},
+      "adjustments": {"temperature": +0.12, "presence_penalty": +0.18}
+    }
+  }
+}
+```
+
+The adjustments blend into the per-task sampling profile, gradually shifting each task's parameters toward what actually works — not what we guessed would work.
+
+## References
+
+- **G0DM0D3:** elder-plinius/G0DM0D3 (GitHub). Inference-time output steering framework. VoynichLabs fork: VoynichLabs/G0DM0D3.
+- **G0DM0D3 paper:** "G0DM0D3: Inference-Time Output Steering Framework for LLMs" — five composable steering primitives (AutoTune, Feedback Loop, Parseltongue, STM, ULTRAPLINIAN). Key results: AutoTune 84% context classification accuracy, ULTRAPLINIAN 82-point quality discrimination, Feedback Loop convergence in 19 ratings.
+- **P128:** Proposal 128 — Compiler Model, Quality Metrics, Dogfood Execution. Provides the measurement framework for evaluating P130's interventions.
+- **P129:** Proposal 129 — Prompt Dentist, Pre-Pipeline Prompt Enrichment. Complements P130 (input enrichment + output steering).
+- **xAI Grok API docs:** https://docs.x.ai/developers/models — Model pricing, reasoning variant constraints, structured output guarantees.
+- **OpenRouter API docs:** https://openrouter.ai/docs/api/reference/parameters — Full sampling parameter surface (temperature, top_p, frequency_penalty, presence_penalty, repetition_penalty, min_p, top_a).
 
 ## Summary
 

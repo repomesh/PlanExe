@@ -24,6 +24,62 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 
 logger = logging.getLogger(__name__)
 
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: enrich each deduplicated lever with a description, synergy_text, and
+conflict_text so that downstream steps (FocusOnVitalFewLevers, scenario
+generation) can make informed prioritization and trade-off decisions.
+
+Pipeline context
+----------------
+This step (EnrichLevers) is part of a 6-step solution-space exploration
+pipeline inside run_plan_pipeline.py:
+
+  1. IdentifyPotentialLevers  — brainstorms 15-20 raw levers
+  2. DeduplicateLevers        — removes near-duplicate levers
+  3. EnrichLevers             ← you are here
+  4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
+  5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
+  6. ScenarioSelection        — picks the best-fitting scenario
+
+Input: deduplicated levers (primary + secondary) from step 2.
+Output: the same levers plus three new fields — description, synergy_text,
+conflict_text. Processing happens in batches of BATCH_SIZE levers per LLM
+call, with the full lever list provided as context in every batch.
+
+Step 4 uses description for filtering and synergy/conflict for scenario
+construction. Vague or generic enrichment text propagates downstream and
+degrades scenario quality.
+
+Known problems to guard against
+--------------------------------
+- Boilerplate descriptions. Weak models produce nearly identical
+  description paragraphs for every lever, differing only in the lever
+  name. Each description should reflect the lever's specific purpose,
+  scope, and success metrics — not a generic template.
+- Self-referential synergy/conflict. Models sometimes name the lever
+  itself in its own synergy_text or conflict_text ("This lever synergizes
+  with itself"). The fields must reference OTHER levers from the full
+  list by name.
+- Phantom lever references. Models invent lever names that do not exist
+  in the full list. Every lever name mentioned in synergy_text or
+  conflict_text must match an actual lever_id/name from the input.
+- Symmetric parroting. When lever A says it synergizes with lever B,
+  lever B's synergy_text often copies the same sentence verbatim with
+  names swapped. Each lever's text should describe the relationship
+  from its own perspective with distinct reasoning.
+- Word-count padding. Models inflate to hit the 80-100 word target with
+  filler phrases ("It is important to note that...", "This lever plays
+  a crucial role in..."). Prefer concrete, information-dense sentences.
+- Missing conflict_text. Models default to positive framing and produce
+  empty or trivially short conflict_text ("No significant conflicts").
+  Every lever has trade-offs — the conflict_text must identify at least
+  one genuine tension.
+- Batch boundary blindness. When processing batches, the LLM may fail
+  to reference levers from other batches in synergy/conflict text. The
+  full lever list is provided as context precisely to prevent this —
+  ensure the prompt makes the full list visually prominent.
+"""
+
 # The number of levers to process in a single call to the LLM.
 BATCH_SIZE = 5
 

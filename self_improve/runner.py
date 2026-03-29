@@ -35,8 +35,10 @@ if _worker_plan_dir not in sys.path:
     sys.path.insert(0, _worker_plan_dir)
 
 from llama_index.core.instrumentation import get_dispatcher
+from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.lever.deduplicate_levers import DeduplicateLevers
+from worker_plan_internal.lever.enrich_potential_levers import EnrichPotentialLevers
 from worker_plan_internal.document.identify_documents import IdentifyDocuments
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName
 from worker_plan_internal.llm_util.track_activity import TrackActivity
@@ -54,31 +56,35 @@ _file_lock = threading.Lock()
 
 # identify_potential_levers — original step
 _LEVERS_INPUT_FILES = [
-    ("001-2-plan.txt", "plan.txt"),
-    ("002-6-identify_purpose.md", "purpose.md"),
-    ("002-8-plan_type.md", "plan_type.md"),
+    (FilenameEnum.INITIAL_PLAN, "plan.txt"),
+    (FilenameEnum.IDENTIFY_PURPOSE_MARKDOWN, "purpose.md"),
+    (FilenameEnum.PLAN_TYPE_MARKDOWN, "plan_type.md"),
 ]
 
 # identify_documents — needs many upstream files
 _DOCUMENTS_INPUT_FILES = [
-    ("002-14-strategic_decisions.md", "strategic_decisions.md"),
-    ("002-19-scenarios.md", "scenarios.md"),
-    ("003-11-consolidate_assumptions_short.md", "assumptions.md"),
-    ("005-2-project_plan.md", "project-plan.md"),
-    ("007-8-related_resources.md", "related-resources.md"),
-    ("014-2-swot_analysis.md", "swot-analysis.md"),
-    ("013-team.md", "team.md"),
-    ("016-2-expert_criticism.md", "expert-review.md"),
+    (FilenameEnum.STRATEGIC_DECISIONS_MARKDOWN, "strategic_decisions.md"),
+    (FilenameEnum.SCENARIOS_MARKDOWN, "scenarios.md"),
+    (FilenameEnum.CONSOLIDATE_ASSUMPTIONS_SHORT_MARKDOWN, "assumptions.md"),
+    (FilenameEnum.PROJECT_PLAN_MARKDOWN, "project-plan.md"),
+    (FilenameEnum.RELATED_RESOURCES_MARKDOWN, "related-resources.md"),
+    (FilenameEnum.SWOT_MARKDOWN, "swot-analysis.md"),
+    (FilenameEnum.TEAM_MARKDOWN, "team.md"),
+    (FilenameEnum.EXPERT_CRITICISM_MARKDOWN, "expert-review.md"),
 ]
 
 # deduplicate_levers — same context files as levers, plus the clean levers JSON
 _DEDUPLICATE_INPUT_FILES = _LEVERS_INPUT_FILES
-_DEDUPLICATE_LEVERS_FILE = "002-10-potential_levers.json"
+_DEDUPLICATE_LEVERS_FILE = FilenameEnum.POTENTIAL_LEVERS_CLEAN
+
+# enrich_potential_levers — same context files as levers, plus the deduplicated levers raw JSON
+_ENRICH_INPUT_FILES = _LEVERS_INPUT_FILES
+_ENRICH_DEDUPLICATED_LEVERS_FILE = FilenameEnum.DEDUPLICATED_LEVERS_RAW
 
 # Separate file for identify_purpose_dict (loaded as JSON, not concatenated)
-_DOCUMENTS_PURPOSE_FILE = "002-5-identify_purpose_raw.json"
+_DOCUMENTS_PURPOSE_FILE = FilenameEnum.IDENTIFY_PURPOSE_RAW
 
-SUPPORTED_STEPS = ["identify_potential_levers", "deduplicate_levers", "identify_documents"]
+SUPPORTED_STEPS = ["identify_potential_levers", "deduplicate_levers", "enrich_potential_levers", "identify_documents"]
 
 # Default wall-clock timeout per plan (seconds).  Prevents a single stuck LLM
 # call from blocking the entire run.  The Anthropic SDK may retry internally
@@ -112,8 +118,8 @@ def _run_levers(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecutor
     user_prompt = _load_user_prompt(plan_dir, _LEVERS_INPUT_FILES)
     result = IdentifyPotentialLevers.execute(llm_executor, user_prompt)
 
-    raw_path = plan_output_dir / "002-9-potential_levers_raw.json"
-    clean_path = plan_output_dir / "002-10-potential_levers.json"
+    raw_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_RAW
+    clean_path = plan_output_dir / FilenameEnum.POTENTIAL_LEVERS_CLEAN
     result.save_raw(str(raw_path))
     result.save_clean(str(clean_path))
 
@@ -145,7 +151,7 @@ def _run_deduplicate(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExe
 
     result = DeduplicateLevers.execute(llm_executor, project_context=project_context, raw_levers_list=raw_levers_list)
 
-    raw_path = plan_output_dir / "002-11-deduplicated_levers_raw.json"
+    raw_path = plan_output_dir / FilenameEnum.DEDUPLICATED_LEVERS_RAW
     result.save_raw(str(raw_path))
 
     return PlanResult(
@@ -153,6 +159,29 @@ def _run_deduplicate(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExe
         status="ok",
         duration_seconds=0,  # filled by caller
         calls_succeeded=1,  # single batch call
+    )
+
+
+def _run_enrich(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecutor) -> PlanResult:
+    """Execute the enrich_potential_levers step."""
+    plan_name = plan_dir.name
+    project_context = _load_user_prompt(plan_dir, _ENRICH_INPUT_FILES)
+
+    dedup_path = plan_dir / _ENRICH_DEDUPLICATED_LEVERS_FILE
+    with open(dedup_path) as f:
+        json_dict = json.load(f)
+        lever_item_list = json_dict["deduplicated_levers"]
+
+    result = EnrichPotentialLevers.execute(llm_executor, project_context=project_context, raw_levers_list=lever_item_list)
+
+    raw_path = plan_output_dir / FilenameEnum.ENRICHED_LEVERS_RAW
+    result.save_raw(str(raw_path))
+
+    return PlanResult(
+        name=plan_name,
+        status="ok",
+        duration_seconds=0,  # filled by caller
+        calls_succeeded=1,
     )
 
 
@@ -173,10 +202,10 @@ def _run_documents(plan_dir: Path, plan_output_dir: Path, llm_executor: LLMExecu
 
     result = llm_executor.run(execute_fn)
 
-    result.save_raw(str(plan_output_dir / "017-3-identified_documents_raw.json"))
-    result.save_markdown(str(plan_output_dir / "017-4-identified_documents.md"))
-    result.save_json_documents_to_find(str(plan_output_dir / "017-5-identified_documents_to_find.json"))
-    result.save_json_documents_to_create(str(plan_output_dir / "017-6-identified_documents_to_create.json"))
+    result.save_raw(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_RAW))
+    result.save_markdown(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_MARKDOWN))
+    result.save_json_documents_to_find(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_FIND_JSON))
+    result.save_json_documents_to_create(str(plan_output_dir / FilenameEnum.IDENTIFIED_DOCUMENTS_TO_CREATE_JSON))
 
     return PlanResult(
         name=plan_name,
@@ -226,6 +255,8 @@ def run_single_plan(
             pr = _run_levers(plan_dir, plan_output_dir, llm_executor)
         elif step == "deduplicate_levers":
             pr = _run_deduplicate(plan_dir, plan_output_dir, llm_executor)
+        elif step == "enrich_potential_levers":
+            pr = _run_enrich(plan_dir, plan_output_dir, llm_executor)
         elif step == "identify_documents":
             pr = _run_documents(plan_dir, plan_output_dir, llm_executor)
         else:

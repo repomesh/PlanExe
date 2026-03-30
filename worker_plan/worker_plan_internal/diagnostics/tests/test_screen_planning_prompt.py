@@ -4,9 +4,11 @@ Tests for screen_planning_prompt module.
 Unit tests for compute_prompt_stats and PromptScreeningResult model.
 Integration tests that use a real LLM to verify prompt screening.
 
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "not llm"
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "llm"
+Unit tests (no LLM, safe for CI):
+PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "not LLM"
+
+LLM integration tests (requires RUN_LLM_TESTS=1, local development only):
+PROMPT> cd worker_plan && RUN_LLM_TESTS=1 python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "LLM"
 """
 import unittest
 import os
@@ -206,7 +208,16 @@ class TestScreenPlanningPromptDataclass(unittest.TestCase):
 
 
 def _get_test_llm():
-    """Try to get a test LLM. Returns None if not available."""
+    """Try to get a test LLM. Returns None if not available.
+
+    Requires RUN_LLM_TESTS=1 environment variable to be set.
+    This prevents accidental LLM invocations in CI which would be costly.
+
+    Usage:
+        RUN_LLM_TESTS=1 python -m pytest ... -k "LLM"
+    """
+    if not os.environ.get("RUN_LLM_TESTS"):
+        return None
     try:
         from worker_plan_internal.llm_factory import get_llm
         llm_name = os.environ.get("TEST_LLM_NAME", "ollama-llama3.1")

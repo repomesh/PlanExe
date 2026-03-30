@@ -206,7 +206,7 @@ class EnrichPotentialLevers:
         logger.info(f"Characterizing {len(levers_to_characterize)} levers in batches of {batch_size}.")
 
         # Prepare the full list of lever names and IDs for context in the prompt
-        full_lever_context_str = "\n".join([f"- {lever.lever_id}: {lever.name}" for lever in levers_to_characterize])
+        full_lever_context_str = "\n".join([f"- {lever.name}" for lever in levers_to_characterize])
 
         enriched_levers_map = {lever.lever_id: lever.model_dump() for lever in levers_to_characterize}
         all_metadata = []

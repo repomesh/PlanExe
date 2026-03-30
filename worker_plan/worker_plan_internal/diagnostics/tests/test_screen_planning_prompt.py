@@ -1,20 +1,20 @@
 """
-Tests for validate_planning_prompt module.
+Tests for screen_planning_prompt module.
 
 Unit tests for compute_prompt_stats and PromptScreeningResult model.
-Integration tests that use a real LLM to verify prompt validation.
+Integration tests that use a real LLM to verify prompt screening.
 
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_validate_planning_prompt.py -v
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_validate_planning_prompt.py -v -k "not llm"
-PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_validate_planning_prompt.py -v -k "llm"
+PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v
+PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "not llm"
+PROMPT> cd worker_plan && python -m pytest worker_plan_internal/diagnostics/tests/test_screen_planning_prompt.py -v -k "llm"
 """
 import unittest
 import os
 
-from worker_plan_internal.diagnostics.validate_planning_prompt import (
+from worker_plan_internal.diagnostics.screen_planning_prompt import (
     compute_prompt_stats,
     PromptScreeningResult,
-    ValidatePlanningPrompt,
+    ScreenPlanningPrompt,
 )
 
 
@@ -153,7 +153,7 @@ class TestConvertToMarkdown(unittest.TestCase):
             confidence="high",
             rationale="Concrete project with real location.",
         )
-        md = ValidatePlanningPrompt.convert_to_markdown(obj)
+        md = ScreenPlanningPrompt.convert_to_markdown(obj)
         self.assertIn("USABLE", md)
         self.assertIn("Concrete project with real location.", md)
         # Should NOT have details table for USABLE
@@ -166,18 +166,18 @@ class TestConvertToMarkdown(unittest.TestCase):
             confidence="high",
             rationale="The prompt is too brief.",
         )
-        md = ValidatePlanningPrompt.convert_to_markdown(obj)
+        md = ScreenPlanningPrompt.convert_to_markdown(obj)
         self.assertIn("UNUSABLE", md)
         self.assertIn("### Details", md)
         self.assertIn("Too Short", md)
         self.assertIn("High", md)
 
 
-class TestValidatePlanningPromptDataclass(unittest.TestCase):
-    """Unit tests for the ValidatePlanningPrompt dataclass methods."""
+class TestScreenPlanningPromptDataclass(unittest.TestCase):
+    """Unit tests for the ScreenPlanningPrompt dataclass methods."""
 
     def _make_instance(self):
-        return ValidatePlanningPrompt(
+        return ScreenPlanningPrompt(
             system_prompt="system",
             user_prompt="user",
             response={"verdict": "USABLE", "reason": "usable", "confidence": "high", "rationale": "Good."},
@@ -292,7 +292,7 @@ BORDERLINE_UNUSABLE_PROMPTS = [
 
 
 @unittest.skipUnless(_get_test_llm() is not None, "No LLM available for integration tests")
-class TestValidatePlanningPromptWithLLM(unittest.TestCase):
+class TestScreenPlanningPromptWithLLM(unittest.TestCase):
     """Integration tests that use a real LLM."""
 
     @classmethod
@@ -305,7 +305,7 @@ class TestValidatePlanningPromptWithLLM(unittest.TestCase):
         failures = []
         for item in good_prompts:
             try:
-                result = ValidatePlanningPrompt.execute(self.llm, item.prompt)
+                result = ScreenPlanningPrompt.execute(self.llm, item.prompt)
                 verdict = result.response["verdict"]
                 if verdict != "USABLE":
                     failures.append(
@@ -326,7 +326,7 @@ class TestValidatePlanningPromptWithLLM(unittest.TestCase):
         failures = []
         for prompt_text, acceptable_reasons in CORE_UNUSABLE_PROMPTS:
             try:
-                result = ValidatePlanningPrompt.execute(self.llm, prompt_text)
+                result = ScreenPlanningPrompt.execute(self.llm, prompt_text)
                 verdict = result.response["verdict"]
                 actual_reason = result.response["reason"]
                 if verdict != "UNUSABLE":
@@ -352,7 +352,7 @@ class TestValidatePlanningPromptWithLLM(unittest.TestCase):
         failures = []
         for prompt_text in ROBUSTNESS_UNUSABLE_PROMPTS:
             try:
-                result = ValidatePlanningPrompt.execute(self.llm, prompt_text)
+                result = ScreenPlanningPrompt.execute(self.llm, prompt_text)
                 verdict = result.response["verdict"]
                 if verdict != "UNUSABLE":
                     failures.append(
@@ -372,7 +372,7 @@ class TestValidatePlanningPromptWithLLM(unittest.TestCase):
         failures = []
         for prompt_text in BORDERLINE_UNUSABLE_PROMPTS:
             try:
-                result = ValidatePlanningPrompt.execute(self.llm, prompt_text)
+                result = ScreenPlanningPrompt.execute(self.llm, prompt_text)
                 verdict = result.response["verdict"]
                 if verdict != "UNUSABLE":
                     failures.append(
@@ -389,7 +389,7 @@ class TestValidatePlanningPromptWithLLM(unittest.TestCase):
 
     def test_response_structure(self):
         """Verify the response has the expected structure."""
-        result = ValidatePlanningPrompt.execute(self.llm, "blah")
+        result = ScreenPlanningPrompt.execute(self.llm, "blah")
         self.assertIn("verdict", result.response)
         self.assertIn("reason", result.response)
         self.assertIn("confidence", result.response)

@@ -1,38 +1,24 @@
 """
-Validate planning prompt.
+Screen planning prompt.
 
-PlanExe makes plans based on an initial prompt.
-The quality of the plan is dependent on the quality of the prompt.
-Garbage in, garbage out.
-This module screens the prompt before plan generation begins.
+LLM-based triage of user prompts before plan generation. Classifies each prompt
+as USABLE or UNUSABLE based on whether it can produce a meaningful project plan.
 
-Determine if it's an underspecified prompt. A prompt that is too vague.
-If it's highly ambiguous, and the user doesn't know what they want.
-Determine if it's an overspecified prompt.
-Determine if it's an nonsensical prompt.
-Determine if the user wants to do something that cost money, but they don't have the money.
+Screens for:
+- Too short or vague to plan around
+- Nonsensical text or gibberish
+- Placeholder/test strings (e.g. "blah", "${PROMPT_TEXT}")
+- Unfilled templates (e.g. "[COMPANY] expansion plan for [CITY]")
+- No actionable goal (e.g. "I want to be rich")
+- Fictional or physically impossible scenarios
+- Prompt injection attempts
 
 Flow:
-Take the initial prompt, and count number of bytes, characters, words, symbols, lines. Format this as a string, lets call it "prompt_stats".
-As part of the user prompt, include the "prompt_stats", so the LLM knows the stats of the initial prompt.
+Compute prompt statistics (byte/char/word/line/symbol counts) and include them
+alongside the raw prompt in the LLM request. The LLM returns a PromptScreeningResult
+via structured output.
 
-Use structured output with the PromptScreeningResult class.
-
-See the simple_plan_prompts.jsonl for examples of good prompts. In this file ignore the short prompts, since they yield somewhat crappy plans. It's the long prompts that results in good plans.
-The longer prompts usually include physical locations, and budget and time constraints.
-I'm not interested in fictional locations, the locations must be in the real world, otherwise the plan will be non-sense.
-
-Example of unusable prompts that yield non-sense plans.. these are what I'm actually seeing in production.
-${PROMPT_TEXT}
-blah
-todo
-hello3
-lots of blank spaces
-\\n
-I want to be rich
-I want to be famous
-
-PROMPT> python -m worker_plan_internal.diagnostics.validate_planning_prompt
+PROMPT> python -m worker_plan_internal.diagnostics.screen_planning_prompt
 """
 import time
 from math import ceil
@@ -71,7 +57,7 @@ def compute_prompt_stats(prompt: str) -> str:
 
 class PromptScreeningResult(BaseModel):
     """
-    Structured output for planning prompt validation.
+    Structured output for planning prompt screening.
     """
     verdict: Literal["USABLE", "UNUSABLE"] = Field(
         description=(
@@ -109,7 +95,7 @@ class PromptScreeningResult(BaseModel):
     )
 
 
-VALIDATE_PLANNING_PROMPT_SYSTEM_PROMPT = """
+SCREEN_PLANNING_PROMPT_SYSTEM_PROMPT = """
 You are an expert prompt quality analyst for a project planning system called PlanExe. Your job is to classify whether a user's prompt is suitable for generating a meaningful, real-world project plan.
 
 A USABLE prompt for PlanExe:
@@ -155,9 +141,9 @@ Respond ONLY with a valid JSON object containing:
 
 
 @dataclass
-class ValidatePlanningPrompt:
+class ScreenPlanningPrompt:
     """
-    Validate whether a user prompt is suitable for plan generation.
+    Screen whether a user prompt is suitable for plan generation.
     """
     system_prompt: str
     user_prompt: str
@@ -166,7 +152,7 @@ class ValidatePlanningPrompt:
     markdown: str
 
     @classmethod
-    def execute(cls, llm: LLM, user_prompt: str) -> "ValidatePlanningPrompt":
+    def execute(cls, llm: LLM, user_prompt: str) -> "ScreenPlanningPrompt":
         if not isinstance(llm, LLM):
             raise ValueError("Invalid LLM instance.")
         if not isinstance(user_prompt, str):
@@ -174,7 +160,7 @@ class ValidatePlanningPrompt:
 
         logger.debug(f"User Prompt:\n{user_prompt}")
 
-        system_prompt = VALIDATE_PLANNING_PROMPT_SYSTEM_PROMPT.strip()
+        system_prompt = SCREEN_PLANNING_PROMPT_SYSTEM_PROMPT.strip()
         prompt_stats = compute_prompt_stats(user_prompt)
 
         composed_user_prompt = (
@@ -294,7 +280,7 @@ if __name__ == "__main__":
         print(f"\nPrompt ID: {item.id} (length: {len(item.prompt)} chars)")
         print(f"Preview: {item.prompt[:100]}...")
         try:
-            result = ValidatePlanningPrompt.execute(llm, item.prompt)
+            result = ScreenPlanningPrompt.execute(llm, item.prompt)
             json_response = result.to_dict(include_system_prompt=False, include_user_prompt=False, include_metadata=False)
             print(f"Response: {json.dumps(json_response, indent=2)}")
         except Exception as e:
@@ -314,7 +300,7 @@ if __name__ == "__main__":
     for prompt in unusable_prompts:
         print(f"\nPrompt: {prompt!r}")
         try:
-            result = ValidatePlanningPrompt.execute(llm, prompt)
+            result = ScreenPlanningPrompt.execute(llm, prompt)
             json_response = result.to_dict(include_system_prompt=False, include_user_prompt=False, include_metadata=False)
             print(f"Response: {json.dumps(json_response, indent=2)}")
         except Exception as e:

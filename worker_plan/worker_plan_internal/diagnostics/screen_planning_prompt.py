@@ -263,8 +263,7 @@ class ScreenPlanningPrompt:
 
 if __name__ == "__main__":
     from worker_plan_internal.llm_factory import get_llm
-    from worker_plan_internal.plan.find_plan_prompt import find_plan_prompt
-    from worker_plan_internal.prompt.prompt_catalog import PromptCatalog
+    from worker_plan_api.prompt_catalog import PromptCatalog
 
     llm = get_llm("ollama-llama3.1")
 

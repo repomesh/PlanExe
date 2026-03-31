@@ -90,8 +90,8 @@ Direct prints are sometimes useful during incident response, but they are not a 
 
 ### Fix steps
 
-1. Replace entrypoint `print()` startup breadcrumbs with structured `logging` calls at `INFO` or `DEBUG`.
-2. Gate verbose diagnostics behind explicit env vars such as `PLANEXE_DEBUG_STARTUP` or module-specific debug flags.
+1. ~~Replace entrypoint `print()` startup breadcrumbs with structured `logging` calls at `INFO` or `DEBUG`.~~ **Done** (PR #474): Converted 22 `[startup]` prints in `mcp_cloud/http_server.py` and `mcp_cloud/db_setup.py` to `_startup_log()` helper.
+2. ~~Gate verbose diagnostics behind explicit env vars such as `PLANEXE_DEBUG_STARTUP` or module-specific debug flags.~~ **Done** (PR #474): Startup breadcrumbs now gated behind `PLANEXE_DEBUG_STARTUP=1`.
 3. Move sample-driver code and debugging helpers into `if __name__ == "__main__":` blocks or dedicated scripts.
 4. Add a lightweight test or lint-like assertion that production modules do not contain uncategorized top-level `print()` calls.
 

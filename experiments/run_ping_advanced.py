@@ -1,7 +1,7 @@
 """
 Ping the LLM to check if it is running.
 
-PROMPT> python -m worker_plan_internal.proof_of_concepts.run_ping_advanced
+PROMPT> python experiments/run_ping_advanced.py
 """
 from worker_plan_internal.llm_factory import get_llm
 from llama_index.core.llms import ChatMessage

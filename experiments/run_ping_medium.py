@@ -8,13 +8,13 @@ PROMPT> python -m venv venv
 PROMPT> source venv/bin/activate
 (venv) PROMPT> pip install llama-index llama-index-llms-openrouter
 (venv) PROMPT> export OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
-(venv) PROMPT> python -m worker_plan_internal.proof_of_concepts.run_ping_medium
+(venv) PROMPT> python experiments/run_ping_medium.py
 
 If you use virtualenvwrapper, remove the virtualenv afterwards:
 PROMPT> mkvirtualenv mypingenv --python=/usr/bin/python3.13
 (mypingenv) PROMPT> pip install llama-index llama-index-llms-openrouter
 (mypingenv) PROMPT> export OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
-(mypingenv) PROMPT> python -m worker_plan_internal.proof_of_concepts.run_ping_medium
+(mypingenv) PROMPT> python experiments/run_ping_medium.py
 (mypingenv) PROMPT> rm -rf ~/.virtualenvs/mypingenv
 """
 from llama_index.llms.openrouter import OpenRouter

@@ -68,7 +68,7 @@ Large modules make the code harder to reason about, harder to test in isolation,
 
 ### Fix steps
 
-1. Split `frontend_multi_user/src/app.py` by concern into `auth`, `billing`, `admin`, `downloads`, `account`, and `plan_routes`.
+1. ~~Split `frontend_multi_user/src/app.py` by concern into `auth`, `billing`, `admin`, `downloads`, `account`, and `plan_routes`.~~ **Done** (PR #476): Split 3,857-line monolith into 6 Flask Blueprint modules + utils (app.py reduced to 1,441 lines).
 2. Split `mcp_cloud/http_server.py` into `middleware`, `route_registration`, `tool_http_bridge`, and `server_boot`.
 3. Convert `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py` from a giant task registry file into a thin pipeline assembly module plus task-specific modules grouped by stage.
 4. Extract reusable orchestration helpers from `worker_plan_database/app.py` into focused worker, billing, and queue modules.
@@ -181,7 +181,7 @@ The multi-user frontend handles auth, admin flows, billing, downloads, and user 
 
 ### Phase 2: Split the Worst Offenders
 
-1. Refactor `frontend_multi_user/src/app.py` first because it mixes the most distinct business concerns.
+1. ~~Refactor `frontend_multi_user/src/app.py` first because it mixes the most distinct business concerns.~~ **Done** (PR #476).
 2. Refactor `mcp_cloud/http_server.py` second because it sits on a public protocol boundary.
 3. Refactor `worker_plan_database/app.py` and `run_plan_pipeline.py` in smaller slices to avoid destabilizing the execution engine.
 
@@ -209,7 +209,7 @@ This proposal integrates with existing PlanExe boundaries rather than fighting t
 ## Success Metrics
 
 1. No production-facing Python module above 1,500 lines after the first cleanup wave.
-2. `frontend_multi_user/src/app.py` reduced by at least 50% through route and helper extraction.
+2. ~~`frontend_multi_user/src/app.py` reduced by at least 50% through route and helper extraction.~~ **Done** (PR #476): Reduced by 63% (3,857 → 1,441 lines).
 3. `mcp_cloud/http_server.py` reduced to a focused HTTP assembly module rather than a mixed implementation file.
 4. Zero uncategorized top-level `print()` statements in production service modules.
 5. Documented justification for all remaining `except Exception:` boundaries in service code.

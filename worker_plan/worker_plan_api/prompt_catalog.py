@@ -121,6 +121,11 @@ class PromptCatalog:
         filepath = PromptCatalog.path_to_prompt_file('simple_plan_prompts.jsonl')
         self.load(filepath)
 
+    def load_unusable_prompts(self) -> None:
+        """Load unusable prompts from a JSONL file."""
+        filepath = PromptCatalog.path_to_prompt_file('unusable_prompts.jsonl')
+        self.load(filepath)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

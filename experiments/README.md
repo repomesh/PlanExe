@@ -1,11 +1,7 @@
 # Experiments
 
-Standalone proof-of-concept scripts used during early development of PlanExe.
+Standalone proof-of-concept scripts used during development of PlanExe.
 These are **not production code** and are not imported by any service.
-
-## Status
-
-Archived. These scripts were originally in `worker_plan/worker_plan_internal/proof_of_concepts/` and moved here to keep the production tree clean.
 
 ## Running
 

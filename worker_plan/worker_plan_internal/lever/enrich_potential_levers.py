@@ -85,11 +85,15 @@ Known problems to guard against
   them as grounding for a richer explanation of purpose, scope, and
   success metrics. The description should go beyond what consequences
   already states.
-- UUID cross-reference format inconsistency. The full_lever_context_str
-  includes lever_id UUIDs, causing models to copy UUIDs into
-  synergy_text and conflict_text in varying formats (full UUID, 8-char
-  truncated, backtick-quoted name, plain name). Models should reference
-  levers by name only in free-text fields.
+- UUID leakage into free-text fields. Models copy UUIDs from the prompt
+  into synergy_text and conflict_text. Mitigated by: (1) removing UUIDs
+  from full_lever_context_str (PR #457), (2) wrapping the per-batch
+  UUID in XML tags (<lever>uuid</lever>) so models treat it as markup
+  rather than text to reference. The UUID must stay first in each lever
+  block (positional heuristic for matching). Use full UUIDs — short
+  prefixes and integer indices break matching for different model types.
+  Do NOT use negative prohibitions naming "UUID" — small models treat
+  the prohibition as a template. Use positive framing instead.
 - max_tokens overflow for small-context models. If max_tokens is set
   close to the model's context_window, the available input token budget
   drops to near zero, causing all batches to fail with BadRequestError
@@ -168,7 +172,9 @@ You are an expert systems analyst and strategist. Your task is to enrich a list 
 2.  **`synergy_text`:** (40-60 words) Describe its most important POSITIVE interactions. How does this lever amplify or enable others? You MUST explicitly name one or two other levers from the full list that it has strong synergy with.
 3.  **`conflict_text`:** (40-60 words) Describe its most important NEGATIVE interactions or trade-offs. What difficult choices does this lever create? Which other levers does it constrain? You MUST explicitly name one or two other levers from the full list that it has a strong conflict with.
 
-You MUST respond with a single JSON object that strictly adheres to the `BatchCharacterizationResult` schema. Provide a full characterization for every single lever requested in the user prompt.
+In `synergy_text` and `conflict_text`, always refer to other levers by their name — for example, write "Policy Advocacy Strategy", not an identifier.
+
+You MUST respond with a single JSON object that strictly adheres to the `BatchCharacterizationResult` schema. Return exactly one characterization per lever requested — no more, no fewer.
 """
 
 @dataclass
@@ -231,7 +237,7 @@ class EnrichPotentialLevers:
             logger.info(f"Processing {batch_label}...")
 
             lever_details_for_prompt = "\n\n".join([
-                f"Lever ID: {lever.lever_id}\n"
+                f"<lever>{lever.lever_id}</lever>\n"
                 f"Name: {lever.name}\n"
                 f"Consequences: {lever.consequences}\n"
                 f"Options: {json.dumps(lever.options)}\n"
@@ -245,6 +251,7 @@ class EnrichPotentialLevers:
                 "---\n\n"
                 f"**Levers to Characterize in this Batch:**\n"
                 f"Please provide the `description`, `synergy_text`, and `conflict_text` for the following {len(batch)} levers. "
+                f"Return exactly {len(batch)} characterizations — one per lever, no more, no fewer. "
                 f"Analyze them against the full list provided above.\n\n"
                 f"{lever_details_for_prompt}"
             )

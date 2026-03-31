@@ -282,7 +282,7 @@ class EnrichPotentialLevers:
                         })
                     else:
                         logger.warning(f"LLM returned characterization for an unknown lever_id: '{char.lever_id}'")
-                        errors.append({"type": "unknown_lever_id", "lever_id": char.lever_id})
+                        errors.append({"type": "ignored_unknown_lever_id", "lever_id": char.lever_id})
 
             except PipelineStopRequested:
                 raise

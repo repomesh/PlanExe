@@ -273,3 +273,6 @@ services:
 
 volumes:
   database_postgres_data:
+    # Use the volume from the main PlanExe repo so both repos share the same database.
+    external: true
+    name: planexe_database_postgres_data

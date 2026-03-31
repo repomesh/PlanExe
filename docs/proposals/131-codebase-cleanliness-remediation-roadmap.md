@@ -109,7 +109,7 @@ Experimental work is good. Leaving it in production-adjacent trees without stron
 
 1. ~~Move proof-of-concept code into a clearly isolated top-level `experiments/` or `research/` area, or explicitly mark it as non-production in module names and docs.~~ **Done** (PR #474): Moved 18 PoC scripts to top-level `experiments/`.
 2. ~~Move experimental diagnostics variants out of the default runtime namespace unless they are active candidates for shipping.~~ **Done** (PR #474): Deleted 6 `experimental_premise_attack{1-6}.py` files superseded by production `premise_attack.py`.
-3. Add a short README in each experimental area defining its status, owner, and graduation criteria.
+3. ~~Add a short README in each experimental area defining its status, owner, and graduation criteria.~~ **Done** (PR #474): Added `experiments/README.md`.
 4. Ensure production imports never depend on experimental modules.
 
 ## Issue 4: Broad Exception Handling

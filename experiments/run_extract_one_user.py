@@ -1,5 +1,5 @@
 """
-python -m worker_plan_internal.proof_of_concepts.run_extract_one_user
+python experiments/run_extract_one_user.py
 """
 import json
 from pydantic import BaseModel

@@ -1,7 +1,7 @@
 """
 Check that Pydantic can be used to parse LLM "structured output".
 
-PROMPT> python -m worker_plan_internal.proof_of_concepts.run_pydantic
+PROMPT> python experiments/run_pydantic.py
 """
 from pydantic import BaseModel
 

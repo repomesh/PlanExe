@@ -16,9 +16,16 @@ from contextlib import asynccontextmanager, suppress
 from time import monotonic
 from typing import Annotated, Any, Awaitable, Callable, Literal, Optional, Sequence
 
-# Early startup logging — print directly to stderr so Railway captures it
-# even if the process hangs or crashes before logging is fully configured.
-print("[startup] http_server.py: begin imports", file=sys.stderr, flush=True)
+# Early startup logging — gated behind PLANEXE_DEBUG_STARTUP so Railway
+# deployments stay quiet unless explicitly opted in.
+_DEBUG_STARTUP = os.environ.get("PLANEXE_DEBUG_STARTUP", "").strip().lower() in ("1", "true", "yes")
+
+def _startup_log(msg: str) -> None:
+    """Emit a startup breadcrumb to stderr when PLANEXE_DEBUG_STARTUP is set."""
+    if _DEBUG_STARTUP:
+        print(f"[startup] {msg}", file=sys.stderr, flush=True)
+
+_startup_log("http_server.py: begin imports")
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,7 +34,7 @@ from pydantic import BaseModel, Field
 from mcp.server.fastmcp import FastMCP
 from mcp.types import CallToolResult, ContentBlock, TextContent, ToolAnnotations
 
-print("[startup] http_server.py: 3rd-party imports done", file=sys.stderr, flush=True)
+_startup_log("http_server.py: 3rd-party imports done")
 
 from mcp_cloud.http_utils import strip_redundant_content
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
@@ -44,7 +51,7 @@ if not _dotenv_loaded:
         ", ".join(str(path) for path in _dotenv_paths),
     )
 
-print("[startup] http_server.py: about to import mcp_cloud.app (triggers db_setup)", file=sys.stderr, flush=True)
+_startup_log("http_server.py: about to import mcp_cloud.app (triggers db_setup)")
 from mcp_cloud.app import (
     PLANEXE_SERVER_INSTRUCTIONS,
     REPORT_CONTENT_TYPE,
@@ -71,10 +78,10 @@ from mcp_cloud.app import (
     validate_download_token,
     _resolve_user_from_api_key,
 )
-print("[startup] http_server.py: mcp_cloud.app imported OK", file=sys.stderr, flush=True)
+_startup_log("http_server.py: mcp_cloud.app imported OK")
 from mcp_cloud.auth import validate_api_key_secret
 from mcp_cloud.download_tokens import validate_download_token_secret
-print("[startup] http_server.py: auth + download_tokens imported OK", file=sys.stderr, flush=True)
+_startup_log("http_server.py: auth + download_tokens imported OK")
 
 SERVER_VERSION = "1.0.1"
 

@@ -6,7 +6,14 @@ from pathlib import Path
 from typing import Literal, Optional
 from urllib.parse import quote_plus
 
-print("[startup] db_setup.py: begin imports", file=sys.stderr, flush=True)
+_DEBUG_STARTUP = os.environ.get("PLANEXE_DEBUG_STARTUP", "").strip().lower() in ("1", "true", "yes")
+
+def _startup_log(msg: str) -> None:
+    """Emit a startup breadcrumb to stderr when PLANEXE_DEBUG_STARTUP is set."""
+    if _DEBUG_STARTUP:
+        print(f"[startup] {msg}", file=sys.stderr, flush=True)
+
+_startup_log("db_setup.py: begin imports")
 
 from flask import Flask
 from mcp.server import Server
@@ -14,7 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import inspect, text
 from worker_plan_api.model_profile import ModelProfileEnum
 
-print("[startup] db_setup.py: imports done", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: imports done", file=sys.stderr, flush=True)
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 
@@ -40,10 +47,10 @@ from database_api.model_credit_history import CreditHistory  # noqa: F401
 from database_api.model_token_metrics import TokenMetrics  # noqa: F401
 from database_api.model_feedback import FeedbackItem  # noqa: F401
 
-print("[startup] db_setup.py: creating Flask app", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: creating Flask app", file=sys.stderr, flush=True)
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
-print("[startup] db_setup.py: Flask app created, config loaded", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: Flask app created, config loaded", file=sys.stderr, flush=True)
 
 def build_postgres_uri_from_env(env: dict[str, str]) -> tuple[str, dict[str, str]]:
     """Construct a SQLAlchemy URI for Postgres using environment variables."""
@@ -59,10 +66,10 @@ def build_postgres_uri_from_env(env: dict[str, str]) -> tuple[str, dict[str, str
 sqlalchemy_database_uri = os.environ.get("SQLALCHEMY_DATABASE_URI")
 if sqlalchemy_database_uri is None:
     sqlalchemy_database_uri, db_settings = build_postgres_uri_from_env(os.environ)
-    print(f"[startup] db_setup.py: SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}", file=sys.stderr, flush=True)
+    _startup_log(f"db_setup.py: SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}")
     logger.info(f"SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}")
 else:
-    print("[startup] db_setup.py: Using SQLALCHEMY_DATABASE_URI from environment", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: Using SQLALCHEMY_DATABASE_URI from environment", file=sys.stderr, flush=True)
     logger.info("Using SQLALCHEMY_DATABASE_URI from environment.")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
@@ -71,9 +78,9 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'connect_args': {'connect_timeout': 10},
 }
-print("[startup] db_setup.py: calling db.init_app(app)", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: calling db.init_app(app)", file=sys.stderr, flush=True)
 db.init_app(app)
-print("[startup] db_setup.py: db.init_app(app) done", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: db.init_app(app) done", file=sys.stderr, flush=True)
 
 def ensure_planitem_stop_columns() -> None:
     statements = (
@@ -175,24 +182,24 @@ def ensure_last_progress_at_column() -> None:
         except Exception as exc:
             logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
-print("[startup] db_setup.py: running schema migrations...", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: running schema migrations...", file=sys.stderr, flush=True)
 with app.app_context():
-    print("[startup] db_setup.py: db.create_all()", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: db.create_all()", file=sys.stderr, flush=True)
     db.create_all()
-    print("[startup] db_setup.py: db.create_all() done", file=sys.stderr, flush=True)
-    print("[startup] db_setup.py: ensure_planitem_stop_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: db.create_all() done", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_planitem_stop_columns", file=sys.stderr, flush=True)
     ensure_planitem_stop_columns()
-    print("[startup] db_setup.py: ensure_multi_api_key_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_multi_api_key_columns", file=sys.stderr, flush=True)
     ensure_multi_api_key_columns()
-    print("[startup] db_setup.py: ensure_step_count_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_step_count_columns", file=sys.stderr, flush=True)
     ensure_step_count_columns()
-    print("[startup] db_setup.py: ensure_failure_diagnostics_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_failure_diagnostics_columns", file=sys.stderr, flush=True)
     ensure_failure_diagnostics_columns()
-    print("[startup] db_setup.py: ensure_stopped_state", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_stopped_state", file=sys.stderr, flush=True)
     ensure_stopped_state()
-    print("[startup] db_setup.py: ensure_last_progress_at_column", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_last_progress_at_column", file=sys.stderr, flush=True)
     ensure_last_progress_at_column()
-print("[startup] db_setup.py: schema migrations complete", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: schema migrations complete", file=sys.stderr, flush=True)
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (

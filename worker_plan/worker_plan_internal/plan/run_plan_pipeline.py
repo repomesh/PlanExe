@@ -17,6 +17,7 @@ import luigi
 from pathlib import Path
 import sys
 from llama_index.core.llms.llm import LLM
+from worker_plan_internal.diagnostics.screen_planning_prompt import ScreenPlanningPrompt
 from worker_plan_internal.diagnostics.redline_gate import RedlineGate
 from worker_plan_internal.diagnostics.premise_attack import PremiseAttack
 from worker_plan_internal.diagnostics.premortem import Premortem
@@ -234,6 +235,32 @@ class SetupTask(PlanTask):
         # The Gradio/Flask app that starts the luigi pipeline, must first create the `INITIAL_PLAN` file inside the `run_id_dir`.
         # This code will ONLY run if the Gradio/Flask app *failed* to create the file.
         raise AssertionError(f"This code is not supposed to be run. Before starting the pipeline the '{FilenameEnum.INITIAL_PLAN.value}' file must be present in the `run_id_dir`: {self.run_id_dir!r}")
+
+
+class ScreenPlanningPromptTask(PlanTask):
+    """
+    Screen the user's prompt for quality before plan generation.
+    Classifies the prompt as USABLE or UNUSABLE.
+    """
+    def requires(self):
+        return self.clone(SetupTask)
+
+    def output(self):
+        return {
+            'raw': self.local_target(FilenameEnum.SCREEN_PLANNING_PROMPT_RAW),
+            'markdown': self.local_target(FilenameEnum.SCREEN_PLANNING_PROMPT_MARKDOWN)
+        }
+
+    def run_with_llm(self, llm: LLM) -> None:
+        with self.input().open("r") as f:
+            plan_prompt = f.read()
+
+        result = ScreenPlanningPrompt.execute(llm, plan_prompt)
+
+        output_raw_path = self.output()['raw'].path
+        result.save_raw(output_raw_path)
+        output_markdown_path = self.output()['markdown'].path
+        result.save_markdown(output_markdown_path)
 
 
 class RedlineGateTask(PlanTask):
@@ -3716,6 +3743,7 @@ class ReportTask(PlanTask):
     def requires(self):
         return {
             'setup': self.clone(SetupTask),
+            'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
@@ -3766,9 +3794,11 @@ class ReportTask(PlanTask):
         rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
         rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
         rg.append_initial_prompt_vetted(
-            document_title='Initial Prompt Vetted', 
-            initial_prompt_file_path=self.input()['setup'].path, 
-            redline_gate_markdown_file_path=self.input()['redline_gate']['markdown'].path, 
+            document_title='Initial Prompt Vetted',
+            initial_prompt_file_path=self.input()['setup'].path,
+            screen_planning_prompt_raw_file_path=self.input()['screen_planning_prompt']['raw'].path,
+            screen_planning_prompt_markdown_file_path=self.input()['screen_planning_prompt']['markdown'].path,
+            redline_gate_markdown_file_path=self.input()['redline_gate']['markdown'].path,
             premise_attack_markdown_file_path=self.input()['premise_attack']['markdown'].path
         )
         rg.save_report(self.output().path, title=title, execute_plan_section_hidden=REPORT_EXECUTE_PLAN_SECTION_HIDDEN)
@@ -3778,6 +3808,7 @@ class FullPlanPipeline(PlanTask):
         return {
             'start_time': self.clone(StartTimeTask),
             'setup': self.clone(SetupTask),
+            'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),

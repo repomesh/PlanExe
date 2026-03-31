@@ -170,8 +170,10 @@ class ReportGenerator:
         else:
             logging.warning(f"Document: '{document_title}'. Could not find HTML_BODY_SCRIPT_START and HTML_BODY_SCRIPT_END in {file_path}")
 
-    def append_initial_prompt_vetted(self, document_title: str, initial_prompt_file_path: Path, redline_gate_markdown_file_path: Path, premise_attack_markdown_file_path: Path, css_classes: list[str] = []):
-        """Append the section 'Inital Prompt Vetted' to the report."""
+    def append_initial_prompt_vetted(self, document_title: str, initial_prompt_file_path: Path, screen_planning_prompt_raw_file_path: Path, screen_planning_prompt_markdown_file_path: Path, redline_gate_markdown_file_path: Path, premise_attack_markdown_file_path: Path, css_classes: list[str] = []):
+        """Append the section 'Initial Prompt Vetted' to the report."""
+        import json as _json
+
         # The user-provided prompt can contain unsafe HTML symbols. Escape them to prevent XSS.
         with open(initial_prompt_file_path, 'r', encoding='utf-8') as f:
             initial_prompt_raw = f.read()
@@ -179,6 +181,37 @@ class ReportGenerator:
             logging.warning(f"Document: '{document_title}'. Could not read file: {initial_prompt_file_path}")
             return
         initial_prompt_html = escape(initial_prompt_raw).replace('\n', '<br>')
+
+        # Read the screening result to determine if a warning banner is needed.
+        screening_banner_html = ""
+        try:
+            with open(screen_planning_prompt_raw_file_path, 'r', encoding='utf-8') as f:
+                screening_raw = _json.load(f)
+            if screening_raw.get("verdict") == "UNUSABLE":
+                reason = screening_raw.get("reason", "unknown")
+                rationale = escape(screening_raw.get("rationale", ""))
+                reason_display = reason.replace("_", " ").title()
+                screening_banner_html = f"""
+        <div style="background-color: #fee2e2; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
+            <strong style="color: #dc2626; font-size: 1.1em;">&#9888; Prompt Quality Warning</strong>
+            <p style="margin: 8px 0 0 0; color: #991b1b;">
+                The initial prompt was classified as <strong>UNUSABLE</strong> ({reason_display}).
+                This plan is likely to contain hallucinated or nonsensical content. Garbage in, garbage out.
+            </p>
+            <p style="margin: 4px 0 0 0; color: #991b1b; font-style: italic;">{rationale}</p>
+        </div>
+"""
+        except Exception as e:
+            logging.warning(f"Document: '{document_title}'. Could not read screening result: {e}")
+
+        # The screening markdown contains markdown tables.
+        screening_html = ""
+        try:
+            with open(screen_planning_prompt_markdown_file_path, 'r', encoding='utf-8') as f:
+                screening_markdown = f.read()
+            screening_html = markdown.markdown(screening_markdown, extensions=['tables'])
+        except Exception as e:
+            logging.warning(f"Document: '{document_title}'. Could not read file: {screen_planning_prompt_markdown_file_path}: {e}")
 
         # The Redline Gate markdown contains markdown tables.
         with open(redline_gate_markdown_file_path, 'r', encoding='utf-8') as f:
@@ -197,6 +230,9 @@ class ReportGenerator:
         premise_attack_html = markdown.markdown(premise_attack_markdown, extensions=['tables'])
 
         html = f"""
+        {screening_banner_html}
+        <h2>Prompt Screening</h2>
+        {screening_html}
         <h2>Initial Prompt</h2>
         <p>{initial_prompt_html}</p>
         <h2>Redline Gate</h2>

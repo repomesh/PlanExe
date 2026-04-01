@@ -124,9 +124,7 @@ class Lever(BaseModel):
     )
     review_lever: str = Field(
         description=(
-            "A short critical review: identify the primary trade-off "
-            "this lever introduces, then state the specific gap the "
-            "three options leave unaddressed. "
+            "Critical review of this lever (one sentence, 20–40 words). "
             "See system prompt section 4 for examples. "
             "Do not use square brackets or placeholder text."
         )
@@ -244,7 +242,7 @@ You are an expert strategic analyst. Generate solution space parameters followin
 
 4. **Validation Protocols**
    - For `review_lever`:
-     A short critical review — identify the primary trade-off this lever introduces, then state the specific gap the three options leave unaddressed.
+     A one-sentence critical review (20–40 words).
      Examples:
      - "Switching from seasonal contract labor to year-round employees stabilizes harvest quality, but the idle-wage burden during the 5-month off-season adds a fixed cost that erases the per-unit savings unless utilization reaches year-round levels."
      - "Each additional clinical site requires its own IRB approval, site-initiation visit, and staff credentialing — a sequential overhead that compounds rather than parallelizes, so doubling site count does not halve enrollment time."

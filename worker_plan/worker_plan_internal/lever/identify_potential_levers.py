@@ -84,12 +84,43 @@ Known problems to guard against
   structure. Keep review_lever examples concise and enforce a length
   cap in the system prompt to prevent output overflow.
 - Field-description template lock. A Pydantic field description
-  containing a structural phrase (e.g. "name the core tension") is
-  read as a literal instruction — models start every output with
-  "The tension is…". Describe the required content ("identify the
-  primary trade-off and the specific gap") not the expected sentence
-  structure. The system-prompt examples alone cannot override a
-  structural cue embedded in the field description.
+  containing a structural phrase (e.g. "name the core tension", "the
+  gap the three options leave unaddressed") is read as a literal
+  instruction — models start every output with that exact phrase.
+  Replacing one structural phrase with another just migrates the lock
+  (confirmed: "the proposed options collectively do not resolve" caused
+  qwen3-30b to lock at 7/20 and worsened gpt-oss-20b). The fix is to
+  strip the field description to content-type and word count only
+  (e.g. "Critical review of this lever (one sentence, 20–40 words)")
+  and let the system-prompt examples teach the style. PR #484 proved
+  this: haiku template lock 24.7% → 0% with zero regressions.
+- Negative prohibitions activate the banned pattern. "Do NOT include
+  'Controls ... vs.'" causes small models (llama3.1) to copy the
+  banned phrase. "Never invent percentages" and "NO fabricated
+  statistics" both increase fabricated numbers by drawing model
+  attention to numbers. Use positive framing instead: "Save critical
+  assessments for the review_lever field" or "only cite numbers the
+  project context provides directly." Confirmed across PRs #458,
+  #460, #475.
+- Consequence parroting in later calls. When the adaptive loop makes
+  calls 2+, the subsequent-call prompt focuses on name novelty with no
+  review-quality guidance. llama3.1 copies the consequences field
+  verbatim into review_lever with only modal verb substitution
+  ("could" → "can"). An anti-parrot sentence in the subsequent-call
+  prompt eliminates this for call-2+ but does not reach call-1.
+- Field descriptions vs system prompt: keep both consistent. If the
+  field description says "2–3 sentences" but the system prompt says
+  "2–4 sentences", haiku follows the system prompt (the looser
+  target). Models that use structured-output JSON schemas (haiku,
+  gpt-4o-mini) weight the field description; text-completion models
+  (llama3.1, gpt-oss-20b) weight the system prompt. Both must agree.
+- Stripping field descriptions too far breaks weak models. Removing
+  structural anchors like "one sentence" and "See system prompt
+  section 4 for examples" from review_lever causes llama3.1 to
+  produce exact-copy parrots (review ≡ consequence). Weak models
+  need minimal structural cues in the field description; strong
+  models can work from system-prompt examples alone. The sweet spot:
+  content-type + word count + section pointer, no sentence templates.
 """
 
 class Lever(BaseModel):

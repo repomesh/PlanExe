@@ -3,6 +3,7 @@ from unittest.mock import patch
 import asyncio
 
 import mcp_cloud.http_server as http_server
+import mcp_cloud.server_boot as server_boot
 
 
 class _RequestStub:
@@ -44,7 +45,7 @@ class TestCorsHeaderAppending(unittest.TestCase):
     def test_append_cors_headers_with_wildcard(self):
         request = _RequestStub(headers={"origin": "http://localhost:6274"})
         response = _ResponseStub()
-        with patch.object(http_server, "CORS_ORIGINS", ["*"]):
+        with patch.object(server_boot, "CORS_ORIGINS", ["*"]):
             updated = http_server._append_cors_headers(request, response)
         self.assertEqual(updated.headers.get("Access-Control-Allow-Origin"), "*")
 
@@ -57,7 +58,7 @@ class TestCorsHeaderAppending(unittest.TestCase):
             }
         )
         response = _ResponseStub()
-        with patch.object(http_server, "CORS_ORIGINS", [origin]):
+        with patch.object(server_boot, "CORS_ORIGINS", [origin]):
             updated = http_server._append_cors_headers(request, response)
         self.assertEqual(updated.headers.get("Access-Control-Allow-Origin"), origin)
         self.assertEqual(
@@ -69,7 +70,7 @@ class TestCorsHeaderAppending(unittest.TestCase):
     def test_append_cors_headers_not_added_for_disallowed_origin(self):
         request = _RequestStub(headers={"origin": "https://unknown.example.com"})
         response = _ResponseStub()
-        with patch.object(http_server, "CORS_ORIGINS", ["https://allowed.example.com"]):
+        with patch.object(server_boot, "CORS_ORIGINS", ["https://allowed.example.com"]):
             updated = http_server._append_cors_headers(request, response)
         self.assertNotIn("Access-Control-Allow-Origin", updated.headers)
 

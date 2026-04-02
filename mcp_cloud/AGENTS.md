@@ -9,7 +9,11 @@ for AI agents and developer tools to interact with PlanExe. Communicates with
 | File | Purpose | Key exports |
 |------|---------|-------------|
 | `app.py` | Re-export facade for backward compatibility | 60+ symbols from all sub-modules |
-| `http_server.py` | FastAPI HTTP wrapper: routes, middleware stack, FastMCP mount, SSE endpoint | `app` (FastAPI instance) |
+| `http_server.py` | Re-export shim for backward compatibility (delegates to server_boot, middleware, tool_http_bridge, route_registration) | All symbols from the four modules below |
+| `server_boot.py` | Config constants, env parsing, FastMCP/FastAPI creation, lifespan, entry point | `app` (FastAPI), `fastmcp_server`, `SERVER_VERSION`, all env-var constants |
+| `middleware.py` | CORS, auth, rate limiting, body size, `enforce_api_key` HTTP middleware, `_NormalizeMcpPath` ASGI middleware | `enforce_api_key`, `apply_middleware`, `_get_authenticated_user_api_key` |
+| `tool_http_bridge.py` | Pydantic request/response models, MCP result normalization, FastMCP tool wrapper functions | `MCPToolCallRequest`, `MCPToolCallResponse`, tool wrapper functions |
+| `route_registration.py` | FastMCP tool registration, MCP prompts, all FastAPI route handlers | `register_routes`, `register_tools_and_prompts` |
 | `handlers.py` | MCP tool handlers dispatched by `TOOL_HANDLERS` dict | `handle_plan_create`, `handle_plan_status`, etc. |
 | `db_setup.py` | Flask + SQLAlchemy init, constants, request DTOs | `app` (Flask), `db`, `mcp_cloud_server`, `PLANEXE_SERVER_INSTRUCTIONS` |
 | `db_queries.py` | Sync DB queries (run via `asyncio.to_thread()`) | `_create_plan_sync`, `_get_plan_status_snapshot_sync`, `get_plan_state_mapping` |
@@ -41,12 +45,25 @@ app.py (facade — re-exports everything)
 ├── schemas.py (auto-generated from tool_models.py)
 └── handlers.py (tool handlers; imports all above)
 
-http_server.py (top-level entry point)
-├── app.py (re-export facade)
-├── auth.py (validate_api_key_secret)
-├── download_tokens.py (validate_download_token_secret)
-├── sse.py (SSE implementation)
-└── http_utils.py (content stripping)
+http_server.py (re-export shim)
+├── server_boot.py (config, app + server creation, lifespan)
+│   ├── mcp_cloud.app (facade)
+│   ├── mcp_cloud.auth (secret validation)
+│   ├── mcp_cloud.download_tokens (secret validation)
+│   ├── route_registration.py (register_routes, register_tools_and_prompts)
+│   └── middleware.py (apply_middleware, _sweep_rate_buckets)
+├── middleware.py (CORS, auth, rate limiting)
+│   ├── server_boot.py (constants only, via import mcp_cloud.server_boot as _boot)
+│   ├── mcp_cloud.app (set/clear_download_base_url, validate_download_token, _resolve_user_from_api_key)
+│   └── mcp_cloud.http_utils (strip_redundant_content)
+├── tool_http_bridge.py (models, wrappers, normalization)
+│   ├── mcp_cloud.app (handler functions)
+│   └── middleware.py (_get_authenticated_user_api_key)
+└── route_registration.py (routes, tool registration, prompts)
+    ├── server_boot.py (constants, deferred import inside register_routes)
+    ├── mcp_cloud.app (handlers, constants)
+    ├── tool_http_bridge.py (models, wrappers)
+    └── middleware.py (_get_authenticated_user_api_key)
 ```
 
 ## Guidelines
@@ -97,7 +114,7 @@ work from both sync and async callers.
 ## Context variables
 
 Two `contextvars.ContextVar` instances are set per-request by the middleware in
-`http_server.py` and cleared in the `finally` block:
+`middleware.py` and cleared in the `finally` block:
 
 - `_download_base_url_ctx` (in `download_tokens.py`): Base URL for building download
   and SSE URLs. Set from request origin for `/mcp` and `/sse/` paths. Read by

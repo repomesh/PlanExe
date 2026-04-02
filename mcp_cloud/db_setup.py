@@ -21,7 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import inspect, text
 from worker_plan_api.model_profile import ModelProfileEnum
 
-_startup_log("db_setup.py: imports done", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: imports done")
 
 from mcp_cloud.dotenv_utils import load_planexe_dotenv
 
@@ -47,10 +47,10 @@ from database_api.model_credit_history import CreditHistory  # noqa: F401
 from database_api.model_token_metrics import TokenMetrics  # noqa: F401
 from database_api.model_feedback import FeedbackItem  # noqa: F401
 
-_startup_log("db_setup.py: creating Flask app", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: creating Flask app")
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
-_startup_log("db_setup.py: Flask app created, config loaded", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: Flask app created, config loaded")
 
 def build_postgres_uri_from_env(env: dict[str, str]) -> tuple[str, dict[str, str]]:
     """Construct a SQLAlchemy URI for Postgres using environment variables."""
@@ -69,7 +69,7 @@ if sqlalchemy_database_uri is None:
     _startup_log(f"db_setup.py: SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}")
     logger.info(f"SQLALCHEMY_DATABASE_URI not set. Using Postgres defaults: {db_settings}")
 else:
-    _startup_log("db_setup.py: Using SQLALCHEMY_DATABASE_URI from environment", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: Using SQLALCHEMY_DATABASE_URI from environment")
     logger.info("Using SQLALCHEMY_DATABASE_URI from environment.")
 
 app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
@@ -78,9 +78,9 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'connect_args': {'connect_timeout': 10},
 }
-_startup_log("db_setup.py: calling db.init_app(app)", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: calling db.init_app(app)")
 db.init_app(app)
-_startup_log("db_setup.py: db.init_app(app) done", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: db.init_app(app) done")
 
 def ensure_planitem_stop_columns() -> None:
     statements = (
@@ -182,24 +182,24 @@ def ensure_last_progress_at_column() -> None:
         except Exception as exc:
             logger.warning("Schema update failed for %s: %s", stmt, exc, exc_info=True)
 
-_startup_log("db_setup.py: running schema migrations...", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: running schema migrations...")
 with app.app_context():
-    _startup_log("db_setup.py: db.create_all()", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: db.create_all()")
     db.create_all()
-    _startup_log("db_setup.py: db.create_all() done", file=sys.stderr, flush=True)
-    _startup_log("db_setup.py: ensure_planitem_stop_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: db.create_all() done")
+    _startup_log("db_setup.py: ensure_planitem_stop_columns")
     ensure_planitem_stop_columns()
-    _startup_log("db_setup.py: ensure_multi_api_key_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_multi_api_key_columns")
     ensure_multi_api_key_columns()
-    _startup_log("db_setup.py: ensure_step_count_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_step_count_columns")
     ensure_step_count_columns()
-    _startup_log("db_setup.py: ensure_failure_diagnostics_columns", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_failure_diagnostics_columns")
     ensure_failure_diagnostics_columns()
-    _startup_log("db_setup.py: ensure_stopped_state", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_stopped_state")
     ensure_stopped_state()
-    _startup_log("db_setup.py: ensure_last_progress_at_column", file=sys.stderr, flush=True)
+    _startup_log("db_setup.py: ensure_last_progress_at_column")
     ensure_last_progress_at_column()
-_startup_log("db_setup.py: schema migrations complete", file=sys.stderr, flush=True)
+_startup_log("db_setup.py: schema migrations complete")
 
 # Shown in MCP initialize (e.g. Inspector) so clients know what PlanExe does.
 PLANEXE_SERVER_INSTRUCTIONS = (

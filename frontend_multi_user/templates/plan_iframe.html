@@ -555,8 +555,8 @@
                         <option value="frontier" {% if selected_model_profile == 'frontier' %}selected{% endif %}>frontier</option>
                         <option value="custom" {% if selected_model_profile == 'custom' %}selected{% endif %}>custom</option>
                     </select>
-                    <button type="submit" formaction="{{ url_for('plan_retry') }}" class="btn-plan-meta" title="Discard all progress and start over from scratch">Retry</button>
-                    <button type="submit" formaction="{{ url_for('plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}disabled{% endif %}>Resume</button>
+                    <button type="submit" formaction="{{ url_for('plan_routes.plan_retry') }}" class="btn-plan-meta" title="Discard all progress and start over from scratch">Retry</button>
+                    <button type="submit" formaction="{{ url_for('plan_routes.plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}disabled{% endif %}>Resume</button>
                     {% if resume_error == "version_mismatch" %}
                     <span class="plan-resume-error" id="resume-error-banner">Resume unavailable — plan was created with a different PlanExe version. Use Retry.</span>
                     {% endif %}
@@ -565,17 +565,17 @@
             <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" title="Discard all progress and start over from scratch" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Retry</span>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="resume-disabled" title="Continue from where it left off, skipping completed steps" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Resume</span>
 
-            <form method="POST" action="{{ url_for('plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and task.state.name in ('pending', 'processing')) %}style="display:none"{% endif %}>
+            <form method="POST" action="{{ url_for('plan_routes.plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and task.state.name in ('pending', 'processing')) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="id" value="{{ task.id }}">
                 <button type="submit" class="btn-plan-meta">Stop</button>
             </form>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and task.state.name in ('pending', 'processing') %}style="display:none"{% endif %}>Stop</span>
 
-            <a class="btn-plan-meta" id="report-link" href="{{ url_for('plan_download_report') }}?id={{ task.id }}" {% if not task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+            <a class="btn-plan-meta" id="report-link" href="{{ url_for('downloads.plan_download_report') }}?id={{ task.id }}" {% if not task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</span>
 
-            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('plan_download_zip') }}?id={{ task.id }}" {% if not task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('downloads.plan_download_zip') }}?id={{ task.id }}" {% if not task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
             <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
         </div>
     </div>
@@ -724,7 +724,7 @@
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
-        src="{% if task.has_generated_report_html %}{{ url_for('viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('run_status') }}?id={{ run_id }}{% endif %}"
+        src="{% if task.has_generated_report_html %}{{ url_for('plan_routes.viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('plan_routes.run_status') }}?id={{ run_id }}{% endif %}"
         title="Plan report"
         loading="eager"
         referrerpolicy="no-referrer"
@@ -735,8 +735,8 @@
     (function () {
         const planId = "{{ task.id }}";
         const promptText = {{ (task.prompt or '') | tojson }};
-        const metaUrl = "{{ url_for('plan_meta') }}?id=" + encodeURIComponent(planId);
-        const telemetryUrl = "{{ url_for('plan_telemetry') }}?id=" + encodeURIComponent(planId);
+        const metaUrl = "{{ url_for('plan_routes.plan_meta') }}?id=" + encodeURIComponent(planId);
+        const telemetryUrl = "{{ url_for('plan_routes.plan_telemetry') }}?id=" + encodeURIComponent(planId);
         const stateEl = document.getElementById("plan-state");
         const stateTextEl = document.getElementById("plan-state-text");
         const copyTelemetryButton = document.getElementById("copy-telemetry-btn");
@@ -794,7 +794,7 @@
             if (!persist) {
                 return;
             }
-            fetch("{{ url_for('plan_view_mode') }}", {
+            fetch("{{ url_for('plan_routes.plan_view_mode') }}", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

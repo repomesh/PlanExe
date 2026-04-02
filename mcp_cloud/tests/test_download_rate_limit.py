@@ -3,6 +3,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 import mcp_cloud.http_server as http_server
+import mcp_cloud.server_boot as server_boot
 
 
 def _fake_request(path: str, client_host: str = "10.0.0.1") -> MagicMock:
@@ -47,13 +48,13 @@ class TestDownloadRateLimit(unittest.TestCase):
 
     def test_disabled_when_limit_is_zero(self):
         request = _fake_request("/download/abc/030-report.html")
-        original = http_server.DOWNLOAD_RATE_LIMIT_REQUESTS
+        original = server_boot.DOWNLOAD_RATE_LIMIT_REQUESTS
         try:
-            http_server.DOWNLOAD_RATE_LIMIT_REQUESTS = 0
+            server_boot.DOWNLOAD_RATE_LIMIT_REQUESTS = 0
             result = asyncio.run(http_server._enforce_download_rate_limit(request))
             self.assertIsNone(result)
         finally:
-            http_server.DOWNLOAD_RATE_LIMIT_REQUESTS = original
+            server_boot.DOWNLOAD_RATE_LIMIT_REQUESTS = original
 
 
 if __name__ == "__main__":

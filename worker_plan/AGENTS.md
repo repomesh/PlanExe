@@ -50,6 +50,29 @@ consumers.
   `rate_limit`, etc.) stored in `usage_metrics.jsonl`. Unknown errors preserve
   a truncated `error_detail` field.
 
+## Pipeline Stages (`worker_plan_internal/plan/stages/`)
+
+Each Luigi pipeline task lives in its own file under `stages/`. This enables:
+- Multiple agents working on different stages without merge conflicts
+- `self_improve/` targeting individual step files
+- Easy DAG insertion (create new file, update downstream `requires()`)
+
+### Convention for new stages
+
+1. Create `stages/<stage_name>.py` with one task class
+2. Import `PlanTask` from `worker_plan_internal.plan.run_plan_pipeline`
+3. Import upstream task dependencies from sibling stage files
+4. Declare dependencies via `requires()` returning upstream task(s)
+5. Add the new task to `stages/full_plan_pipeline.py`'s `requires()` dict
+
+### Framework location
+
+`run_plan_pipeline.py` contains only shared framework:
+- `PlanTask` (base class for all stages)
+- `ExecutePipeline`, `HandleTaskCompletionParameters`, `PipelineProgress`
+- `_task_class_to_step_label`, `configure_logging`
+- `__main__` entry point
+
 ## Testing
 - Prefer unit tests over manual server checks. Run `python test.py` from repo
   root; worker tests live under `worker_plan/worker_plan_internal/**/tests` and

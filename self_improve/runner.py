@@ -576,7 +576,7 @@ def _run_plan_task(
 
         if (step == "identify_potential_levers"
                 and pr.calls_succeeded is not None
-                and pr.calls_succeeded < 3):
+                and pr.calls_succeeded < 2):
             _emit_event(events_path, "partial_recovery",
                         plan_name=plan_name,
                         calls_succeeded=pr.calls_succeeded,

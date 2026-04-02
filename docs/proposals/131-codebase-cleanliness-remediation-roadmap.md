@@ -68,7 +68,7 @@ Large modules make the code harder to reason about, harder to test in isolation,
 
 ### Fix steps
 
-1. ~~Split `frontend_multi_user/src/app.py` by concern into `auth`, `billing`, `admin`, `downloads`, `account`, and `plan_routes`.~~ **Done** (PR #476): Split 3,857-line monolith into 6 Flask Blueprint modules + utils (app.py reduced to 1,441 lines).
+1. ~~Split `frontend_multi_user/src/app.py` by concern into `auth`, `billing`, `admin`, `downloads`, `account`, and `plan_routes`.~~ **Done** (PR #476): Split 3,857-line monolith into 6 Flask Blueprint modules + utils (app.py reduced to 1,441 lines). Follow-up fix: updated all `url_for()` calls in templates to use blueprint-prefixed endpoint names (`plan_routes.*`, `auth.*`, `downloads.*`).
 2. Split `mcp_cloud/http_server.py` into `middleware`, `route_registration`, `tool_http_bridge`, and `server_boot`.
 3. Convert `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py` from a giant task registry file into a thin pipeline assembly module plus task-specific modules grouped by stage.
 4. Extract reusable orchestration helpers from `worker_plan_database/app.py` into focused worker, billing, and queue modules.
@@ -181,7 +181,7 @@ The multi-user frontend handles auth, admin flows, billing, downloads, and user 
 
 ### Phase 2: Split the Worst Offenders
 
-1. ~~Refactor `frontend_multi_user/src/app.py` first because it mixes the most distinct business concerns.~~ **Done** (PR #476).
+1. ~~Refactor `frontend_multi_user/src/app.py` first because it mixes the most distinct business concerns.~~ **Done** (PR #476). Template `url_for()` references fixed to match new blueprint endpoints.
 2. Refactor `mcp_cloud/http_server.py` second because it sits on a public protocol boundary.
 3. Refactor `worker_plan_database/app.py` and `run_plan_pipeline.py` in smaller slices to avoid destabilizing the execution engine.
 

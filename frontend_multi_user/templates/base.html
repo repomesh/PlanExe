@@ -245,7 +245,7 @@
                     <span class="site-brand-label">Home</span>
                 </a>
                 {% if current_user_name %}
-                    <a href="{{ url_for('plan') }}" class="{% if request.endpoint == 'plan' and not request.args.get('id') %}nav-active{% endif %}">Plans</a>
+                    <a href="{{ url_for('plan_routes.plan') }}" class="{% if request.endpoint == 'plan_routes.plan' and not request.args.get('id') %}nav-active{% endif %}">Plans</a>
                     <a href="{{ url_for('models') }}" class="{% if request.endpoint == 'models' %}nav-active{% endif %}">Models</a>
                 {% endif %}
                 <div class="site-nav-spacer"></div>
@@ -256,7 +256,7 @@
                     {% endif %}
                 {% else %}
                     <a href="https://planexe.org/" target="_blank">About</a>
-                    <a href="{{ url_for('login') }}" class="btn-nav">Sign In</a>
+                    <a href="{{ url_for('auth.login') }}" class="btn-nav">Sign In</a>
                 {% endif %}
             </nav>
         </div>

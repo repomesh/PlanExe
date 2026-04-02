@@ -148,7 +148,7 @@
         <tbody>
             {% for row in plan_rows %}
             {% set status = (row.status | lower) %}
-            <tr class="plan-row" data-href="{{ url_for('plan') }}?id={{ row.id }}" title="Inspect plan {{ row.id }}">
+            <tr class="plan-row" data-href="{{ url_for('plan_routes.plan') }}?id={{ row.id }}" title="Inspect plan {{ row.id }}">
                 <td class="plan-cell-status"><span class="status-chip status-{{ status }}">{{ status }}</span></td>
                 <td class="plan-cell-id"><span class="plan-no-telephone">{{ row.id }}</span></td>
                 <td class="plan-cell-created"><span class="plan-no-telephone">{{ row.created_compact }}</span></td>

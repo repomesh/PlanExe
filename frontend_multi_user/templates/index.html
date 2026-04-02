@@ -639,7 +639,7 @@
             {% endfor %}
         </div>
         {% endif %}
-        <form id="new-plan-form" method="POST" action="{{ url_for('create_plan') }}">
+        <form id="new-plan-form" method="POST" action="{{ url_for('plan_routes.create_plan') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
             <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
@@ -694,7 +694,7 @@
 <h2 class="section-title">Recent Plans</h2>
 <div class="tasks-list">
     {% for task in recent_tasks %}
-    <a class="task-row-link" href="{{ url_for('plan') }}?id={{ task.id }}">
+    <a class="task-row-link" href="{{ url_for('plan_routes.plan') }}?id={{ task.id }}">
     <div class="task-row">
         <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
         <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
@@ -727,7 +727,7 @@
     <h1>Welcome to PlanExe</h1>
     <p>Generate detailed project plans from a simple description. Save time, save money, avoid surprises.</p>
     <div class="hero-actions">
-        <a href="{{ url_for('login') }}" class="btn-hero">Sign In to Get Started</a>
+        <a href="{{ url_for('auth.login') }}" class="btn-hero">Sign In to Get Started</a>
         <a href="https://planexe.org/" target="_blank" class="btn-hero-outline">Learn More</a>
     </div>
 </section>

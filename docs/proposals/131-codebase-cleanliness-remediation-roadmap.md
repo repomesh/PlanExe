@@ -70,7 +70,7 @@ Large modules make the code harder to reason about, harder to test in isolation,
 
 1. ~~Split `frontend_multi_user/src/app.py` by concern into `auth`, `billing`, `admin`, `downloads`, `account`, and `plan_routes`.~~ **Done** (PR #476): Split 3,857-line monolith into 6 Flask Blueprint modules + utils (app.py reduced to 1,441 lines). Follow-up fix: updated all `url_for()` calls in templates to use blueprint-prefixed endpoint names (`plan_routes.*`, `auth.*`, `downloads.*`).
 2. ~~Split `mcp_cloud/http_server.py` into `middleware`, `route_registration`, `tool_http_bridge`, and `server_boot`.~~ **Done**: Split 1,439-line monolith into 4 focused modules + re-export shim.
-3. Convert `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py` from a giant task registry file into a thin pipeline assembly module plus task-specific modules grouped by stage.
+3. ~~Convert `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py` from a giant task registry file into a thin pipeline assembly module plus task-specific modules grouped by stage.~~ **Done**: Split 4,257-line monolith into ~66 individual stage files under `stages/` + framework-only core module (563 lines).
 4. Extract reusable orchestration helpers from `worker_plan_database/app.py` into focused worker, billing, and queue modules.
 5. Set an internal size target for service modules. As a starting rule, new files should stay below roughly 500 lines unless there is a strong reason not to.
 

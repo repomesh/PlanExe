@@ -461,7 +461,7 @@
 <div class="acct-header">
     <div class="acct-header-top">
         <h1>Account</h1>
-        <a href="{{ url_for('logout') }}" class="btn-acct btn-acct-secondary">Logout</a>
+        <a href="{{ url_for('auth.logout') }}" class="btn-acct btn-acct-secondary">Logout</a>
     </div>
     <p>Manage your {% if admin_mode %}API access.{% else %}profile, API access, and billing.{% endif %}</p>
 </div>

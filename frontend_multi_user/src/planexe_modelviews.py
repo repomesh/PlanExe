@@ -25,7 +25,7 @@ class AdminOnlyModelView(ModelView):
 
     def inaccessible_callback(self, name, **kwargs):
         if not current_user.is_authenticated:
-            return redirect(url_for("login"))
+            return redirect(url_for("auth.login"))
         abort(403)
 
     @action("download_json", "Download as JSON", "Download selected rows as JSON?")
@@ -146,10 +146,10 @@ class PlanItemView(AdminOnlyModelView):
             f'<a href="/viewplan?run_id={m.id}" target="_blank">View</a>'
         ) if m.has_generated_report_html else '—',
         'generated_report_html': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_report", task_id=str(m.id))}">Download</a>'
+            f'<a href="{url_for("downloads.download_task_report", task_id=str(m.id))}">Download</a>'
         ) if m.has_generated_report_html else '—',
         'run_zip_snapshot': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_run_zip", task_id=str(m.id))}">Download</a>'
+            f'<a href="{url_for("downloads.download_task_run_zip", task_id=str(m.id))}">Download</a>'
         ) if m.has_run_zip_snapshot else '—',
         'run_activity_overview_json': lambda v, c, m, p: (
             json.dumps(m.run_activity_overview_json, ensure_ascii=False)[:120] + '...'
@@ -157,7 +157,7 @@ class PlanItemView(AdminOnlyModelView):
             else (json.dumps(m.run_activity_overview_json, ensure_ascii=False) if m.run_activity_overview_json else '—')
         ),
         'run_track_activity': lambda v, c, m, p: Markup(
-            f'<a href="{url_for("download_task_track_activity", task_id=str(m.id))}">Download</a>'
+            f'<a href="{url_for("downloads.download_task_track_activity", task_id=str(m.id))}">Download</a>'
         ) if m.has_run_track_activity_jsonl else '—',
     }
     form_excluded_columns = [
@@ -188,7 +188,7 @@ class PlanItemView(AdminOnlyModelView):
 
         if hasattr(form, "generated_report_html_upload"):
             if model.has_generated_report_html:
-                href = url_for("download_task_report", task_id=str(model.id))
+                href = url_for("downloads.download_task_report", task_id=str(model.id))
                 form.generated_report_html_upload.description = Markup(
                     f'Current file: <a href="{href}" target="_blank">download report.html</a>'
                 )
@@ -197,7 +197,7 @@ class PlanItemView(AdminOnlyModelView):
 
         if hasattr(form, "run_zip_snapshot_upload"):
             if model.has_run_zip_snapshot:
-                href = url_for("download_task_run_zip", task_id=str(model.id))
+                href = url_for("downloads.download_task_run_zip", task_id=str(model.id))
                 form.run_zip_snapshot_upload.description = Markup(
                     f'Current file: <a href="{href}" target="_blank">download run.zip</a>'
                 )
@@ -206,7 +206,7 @@ class PlanItemView(AdminOnlyModelView):
 
         if hasattr(form, "run_track_activity_jsonl_upload"):
             if model.has_run_track_activity_jsonl:
-                href = url_for("download_task_track_activity", task_id=str(model.id))
+                href = url_for("downloads.download_task_track_activity", task_id=str(model.id))
                 form.run_track_activity_jsonl_upload.description = Markup(
                     f'Current file: <a href="{href}" target="_blank">download track_activity.jsonl</a>'
                 )

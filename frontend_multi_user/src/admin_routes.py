@@ -373,8 +373,9 @@ def admin_database_backup():
 @admin_routes_bp.route("/ping/stream")
 @login_required
 def ping_stream():
+    worker_plan_url = current_app.config["WORKER_PLAN_URL"]
+
     def generate():
-        worker_plan_url = current_app.config["WORKER_PLAN_URL"]
         url = f"{worker_plan_url}/llm-ping"
         logger.info("Proxying LLM ping stream from %s", url)
         try:

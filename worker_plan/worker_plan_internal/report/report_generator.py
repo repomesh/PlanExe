@@ -232,7 +232,6 @@ class ReportGenerator:
         premise_attack_html = markdown.markdown(premise_attack_markdown, extensions=['tables'])
 
         html = f"""
-        {screening_banner_html}
         <h2>Initial Prompt</h2>
         <p>{initial_prompt_html}</p>
         <h2>Prompt Screening</h2>

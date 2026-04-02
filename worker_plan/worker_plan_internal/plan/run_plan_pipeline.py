@@ -7,7 +7,7 @@ If it's an already finished run, then remove the "999-pipeline_complete.txt" fil
 PROMPT> RUN_ID_DIR=/absolute/path/to/PlanExe_20250216_150332 python -m worker_plan_internal.plan.run_plan_pipeline
 """
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import datetime
 import os
 import logging
 import json

@@ -233,10 +233,10 @@ class ReportGenerator:
 
         html = f"""
         {screening_banner_html}
-        <h2>Prompt Screening</h2>
-        {screening_html}
         <h2>Initial Prompt</h2>
         <p>{initial_prompt_html}</p>
+        <h2>Prompt Screening</h2>
+        {screening_html}
         <h2>Redline Gate</h2>
         {redline_gate_html}
         <h2>Premise Attack</h2>

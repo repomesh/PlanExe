@@ -8,6 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_PREFER_BINARY=1 \
     PYTHONPATH=/app:/app/worker_plan_database:/app/database_api
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid 1000 -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # Bring in the shared worker code, DB models, and this worker implementation.
@@ -23,6 +25,8 @@ RUN set -eux; \
     pip install --no-cache-dir --prefer-binary -r /app/worker_plan_database/requirements.txt
 
 # Ensure output directory exists (mounted in docker-compose).
-RUN mkdir -p /app/run
+RUN mkdir -p /app/run && chown -R appuser:appuser /app/run
+
+USER appuser
 
 CMD ["python", "-m", "worker_plan_database.app"]

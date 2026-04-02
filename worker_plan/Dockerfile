@@ -6,6 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_PREFER_BINARY=1
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid 1000 -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # Copy application code and supporting files
@@ -16,7 +18,9 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefer-binary /app/worker_plan
 
 # Default location for generated plans
-RUN mkdir -p /app/run
+RUN mkdir -p /app/run && chown -R appuser:appuser /app/run
+
+USER appuser
 
 EXPOSE 8000
 

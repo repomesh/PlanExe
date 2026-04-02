@@ -28,6 +28,7 @@ class ReportDocumentItem:
 class ReportGenerator:
     def __init__(self):
         self.report_item_list: list[ReportDocumentItem] = []
+        self.top_banner_html: str = ""
         self.html_head_content: list[str] = []
         self.html_body_script_content: list[str] = []
 
@@ -192,15 +193,16 @@ class ReportGenerator:
                 rationale = escape(screening_raw.get("rationale", ""))
                 reason_display = reason.replace("_", " ").title()
                 screening_banner_html = f"""
-        <div style="background-color: #fee2e2; border: 2px solid #dc2626; border-radius: 8px; padding: 16px; margin-bottom: 20px;">
-            <strong style="color: #dc2626; font-size: 1.1em;">&#9888; Prompt Quality Warning</strong>
-            <p style="margin: 8px 0 0 0; color: #991b1b;">
+        <div class="prompt-quality-warning">
+            <strong>&#9888; Prompt Quality Warning</strong>
+            <p>
                 The initial prompt was classified as <strong>UNUSABLE</strong> ({reason_display}).
                 This plan is likely to contain hallucinated or nonsensical content. Garbage in, garbage out.
             </p>
-            <p style="margin: 4px 0 0 0; color: #991b1b; font-style: italic;">{rationale}</p>
+            <p class="prompt-quality-warning-rationale">{rationale}</p>
         </div>
 """
+                self.top_banner_html = screening_banner_html
         except Exception as e:
             logging.warning(f"Document: '{document_title}'. Could not read screening result: {e}")
 
@@ -272,6 +274,10 @@ class ReportGenerator:
         <h1>{escaped_title}</h1>
         <p class="planexe-report-info">Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} with PlanExe. <a href="https://planexe.org/discord.html">Discord</a>, <a href="https://github.com/PlanExeOrg/PlanExe">GitHub</a></p>
         """)
+
+        # Top-level warning banner (e.g. prompt quality warning)
+        if self.top_banner_html:
+            html_parts.append(self.top_banner_html)
 
         def add_section(title: str, content: str, css_classes: list[str]):
             resolved_css_classes = ['section'] + css_classes

@@ -1,0 +1,95 @@
+"""ReportTask - Generates the final HTML report document."""
+from worker_plan_internal.plan.run_plan_pipeline import PlanTask, REPORT_EXECUTE_PLAN_SECTION_HIDDEN
+from worker_plan_internal.report.report_generator import ReportGenerator
+from worker_plan_api.filenames import FilenameEnum
+from worker_plan_internal.plan.stages.setup import SetupTask
+from worker_plan_internal.plan.stages.redline_gate import RedlineGateTask
+from worker_plan_internal.plan.stages.premise_attack import PremiseAttackTask
+from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.stages.project_plan import ProjectPlanTask
+from worker_plan_internal.plan.stages.data_collection import DataCollectionTask
+from worker_plan_internal.plan.stages.related_resources import RelatedResourcesTask
+from worker_plan_internal.plan.stages.swot_analysis import SWOTAnalysisTask
+from worker_plan_internal.plan.stages.team_markdown import TeamMarkdownTask
+from worker_plan_internal.plan.stages.convert_pitch_to_markdown import ConvertPitchToMarkdownTask
+from worker_plan_internal.plan.stages.expert_review import ExpertReviewTask
+from worker_plan_internal.plan.stages.consolidate_governance import ConsolidateGovernanceTask
+from worker_plan_internal.plan.stages.markdown_documents import MarkdownWithDocumentsToCreateAndFindTask
+from worker_plan_internal.plan.stages.create_wbs_level1 import CreateWBSLevel1Task
+from worker_plan_internal.plan.stages.wbs_project_level1_level2_level3 import WBSProjectLevel1AndLevel2AndLevel3Task
+from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
+from worker_plan_internal.plan.stages.executive_summary import ExecutiveSummaryTask
+from worker_plan_internal.plan.stages.create_schedule import CreateScheduleTask
+from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndAnswersTask
+from worker_plan_internal.plan.stages.premortem import PremortemTask
+from worker_plan_internal.plan.stages.self_audit import SelfAuditTask
+
+
+class ReportTask(PlanTask):
+    """
+    Generate a report html document.
+    """
+    def output(self):
+        return self.local_target(FilenameEnum.REPORT)
+
+    def requires(self):
+        return {
+            'setup': self.clone(SetupTask),
+            'redline_gate': self.clone(RedlineGateTask),
+            'premise_attack': self.clone(PremiseAttackTask),
+            'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
+            'scenarios_markdown': self.clone(ScenariosMarkdownTask),
+            'consolidate_assumptions_markdown': self.clone(ConsolidateAssumptionsMarkdownTask),
+            'team_markdown': self.clone(TeamMarkdownTask),
+            'related_resources': self.clone(RelatedResourcesTask),
+            'consolidate_governance': self.clone(ConsolidateGovernanceTask),
+            'swot_analysis': self.clone(SWOTAnalysisTask),
+            'pitch_markdown': self.clone(ConvertPitchToMarkdownTask),
+            'data_collection': self.clone(DataCollectionTask),
+            'documents_to_create_and_find': self.clone(MarkdownWithDocumentsToCreateAndFindTask),
+            'wbs_level1': self.clone(CreateWBSLevel1Task),
+            'wbs_project123': self.clone(WBSProjectLevel1AndLevel2AndLevel3Task),
+            'expert_review': self.clone(ExpertReviewTask),
+            'project_plan': self.clone(ProjectPlanTask),
+            'review_plan': self.clone(ReviewPlanTask),
+            'executive_summary': self.clone(ExecutiveSummaryTask),
+            'create_schedule': self.clone(CreateScheduleTask),
+            'questions_and_answers': self.clone(QuestionsAndAnswersTask),
+            'premortem': self.clone(PremortemTask),
+            'self_audit': self.clone(SelfAuditTask)
+        }
+
+    def run_inner(self):
+        # For the report title, use the 'project_title' of the WBS Level 1 result.
+        with self.input()['wbs_level1']['project_title'].open("r") as f:
+            title = f.read()
+
+        rg = ReportGenerator()
+        rg.append_markdown('Executive Summary', self.input()['executive_summary']['markdown'].path)
+        rg.append_html('Gantt Interactive', self.input()['create_schedule']['dhtmlx_html'].path)
+        rg.append_markdown('Pitch', self.input()['pitch_markdown']['markdown'].path)
+        rg.append_markdown('Project Plan', self.input()['project_plan']['markdown'].path)
+        rg.append_markdown('Strategic Decisions', self.input()['strategic_decisions_markdown']['markdown'].path)
+        rg.append_markdown('Scenarios', self.input()['scenarios_markdown']['markdown'].path)
+        rg.append_markdown('Assumptions', self.input()['consolidate_assumptions_markdown']['full'].path)
+        rg.append_markdown('Governance', self.input()['consolidate_governance'].path)
+        rg.append_markdown('Related Resources', self.input()['related_resources']['markdown'].path)
+        rg.append_markdown('Data Collection', self.input()['data_collection']['markdown'].path)
+        rg.append_markdown('Documents to Create and Find', self.input()['documents_to_create_and_find'].path)
+        rg.append_markdown('SWOT Analysis', self.input()['swot_analysis']['markdown'].path)
+        rg.append_markdown('Team', self.input()['team_markdown'].path)
+        rg.append_markdown('Expert Criticism', self.input()['expert_review'].path)
+        rg.append_csv('Work Breakdown Structure', self.input()['wbs_project123']['csv'].path)
+        rg.append_markdown('Review Plan', self.input()['review_plan']['markdown'].path)
+        rg.append_html('Questions & Answers', self.input()['questions_and_answers']['html'].path)
+        rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
+        rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
+        rg.append_initial_prompt_vetted(
+            document_title='Initial Prompt Vetted',
+            initial_prompt_file_path=self.input()['setup'].path,
+            redline_gate_markdown_file_path=self.input()['redline_gate']['markdown'].path,
+            premise_attack_markdown_file_path=self.input()['premise_attack']['markdown'].path
+        )
+        rg.save_report(self.output().path, title=title, execute_plan_section_hidden=REPORT_EXECUTE_PLAN_SECTION_HIDDEN)

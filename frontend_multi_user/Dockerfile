@@ -7,6 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_PREFER_BINARY=1 \
     PYTHONPATH=/app:/app/frontend_multi_user:/app/frontend_multi_user/src
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid 1000 -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # Copy application code and supporting files
@@ -22,7 +24,9 @@ RUN set -eux; \
     pip install --no-cache-dir --prefer-binary /app/frontend_multi_user
 
 # Default location for generated plans
-RUN mkdir -p /app/run
+RUN mkdir -p /app/run && chown -R appuser:appuser /app/run
+
+USER appuser
 
 WORKDIR /app/frontend_multi_user
 

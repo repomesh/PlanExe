@@ -8,6 +8,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_PREFER_BINARY=1 \
     PYTHONPATH=/app:/app/mcp_cloud:/app/database_api
 
+RUN groupadd --gid 1000 appuser && useradd --uid 1000 --gid 1000 -d /app -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # Bring in the shared database models, prompt catalog (for prompt_catalog_samples), and this MCP server.
@@ -23,7 +25,9 @@ RUN set -eux; \
     pip install --no-cache-dir --prefer-binary -r /app/mcp_cloud/requirements.txt
 
 # Ensure output directory exists (mounted in docker-compose).
-RUN mkdir -p /app/run
+RUN mkdir -p /app/run && chown -R appuser:appuser /app/run
+
+USER appuser
 
 # Default to HTTP server mode (can be overridden with PLANEXE_MCP_MODE env var)
 CMD ["python", "-m", "mcp_cloud.http_server"]

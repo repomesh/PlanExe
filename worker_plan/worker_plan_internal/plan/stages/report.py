@@ -25,6 +25,7 @@ from worker_plan_internal.plan.stages.create_schedule import CreateScheduleTask
 from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndAnswersTask
 from worker_plan_internal.plan.stages.premortem import PremortemTask
 from worker_plan_internal.plan.stages.self_audit import SelfAuditTask
+from worker_plan_internal.plan.stages.screen_planning_prompt import ScreenPlanningPromptTask
 
 
 class ReportTask(PlanTask):
@@ -37,6 +38,7 @@ class ReportTask(PlanTask):
     def requires(self):
         return {
             'setup': self.clone(SetupTask),
+            'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
@@ -89,6 +91,8 @@ class ReportTask(PlanTask):
         rg.append_initial_prompt_vetted(
             document_title='Initial Prompt Vetted',
             initial_prompt_file_path=self.input()['setup'].path,
+            screen_planning_prompt_raw_file_path=self.input()['screen_planning_prompt']['raw'].path,
+            screen_planning_prompt_markdown_file_path=self.input()['screen_planning_prompt']['markdown'].path,
             redline_gate_markdown_file_path=self.input()['redline_gate']['markdown'].path,
             premise_attack_markdown_file_path=self.input()['premise_attack']['markdown'].path
         )

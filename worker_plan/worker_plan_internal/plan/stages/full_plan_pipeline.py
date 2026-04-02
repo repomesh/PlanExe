@@ -7,6 +7,7 @@ from worker_plan_internal.plan.stages.start_time import StartTimeTask
 from worker_plan_internal.plan.stages.setup import SetupTask
 from worker_plan_internal.plan.stages.redline_gate import RedlineGateTask
 from worker_plan_internal.plan.stages.premise_attack import PremiseAttackTask
+from worker_plan_internal.plan.stages.screen_planning_prompt import ScreenPlanningPromptTask
 from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
 from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
 
@@ -86,6 +87,7 @@ class FullPlanPipeline(PlanTask):
         return {
             'start_time': self.clone(StartTimeTask),
             'setup': self.clone(SetupTask),
+            'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),

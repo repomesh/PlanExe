@@ -203,7 +203,7 @@ if __name__ == "__main__":
     prompt_catalog.load_simple_plan_prompts()
 
     # Test with Minecraft escape-room prompt (has banned words)
-    item = prompt_catalog.find_by_id("f717e0c0-73b4-4e12-8d1d-8ec426966122")
+    item = prompt_catalog.find("f717e0c0-73b4-4e12-8d1d-8ec426966122")
     if item:
         print(f"=== Prompt: {item.prompt[:80]}... ===")
         result = ExtractConstraints.execute(llm, item.prompt)
@@ -212,7 +212,7 @@ if __name__ == "__main__":
         print(f"\nMarkdown:\n{result.markdown}")
 
     # Test with simple prompt (no negative constraints)
-    item = prompt_catalog.find_by_id("4dc34d55-0d0d-4e9d-92f4-23765f49dd29")
+    item = prompt_catalog.find("4dc34d55-0d0d-4e9d-92f4-23765f49dd29")
     if item:
         print(f"\n=== Prompt: {item.prompt} ===")
         result = ExtractConstraints.execute(llm, item.prompt)

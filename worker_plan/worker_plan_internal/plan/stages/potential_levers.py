@@ -6,6 +6,7 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_internal.plan.stages.setup import SetupTask
 from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
 from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
+from worker_plan_internal.plan.stages.extract_constraints import ExtractConstraintsTask
 
 
 class PotentialLeversTask(PlanTask):
@@ -16,7 +17,8 @@ class PotentialLeversTask(PlanTask):
         return {
             'setup': self.clone(SetupTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),
-            'plan_type': self.clone(PlanTypeTask)
+            'plan_type': self.clone(PlanTypeTask),
+            'extract_constraints': self.clone(ExtractConstraintsTask),
         }
 
     def output(self):
@@ -36,10 +38,15 @@ class PotentialLeversTask(PlanTask):
         with self.input()['plan_type']['markdown'].open("r") as f:
             plan_type_markdown = f.read()
 
+        # Read extracted constraints markdown.
+        with self.input()['extract_constraints']['markdown'].open("r") as f:
+            constraints_markdown = f.read()
+
         query = (
             f"File 'plan.txt':\n{plan_prompt}\n\n"
             f"File 'purpose.md':\n{identify_purpose_markdown}\n\n"
-            f"File 'plan_type.md':\n{plan_type_markdown}"
+            f"File 'plan_type.md':\n{plan_type_markdown}\n\n"
+            f"File 'constraints.md':\n{constraints_markdown}"
         )
 
         identify_potential_levers = IdentifyPotentialLevers.execute(llm_executor, query)

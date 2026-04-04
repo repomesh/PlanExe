@@ -274,6 +274,45 @@ class TestConstraintCheckerWithLLM(unittest.TestCase):
         self.assertIn("stage_name", result.metadata)
         self.assertEqual(result.metadata["stage_name"], "test_stage")
 
+    def test_detects_synonym_violations(self):
+        """Banned concepts appearing under synonyms should still be flagged."""
+        constraints = json.dumps({
+            "constraints": [
+                {"classification": "negative", "constraint_text": "Do not use blockchain"},
+                {"classification": "negative", "constraint_text": "Do not use VR"},
+            ]
+        })
+        # Uses synonyms: "distributed ledger" for blockchain, "virtual reality headset" for VR
+        stage_output = json.dumps({
+            "levers": [
+                {
+                    "name": "Transparency Layer",
+                    "options": [
+                        "Distributed ledger for audit trail",
+                        "Traditional database with logging",
+                        "Paper-based records",
+                    ],
+                },
+                {
+                    "name": "Immersive Experience",
+                    "options": [
+                        "Virtual reality headset stations",
+                        "Large screen projections",
+                        "Physical props only",
+                    ],
+                },
+            ]
+        })
+        result = ConstraintChecker.execute(self.llm, constraints, stage_output, "test_synonyms")
+        violations = result.response["constraint_violations"]
+
+        violated_items = [v for v in violations if v["status"] == "violated"]
+        self.assertTrue(
+            len(violated_items) >= 2,
+            f"Expected at least 2 synonym violations, got {len(violated_items)}: {violated_items}"
+        )
+        self.assertEqual(result.response["overall_status"], "fail")
+
 
 if __name__ == "__main__":
     unittest.main()

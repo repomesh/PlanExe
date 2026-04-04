@@ -80,6 +80,18 @@ CHECKING RULES:
 - For positive constraints: only mark as "violated" if the output actively contradicts the constraint. If the constraint simply isn't mentioned, mark as "unclear" rather than "violated".
 - Provide specific evidence (quote the relevant text from the stage output) for each assessment.
 
+SYNONYM AND CONCEPT DETECTION (CRITICAL):
+- Do NOT just check for exact word matches. Check for SYNONYMS, related concepts, and rebranded terms.
+- Examples of synonym violations for negative constraints:
+  - "blockchain" also covers: distributed ledger, DLT, web3, smart contracts, on-chain, decentralized ledger
+  - "VR" also covers: virtual reality, immersive headset, head-mounted display, VR headset
+  - "AR" also covers: augmented reality, mixed reality, AR overlay, AR glasses
+  - "NFT" also covers: non-fungible token, digital collectible, tokenized asset
+  - "crypto" also covers: cryptocurrency, digital currency, token economy, crypto wallet
+  - "DAO" also covers: decentralized autonomous organization, on-chain governance
+- If the stage output uses a synonym or closely related concept of a banned item, that is STILL A VIOLATION. The user banned the concept, not just the exact word.
+- Use your domain knowledge to identify when a concept is being smuggled in under a different name.
+
 OVERALL STATUS:
 - "pass" if zero constraints have status "violated"
 - "fail" if one or more constraints have status "violated"

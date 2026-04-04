@@ -21,6 +21,14 @@ from worker_plan_internal.plan.stages.strategic_decisions_markdown import Strate
 from worker_plan_internal.plan.stages.candidate_scenarios import CandidateScenariosTask
 from worker_plan_internal.plan.stages.select_scenario import SelectScenarioTask
 from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.stages.constraint_checker_stages import (
+    PotentialLeversConstraintTask,
+    DeduplicatedLeversConstraintTask,
+    EnrichedLeversConstraintTask,
+    VitalFewLeversConstraintTask,
+    CandidateScenariosConstraintTask,
+    SelectedScenarioConstraintTask,
+)
 
 # Phase 4-5
 from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
@@ -102,6 +110,12 @@ class FullPlanPipeline(PlanTask):
             'candidate_scenarios': self.clone(CandidateScenariosTask),
             'select_scenario': self.clone(SelectScenarioTask),
             'scenarios_markdown': self.clone(ScenariosMarkdownTask),
+            'potential_levers_constraint': self.clone(PotentialLeversConstraintTask),
+            'deduplicated_levers_constraint': self.clone(DeduplicatedLeversConstraintTask),
+            'enriched_levers_constraint': self.clone(EnrichedLeversConstraintTask),
+            'vital_few_levers_constraint': self.clone(VitalFewLeversConstraintTask),
+            'candidate_scenarios_constraint': self.clone(CandidateScenariosConstraintTask),
+            'selected_scenario_constraint': self.clone(SelectedScenarioConstraintTask),
             'physical_locations': self.clone(PhysicalLocationsTask),
             'currency_strategy': self.clone(CurrencyStrategyTask),
             'identify_risks': self.clone(IdentifyRisksTask),

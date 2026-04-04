@@ -303,7 +303,56 @@ class IdentifyPotentialLevers:
     metadata: dict
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, user_prompt: str) -> 'IdentifyPotentialLevers':
+    def _check_constraints_on_response(
+        cls,
+        llm_executor: LLMExecutor,
+        constraints_markdown: str,
+        response_doc: 'DocumentDetails',
+    ) -> tuple[list['Lever'], list[tuple['Lever', list[dict]]]]:
+        """Run ConstraintChecker on each lever individually.
+
+        Returns (accepted_levers, rejected_levers) where rejected_levers
+        is a list of (lever, violations) tuples.
+        """
+        from worker_plan_internal.diagnostics.constraint_checker import ConstraintChecker
+
+        constraints_json = json.dumps({"constraints_markdown": constraints_markdown})
+
+        accepted: list[Lever] = []
+        rejected: list[tuple[Lever, list[dict]]] = []
+
+        for lever in response_doc.levers:
+            lever_json = json.dumps({
+                "lever_name": lever.name,
+                "consequences": lever.consequences,
+                "options": lever.options,
+                "review": lever.review_lever,
+            }, indent=2)
+
+            def check_function(llm: LLM, _cj=constraints_json, _lj=lever_json, _ln=lever.name) -> dict:
+                result = ConstraintChecker.execute(llm, _cj, _lj, f"lever: {_ln}")
+                return result.response
+
+            try:
+                check_result = llm_executor.run(check_function)
+            except Exception as e:
+                logger.warning(f"Constraint check failed for lever '{lever.name}': {e}. Accepting lever.")
+                accepted.append(lever)
+                continue
+
+            violations = [
+                v for v in check_result.get("constraint_violations", [])
+                if v.get("status") == "violated"
+            ]
+            if violations:
+                rejected.append((lever, violations))
+            else:
+                accepted.append(lever)
+
+        return accepted, rejected
+
+    @classmethod
+    def execute(cls, llm_executor: LLMExecutor, user_prompt: str, constraints_markdown: str = "") -> 'IdentifyPotentialLevers':
         if not isinstance(llm_executor, LLMExecutor):
             raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(user_prompt, str):
@@ -322,6 +371,9 @@ class IdentifyPotentialLevers:
         responses: list[DocumentDetails] = []
         metadata_list: list[dict] = []
         generated_lever_names: list[str] = []
+        # Accumulate constraint violation feedback across iterations so the
+        # LLM learns from repeated rejections (e.g. "VR was rejected 3 times").
+        constraint_rejection_history: list[str] = []
 
         for call_index in range(1, max_calls + 1):
             if call_index == 1:
@@ -332,6 +384,16 @@ class IdentifyPotentialLevers:
                     f"Generate 5 to 7 MORE levers with completely different names. "
                     f"Do NOT reuse any of these already-generated names: [{names_list}]\n\n"
                     f"{user_prompt}"
+                )
+
+            # Include accumulated constraint rejection feedback so the LLM
+            # knows which levers were rejected and why.
+            if constraint_rejection_history:
+                rejection_text = "\n".join(constraint_rejection_history)
+                prompt_content += (
+                    f"\n\n## Constraint Violation History\n"
+                    f"The following levers were REJECTED for violating constraints. "
+                    f"Do NOT generate levers that repeat these violations:\n{rejection_text}"
                 )
 
             logger.info(f"Processing call {call_index} of {max_calls} (have {len(generated_lever_names)} levers, need {min_levers})")
@@ -376,8 +438,33 @@ class IdentifyPotentialLevers:
                 )
                 continue
 
-            generated_lever_names.extend(lever.name for lever in result["chat_response"].raw.levers)
-            responses.append(result["chat_response"].raw)
+            # Run constraint check on the response if constraints were provided.
+            response_doc: DocumentDetails = result["chat_response"].raw
+            if constraints_markdown.strip():
+                accepted_levers, rejected_levers = cls._check_constraints_on_response(
+                    llm_executor, constraints_markdown, response_doc
+                )
+                if rejected_levers:
+                    for lever, violations in rejected_levers:
+                        violation_details = "; ".join(
+                            f"{v['constraint_text']}: {v['explanation']}"
+                            for v in violations
+                        )
+                        constraint_rejection_history.append(
+                            f"- Lever \"{lever.name}\" REJECTED: {violation_details}"
+                        )
+                    logger.info(
+                        f"Call {call_index}: {len(rejected_levers)} lever(s) rejected by constraint check, "
+                        f"{len(accepted_levers)} accepted."
+                    )
+                    # Replace the response's levers with only the accepted ones
+                    response_doc = DocumentDetails(
+                        strategic_rationale=response_doc.strategic_rationale,
+                        levers=accepted_levers,
+                    )
+
+            generated_lever_names.extend(lever.name for lever in response_doc.levers)
+            responses.append(response_doc)
             metadata_list.append(result["metadata"])
 
             if len(generated_lever_names) >= min_levers:

@@ -45,11 +45,10 @@ class PotentialLeversTask(PlanTask):
         query = (
             f"File 'plan.txt':\n{plan_prompt}\n\n"
             f"File 'purpose.md':\n{identify_purpose_markdown}\n\n"
-            f"File 'plan_type.md':\n{plan_type_markdown}\n\n"
-            f"File 'constraints.md':\n{constraints_markdown}"
+            f"File 'plan_type.md':\n{plan_type_markdown}"
         )
 
-        identify_potential_levers = IdentifyPotentialLevers.execute(llm_executor, query)
+        identify_potential_levers = IdentifyPotentialLevers.execute(llm_executor, query, constraints_markdown)
 
         # Write the result to disk.
         output_raw_path = self.output()['raw'].path

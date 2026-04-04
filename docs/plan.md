@@ -129,6 +129,14 @@ Obtain info about what resources the user has available, and if they are willing
 
 # Secondary issues
 
+## Negative constraints
+
+Prompts that have specifies `banned words: VR, crypto`, have a strong preference to pick related words.
+I have added a `extract_constraints.py` and `constraint_checker.py`, for addressing this.
+I will have to see several plans generated to assess if I have solved it or not.
+If I deem it solved, then inside `filenames.py` I can remove the files with suffix `_constraint.json` and remove the LLM call that does the constraint checking.
+
+
 ## MCP - Polishing of MCP flow via planexe.org
 
 As of 2026-mar-27, I'm focusing on improving MCP. It is not as smooth as I would like.

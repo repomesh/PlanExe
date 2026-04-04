@@ -3,6 +3,7 @@
 Each task reads the extracted constraints and a specific stage's output,
 then uses the ConstraintChecker to identify violations.
 """
+import json
 from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.diagnostics.constraint_checker import ConstraintChecker
@@ -17,9 +18,15 @@ from worker_plan_internal.plan.stages.select_scenario import SelectScenarioTask
 
 
 def _read_constraints_json(task: PlanTask) -> str:
-    """Read the extracted constraints JSON from the extract_constraints stage."""
+    """Read just the constraints list from the extract_constraints stage output.
+
+    The raw file contains system_prompt, user_prompt, metadata, and constraints.
+    We only pass the constraints list to the checker.
+    """
     with task.input()['extract_constraints']['raw'].open("r") as f:
-        return f.read()
+        raw = json.load(f)
+    constraints_only = {"constraints": raw.get("constraints", [])}
+    return json.dumps(constraints_only, indent=2)
 
 
 class PotentialLeversConstraintTask(PlanTask):

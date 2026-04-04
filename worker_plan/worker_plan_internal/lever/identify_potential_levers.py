@@ -333,12 +333,17 @@ class IdentifyPotentialLevers:
                 "review": lever.review_lever,
             }, indent=2)
 
-            def check_function(llm: LLM, _cj=constraints_json, _lj=lever_json, _ln=lever.name) -> dict:
-                result = ConstraintChecker.execute(llm, _cj, _lj, f"lever: {_ln}")
-                return result.response
+            # Capture loop variables in a closure that returns a single-arg function,
+            # because LLMExecutor validates that execute_function has exactly 1 parameter.
+            cj, lj, ln = constraints_json, lever_json, lever.name
+            def make_check_function(cj, lj, ln):
+                def check_function(llm: LLM) -> dict:
+                    result = ConstraintChecker.execute(llm, cj, lj, f"lever: {ln}")
+                    return result.response
+                return check_function
 
             try:
-                check_result = llm_executor.run(check_function)
+                check_result = llm_executor.run(make_check_function(cj, lj, ln))
             except Exception as e:
                 logger.warning(f"Constraint check failed for lever '{lever.name}': {e}. Accepting lever.")
                 accepted.append(lever)

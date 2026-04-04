@@ -301,6 +301,7 @@ class IdentifyPotentialLevers:
     responses: list[DocumentDetails]
     levers: list[LeverCleaned]
     metadata: dict
+    constraint_checks: list[dict] = None  # Constraint checker results per lever
 
     @classmethod
     def _check_constraints_on_response(
@@ -308,11 +309,13 @@ class IdentifyPotentialLevers:
         llm_executor: LLMExecutor,
         constraints_markdown: str,
         response_doc: 'DocumentDetails',
-    ) -> tuple[list['Lever'], list[tuple['Lever', list[dict]]]]:
+    ) -> tuple[list['Lever'], list[tuple['Lever', list[dict]]], list[dict]]:
         """Run ConstraintChecker on each lever individually.
 
-        Returns (accepted_levers, rejected_levers) where rejected_levers
-        is a list of (lever, violations) tuples.
+        Returns (accepted_levers, rejected_levers, all_check_results) where:
+        - accepted_levers: levers that passed the constraint check
+        - rejected_levers: list of (lever, violations) tuples
+        - all_check_results: full constraint checker response for each lever
         """
         from worker_plan_internal.diagnostics.constraint_checker import ConstraintChecker
 
@@ -320,6 +323,7 @@ class IdentifyPotentialLevers:
 
         accepted: list[Lever] = []
         rejected: list[tuple[Lever, list[dict]]] = []
+        all_check_results: list[dict] = []
 
         for lever in response_doc.levers:
             lever_json = json.dumps({
@@ -338,7 +342,17 @@ class IdentifyPotentialLevers:
             except Exception as e:
                 logger.warning(f"Constraint check failed for lever '{lever.name}': {e}. Accepting lever.")
                 accepted.append(lever)
+                all_check_results.append({
+                    "lever_name": lever.name,
+                    "status": "error",
+                    "error": str(e),
+                })
                 continue
+
+            all_check_results.append({
+                "lever_name": lever.name,
+                **check_result,
+            })
 
             violations = [
                 v for v in check_result.get("constraint_violations", [])
@@ -349,7 +363,7 @@ class IdentifyPotentialLevers:
             else:
                 accepted.append(lever)
 
-        return accepted, rejected
+        return accepted, rejected, all_check_results
 
     @classmethod
     def execute(cls, llm_executor: LLMExecutor, user_prompt: str, constraints_markdown: str = "") -> 'IdentifyPotentialLevers':
@@ -374,6 +388,7 @@ class IdentifyPotentialLevers:
         # Accumulate constraint violation feedback across iterations so the
         # LLM learns from repeated rejections (e.g. "VR was rejected 3 times").
         constraint_rejection_history: list[str] = []
+        all_constraint_checks: list[dict] = []
 
         for call_index in range(1, max_calls + 1):
             if call_index == 1:
@@ -441,9 +456,10 @@ class IdentifyPotentialLevers:
             # Run constraint check on the response if constraints were provided.
             response_doc: DocumentDetails = result["chat_response"].raw
             if constraints_markdown.strip():
-                accepted_levers, rejected_levers = cls._check_constraints_on_response(
+                accepted_levers, rejected_levers, check_results = cls._check_constraints_on_response(
                     llm_executor, constraints_markdown, response_doc
                 )
+                all_constraint_checks.extend(check_results)
                 if rejected_levers:
                     for lever, violations in rejected_levers:
                         violation_details = "; ".join(
@@ -505,8 +521,9 @@ class IdentifyPotentialLevers:
             responses=responses,
             levers=levers_cleaned,
             metadata=metadata,
+            constraint_checks=all_constraint_checks if all_constraint_checks else None,
         )
-        return result    
+        return result
 
     def to_dict(self, include_responses=True, include_cleaned_levers=True, include_metadata=True, include_system_prompt=True, include_user_prompt=True) -> dict:
         d = {}
@@ -514,6 +531,8 @@ class IdentifyPotentialLevers:
             d["responses"] = [response.model_dump() for response in self.responses]
         if include_cleaned_levers:
             d['levers'] = [lever.model_dump() for lever in self.levers]
+        if self.constraint_checks is not None:
+            d['constraint_checks'] = self.constraint_checks
         if include_metadata:
             d['metadata'] = self.metadata
         if include_system_prompt:

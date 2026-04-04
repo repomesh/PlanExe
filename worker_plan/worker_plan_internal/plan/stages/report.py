@@ -26,7 +26,6 @@ from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndA
 from worker_plan_internal.plan.stages.premortem import PremortemTask
 from worker_plan_internal.plan.stages.self_audit import SelfAuditTask
 from worker_plan_internal.plan.stages.screen_planning_prompt import ScreenPlanningPromptTask
-from worker_plan_internal.plan.stages.extract_constraints import ExtractConstraintsTask
 
 
 class ReportTask(PlanTask):
@@ -40,7 +39,6 @@ class ReportTask(PlanTask):
         return {
             'setup': self.clone(SetupTask),
             'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
-            'extract_constraints': self.clone(ExtractConstraintsTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
@@ -90,7 +88,6 @@ class ReportTask(PlanTask):
         rg.append_html('Questions & Answers', self.input()['questions_and_answers']['html'].path)
         rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
         rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
-        rg.append_markdown('Constraints', self.input()['extract_constraints']['markdown'].path)
         rg.append_initial_prompt_vetted(
             document_title='Initial Prompt Vetted',
             initial_prompt_file_path=self.input()['setup'].path,

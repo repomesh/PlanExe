@@ -9,3 +9,6 @@ __pycache__/
 
 # Claude Code
 .claude/
+
+# Git worktrees
+.worktrees/

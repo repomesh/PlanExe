@@ -126,6 +126,13 @@ class TokenMetricsStore:
                 self.db.session.rollback()
             except Exception:
                 pass
+            # Fully discard the scoped session to prevent a corrupted
+            # transaction state from poisoning subsequent DB operations
+            # (e.g. the _handle_task_completion callback that runs next).
+            try:
+                self.db.session.remove()
+            except Exception:
+                pass
             return False
 
     def get_metrics_for_task(self, task_id: str) -> List:

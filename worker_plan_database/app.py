@@ -545,40 +545,51 @@ class ServerExecutePipeline(ExecutePipeline):
             except Exception:
                 pass
 
-        # Expire cached ORM state so the next query uses a fresh DB round-trip.
-        # The heartbeat upsert above commits/rollbacks internally, which can
-        # leave the session holding a stale or closed cursor — especially under
-        # Railway's flaky private networking.  expire_all() is cheap (no I/O)
-        # and forces the subsequent get() to re-fetch from the connection pool
-        # where pool_pre_ping will validate the connection.
-        db.session.expire_all()
+        # Fully discard the scoped session so the next access creates a fresh
+        # one with a new connection from the pool.  This is stronger than
+        # expire_all() or close() — it drops the session entirely, which
+        # recovers from corrupted transaction state (e.g. after a failed
+        # token_metrics_store commit leaves the connection dirty).
+        try:
+            db.session.remove()
+        except Exception:
+            pass
 
         # Lookup the taskitem in the database by self.task_id.
-        # Retry once on transient connection errors (ResourceClosedError etc.)
-        # that can occur when the underlying connection was recycled.
+        # Retry up to 3 times on transient connection errors
+        # (ResourceClosedError, PGRES_TUPLES_OK corruption, etc.)
         task = None
-        for _attempt in range(2):
+        max_attempts = 3
+        for _attempt in range(max_attempts):
             try:
                 task = db.session.get(PlanItem, self.task_id)
                 break
             except Exception as exc:
                 logger.warning(
-                    "db.session.get(PlanItem, %r) failed (attempt %d): %s",
-                    self.task_id, _attempt + 1, exc,
+                    "db.session.get(PlanItem, %r) failed (attempt %d/%d): %s",
+                    self.task_id, _attempt + 1, max_attempts, exc,
                 )
                 try:
                     db.session.rollback()
                 except Exception:
                     pass
-                if _attempt == 0:
-                    # Close the session to drop the broken connection and
-                    # let the pool hand out a fresh one on the next access.
-                    try:
-                        db.session.close()
-                    except Exception:
-                        pass
-                else:
-                    raise
+                # Discard the scoped session entirely so the pool hands out
+                # a fresh connection on the next access.
+                try:
+                    db.session.remove()
+                except Exception:
+                    pass
+                if _attempt == max_attempts - 1:
+                    # All retries exhausted.  Log the error but do NOT crash
+                    # the pipeline — the actual LLM work already succeeded.
+                    # Default to "task is still active" so we don't waste the
+                    # completed work.
+                    logger.error(
+                        "All %d attempts to read task %r from DB failed. "
+                        "Assuming task is still active and continuing pipeline.",
+                        max_attempts, self.task_id,
+                    )
+                    return
         if task is None:
             logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")
             raise Exception(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")

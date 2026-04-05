@@ -11,7 +11,7 @@ dependencies = [
     "flask-wtf==1.2.2",
     "authlib==1.6.9",
     "psycopg2-binary==2.9.11",
-    "requests==2.33.0",
+    "requests==2.33.1",
     "stripe==14.4.1",
     "python-dotenv==1.2.2",
     "sqlalchemy-utils==0.42.1",

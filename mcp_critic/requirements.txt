@@ -3,7 +3,7 @@
 # present in the main project's requirements. This file lists only
 # what is needed if running mcp_critic in isolation.
 
-mcp==1.26.0
+mcp==1.27.0
 pydantic==2.12.5
 llama-index-core==0.14.19
 httpx==0.28.1

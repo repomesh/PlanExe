@@ -299,7 +299,8 @@ class FlawTracer:
         for path in source_paths:
             if path.exists():
                 content = path.read_text(encoding="utf-8")
-                source_contents.append((path.name, content))
+                short_name = f"{path.parent.name}/{path.name}"
+                source_contents.append((short_name, content))
 
         if not source_contents:
             return

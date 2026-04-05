@@ -65,6 +65,28 @@
         },
         "pricing_kind": "paid"
     },
+    "openrouter-gemma4-26b-a4b-it": {
+        "comment": "Released Apr 3, 2026, 262,144 context, $0.13/M input tokens, $0.40/M output tokens",
+        "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/google/gemma-4-26b-a4b-it",
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "google/gemma-4-26b-a4b-it",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 262144,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.13,
+            "output_per_million_tokens": 0.40
+        },
+        "pricing_kind": "paid"
+    },
     "openrouter-openai-gpt-4o-mini": {
         "comment": "This is medium fast. Created Jul 18, 2024. 128,000 context. Starting at $0.15/M input tokens. Starting at $0.60/M output tokens.",
         "priority": 2,
@@ -155,6 +177,19 @@
             "base_url": "http://host.docker.internal:11434",
             "temperature": 0.5,
             "request_timeout": 180.0,
+            "is_function_calling_model": false
+        },
+        "pricing_kind": "free"
+    },
+    "docker-ollama-gemma4-e4b": {
+        "comment": "This runs on your own computer. Requires Ollama to be installed. PlanExe runs in .venv on the host computer. No use of docker.",
+        "luigi_workers": 1,
+        "class": "Ollama",
+        "arguments": {
+            "model": "gemma4:e4b",
+            "base_url": "http://host.docker.internal:11434",
+            "temperature": 0.5,
+            "request_timeout": 120.0,
             "is_function_calling_model": false
         },
         "pricing_kind": "free"

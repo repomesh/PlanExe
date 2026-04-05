@@ -6,11 +6,10 @@ private LLM-calling methods (_identify_flaws, _check_upstream,
 _analyze_source_code) directly.  This tests the tracing logic — recursion,
 deduplication, max depth — which is the important part.
 """
-import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from worker_plan_internal.flaw_tracer.tracer import (
     FlawTracer,
@@ -336,6 +335,45 @@ class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
             args = mock_analyze.call_args
             # First positional arg is the TracedFlaw, second is the stage name
             self.assertEqual(args[0][1], "executive_summary")
+
+    def test_source_code_analysis_called_at_deep_origin(self):
+        """Phase 3 should run when the origin is found at a deeper upstream stage."""
+        with TemporaryDirectory() as d:
+            output_dir = Path(d)
+            # Create files for a chain: executive_summary -> project_plan (origin)
+            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "005-2-project_plan.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "001-2-plan.txt").write_text("Open a tea shop", encoding="utf-8")
+            (output_dir / "002-14-strategic_decisions.md").write_text("decisions", encoding="utf-8")
+            (output_dir / "002-19-scenarios.md").write_text("scenarios", encoding="utf-8")
+            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
+
+            tracer = _make_tracer(output_dir)
+
+            mock_identification = FlawIdentificationResult(
+                flaws=[
+                    IdentifiedFlaw(description="Budget fabricated", evidence="500k", severity="HIGH")
+                ]
+            )
+
+            def mock_check_upstream(flaw_desc, evidence, upstream_filename, upstream_content):
+                # project_plan has the flaw; others are clean
+                if "project_plan" in upstream_filename:
+                    return UpstreamCheckResult(
+                        found=True, evidence="Budget: 500k", explanation="Budget originates here"
+                    )
+                return UpstreamCheckResult(found=False, evidence=None, explanation="clean")
+
+            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+                 patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
+                 patch.object(tracer, '_analyze_source_code') as mock_analyze:
+                result = tracer.trace("025-2-executive_summary.md", "budget fabricated")
+
+            # Phase 3 should have been called at the deep origin (project_plan)
+            mock_analyze.assert_called_once()
+            args = mock_analyze.call_args
+            # Second positional arg is the origin stage name
+            self.assertEqual(args[0][1], "project_plan")
 
 
 class TestFlawTracerMultipleFlaws(unittest.TestCase):

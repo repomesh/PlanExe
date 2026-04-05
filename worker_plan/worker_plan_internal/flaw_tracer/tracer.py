@@ -1,6 +1,5 @@
 # worker_plan/worker_plan_internal/flaw_tracer/tracer.py
 """Recursive depth-first flaw tracer for PlanExe pipeline outputs."""
-import json
 import logging
 import sys
 from dataclasses import dataclass, field
@@ -137,8 +136,12 @@ class FlawTracer:
                 traced.origin_stage = last.stage
                 traced.depth = len(traced.trace) - 1
 
-                # Phase 3: Source code analysis at origin
-                self._analyze_source_code(traced, last.stage, flaw.description, last.evidence)
+            # Phase 3: Source code analysis at origin (always, when origin is known)
+            if traced.origin_stage is not None:
+                self._analyze_source_code(
+                    traced, traced.origin_stage, flaw.description,
+                    next((e.evidence for e in traced.trace if e.stage == traced.origin_stage), flaw.evidence)
+                )
 
             traced_flaws.append(traced)
 

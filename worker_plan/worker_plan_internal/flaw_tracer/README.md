@@ -14,15 +14,27 @@ The flaw tracer performs a recursive depth-first search:
 
 Output is a JSON file (`flaw_trace.json`) and a markdown report (`flaw_trace.md`), sorted by trace depth so the deepest root cause appears first.
 
+## Prerequisites
+
+- Python 3.11 (`/opt/homebrew/bin/python3.11` on macOS with Homebrew)
+- An LLM configured via `PLANEXE_MODEL_PROFILE` environment variable (defaults to `baseline`)
+- API key for your LLM provider (e.g., `OPENROUTER_API_KEY`)
+
 ## Usage
 
-From the `worker_plan/` directory:
+All commands are run from the `worker_plan/` directory:
 
 ```bash
-python -m worker_plan_internal.flaw_tracer \
+cd worker_plan
+```
+
+Basic usage:
+
+```bash
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
     --dir /path/to/output \
     --file 030-report.html \
-    --flaw "The budget is CZK 500,000 but this number appears unvalidated. No market sizing or unit economics are provided." \
+    --flaw "Description of the flaw you observed" \
     --verbose
 ```
 
@@ -37,24 +49,54 @@ python -m worker_plan_internal.flaw_tracer \
 | `--max-depth` | No | Maximum upstream hops per flaw (default: 15) |
 | `--verbose` | No | Print each LLM call to stderr as the trace runs |
 
-### Example
+### Starting files
+
+You can start from any intermediary file. Common starting points:
+
+| File | What it is |
+|------|------------|
+| `030-report.html` | The final HTML report (largest, most flaws to find) |
+| `029-2-self_audit.md` | Self-audit (already identifies issues — good for tracing them back) |
+| `025-2-executive_summary.md` | Executive summary |
+| `024-2-review_plan.md` | Plan review |
+| `028-2-premortem.md` | Premortem analysis |
+
+### Examples
+
+Trace a flaw from the self-audit:
 
 ```bash
-python -m worker_plan_internal.flaw_tracer \
-    --dir /Users/you/planexe-output/20250101_india_census \
-    --file 025-2-executive_summary.md \
-    --flaw "The budget claims CZK 500,000 but also states costs may exceed that by 20%. The budget is an unvalidated placeholder, not a reliable plan." \
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
+    --dir /path/to/output/20250101_india_census \
+    --file 029-2-self_audit.md \
+    --flaw "No Real-World Proof. The plan combines a digital census with caste enumeration at an unprecedented scale, lacking independent evidence of success." \
     --output-dir /tmp/flaw-analysis \
     --verbose
 ```
 
-This produces:
-- `/tmp/flaw-analysis/flaw_trace.json` — machine-readable trace
-- `/tmp/flaw-analysis/flaw_trace.md` — human-readable report
+Trace a budget flaw from the executive summary:
+
+```bash
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
+    --dir /path/to/output/20250101_india_census \
+    --file 025-2-executive_summary.md \
+    --flaw "The budget claims CZK 500,000 but also states costs may exceed that by 20%. The budget is an unvalidated placeholder, not a reliable plan." \
+    --output-dir /tmp/flaw-analysis2 \
+    --verbose
+```
+
+### Output
+
+Each run produces two files in `--output-dir` (or `--dir` if not specified):
+
+- `flaw_trace.json` — machine-readable trace with full details
+- `flaw_trace.md` — human-readable report with trace tables
+
+Flaws are sorted by trace depth (deepest root cause first). A typical run on a downstream file like `029-2-self_audit.md` finds 10-20 flaws and makes 100-200 LLM calls.
 
 ## Running tests
 
 ```bash
 cd worker_plan
-python -m pytest worker_plan_internal/flaw_tracer/tests/ -v
+/opt/homebrew/bin/python3.11 -m pytest worker_plan_internal/flaw_tracer/tests/ -v
 ```

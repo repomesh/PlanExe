@@ -2,9 +2,11 @@
 """Recursive depth-first flaw tracer for PlanExe pipeline outputs."""
 from __future__ import annotations
 
+import json
 import logging
 import sys
 from dataclasses import dataclass
+from datetime import datetime, UTC
 from pathlib import Path
 
 from llama_index.core.llms.llm import LLM
@@ -70,6 +72,31 @@ class FlawTraceResult:
     llm_calls_made: int = 0
 
 
+class EventLogger:
+    """Appends JSON events to a JSONL file for live monitoring.
+
+    Usage: tail -f events.jsonl
+    """
+
+    def __init__(self, path: Path | None):
+        self._path = path
+        if self._path:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            # Truncate on start so each run is a fresh log
+            self._path.write_text("", encoding="utf-8")
+
+    def log(self, event_type: str, **data: object) -> None:
+        if self._path is None:
+            return
+        entry = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "event": event_type,
+            **data,
+        }
+        with open(self._path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+
 class FlawTracer:
     """Traces flaws upstream through the PlanExe pipeline DAG."""
 
@@ -79,6 +106,7 @@ class FlawTracer:
         llm_executor: LLMExecutor,
         max_depth: int = 15,
         verbose: bool = False,
+        events_path: Path | None = None,
     ):
         self.output_dir = output_dir
         self.llm_executor = llm_executor
@@ -86,6 +114,7 @@ class FlawTracer:
         self.verbose = verbose
         self._llm_calls = 0
         self._checked: set[tuple[str, str]] = set()  # (stage_name, flaw_description) dedup
+        self._events = EventLogger(events_path)
 
     def trace(self, starting_file: str, flaw_description: str) -> FlawTraceResult:
         """Main entry point. Identify flaws and trace each upstream."""
@@ -102,13 +131,19 @@ class FlawTracer:
 
         # Phase 1: Identify flaws
         self._log(f"Phase 1: Identifying flaws in {starting_file}")
+        self._events.log("phase1_start", file=starting_file, stage=stage_name)
         identified = self._identify_flaws(starting_file, file_content, flaw_description)
         self._log(f"  Found {len(identified.flaws)} flaw(s)")
+        self._events.log("phase1_done", flaws_found=len(identified.flaws),
+                         summaries=[f.description for f in identified.flaws])
 
         traced_flaws: list[TracedFlaw] = []
         for i, flaw in enumerate(identified.flaws):
             flaw_id = f"flaw_{i + 1:03d}"
             self._log(f"\nTracing {flaw_id}: {flaw.description}")
+            self._events.log("trace_flaw_start", flaw_id=flaw_id,
+                             flaw_index=i + 1, flaw_total=len(identified.flaws),
+                             description=flaw.description, severity=flaw.severity)
 
             starting_entry = TraceEntry(
                 stage=stage_name,
@@ -137,15 +172,21 @@ class FlawTracer:
 
             # Phase 3: Source code analysis at origin (always, when origin is known)
             if traced.origin_stage is not None:
+                self._events.log("phase3_start", flaw_id=flaw_id, origin_stage=traced.origin_stage)
                 self._analyze_source_code(
                     traced, traced.origin_stage, flaw.description,
                     next((e.evidence for e in traced.trace if e.stage == traced.origin_stage), flaw.evidence)
                 )
 
+            self._events.log("trace_flaw_done", flaw_id=flaw_id,
+                             origin_stage=traced.origin_stage, depth=traced.depth)
             traced_flaws.append(traced)
 
         # Sort by depth (deepest origin first)
         traced_flaws.sort(key=lambda f: f.depth, reverse=True)
+
+        self._events.log("trace_complete", total_flaws=len(traced_flaws),
+                         llm_calls=self._llm_calls)
 
         return FlawTraceResult(
             starting_file=starting_file,
@@ -210,11 +251,15 @@ class FlawTracer:
 
             upstream_content = upstream_path.read_text(encoding="utf-8")
             self._log(f"  Checking upstream: {upstream_name} ({upstream_path.name})")
+            self._events.log("upstream_check", stage=upstream_name,
+                             file=upstream_path.name, depth=depth)
 
             result = self._check_upstream(flaw_description, evidence, upstream_path.name, upstream_content)
 
             if result.found:
                 self._log(f"  -> FOUND in {upstream_name}")
+                self._events.log("upstream_found", stage=upstream_name,
+                                 file=upstream_path.name, depth=depth)
                 found_upstream = True
                 entry = TraceEntry(
                     stage=upstream_name,
@@ -238,6 +283,7 @@ class FlawTracer:
             # Current stage is the origin — flaw exists here but not in any upstream
             traced.origin_stage = current_stage
             traced.depth = len(traced.trace)
+            self._events.log("origin_found", stage=current_stage, depth=traced.depth)
             # Mark the current stage entry as origin
             for entry in traced.trace:
                 if entry.stage == current_stage:

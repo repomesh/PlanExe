@@ -76,11 +76,14 @@ def main() -> None:
         max_validation_retries=1,
     )
 
+    events_path = report_dir / "events.jsonl"
+
     tracer = FlawTracer(
         output_dir=output_dir,
         llm_executor=executor,
         max_depth=args.max_depth,
         verbose=args.verbose,
+        events_path=events_path,
     )
 
     print(f"Tracing flaws in {starting_file}...", file=sys.stderr)
@@ -101,6 +104,7 @@ def main() -> None:
     print(f"\nReports written:", file=sys.stderr)
     print(f"  JSON: {json_path}", file=sys.stderr)
     print(f"  Markdown: {md_path}", file=sys.stderr)
+    print(f"  Events: {events_path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

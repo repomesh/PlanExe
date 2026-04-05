@@ -22,7 +22,6 @@ from worker_plan_internal.flaw_tracer.prompts import (
     FlawIdentificationResult,
     IdentifiedFlaw,
     UpstreamCheckResult,
-    SourceCodeAnalysisResult,
 )
 from worker_plan_internal.llm_util.response_mockllm import ResponseMockLLM
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelWithInstance
@@ -36,13 +35,11 @@ def _make_executor() -> LLMExecutor:
 
 
 def _make_tracer(output_dir: Path, max_depth: int = 15, verbose: bool = False) -> FlawTracer:
-    """Create a FlawTracer with a dummy executor and a real source_code_base."""
+    """Create a FlawTracer with a dummy executor."""
     executor = _make_executor()
-    source_base = Path(__file__).resolve().parent.parent.parent.parent  # worker_plan/
     return FlawTracer(
         output_dir=output_dir,
         llm_executor=executor,
-        source_code_base=source_base,
         max_depth=max_depth,
         verbose=verbose,
     )
@@ -117,14 +114,6 @@ class TestFlawTracerPhase1(unittest.TestCase):
                         severity="HIGH",
                     )
                 ]
-            )
-
-            # Mock Phase 2: upstream check — not found (no upstream files on disk)
-            # Mock Phase 3: source code analysis
-            mock_analysis = SourceCodeAnalysisResult(
-                likely_cause="Prompt asks for budget without data",
-                relevant_code_section="system_prompt = ...",
-                suggestion="Add validation step",
             )
 
             with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \

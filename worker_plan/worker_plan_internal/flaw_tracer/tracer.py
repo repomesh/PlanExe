@@ -1,10 +1,11 @@
 # worker_plan/worker_plan_internal/flaw_tracer/tracer.py
 """Recursive depth-first flaw tracer for PlanExe pipeline outputs."""
+from __future__ import annotations
+
 import logging
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
 
 from llama_index.core.llms.llm import LLM
 
@@ -53,8 +54,8 @@ class TracedFlaw:
     severity: str
     starting_evidence: str
     trace: list[TraceEntry]
-    origin_stage: Optional[str] = None
-    origin: Optional[OriginInfo] = None
+    origin_stage: str | None = None
+    origin: OriginInfo | None = None
     depth: int = 0
     trace_complete: bool = True
 
@@ -76,13 +77,11 @@ class FlawTracer:
         self,
         output_dir: Path,
         llm_executor: LLMExecutor,
-        source_code_base: Path,
         max_depth: int = 15,
         verbose: bool = False,
     ):
         self.output_dir = output_dir
         self.llm_executor = llm_executor
-        self.source_code_base = source_code_base
         self.max_depth = max_depth
         self.verbose = verbose
         self._llm_calls = 0
@@ -200,6 +199,9 @@ class FlawTracer:
 
         found_upstream = False
         for upstream_name, upstream_path in upstream_files:
+            # Dedup key uses flaw_description so different flaws get independent
+            # upstream checks. If the LLM returns duplicate descriptions, they
+            # share check results.
             dedup_key = (upstream_name, flaw_description)
             if dedup_key in self._checked:
                 self._log(f"  Skipping {upstream_name} (already checked for this flaw)")
@@ -227,7 +229,8 @@ class FlawTracer:
                     traced, upstream_name, flaw_description,
                     result.evidence or evidence, depth + 1,
                 )
-                # After recursion, if origin was found deeper, stop tracing other branches
+                # First-match-wins: once an origin is found in one upstream
+                # branch, stop exploring others.
                 if traced.origin_stage is not None:
                     return
 

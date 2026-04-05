@@ -1,0 +1,125 @@
+# worker_plan/worker_plan_internal/flaw_tracer/prompts.py
+"""Pydantic models and prompt builders for the flaw tracer."""
+from typing import Literal
+from pydantic import BaseModel, Field
+from llama_index.core.llms import ChatMessage, MessageRole
+
+
+# -- Pydantic models for structured LLM output --------------------------------
+
+class IdentifiedFlaw(BaseModel):
+    """A discrete flaw found in a pipeline output file."""
+    description: str = Field(description="One-sentence description of the flaw")
+    evidence: str = Field(description="Direct quote from the file demonstrating the flaw")
+    severity: Literal["HIGH", "MEDIUM", "LOW"] = Field(
+        description="HIGH: fabricated data or missing critical analysis. MEDIUM: weak reasoning or vague claims. LOW: minor gaps."
+    )
+
+
+class FlawIdentificationResult(BaseModel):
+    """Result of analyzing a file for flaws."""
+    flaws: list[IdentifiedFlaw] = Field(description="List of discrete flaws found in the file")
+
+
+class UpstreamCheckResult(BaseModel):
+    """Result of checking an upstream file for a flaw precursor."""
+    found: bool = Field(description="True if this file contains the flaw or a precursor to it")
+    evidence: str | None = Field(description="Direct quote from the file if found, null otherwise")
+    explanation: str = Field(description="How this connects to the downstream flaw, or why this file is clean")
+
+
+class SourceCodeAnalysisResult(BaseModel):
+    """Result of analyzing source code at a flaw's origin stage."""
+    likely_cause: str = Field(description="What in the prompt or logic likely caused the flaw")
+    relevant_code_section: str = Field(description="The specific code or prompt text responsible")
+    suggestion: str = Field(description="How to fix or prevent this flaw")
+
+
+# -- Prompt builders -----------------------------------------------------------
+
+def build_flaw_identification_messages(
+    filename: str,
+    file_content: str,
+    user_flaw_description: str,
+) -> list[ChatMessage]:
+    """Build messages for Phase 1: identifying discrete flaws in a file."""
+    system = (
+        "You are analyzing an intermediary file from a project planning pipeline.\n"
+        "The user has identified problems in this output. Identify each discrete flaw.\n"
+        "For each flaw, provide a short description (one sentence), a direct quote "
+        "from the file as evidence, and a severity level.\n"
+        "Only identify real flaws — do not flag stylistic preferences or minor formatting issues.\n"
+        "Severity levels:\n"
+        "- HIGH: fabricated data, invented statistics, or missing critical analysis\n"
+        "- MEDIUM: weak reasoning, vague unsupported claims, or shallow treatment\n"
+        "- LOW: minor gaps that don't significantly impact the plan"
+    )
+    user = (
+        f"User's observation:\n{user_flaw_description}\n\n"
+        f"Filename: {filename}\n"
+        f"File content:\n{file_content}"
+    )
+    return [
+        ChatMessage(role=MessageRole.SYSTEM, content=system),
+        ChatMessage(role=MessageRole.USER, content=user),
+    ]
+
+
+def build_upstream_check_messages(
+    flaw_description: str,
+    evidence_quote: str,
+    upstream_filename: str,
+    upstream_file_content: str,
+) -> list[ChatMessage]:
+    """Build messages for Phase 2: checking if a flaw exists in an upstream file."""
+    system = (
+        "You are tracing a flaw through a project planning pipeline to find where it originated.\n"
+        "A downstream file contains a flaw. You are examining an upstream file that was an input "
+        "to the stage that produced the flawed output.\n"
+        "Determine if this upstream file contains the same problem or a precursor to it.\n"
+        "If YES: quote the relevant passage and explain how it connects to the downstream flaw.\n"
+        "If NO: explain why this file is clean regarding this specific flaw."
+    )
+    user = (
+        f"Flaw: {flaw_description}\n"
+        f"Evidence from downstream: {evidence_quote}\n\n"
+        f"Upstream filename: {upstream_filename}\n"
+        f"Upstream file content:\n{upstream_file_content}"
+    )
+    return [
+        ChatMessage(role=MessageRole.SYSTEM, content=system),
+        ChatMessage(role=MessageRole.USER, content=user),
+    ]
+
+
+def build_source_code_analysis_messages(
+    flaw_description: str,
+    evidence_quote: str,
+    source_code_contents: list[tuple[str, str]],
+) -> list[ChatMessage]:
+    """Build messages for Phase 3: analyzing source code at flaw origin.
+
+    Args:
+        source_code_contents: list of (filename, content) tuples
+    """
+    system = (
+        "A flaw was introduced at this pipeline stage. The flaw exists in its output "
+        "but NOT in any of its inputs, so this stage created it.\n"
+        "Examine the source code to identify what in the prompt text, logic, or processing "
+        "likely caused this flaw. Be specific — point to lines or prompt phrases.\n"
+        "Focus on the system prompt text and the data transformation logic."
+    )
+    source_sections = []
+    for fname, content in source_code_contents:
+        source_sections.append(f"--- {fname} ---\n{content}")
+    source_text = "\n\n".join(source_sections)
+
+    user = (
+        f"Flaw: {flaw_description}\n"
+        f"Evidence from output: {evidence_quote}\n\n"
+        f"Source code files:\n{source_text}"
+    )
+    return [
+        ChatMessage(role=MessageRole.SYSTEM, content=system),
+        ChatMessage(role=MessageRole.USER, content=user),
+    ]

@@ -66,7 +66,7 @@
         "pricing_kind": "paid"
     },
     "openrouter-gemma4-26b-a4b-it": {
-        "comment": "Released Apr 3, 2026, 262,144 context, $0.13/M input tokens, $0.40/M output tokens",
+        "comment": "Slower and worse than Gemini 2.0 Flash. Released Apr 3, 2026, 262,144 context, $0.13/M input tokens, $0.40/M output tokens",
         "luigi_workers": 4,
         "model_info_url": "https://openrouter.ai/google/gemma-4-26b-a4b-it",
         "class": "OpenRouter",

@@ -89,7 +89,7 @@ class EventLogger:
         if self._path is None:
             return
         entry = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": datetime.now(UTC).strftime("%H:%M:%S"),
             "event": event_type,
             **data,
         }

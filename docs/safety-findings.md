@@ -9,7 +9,11 @@ The model sees the full plan. It is not being tricked. In the example below, the
 "amendments to laws against murder", "less lethal formats", and "exploitation of vulnerable individuals" 
 The model responds with a professionally formatted work breakdown structure.
 
-Tested across models from Google, OpenAI, Alibaba, DeepSeek, Meta, and Anthropic — cloud APIs and local models. All comply.
+I tested a substantial set of widely used models and found repeated willingness to generate operational plans for harmful goals. 
+I did not exhaustively test all available models. I prefer cheap and fast LLMs. I avoid reasoning models that are slow and expensive. 
+These results should not be read as a universal claim about every model.
+
+Tested across models from Google, OpenAI, Alibaba, DeepSeek, Meta, and Anthropic — cloud APIs and local models. Many of them comply.
 Each generated plan's zip file contains metadata showing which model produced each step.
 In 2025 Q3, I reported my concerns, got told `not fixable` by Google and `slop` by AI safety researchers.
 

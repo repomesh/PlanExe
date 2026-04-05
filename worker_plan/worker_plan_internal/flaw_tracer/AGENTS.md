@@ -6,47 +6,46 @@
 - **Source code analysis gives actionable suggestions.** When the origin is correctly identified, the Phase 3 output points to specific prompt text and proposes concrete fixes.
 - **Depth sorting is useful.** Deepest root causes appear first, which matches the user's intent of finding the earliest upstream origin.
 - **Events.jsonl enables live monitoring.** Users can `tail -f events.jsonl` to watch progress instead of waiting blindly.
-- **Evidence quoting works.** The LLM generally finds relevant passages in upstream files.
+- **Phase 1 anchors to the user's flaw.** The user's specific flaw is always the first result, with additional flaws limited to the same problem family. Verified on the Minecraft escape run — the zoning/permits flaw is now correctly identified and traced.
+- **Upstream checks require causal links.** The prompt requires the LLM to explain *how* upstream content caused the downstream flaw, not just topical overlap. This produces tighter, more accurate traces.
+- **Evidence quotes are concise.** Both Phase 1 and Phase 2 prompts instruct the LLM to keep quotes under 200 characters.
+- **Source code filenames are disambiguated.** Shows `stages/identify_purpose.py` and `assume/identify_purpose.py` instead of duplicate bare filenames.
 
-## Known issues to fix
+## Fixed issues
 
-### HIGH: Phase 1 doesn't anchor to the user's flaw description
+### Phase 1 didn't anchor to user's flaw (was HIGH, fixed)
 
-The user provides a specific flaw (e.g., "zoning and permits in Shanghai lack specifics") but Phase 1 identifies *different* flaws from the file instead. The LLM uses the description as inspiration rather than finding that exact flaw and closely related ones.
+The Phase 1 prompt now requires the user's specific flaw as the first item, with additional flaws limited to the same problem family. Before the fix, the LLM would ignore the user's flaw and identify unrelated issues.
 
-**Root cause:** The Phase 1 prompt says "identify each discrete flaw" broadly. It should prioritize flaws matching the user's description, then optionally find additional ones.
+### Upstream checks were too loose (was MEDIUM, fixed)
 
-**Fix direction:** Restructure the Phase 1 prompt to first locate the user's specific flaw in the file, then look for related flaws. Consider splitting into "anchor the user's flaw" + "find additional flaws" as two steps.
+The Phase 2 prompt now requires a causal mechanism ("how did this upstream content lead to the downstream flaw?") and explicitly rejects topical overlap. Before the fix, the LLM would say "found" whenever an upstream file discussed a related topic.
 
-### MEDIUM: Upstream checks are too loose
+### Evidence quotes were too long (was MEDIUM, fixed)
 
-The LLM says "found" when an upstream file discusses a related *topic* rather than containing the actual *precursor* to the flaw. Example: a flaw about "Lead Room Designer talent availability" traces through "Room Design Complexity" evidence because both involve room design.
+Both Phase 1 and Phase 2 prompts now instruct "keep quotes under 200 characters." Before the fix, evidence fields contained entire JSON objects (100+ lines).
 
-**Root cause:** The upstream check prompt asks "does this file contain the same problem or a precursor?" — the word "precursor" is too vague. The LLM interprets topical similarity as causal connection.
+### Duplicate source code filenames (was LOW, fixed)
 
-**Fix direction:** Make the upstream check prompt more specific. Require the LLM to explain the causal mechanism (how upstream content *caused* the downstream flaw), not just topical overlap. Consider asking the LLM to rate confidence (HIGH/MEDIUM/LOW) and only follow HIGH-confidence matches.
+Source code paths now include the parent directory (`stages/identify_purpose.py`) to disambiguate files with the same name in different packages.
 
-### MEDIUM: Evidence quotes are too long
+## Open issues to monitor
 
-Some evidence fields contain entire JSON objects (100+ lines) instead of the relevant snippet. This makes the output hard to read and wastes context window in downstream LLM calls.
+### LOW: Flaw convergence on same origin
 
-**Fix direction:** Add guidance to the upstream check prompt: "Quote only the specific sentence or phrase that demonstrates the flaw, not the entire surrounding object or section. Keep quotes under 200 characters."
+In the first test run (India census, before prompt fixes), 3 of 5 flaws traced back to `potential_levers`. After the prompt tightening, the Minecraft escape run showed all 3 flaws converging on `identify_risks` — but this makes sense since all 3 flaws were about the same problem family (missing regulatory specifics). Monitor across more diverse runs to determine if convergence is a real pattern or an artifact.
 
-### LOW: Duplicate source code filenames are confusing
+### LOW: First-match-wins may miss parallel origins
 
-When the stage file and implementation file have the same name (e.g., `identify_purpose.py` in both `stages/` and `assume/`), the output shows `["identify_purpose.py", "identify_purpose.py"]`.
-
-**Fix direction:** Include the parent directory in source code file names, e.g., `stages/identify_purpose.py` and `assume/identify_purpose.py`.
-
-### LOW: Most flaws converge on the same origin
-
-In test runs, 3 of 5 flaws trace back to `potential_levers`. This may be accurate (many downstream issues really do originate from lever identification) but could also indicate the upstream check is too eager. Worth monitoring across more runs to determine if this is a real pattern or an artifact of loose matching.
+The `_trace_upstream` method follows only the first upstream branch where the flaw is found. If a flaw has precursors in multiple parallel branches, only one is traced. This is a deliberate efficiency trade-off. If users report missing origins, consider adding a mode that follows all branches.
 
 ## Test runs completed
 
-1. **India census** (`20250101_india_census`): Started from `029-2-self_audit.md`, 17 flaws found, 153 LLM calls, deepest origin: `potential_levers` (depth 6). Many flaws traced to early pipeline stages.
+1. **India census** (`20250101_india_census`): Started from `029-2-self_audit.md`, 17 flaws found, 153 LLM calls, deepest origin: `potential_levers` (depth 6). Run with old prompts — flaws were not anchored to user input, traces were loose.
 
-2. **Minecraft escape** (`20251016_minecraft_escape`): Started from `029-2-self_audit.md` with specific flaw about zoning/permits, 5 flaws found, 43 LLM calls, deepest origin: `identify_purpose` (depth 5). The user's specific flaw was not among the 5 identified — exposed the Phase 1 anchoring problem.
+2. **Minecraft escape v1** (`20251016_minecraft_escape`): Started from `029-2-self_audit.md` with flaw about zoning/permits. Old prompts: 5 flaws found, 43 LLM calls, user's flaw not identified. Exposed the Phase 1 anchoring problem.
+
+3. **Minecraft escape v2** (`20251016_minecraft_escape`): Same input, new prompts. 3 flaws found, 31 LLM calls, deepest origin: `identify_risks` (depth 5). User's zoning/permits flaw correctly identified as flaw_001. All 3 flaws in the same problem family (regulatory gaps). Evidence quotes concise. Traces causally sound.
 
 ## Architecture notes
 

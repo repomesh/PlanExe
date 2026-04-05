@@ -45,9 +45,15 @@ def build_flaw_identification_messages(
     """Build messages for Phase 1: identifying discrete flaws in a file."""
     system = (
         "You are analyzing an intermediary file from a project planning pipeline.\n"
-        "The user has identified problems in this output. Identify each discrete flaw.\n"
+        "The user has described a specific flaw they observed. Your job:\n\n"
+        "1. FIRST, locate the user's specific flaw in the file. Find the passage that "
+        "corresponds to what the user described. This flaw MUST be the first item in your list.\n"
+        "2. THEN, identify any additional discrete flaws that are closely related to the "
+        "user's concern (e.g., other instances of the same problem pattern, or flaws that "
+        "share the same root cause). Do NOT list every possible flaw in the file — only "
+        "those connected to what the user raised.\n\n"
         "For each flaw, provide a short description (one sentence), a direct quote "
-        "from the file as evidence, and a severity level.\n"
+        "from the file as evidence (keep quotes under 200 characters), and a severity level.\n"
         "Only identify real flaws — do not flag stylistic preferences or minor formatting issues.\n"
         "Severity levels:\n"
         "- HIGH: fabricated data, invented statistics, or missing critical analysis\n"
@@ -55,7 +61,7 @@ def build_flaw_identification_messages(
         "- LOW: minor gaps that don't significantly impact the plan"
     )
     user = (
-        f"User's observation:\n{user_flaw_description}\n\n"
+        f"User's flaw description:\n{user_flaw_description}\n\n"
         f"Filename: {filename}\n"
         f"File content:\n{file_content}"
     )
@@ -75,10 +81,14 @@ def build_upstream_check_messages(
     system = (
         "You are tracing a flaw through a project planning pipeline to find where it originated.\n"
         "A downstream file contains a flaw. You are examining an upstream file that was an input "
-        "to the stage that produced the flawed output.\n"
-        "Determine if this upstream file contains the same problem or a precursor to it.\n"
-        "If YES: quote the relevant passage and explain how it connects to the downstream flaw.\n"
-        "If NO: explain why this file is clean regarding this specific flaw."
+        "to the stage that produced the flawed output.\n\n"
+        "Determine if this upstream file CAUSED or CONTRIBUTED to the downstream flaw.\n"
+        "This means the upstream file contains content that was carried forward, transformed, "
+        "or amplified into the downstream flaw. Merely discussing a related topic is NOT enough.\n\n"
+        "If YES: quote the specific sentence or phrase (under 200 characters) and explain "
+        "the causal mechanism — how this upstream content led to the downstream flaw.\n"
+        "If NO: explain why this file is clean regarding this specific flaw.\n\n"
+        "Be strict. Only say YES if you can identify a clear causal link, not just topical overlap."
     )
     user = (
         f"Flaw: {flaw_description}\n"

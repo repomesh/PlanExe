@@ -18,10 +18,10 @@ class TestStageInfo(unittest.TestCase):
     def test_all_stages_have_required_fields(self):
         for stage in STAGES:
             self.assertIsInstance(stage.name, str, f"{stage.name} name")
-            self.assertIsInstance(stage.output_files, list, f"{stage.name} output_files")
+            self.assertIsInstance(stage.output_files, tuple, f"{stage.name} output_files")
             self.assertTrue(len(stage.output_files) > 0, f"{stage.name} has no output_files")
-            self.assertIsInstance(stage.upstream_stages, list, f"{stage.name} upstream_stages")
-            self.assertIsInstance(stage.source_code_files, list, f"{stage.name} source_code_files")
+            self.assertIsInstance(stage.upstream_stages, tuple, f"{stage.name} upstream_stages")
+            self.assertIsInstance(stage.source_code_files, tuple, f"{stage.name} source_code_files")
             self.assertIsInstance(stage.primary_output, str, f"{stage.name} primary_output")
             self.assertIn(stage.primary_output, stage.output_files, f"{stage.name} primary_output not in output_files")
 

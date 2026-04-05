@@ -84,7 +84,8 @@ def write_markdown_report(result: FlawTraceResult, output_path: Path) -> None:
     lines.append(f"**LLM calls:** {result.llm_calls_made}")
     lines.append("")
 
-    for flaw in result.flaws:
+    sorted_flaws = sorted(result.flaws, key=lambda f: f.depth, reverse=True)
+    for flaw in sorted_flaws:
         lines.append("---")
         lines.append("")
         lines.append(f"## {flaw.id.replace('_', ' ').title()} ({flaw.severity}): {flaw.description}")

@@ -68,7 +68,7 @@
     .models-table {
         width: 100%;
         border-collapse: collapse;
-        table-layout: auto;
+        table-layout: fixed;
         font-size: 0.84rem;
     }
     .models-table th {
@@ -93,12 +93,11 @@
         border-bottom: none;
     }
     .models-col-key {
-        width: 22%;
+        width: 18%;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .models-col-prio {
-        width: 1%;
-        max-width: 40px;
+        width: 4%;
         text-align: right;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         white-space: nowrap;
@@ -108,7 +107,7 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     .models-col-pricing {
-        width: 8%;
+        width: 6%;
         white-space: nowrap;
     }
     .pricing-badge {
@@ -140,11 +139,10 @@
         color: var(--color-text-secondary);
     }
     .models-col-comment {
-        width: 40%;
+        width: 49%;
     }
     .models-col-info {
-        width: 1%;
-        max-width: 40px;
+        width: 5%;
         white-space: nowrap;
     }
     th.models-col-prio,

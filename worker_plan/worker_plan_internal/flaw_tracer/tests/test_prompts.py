@@ -46,11 +46,22 @@ class TestPydanticModels(unittest.TestCase):
 
     def test_source_code_analysis_result(self):
         result = SourceCodeAnalysisResult(
+            category="prompt_fixable",
             likely_cause="prompt lacks validation",
             relevant_code_section="system_prompt = ...",
             suggestion="add grounding check",
         )
+        self.assertEqual(result.category, "prompt_fixable")
         self.assertIsInstance(result.likely_cause, str)
+
+    def test_source_code_analysis_rejects_invalid_category(self):
+        with self.assertRaises(Exception):
+            SourceCodeAnalysisResult(
+                category="unknown_category",
+                likely_cause="test",
+                relevant_code_section="test",
+                suggestion="test",
+            )
 
 
 class TestBuildFlawIdentificationMessages(unittest.TestCase):

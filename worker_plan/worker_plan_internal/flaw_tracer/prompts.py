@@ -30,7 +30,14 @@ class UpstreamCheckResult(BaseModel):
 
 class SourceCodeAnalysisResult(BaseModel):
     """Result of analyzing source code at a flaw's origin stage."""
-    likely_cause: str = Field(description="What in the prompt or logic likely caused the flaw")
+    category: Literal["prompt_fixable", "domain_complexity", "missing_input"] = Field(
+        description=(
+            "prompt_fixable: the prompt forgot to ask for something or has a gap that can be fixed by editing the prompt. "
+            "domain_complexity: the topic is inherently uncertain, contentious, or requires domain expertise that no prompt change can resolve. "
+            "missing_input: the user's plan prompt didn't provide enough context for the pipeline to work with."
+        )
+    )
+    likely_cause: str = Field(description="What in the prompt, logic, or domain caused the flaw")
     relevant_code_section: str = Field(description="The specific code or prompt text responsible")
     suggestion: str = Field(description="How to fix or prevent this flaw")
 
@@ -114,10 +121,20 @@ def build_source_code_analysis_messages(
     """
     system = (
         "A flaw was introduced at this pipeline stage. The flaw exists in its output "
-        "but NOT in any of its inputs, so this stage created it.\n"
-        "Examine the source code to identify what in the prompt text, logic, or processing "
-        "likely caused this flaw. Be specific — point to lines or prompt phrases.\n"
-        "Focus on the system prompt text and the data transformation logic."
+        "but NOT in any of its inputs, so this stage created it.\n\n"
+        "First, classify the root cause into one of three categories:\n"
+        "- prompt_fixable: The prompt has a gap or oversight that can be fixed by editing "
+        "the prompt text. Example: the prompt asks for budget estimates but doesn't require "
+        "sourcing or validation.\n"
+        "- domain_complexity: The topic is inherently uncertain, politically sensitive, or "
+        "requires specialized domain expertise that no prompt change can fully resolve. "
+        "Example: caste enumeration in India is politically contentious regardless of how "
+        "the prompt is worded.\n"
+        "- missing_input: The user's original plan description didn't provide enough detail "
+        "for this stage to produce quality output. Example: the plan says 'open a shop' "
+        "without specifying location, budget, or target market.\n\n"
+        "Then examine the source code to identify the specific cause. Be specific — point "
+        "to lines or prompt phrases. Focus on the system prompt text and data transformation logic."
     )
     source_sections = []
     for fname, content in source_code_contents:

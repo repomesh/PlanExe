@@ -53,6 +53,7 @@ def write_json_report(result: FlawTraceResult, output_path: Path) -> None:
                 "stage": flaw.origin.stage,
                 "file": flaw.origin.file,
                 "source_code_files": flaw.origin.source_code_files,
+                "category": flaw.origin.category,
                 "likely_cause": flaw.origin.likely_cause,
                 "suggestion": flaw.origin.suggestion,
             }
@@ -117,6 +118,14 @@ def write_markdown_report(result: FlawTraceResult, output_path: Path) -> None:
 
         # Origin analysis
         if flaw.origin:
+            category_labels = {
+                "prompt_fixable": "Prompt fixable",
+                "domain_complexity": "Domain complexity",
+                "missing_input": "Missing input",
+            }
+            category_label = category_labels.get(flaw.origin.category, flaw.origin.category)
+            lines.append(f"**Category:** {category_label}")
+            lines.append("")
             lines.append(f"**Root cause:** {flaw.origin.likely_cause}")
             lines.append("")
             lines.append(f"**Source files:** {', '.join(flaw.origin.source_code_files)}")

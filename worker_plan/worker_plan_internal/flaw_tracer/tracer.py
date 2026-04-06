@@ -44,6 +44,7 @@ class OriginInfo:
     stage: str
     file: str
     source_code_files: list[str]
+    category: str  # "prompt_fixable", "domain_complexity", or "missing_input"
     likely_cause: str
     suggestion: str
 
@@ -321,6 +322,7 @@ class FlawTracer:
                 stage=stage_name,
                 file=traced.trace[-1].file if traced.trace else "",
                 source_code_files=source_file_names,
+                category=analysis.category,
                 likely_cause=analysis.likely_cause,
                 suggestion=analysis.suggestion,
             )

@@ -35,6 +35,7 @@ def _make_sample_result() -> FlawTraceResult:
                     stage="make_assumptions",
                     file="003-5-make_assumptions.md",
                     source_code_files=["make_assumptions.py"],
+                    category="prompt_fixable",
                     likely_cause="Prompt generates budget without data",
                     suggestion="Add validation step",
                 ),

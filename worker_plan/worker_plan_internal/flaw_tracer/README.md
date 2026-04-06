@@ -8,11 +8,14 @@ PlanExe runs a DAG of ~70 tasks. Each task reads upstream files, calls an LLM, a
 
 The flaw tracer performs a recursive depth-first search:
 
-1. **Phase 1 — Identify flaws.** Reads the starting file and asks the LLM to identify discrete flaws based on your description.
-2. **Phase 2 — Trace upstream.** For each flaw, walks upstream through the DAG one hop at a time, asking the LLM whether the flaw or a precursor exists in each input file. Continues until it finds a stage where the flaw exists in the output but not in any inputs.
-3. **Phase 3 — Analyze source code.** At the origin stage, reads the Python source code that generated the output and asks the LLM what in the prompt or logic likely caused the flaw.
+1. **Phase 1 — Identify flaws.** Reads the starting file and locates the specific flaw you described, plus any closely related flaws in the same problem family.
+2. **Phase 2 — Trace upstream.** For each flaw, walks upstream through the DAG one hop at a time, asking the LLM whether the flaw was *caused by* content in each input file (requires causal link, not just topical overlap). Continues until it finds a stage where the flaw exists in the output but not in any inputs.
+3. **Phase 3 — Analyze source code and classify.** At the origin stage, reads the Python source code and classifies the root cause:
+   - **Prompt fixable** — the prompt has a gap that can be fixed by editing it
+   - **Domain complexity** — the topic is inherently uncertain or contentious, no prompt change resolves it
+   - **Missing input** — the user's plan prompt didn't provide enough detail
 
-Output is a JSON file (`flaw_trace.json`) and a markdown report (`flaw_trace.md`), sorted by trace depth so the deepest root cause appears first.
+Output is a JSON file (`flaw_trace.json`), a markdown report (`flaw_trace.md`), and a live event log (`events.jsonl`), sorted by trace depth so the deepest root cause appears first.
 
 ## Prerequisites
 
@@ -74,25 +77,36 @@ Trace a flaw from the self-audit:
     --verbose
 ```
 
-Trace a budget flaw from the executive summary:
+Trace a zoning/permits flaw:
 
 ```bash
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
-    --dir /path/to/output/20250101_india_census \
-    --file 025-2-executive_summary.md \
-    --flaw "The budget claims CZK 500,000 but also states costs may exceed that by 20%. The budget is an unvalidated placeholder, not a reliable plan." \
+    --dir /path/to/output/20251016_minecraft_escape \
+    --file 029-2-self_audit.md \
+    --flaw "Infeasible Constraints Rated MEDIUM because the plan mentions zoning and permits but lacks specifics for the Shanghai location." \
     --output-dir /tmp/flaw-analysis2 \
     --verbose
 ```
 
+### Monitoring progress
+
+While the tracer runs, watch the live event log in another terminal:
+
+```bash
+tail -f /tmp/flaw-analysis/events.jsonl
+```
+
 ### Output
 
-Each run produces two files in `--output-dir` (or `--dir` if not specified):
+Each run produces three files in `--output-dir` (or `--dir` if not specified):
 
 - `flaw_trace.json` — machine-readable trace with full details
 - `flaw_trace.md` — human-readable report with trace tables
+- `events.jsonl` — live event log for monitoring progress
 
-Flaws are sorted by trace depth (deepest root cause first). A typical run on a downstream file like `029-2-self_audit.md` finds 10-20 flaws and makes 100-200 LLM calls.
+Flaws are sorted by trace depth (deepest root cause first). Each flaw's origin includes a **category** (`prompt_fixable`, `domain_complexity`, or `missing_input`) so you know whether the fix is a prompt edit, a domain limitation to accept, or a need for more detail in the plan input.
+
+A typical run finds 2-3 focused flaws and makes 15-30 LLM calls.
 
 ## Running tests
 

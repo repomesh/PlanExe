@@ -39,15 +39,27 @@ Before the fix, every suggestion was "modify the system prompt" even when the re
 
 Source code paths now include the parent directory (`stages/identify_purpose.py`) to disambiguate files with the same name in different packages.
 
-## Open issues to monitor
+## Open issues
 
-### LOW: Flaw convergence on same origin
+### MEDIUM: Non-determinism untested
 
-After prompt tightening, convergence now makes sense — flaws in the same problem family naturally trace to the same origin. The Minecraft escape run had all 3 regulatory flaws converge on `identify_risks`, which is correct. Monitor across more diverse runs.
+This is LLM judging LLM output. Every upstream check is a subjective call. Two runs on the same input may produce different traces. We haven't tested reproducibility — run the same input 3 times and compare. If traces diverge significantly, consider requiring higher-confidence matches or running multiple passes and intersecting results.
+
+### MEDIUM: Static registry will drift
+
+The DAG mapping in `registry.py` is a hand-maintained copy of the pipeline topology. Adding, removing, or renaming stages requires a manual update — the registry won't auto-detect changes. If the registry falls out of sync, traces will silently miss stages or follow wrong paths.
+
+**Fix direction:** Generate the registry from Luigi task introspection at startup, or add a CI check that compares the registry against the actual task classes.
 
 ### LOW: First-match-wins may miss parallel origins
 
-The `_trace_upstream` method follows only the first upstream branch where the flaw is found. If a flaw has precursors in multiple parallel branches, only one is traced. This is a deliberate efficiency trade-off. If users report missing origins, consider adding a mode that follows all branches.
+The `_trace_upstream` method follows only the first upstream branch where the flaw is found. Real flaws often have multiple contributing causes from parallel branches, but only one is traced. The trace looks clean and linear, but reality is messier.
+
+**Fix direction:** Add a `--thorough` mode that follows all branches where the flaw is found, producing a tree instead of a chain.
+
+### LOW: Flaw convergence on same origin
+
+After prompt tightening, convergence makes sense — flaws in the same problem family naturally trace to the same origin. Monitor across more diverse runs.
 
 ## Test runs completed
 
@@ -60,6 +72,18 @@ The `_trace_upstream` method follows only the first upstream branch where the fl
 4. **India census v2** (`20250101_india_census`): New prompts. 2 flaws (down from 17), 17 LLM calls (down from 153), deepest origin: `potential_levers` (depth 6). User's flaw correctly identified. Exposed Phase 3 "always blames prompt" limitation.
 
 5. **India census v3** (`20250101_india_census`): New prompts + Phase 3 classification. 2 flaws, 17 LLM calls. Caste enumeration correctly classified as `domain_complexity`. Workforce feasibility correctly classified as `prompt_fixable`. All fixes verified working.
+
+## Honest assessment
+
+The tool is a useful diagnostic prototype. The trace chains are the most trustworthy part — they're mechanically grounded in the DAG structure. The suggestions are LLM opinions — useful starting points, not patches.
+
+The category classification (`prompt_fixable` / `domain_complexity` / `missing_input`) turned out to be the most valuable feature. It prevents wasted effort on flaws that can't be fixed by prompt editing.
+
+The tool is diagnostic, not prescriptive. It tells you *where* a flaw originated and *why*, but someone still has to decide what to do. It can't catch flaws that don't leave textual evidence — timing issues, model-specific quirks, or structural DAG problems are invisible.
+
+Starting from `029-2-self_audit.md` is the sweet spot. That file already contains identified issues, so the tracer is tracing known problems upstream rather than discovering flaws from scratch.
+
+Before relying on this for automated decisions (e.g., in the self-improve loop), it needs more diverse test runs (10+ plans) and reproducibility testing.
 
 ## Architecture notes
 

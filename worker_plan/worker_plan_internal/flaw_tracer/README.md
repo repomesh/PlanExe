@@ -108,6 +108,21 @@ Flaws are sorted by trace depth (deepest root cause first). Each flaw's origin i
 
 A typical run finds 2-3 focused flaws and makes 15-30 LLM calls.
 
+## Tips
+
+- **Start from `029-2-self_audit.md`.** This file already contains identified issues, so you're tracing *known* problems upstream rather than asking the LLM to find flaws from scratch.
+- **Trust the trace chains more than the suggestions.** The upstream path (which stages the flaw passed through) is mechanically grounded in the DAG. The suggestions are LLM opinions — useful starting points, not patches.
+- **Check the category before acting.** If the origin is `domain_complexity`, don't spend time tweaking the prompt. If it's `prompt_fixable`, the suggestion is likely actionable.
+- **Results are non-deterministic.** This is LLM judging LLM output. Two runs on the same input may produce slightly different traces. If a finding matters, run it twice.
+
+## Limitations
+
+- **LLM subjectivity.** Every hop in the trace is a judgment call by the LLM ("did this upstream file cause the downstream flaw?"). The causal-link requirement helps, but it's still one LLM's opinion.
+- **First-match-wins.** When a flaw has precursors in multiple parallel upstream branches, only the first branch found is followed. Real flaws often have multiple contributing causes.
+- **Static registry.** The DAG mapping is hand-maintained in `registry.py`. Adding, removing, or renaming pipeline stages requires a manual registry update — it won't auto-detect changes.
+- **Text-only.** The tracer can only catch flaws that leave textual evidence in intermediary files. Timing issues, model-specific quirks, or structural DAG problems are invisible to it.
+- **Diagnostic, not prescriptive.** It tells you *where* and *why*, but someone still has to decide what to do about it.
+
 ## Running tests
 
 ```bash

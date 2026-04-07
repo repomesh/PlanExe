@@ -219,7 +219,7 @@ def extract_dag() -> dict[str, Any]:
     return {
         "schema_version": "1.0",
         "pipeline_name": "planning_pipeline",
-        "description": "PlanExe's LLM-driven planning pipeline",
+        "description": "DAG for PlanExe, an AI-driven project planning system.",
         "stages": stages,
     }
 

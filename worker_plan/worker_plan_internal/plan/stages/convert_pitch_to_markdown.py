@@ -9,12 +9,7 @@ from worker_plan_internal.plan.stages.create_pitch import CreatePitchTask
 
 
 class ConvertPitchToMarkdownTask(PlanTask):
-    """
-    Human readable version of the pitch.
-
-    This task depends on:
-      - CreatePitchTask: Creates the pitch JSON.
-    """
+    """Convert the raw pitch JSON into a polished, scannable markdown document."""
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.PITCH_CONVERT_TO_MARKDOWN_RAW),

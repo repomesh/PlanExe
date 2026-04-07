@@ -29,9 +29,7 @@ from worker_plan_internal.plan.stages.screen_planning_prompt import ScreenPlanni
 
 
 class ReportTask(PlanTask):
-    """
-    Generate a report html document.
-    """
+    """Assemble all pipeline outputs into the final HTML report."""
     def output(self):
         return self.local_target(FilenameEnum.REPORT)
 

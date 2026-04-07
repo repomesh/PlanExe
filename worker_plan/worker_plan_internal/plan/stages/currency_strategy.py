@@ -12,9 +12,7 @@ from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdow
 
 
 class CurrencyStrategyTask(PlanTask):
-    """
-    Identify/suggest what currency to use for the plan, depending on the physical locations.
-    """
+    """Choose the project currency based on physical locations and cross-border needs."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

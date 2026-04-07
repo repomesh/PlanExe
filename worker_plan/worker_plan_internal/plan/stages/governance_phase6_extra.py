@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase6ExtraTask(PlanTask):
-    """Address additional governance considerations."""
+    """Validate prior governance phases with tough questions and a high-level summary."""
 
     def requires(self):
         return {

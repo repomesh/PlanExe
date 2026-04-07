@@ -8,9 +8,7 @@ from worker_plan_internal.plan.stages.draft_documents_to_find import DraftDocume
 
 
 class MarkdownWithDocumentsToCreateAndFindTask(PlanTask):
-    """
-    Create markdown with the "documents to create and find"
-    """
+    """Format drafted documents into a structured markdown with roles, templates, and approval steps."""
     def output(self):
         return self.local_target(FilenameEnum.DOCUMENTS_TO_CREATE_AND_FIND_MARKDOWN)
 

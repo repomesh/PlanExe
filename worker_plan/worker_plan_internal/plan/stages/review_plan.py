@@ -17,9 +17,7 @@ from worker_plan_internal.plan.stages.wbs_project_level1_level2_level3 import WB
 
 
 class ReviewPlanTask(PlanTask):
-    """
-    Ask questions about the almost finished plan.
-    """
+    """Critically review the near-final plan with targeted questions and SMART recommendations."""
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.REVIEW_PLAN_RAW),

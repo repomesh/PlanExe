@@ -15,9 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class PhysicalLocationsTask(PlanTask):
-    """
-    Identify/suggest physical locations for the plan.
-    """
+    """Determine where the project operates — extract or suggest physical locations."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

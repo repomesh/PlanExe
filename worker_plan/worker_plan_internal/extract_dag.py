@@ -165,7 +165,7 @@ def _extract_implementation(task: luigi.Task) -> dict[str, Any]:
 
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
     """Sort key: numeric prefix from the first output filename, then name."""
-    filename = stage["output_files"][0] if stage.get("output_files") else ""
+    filename = stage["artifacts"][0]["path"] if stage.get("artifacts") else ""
     match = re.match(r"(\d+)-?(\d+)?", filename)
     if match:
         major = int(match.group(1))
@@ -205,7 +205,7 @@ def extract_dag() -> dict[str, Any]:
         cls = type(task)
         stage_name = _class_name_to_stage_name(class_name)
         description = cls.description() if hasattr(cls, "description") else ""
-        output_files = _extract_output_filenames(task)
+        artifacts = [{"path": f} for f in _extract_output_filenames(task)]
         implementation = _extract_implementation(task)
         depends_on_names = sorted(set(
             _class_name_to_stage_name(dep.__class__.__name__)
@@ -215,7 +215,7 @@ def extract_dag() -> dict[str, Any]:
         stages.append({
             "id": stage_name,
             "description": description,
-            "output_files": output_files,
+            "artifacts": artifacts,
             "depends_on": depends_on_names,
             "implementation": implementation,
         })

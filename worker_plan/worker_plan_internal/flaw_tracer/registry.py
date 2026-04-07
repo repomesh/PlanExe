@@ -45,7 +45,7 @@ def _build_registry() -> tuple[NodeInfo, ...]:
     dag = extract_dag()
     nodes = []
     for entry in dag["nodes"]:
-        output_files = tuple(entry["output_files"])
+        output_files = tuple(a["path"] for a in entry["artifacts"])
         nodes.append(NodeInfo(
             name=entry["id"],
             output_files=output_files,

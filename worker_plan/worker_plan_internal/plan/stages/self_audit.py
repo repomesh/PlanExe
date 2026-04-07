@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class SelfAuditTask(PlanTask):
-    """Perform self-audit to validate plan completeness and consistency."""
+    """Checklist-based diagnostic: find gaps, contradictions, and unsupported claims across all stages."""
 
     def output(self):
         return {

@@ -8,13 +8,7 @@ from worker_plan_internal.plan.stages.create_wbs_level2 import CreateWBSLevel2Ta
 
 
 class WBSProjectLevel1AndLevel2Task(PlanTask):
-    """
-    Create a WBS project from the WBS Level 1 and Level 2 JSON files.
-
-    It depends on:
-      - CreateWBSLevel1Task: providing the cleaned WBS Level 1 JSON.
-      - CreateWBSLevel2Task: providing the major phases with subtasks and the task UUIDs.
-    """
+    """Merge Level 1 and Level 2 into a unified WBS project tree."""
     def output(self):
         return self.local_target(FilenameEnum.WBS_PROJECT_LEVEL1_AND_LEVEL2)
 

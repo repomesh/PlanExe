@@ -18,9 +18,7 @@ from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
 
 
 class ExecutiveSummaryTask(PlanTask):
-    """
-    Create an executive summary of the plan.
-    """
+    """Produce a concise one-pager for decision-makers with key findings and recommendations."""
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.EXECUTIVE_SUMMARY_RAW),

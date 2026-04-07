@@ -16,15 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreateWBSLevel2Task(PlanTask):
-    """
-    Creates the Work Breakdown Structure (WBS) Level 2.
-    Depends on:
-      - ProjectPlanTask: provides the project plan as JSON.
-      - CreateWBSLevel1Task: provides the cleaned WBS Level 1 result.
-    Produces:
-      - Raw WBS Level 2 output (007-wbs_level2_raw.json)
-      - Cleaned WBS Level 2 output (008-wbs_level2.json)
-    """
+    """Decompose top-level phases into major tasks (WBS Level 2)."""
     def requires(self):
         return {
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),

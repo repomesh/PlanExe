@@ -21,7 +21,7 @@ from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndA
 
 
 class PremortemTask(PlanTask):
-    """Conduct premortem analysis to identify potential failure modes."""
+    """Imagine the project has already failed — identify how and why it would happen."""
 
     def output(self):
         return {

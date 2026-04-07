@@ -12,14 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreateWBSLevel1Task(PlanTask):
-    """
-    Creates the Work Breakdown Structure (WBS) Level 1.
-    Depends on:
-      - ProjectPlanTask: provides the project plan as JSON.
-    Produces:
-      - Raw WBS Level 1 output file (xxx-wbs_level1_raw.json)
-      - Cleaned up WBS Level 1 file (xxx-wbs_level1.json)
-    """
+    """Extract the project title and top-level phases (WBS Level 1) from the project plan."""
     def requires(self):
         return {
             'project_plan': self.clone(ProjectPlanTask)

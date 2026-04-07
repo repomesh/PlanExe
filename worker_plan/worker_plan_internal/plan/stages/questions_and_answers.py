@@ -20,7 +20,7 @@ from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
 
 
 class QuestionsAndAnswersTask(PlanTask):
-    """Generate Q&A documentation addressing plan details."""
+    """Anticipate stakeholder questions and provide clear answers from the plan."""
 
     def output(self):
         return {

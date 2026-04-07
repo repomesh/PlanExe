@@ -1,15 +1,16 @@
 """Extract the pipeline DAG from Luigi task introspection.
 
 Walks the FullPlanPipeline task graph via requires()/output() and produces
-a JSON description of every stage: name, output files, primary output, and
-upstream stages.  This replaces the hand-maintained registry with a generated
-artifact that stays in sync with the actual pipeline code.
+a JSON description of every stage: name, output files, upstream stages,
+and source code files.  This replaces the hand-maintained registry with a
+generated artifact that stays in sync with the actual pipeline code.
 
 Usage:
     cd worker_plan
-    python -m worker_plan_internal.flaw_tracer.extract_dag
-    python -m worker_plan_internal.flaw_tracer.extract_dag --output pipeline_dag.json
+    python -m worker_plan_internal.extract_dag
+    python -m worker_plan_internal.extract_dag --output pipeline_dag.json
 """
+import inspect
 import json
 import re
 import sys
@@ -17,6 +18,20 @@ from pathlib import Path
 from typing import Any
 
 import luigi
+
+_WORKER_PLAN_DIR = Path(__file__).resolve().parent.parent  # worker_plan/
+
+# Module prefixes that are infrastructure/utilities, not implementation logic.
+# Imports from these are excluded from source_files auto-detection.
+_INFRASTRUCTURE_PREFIXES = (
+    "worker_plan_internal.plan.",
+    "worker_plan_internal.llm_util.",
+    "worker_plan_internal.llm_factory",
+    "worker_plan_internal.luigi_util.",
+    "worker_plan_internal.utils.",
+    "worker_plan_internal.format_",
+    "worker_plan_api.",
+)
 
 
 def _class_name_to_stage_name(class_name: str) -> str:
@@ -36,22 +51,6 @@ def _class_name_to_stage_name(class_name: str) -> str:
     # Insert underscore between consecutive uppercase run and uppercase+lowercase
     name = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
     return name.lower()
-
-
-def _pick_primary_output(filenames: list[str]) -> str:
-    """Pick the best primary output from a list of filenames.
-
-    Preference: .md > .html > non-raw file > first file.
-    """
-    for ext in (".md", ".html"):
-        for f in filenames:
-            if f.endswith(ext):
-                return f
-    # Prefer non-raw files
-    non_raw = [f for f in filenames if "_raw" not in f]
-    if non_raw:
-        return non_raw[0]
-    return filenames[0] if filenames else ""
 
 
 def _extract_output_filenames(task: luigi.Task) -> list[str]:
@@ -94,11 +93,68 @@ def _extract_upstream_tasks(task: luigi.Task) -> list[luigi.Task]:
     return []
 
 
+def _detect_implementation_files(cls: type) -> list[str]:
+    """Auto-detect implementation source files from module-level imports.
+
+    Scans the module that defines *cls* for classes and functions imported
+    from ``worker_plan_internal.*`` that are NOT infrastructure (stages,
+    LLM utilities, API types, etc.).  Returns paths relative to worker_plan/.
+    """
+    module = inspect.getmodule(cls)
+    if module is None:
+        return []
+
+    files: list[str] = []
+    seen_modules: set[str] = set()
+
+    for attr_name in dir(module):
+        obj = getattr(module, attr_name, None)
+        if obj is None or not (inspect.isclass(obj) or inspect.isfunction(obj)):
+            continue
+
+        obj_module_name = getattr(obj, "__module__", "") or ""
+        if not obj_module_name.startswith("worker_plan_internal."):
+            continue
+        if any(obj_module_name.startswith(p) for p in _INFRASTRUCTURE_PREFIXES):
+            continue
+        if obj_module_name in seen_modules:
+            continue
+        seen_modules.add(obj_module_name)
+
+        try:
+            obj_file = Path(inspect.getfile(obj)).resolve()
+            rel = str(obj_file.relative_to(_WORKER_PLAN_DIR))
+            if rel not in files:
+                files.append(rel)
+        except (TypeError, ValueError, OSError):
+            continue
+
+    return files
+
+
+def _extract_source_files(task: luigi.Task) -> list[str]:
+    """Get source files: task's own file + auto-detected implementation files.
+
+    If the task class overrides ``source_files()``, those are used as the
+    base.  Auto-detected implementation imports are appended if not already
+    present.
+    """
+    cls = type(task)
+
+    # Start with what the task class declares
+    declared = list(cls.source_files())
+
+    # Supplement with auto-detected implementation files
+    for f in _detect_implementation_files(cls):
+        if f not in declared:
+            declared.append(f)
+
+    return declared
+
+
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
-    """Sort key: numeric prefix from the primary output filename, then name."""
-    filename = stage.get("primary_output", "") or ""
-    if not filename and stage.get("output_files"):
-        filename = stage["output_files"][0]
+    """Sort key: numeric prefix from the first output filename, then name."""
+    filename = stage["output_files"][0] if stage.get("output_files") else ""
     match = re.match(r"(\d+)-?(\d+)?", filename)
     if match:
         major = int(match.group(1))
@@ -137,7 +193,7 @@ def extract_dag() -> list[dict[str, Any]]:
 
         stage_name = _class_name_to_stage_name(class_name)
         output_files = _extract_output_filenames(task)
-        primary_output = _pick_primary_output(output_files)
+        source_files = _extract_source_files(task)
         upstream_stage_names = sorted(set(
             _class_name_to_stage_name(dep.__class__.__name__)
             for dep in upstream_tasks
@@ -146,8 +202,8 @@ def extract_dag() -> list[dict[str, Any]]:
         stages.append({
             "name": stage_name,
             "output_files": output_files,
-            "primary_output": primary_output,
             "upstream_stages": upstream_stage_names,
+            "source_files": source_files,
         })
 
     _walk(root)

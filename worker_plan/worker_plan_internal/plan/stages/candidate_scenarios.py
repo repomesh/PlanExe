@@ -11,9 +11,7 @@ from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVi
 
 
 class CandidateScenariosTask(PlanTask):
-    """
-    Combinations of the vital few levers.
-    """
+    """Generate aggressive, moderate, and conservative scenarios from the vital few levers."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

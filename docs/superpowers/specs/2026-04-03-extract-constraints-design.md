@@ -63,7 +63,7 @@ Output:
 
 ## Pipeline Stage
 
-**Stage file:** `worker_plan_internal/plan/stages/extract_constraints.py`
+**Stage file:** `worker_plan_internal/plan/nodes/extract_constraints.py`
 
 - `ExtractConstraintsTask` extends `PlanTask`
 - `requires()` — depends on `SetupTask` only (reads the raw user prompt)
@@ -101,10 +101,10 @@ EXTRACT_CONSTRAINTS_MARKDOWN = "002-0-extract_constraints.md"
 
 **New files:**
 - `worker_plan_internal/diagnostics/extract_constraints.py` — Pydantic models, dataclass, system prompt, execute()
-- `worker_plan_internal/plan/stages/extract_constraints.py` — PlanTask wrapper
+- `worker_plan_internal/plan/nodes/extract_constraints.py` — PlanTask wrapper
 - `worker_plan_internal/diagnostics/tests/test_extract_constraints.py` — unit + LLM integration tests
 
 **Modified files:**
 - `worker_plan_api/filenames.py` — add FilenameEnum entries
-- `worker_plan_internal/plan/stages/full_plan_pipeline.py` — register stage
+- `worker_plan_internal/plan/nodes/full_plan_pipeline.py` — register stage
 - `worker_plan_internal/report/report_generator.py` — add to report

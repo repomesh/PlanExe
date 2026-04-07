@@ -594,11 +594,11 @@ git commit -m "Add FilenameEnum entries for extract_constraints stage"
 ### Task 4: Create the pipeline stage wrapper
 
 **Files:**
-- Create: `worker_plan/worker_plan_internal/plan/stages/extract_constraints.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/extract_constraints.py`
 
 - [ ] **Step 1: Create the stage file**
 
-Create `worker_plan/worker_plan_internal/plan/stages/extract_constraints.py`:
+Create `worker_plan/worker_plan_internal/plan/nodes/extract_constraints.py`:
 
 ```python
 """Pipeline stage: extract constraints from user prompt."""
@@ -606,7 +606,7 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.diagnostics.extract_constraints import ExtractConstraints
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
 
 
 class ExtractConstraintsTask(PlanTask):
@@ -637,13 +637,13 @@ class ExtractConstraintsTask(PlanTask):
 
 - [ ] **Step 2: Verify syntax**
 
-Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "import ast; ast.parse(open('worker_plan_internal/plan/stages/extract_constraints.py').read()); print('OK')"`
+Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "import ast; ast.parse(open('worker_plan_internal/plan/nodes/extract_constraints.py').read()); print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/extract_constraints.py
+git add worker_plan/worker_plan_internal/plan/nodes/extract_constraints.py
 git commit -m "Add ExtractConstraintsTask pipeline stage wrapper"
 ```
 
@@ -652,15 +652,15 @@ git commit -m "Add ExtractConstraintsTask pipeline stage wrapper"
 ### Task 5: Wire into the full pipeline
 
 **Files:**
-- Modify: `worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py:10` (add import)
-- Modify: `worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py:90-91` (add to requires dict)
+- Modify: `worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py:10` (add import)
+- Modify: `worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py:90-91` (add to requires dict)
 
 - [ ] **Step 1: Add the import**
 
-In `worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py`, add after line 10 (`from ... import ScreenPlanningPromptTask`):
+In `worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py`, add after line 10 (`from ... import ScreenPlanningPromptTask`):
 
 ```python
-from worker_plan_internal.plan.stages.extract_constraints import ExtractConstraintsTask
+from worker_plan_internal.plan.nodes.extract_constraints import ExtractConstraintsTask
 ```
 
 - [ ] **Step 2: Add to the requires() dict**
@@ -673,13 +673,13 @@ In the `requires()` method, add after the `'screen_planning_prompt'` entry (line
 
 - [ ] **Step 3: Verify syntax**
 
-Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "from worker_plan_internal.plan.stages.full_plan_pipeline import FullPlanPipeline; print('OK')"`
+Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "from worker_plan_internal.plan.nodes.full_plan_pipeline import FullPlanPipeline; print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py
+git add worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py
 git commit -m "Register extract_constraints in the full plan pipeline"
 ```
 
@@ -688,16 +688,16 @@ git commit -m "Register extract_constraints in the full plan pipeline"
 ### Task 6: Add to the report
 
 **Files:**
-- Modify: `worker_plan/worker_plan_internal/plan/stages/report.py:28` (add import)
-- Modify: `worker_plan/worker_plan_internal/plan/stages/report.py:41-42` (add to requires dict)
-- Modify: `worker_plan/worker_plan_internal/plan/stages/report.py:90-91` (add append_markdown call)
+- Modify: `worker_plan/worker_plan_internal/plan/nodes/report.py:28` (add import)
+- Modify: `worker_plan/worker_plan_internal/plan/nodes/report.py:41-42` (add to requires dict)
+- Modify: `worker_plan/worker_plan_internal/plan/nodes/report.py:90-91` (add append_markdown call)
 
 - [ ] **Step 1: Add the import**
 
-In `worker_plan/worker_plan_internal/plan/stages/report.py`, add after line 28 (`from ... import ScreenPlanningPromptTask`):
+In `worker_plan/worker_plan_internal/plan/nodes/report.py`, add after line 28 (`from ... import ScreenPlanningPromptTask`):
 
 ```python
-from worker_plan_internal.plan.stages.extract_constraints import ExtractConstraintsTask
+from worker_plan_internal.plan.nodes.extract_constraints import ExtractConstraintsTask
 ```
 
 - [ ] **Step 2: Add to the requires() dict**
@@ -718,13 +718,13 @@ In `run_inner()`, add after the Self Audit line (line 90, `rg.append_markdown_wi
 
 - [ ] **Step 4: Verify syntax**
 
-Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "from worker_plan_internal.plan.stages.report import ReportTask; print('OK')"`
+Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "from worker_plan_internal.plan.nodes.report import ReportTask; print('OK')"`
 Expected: `OK`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/report.py
+git add worker_plan/worker_plan_internal/plan/nodes/report.py
 git commit -m "Add extract_constraints to the HTML report"
 ```
 

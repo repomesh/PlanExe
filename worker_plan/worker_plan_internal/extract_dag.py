@@ -162,8 +162,8 @@ def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
     if match:
         major = int(match.group(1))
         minor = int(match.group(2)) if match.group(2) else 0
-        return (major, minor, stage["name"])
-    return (9999, 0, stage["name"])
+        return (major, minor, stage["id"])
+    return (9999, 0, stage["id"])
 
 
 def extract_dag() -> dict[str, Any]:
@@ -205,7 +205,7 @@ def extract_dag() -> dict[str, Any]:
         ))
 
         stages.append({
-            "name": stage_name,
+            "id": stage_name,
             "description": description,
             "output_files": output_files,
             "depends_on": depends_on_names,

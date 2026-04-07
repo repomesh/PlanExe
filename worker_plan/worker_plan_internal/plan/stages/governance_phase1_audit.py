@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase1AuditTask(PlanTask):
+    """Audit organizational governance structure and compliance requirements."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

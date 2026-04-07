@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class SWOTAnalysisTask(PlanTask):
+    """Perform SWOT analysis on the project plan."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

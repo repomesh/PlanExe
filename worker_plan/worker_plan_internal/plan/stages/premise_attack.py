@@ -7,6 +7,8 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class PremiseAttackTask(PlanTask):
+    """Challenge the fundamental assumptions underlying the plan."""
+
     def requires(self):
         return self.clone(SetupTask)
 

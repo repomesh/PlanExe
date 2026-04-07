@@ -14,8 +14,9 @@ from worker_plan_internal.plan.stages.pre_project_assessment import PreProjectAs
 
 logger = logging.getLogger(__name__)
 
-
 class ProjectPlanTask(PlanTask):
+    """Generate the comprehensive project plan."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

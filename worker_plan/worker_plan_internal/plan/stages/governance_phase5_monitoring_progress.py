@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase5MonitoringProgressTask(PlanTask):
+    """Define monitoring mechanisms and progress tracking."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

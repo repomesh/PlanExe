@@ -194,7 +194,9 @@ def extract_dag() -> list[dict[str, Any]]:
         if class_name == "FullPlanPipeline":
             return
 
+        cls = type(task)
         stage_name = _class_name_to_stage_name(class_name)
+        description = cls.description() if hasattr(cls, "description") else ""
         output_files = _extract_output_filenames(task)
         source_files = _extract_source_files(task)
         upstream_stage_names = sorted(set(
@@ -204,6 +206,7 @@ def extract_dag() -> list[dict[str, Any]]:
 
         stages.append({
             "name": stage_name,
+            "description": description,
             "output_files": output_files,
             "upstream_stages": upstream_stage_names,
             "source_files": source_files,

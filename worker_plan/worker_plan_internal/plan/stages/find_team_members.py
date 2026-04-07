@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class FindTeamMembersTask(PlanTask):
+    """Identify team members required for project execution."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

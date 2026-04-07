@@ -78,6 +78,18 @@ class PlanTask(luigi.Task):
     # If the callback is not provided, the pipeline will run until completion.
     _pipeline_executor_callback = luigi.Parameter(default=None, significant=False, visibility=luigi.parameter.ParameterVisibility.PRIVATE)
 
+    @classmethod
+    def description(cls) -> str:
+        """Brief description of what this task does.
+
+        Default returns the first line of the class docstring.
+        Override in subclasses for a custom description.
+        """
+        doc = cls.__doc__
+        if doc:
+            return doc.strip().split("\n")[0].strip()
+        return ""
+
     def file_path(self, filename: FilenameEnum) -> Path:
         return self.run_id_dir / filename.value
 

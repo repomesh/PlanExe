@@ -17,6 +17,8 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase3ImplPlanTask(PlanTask):
+    """Create implementation plan for the governance structure."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

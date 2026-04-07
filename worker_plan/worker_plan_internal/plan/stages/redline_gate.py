@@ -7,6 +7,8 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class RedlineGateTask(PlanTask):
+    """Check the plan prompt against redline criteria."""
+
     def requires(self):
         return self.clone(SetupTask)
 

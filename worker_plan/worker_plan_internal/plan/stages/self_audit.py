@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 class SelfAuditTask(PlanTask):
+    """Perform self-audit to validate plan completeness and consistency."""
+
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.SELF_AUDIT_RAW),

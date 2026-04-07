@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class RelatedResourcesTask(PlanTask):
+    """Identify external resources and tools needed for the project."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

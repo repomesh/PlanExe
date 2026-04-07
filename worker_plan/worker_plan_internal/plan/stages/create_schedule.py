@@ -19,6 +19,8 @@ from worker_plan_internal.plan.stages.wbs_project_level1_level2_level3 import WB
 
 
 class CreateScheduleTask(PlanTask):
+    """Build the project schedule and generate Gantt charts."""
+
     def output(self):
         return {
             'dhtmlx_html': self.local_target(FilenameEnum.SCHEDULE_GANTT_DHTMLX_HTML),

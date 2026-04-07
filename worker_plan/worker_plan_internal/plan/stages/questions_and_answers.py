@@ -20,6 +20,8 @@ from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
 
 
 class QuestionsAndAnswersTask(PlanTask):
+    """Generate Q&A documentation addressing plan details."""
+
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_RAW),

@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase4DecisionEscalationMatrixTask(PlanTask):
+    """Establish decision-making authority and escalation pathways."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

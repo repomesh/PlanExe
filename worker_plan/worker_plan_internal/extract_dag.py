@@ -163,6 +163,44 @@ def _extract_source_files(task: luigi.Task) -> list[dict[str, str]]:
     return files
 
 
+def _pick_primary_output(filenames: list[str]) -> str:
+    """Pick the most likely file to be read from a node's outputs.
+
+    Preference: .md > .html > non-raw file > first file.
+    """
+    for ext in (".md", ".html"):
+        for f in filenames:
+            if f.endswith(ext):
+                return f
+    non_raw = [f for f in filenames if "_raw" not in f]
+    if non_raw:
+        return non_raw[0]
+    return filenames[0] if filenames else ""
+
+
+def _extract_inputs(upstream_tasks: list[luigi.Task]) -> list[dict[str, str]]:
+    """Build inputs list: for each upstream task, identify the primary artifact it provides."""
+    inputs: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for dep in upstream_tasks:
+        node_name = _class_name_to_stage_name(dep.__class__.__name__)
+        if node_name in seen:
+            continue
+        seen.add(node_name)
+
+        output_files = _extract_output_filenames(dep)
+        primary = _pick_primary_output(output_files)
+        if primary:
+            inputs.append({
+                "from_node": node_name,
+                "artifact_path": primary,
+            })
+
+    inputs.sort(key=lambda x: x["from_node"])
+    return inputs
+
+
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
     """Sort key: numeric prefix from the first output filename, then name."""
     filename = stage["artifacts"][0]["path"] if stage.get("artifacts") else ""
@@ -206,17 +244,14 @@ def extract_dag() -> dict[str, Any]:
         stage_name = _class_name_to_stage_name(class_name)
         description = cls.description() if hasattr(cls, "description") else ""
         artifacts = [{"path": f} for f in _extract_output_filenames(task)]
+        inputs = _extract_inputs(upstream_tasks)
         source_files = _extract_source_files(task)
-        depends_on_names = sorted(set(
-            _class_name_to_stage_name(dep.__class__.__name__)
-            for dep in upstream_tasks
-        ))
 
         stages.append({
             "id": stage_name,
             "description": description,
             "artifacts": artifacts,
-            "depends_on": depends_on_names,
+            "inputs": inputs,
             "source_files": source_files,
         })
 

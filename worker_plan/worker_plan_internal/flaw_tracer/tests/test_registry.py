@@ -20,18 +20,18 @@ class TestNodeInfo(unittest.TestCase):
             self.assertIsInstance(node.name, str, f"{node.name} name")
             self.assertIsInstance(node.output_files, tuple, f"{node.name} output_files")
             self.assertTrue(len(node.output_files) > 0, f"{node.name} has no output_files")
-            self.assertIsInstance(node.depends_on, tuple, f"{node.name} depends_on")
+            self.assertIsInstance(node.inputs, tuple, f"{node.name} inputs")
             self.assertIsInstance(node.source_code_files, tuple, f"{node.name} source_code_files")
 
     def test_no_duplicate_node_names(self):
         names = [n.name for n in NODES]
         self.assertEqual(len(names), len(set(names)))
 
-    def test_upstream_references_are_valid(self):
+    def test_input_references_are_valid(self):
         valid_names = {n.name for n in NODES}
         for node in NODES:
-            for upstream in node.depends_on:
-                self.assertIn(upstream, valid_names, f"{node.name} references unknown upstream '{upstream}'")
+            for inp in node.inputs:
+                self.assertIn(inp.from_node, valid_names, f"{node.name} references unknown node '{inp.from_node}'")
 
 
 class TestFindNodeByFilename(unittest.TestCase):

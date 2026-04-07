@@ -166,10 +166,10 @@ def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
     return (9999, 0, stage["name"])
 
 
-def extract_dag() -> list[dict[str, Any]]:
+def extract_dag() -> dict[str, Any]:
     """Walk the FullPlanPipeline task graph and extract DAG info.
 
-    Returns a list of stage dicts sorted by output file prefix (pipeline order).
+    Returns a top-level schema object with stages sorted by pipeline order.
     """
     from worker_plan_internal.plan.stages.full_plan_pipeline import FullPlanPipeline
 
@@ -215,7 +215,13 @@ def extract_dag() -> list[dict[str, Any]]:
     _walk(root)
 
     stages.sort(key=_output_sort_key)
-    return stages
+
+    return {
+        "schema_version": "1.0",
+        "pipeline_name": "planning_pipeline",
+        "description": "LLM-driven planning pipeline",
+        "stages": stages,
+    }
 
 
 def main() -> None:
@@ -224,12 +230,12 @@ def main() -> None:
     if len(args) >= 2 and args[0] == "--output":
         output_path = args[1]
 
-    stages = extract_dag()
-    dag_json = json.dumps(stages, indent=2, ensure_ascii=False)
+    dag = extract_dag()
+    dag_json = json.dumps(dag, indent=2, ensure_ascii=False)
 
     if output_path:
         Path(output_path).write_text(dag_json + "\n", encoding="utf-8")
-        print(f"Wrote {len(stages)} stages to {output_path}", file=sys.stderr)
+        print(f"Wrote {len(dag['stages'])} stages to {output_path}", file=sys.stderr)
     else:
         print(dag_json)
 

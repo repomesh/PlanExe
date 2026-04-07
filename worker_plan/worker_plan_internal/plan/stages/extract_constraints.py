@@ -7,10 +7,7 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class ExtractConstraintsTask(PlanTask):
-    """
-    Extract and classify constraints from the user's prompt.
-    Produces a list of positive/negative constraint items.
-    """
+    """Extract positive/negative constraints from the user's prompt."""
     def requires(self):
         return self.clone(SetupTask)
 

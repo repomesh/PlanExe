@@ -199,7 +199,7 @@ def extract_dag() -> list[dict[str, Any]]:
         description = cls.description() if hasattr(cls, "description") else ""
         output_files = _extract_output_filenames(task)
         source_files = _extract_source_files(task)
-        upstream_stage_names = sorted(set(
+        depends_on_names = sorted(set(
             _class_name_to_stage_name(dep.__class__.__name__)
             for dep in upstream_tasks
         ))
@@ -208,7 +208,7 @@ def extract_dag() -> list[dict[str, Any]]:
             "name": stage_name,
             "description": description,
             "output_files": output_files,
-            "upstream_stages": upstream_stage_names,
+            "depends_on": depends_on_names,
             "source_files": source_files,
         })
 

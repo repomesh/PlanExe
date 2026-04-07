@@ -78,30 +78,6 @@ class PlanTask(luigi.Task):
     # If the callback is not provided, the pipeline will run until completion.
     _pipeline_executor_callback = luigi.Parameter(default=None, significant=False, visibility=luigi.parameter.ParameterVisibility.PRIVATE)
 
-    @classmethod
-    def source_files(cls) -> list[str]:
-        """Return source code file paths for this task, relative to worker_plan/.
-
-        Default implementation returns just the file containing this class.
-        Override in subclasses to include significant implementation files.
-
-        Example override::
-
-            @classmethod
-            def source_files(cls) -> list[str]:
-                return super().source_files() + [
-                    "worker_plan_internal/swot/swot_analysis.py",
-                    "worker_plan_internal/swot/swot_phase2_conduct_analysis.py",
-                ]
-        """
-        import inspect
-        worker_plan_dir = Path(__file__).resolve().parent.parent.parent
-        task_file = Path(inspect.getfile(cls)).resolve()
-        try:
-            return [str(task_file.relative_to(worker_plan_dir))]
-        except ValueError:
-            return [str(task_file)]
-
     def file_path(self, filename: FilenameEnum) -> Path:
         return self.run_id_dir / filename.value
 

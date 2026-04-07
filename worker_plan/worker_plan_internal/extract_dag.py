@@ -133,23 +133,23 @@ def _detect_implementation_files(cls: type) -> list[str]:
 
 
 def _extract_source_files(task: luigi.Task) -> list[str]:
-    """Get source files: task's own file + auto-detected implementation files.
-
-    If the task class overrides ``source_files()``, those are used as the
-    base.  Auto-detected implementation imports are appended if not already
-    present.
-    """
+    """Get source files: task's own file + auto-detected implementation files."""
     cls = type(task)
 
-    # Start with what the task class declares
-    declared = list(cls.source_files())
+    # The task's own file
+    result: list[str] = []
+    try:
+        task_file = Path(inspect.getfile(cls)).resolve()
+        result.append(str(task_file.relative_to(_WORKER_PLAN_DIR)))
+    except (TypeError, ValueError, OSError):
+        pass
 
     # Supplement with auto-detected implementation files
     for f in _detect_implementation_files(cls):
-        if f not in declared:
-            declared.append(f)
+        if f not in result:
+            result.append(f)
 
-    return declared
+    return result
 
 
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:

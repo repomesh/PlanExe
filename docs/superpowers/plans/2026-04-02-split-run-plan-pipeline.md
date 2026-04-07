@@ -4,7 +4,7 @@
 
 **Goal:** Extract ~66 Luigi task classes from `run_plan_pipeline.py` (4,257 lines) into individual files under `stages/`, leaving only the shared framework in the original file.
 
-**Architecture:** Each task class moves verbatim to its own file under `worker_plan/worker_plan_internal/plan/stages/`. Each file imports `PlanTask` from `run_plan_pipeline` and its upstream task dependencies from sibling stage files. `FullPlanPipeline` moves to `stages/full_plan_pipeline.py`. `run_plan_pipeline.py` shrinks to ~280 lines keeping only `PlanTask`, `ExecutePipeline`, and supporting utilities.
+**Architecture:** Each task class moves verbatim to its own file under `worker_plan/worker_plan_internal/plan/nodes/`. Each file imports `PlanTask` from `run_plan_pipeline` and its upstream task dependencies from sibling stage files. `FullPlanPipeline` moves to `stages/full_plan_pipeline.py`. `run_plan_pipeline.py` shrinks to ~280 lines keeping only `PlanTask`, `ExecutePipeline`, and supporting utilities.
 
 **Tech Stack:** Python 3.11, Luigi (task orchestration), llama_index
 
@@ -40,18 +40,18 @@ The import block is the ONLY new code per file. The class body is a verbatim cop
 ### Task 1: Create stages/ directory and Phase 1-2 stages (Input, Validation, Purpose)
 
 **Files:**
-- Create: `worker_plan/worker_plan_internal/plan/stages/__init__.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/start_time.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/setup.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/redline_gate.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/premise_attack.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/identify_purpose.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/plan_type.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/__init__.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/start_time.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/setup.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/redline_gate.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/premise_attack.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/identify_purpose.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/plan_type.py`
 
 - [ ] **Step 1: Create the stages directory with empty `__init__.py`**
 
 ```python
-# worker_plan/worker_plan_internal/plan/stages/__init__.py
+# worker_plan/worker_plan_internal/plan/nodes/__init__.py
 ```
 
 (Empty file — stage files are imported directly by whoever needs them.)
@@ -84,7 +84,7 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.diagnostics.redline_gate import RedlineGate
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
 ```
 
 Copy `RedlineGateTask` from SOURCE lines 239-260 verbatim.
@@ -97,7 +97,7 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.diagnostics.premise_attack import PremiseAttack
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
 ```
 
 Copy `PremiseAttackTask` from SOURCE lines 263-286 verbatim.
@@ -110,7 +110,7 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.identify_purpose import IdentifyPurpose
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
 ```
 
 Copy `IdentifyPurposeTask` from SOURCE lines 289-313 verbatim.
@@ -123,8 +123,8 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.identify_plan_type import IdentifyPlanType
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
 ```
 
 Copy `PlanTypeTask` from SOURCE lines 316-350 verbatim.
@@ -133,14 +133,14 @@ Copy `PlanTypeTask` from SOURCE lines 316-350 verbatim.
 
 Run from `worker_plan/`:
 ```bash
-python -c "from worker_plan_internal.plan.stages.plan_type import PlanTypeTask; print('OK')"
+python -c "from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask; print('OK')"
 ```
 Expected: `OK`
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 1-2 pipeline stages to individual files
 
 Extract StartTimeTask, SetupTask, RedlineGateTask, PremiseAttackTask,
@@ -152,14 +152,14 @@ IdentifyPurposeTask, PlanTypeTask into stages/ directory."
 ### Task 2: Phase 3 stages (Strategic Options & Scenarios)
 
 **Files:**
-- Create: `worker_plan/worker_plan_internal/plan/stages/potential_levers.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/deduplicate_levers.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/enrich_levers.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/focus_on_vital_few_levers.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/strategic_decisions_markdown.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/candidate_scenarios.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/select_scenario.py`
-- Create: `worker_plan/worker_plan_internal/plan/stages/scenarios_markdown.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/potential_levers.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/deduplicate_levers.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/enrich_levers.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/focus_on_vital_few_levers.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/strategic_decisions_markdown.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/candidate_scenarios.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/select_scenario.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/scenarios_markdown.py`
 
 - [ ] **Step 1: Create `stages/potential_levers.py`**
 
@@ -170,9 +170,9 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.identify_potential_levers import IdentifyPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 ```
 
 Copy `PotentialLeversTask` from SOURCE lines 352-392 verbatim.
@@ -186,10 +186,10 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.deduplicate_levers import DeduplicateLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.potential_levers import PotentialLeversTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
 ```
 
 Copy `DeduplicateLeversTask` from SOURCE lines 395-439 verbatim.
@@ -203,10 +203,10 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.enrich_potential_levers import EnrichPotentialLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.deduplicate_levers import DeduplicateLeversTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.deduplicate_levers import DeduplicateLeversTask
 ```
 
 Copy `EnrichLeversTask` from SOURCE lines 441-486 verbatim.
@@ -220,10 +220,10 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.focus_on_vital_few_levers import FocusOnVitalFewLevers
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.enrich_levers import EnrichLeversTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.enrich_levers import EnrichLeversTask
 ```
 
 Copy `FocusOnVitalFewLeversTask` from SOURCE lines 488-532 verbatim.
@@ -236,8 +236,8 @@ import json
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.strategic_decisions_markdown import StrategicDecisionsMarkdown
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.enrich_levers import EnrichLeversTask
-from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
+from worker_plan_internal.plan.nodes.enrich_levers import EnrichLeversTask
+from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
 ```
 
 Copy `StrategicDecisionsMarkdownTask` from SOURCE lines 535-561 verbatim.
@@ -251,10 +251,10 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.candidate_scenarios import CandidateScenarios
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
 ```
 
 Copy `CandidateScenariosTask` from SOURCE lines 563-610 verbatim.
@@ -269,11 +269,11 @@ from worker_plan_internal.lever.select_scenario import SelectScenario
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.format_json_for_use_in_query import format_json_for_use_in_query
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
-from worker_plan_internal.plan.stages.candidate_scenarios import CandidateScenariosTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
+from worker_plan_internal.plan.nodes.candidate_scenarios import CandidateScenariosTask
 ```
 
 Copy `SelectScenarioTask` from SOURCE lines 613-665 verbatim.
@@ -286,8 +286,8 @@ import json
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.lever.scenarios_markdown import ScenariosMarkdown
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.candidate_scenarios import CandidateScenariosTask
-from worker_plan_internal.plan.stages.select_scenario import SelectScenarioTask
+from worker_plan_internal.plan.nodes.candidate_scenarios import CandidateScenariosTask
+from worker_plan_internal.plan.nodes.select_scenario import SelectScenarioTask
 ```
 
 Copy `ScenariosMarkdownTask` from SOURCE lines 668-695 verbatim.
@@ -295,13 +295,13 @@ Copy `ScenariosMarkdownTask` from SOURCE lines 668-695 verbatim.
 - [ ] **Step 9: Verify imports resolve**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask; print('OK')"
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask; print('OK')"
 ```
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 3 pipeline stages (levers & scenarios)"
 ```
 
@@ -330,11 +330,11 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.physical_locations import PhysicalLocations
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -349,12 +349,12 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.currency_strategy import CurrencyStrategy
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
 ```
 
 Copy `CurrencyStrategyTask` from SOURCE lines 763-813 verbatim.
@@ -367,13 +367,13 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.identify_risks import IdentifyRisks
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
 ```
 
 Copy `IdentifyRisksTask` from SOURCE lines 816-870 verbatim.
@@ -386,14 +386,14 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.make_assumptions import MakeAssumptions
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
-from worker_plan_internal.plan.stages.identify_risks import IdentifyRisksTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
+from worker_plan_internal.plan.nodes.identify_risks import IdentifyRisksTask
 ```
 
 Copy `MakeAssumptionsTask` from SOURCE lines 873-934 verbatim.
@@ -408,11 +408,11 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.distill_assumptions import DistillAssumptions
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.format_json_for_use_in_query import format_json_for_use_in_query
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.make_assumptions import MakeAssumptionsTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.make_assumptions import MakeAssumptionsTask
 ```
 
 Copy `DistillAssumptionsTask` from SOURCE lines 937-984 verbatim.
@@ -426,15 +426,15 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.review_assumptions import ReviewAssumptions
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
-from worker_plan_internal.plan.stages.identify_risks import IdentifyRisksTask
-from worker_plan_internal.plan.stages.make_assumptions import MakeAssumptionsTask
-from worker_plan_internal.plan.stages.distill_assumptions import DistillAssumptionsTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
+from worker_plan_internal.plan.nodes.identify_risks import IdentifyRisksTask
+from worker_plan_internal.plan.nodes.make_assumptions import MakeAssumptionsTask
+from worker_plan_internal.plan.nodes.distill_assumptions import DistillAssumptionsTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -451,14 +451,14 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.shorten_markdown import ShortenMarkdown
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
-from worker_plan_internal.plan.stages.identify_risks import IdentifyRisksTask
-from worker_plan_internal.plan.stages.make_assumptions import MakeAssumptionsTask
-from worker_plan_internal.plan.stages.distill_assumptions import DistillAssumptionsTask
-from worker_plan_internal.plan.stages.review_assumptions import ReviewAssumptionsTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
+from worker_plan_internal.plan.nodes.identify_risks import IdentifyRisksTask
+from worker_plan_internal.plan.nodes.make_assumptions import MakeAssumptionsTask
+from worker_plan_internal.plan.nodes.distill_assumptions import DistillAssumptionsTask
+from worker_plan_internal.plan.nodes.review_assumptions import ReviewAssumptionsTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -468,8 +468,8 @@ Copy `ConsolidateAssumptionsMarkdownTask` from SOURCE lines 1050-1132 verbatim.
 - [ ] **Step 8: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 4-5 pipeline stages (context & assumptions)"
 ```
 
@@ -499,10 +499,10 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.expert.pre_project_assessment import PreProjectAssessment
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -520,11 +520,11 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.plan.project_plan import ProjectPlan
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.format_json_for_use_in_query import format_json_for_use_in_query
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
-from worker_plan_internal.plan.stages.pre_project_assessment import PreProjectAssessmentTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.pre_project_assessment import PreProjectAssessmentTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -543,11 +543,11 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.governance.governance_phase1_audit import GovernancePhase1Audit
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
-from worker_plan_internal.plan.stages.project_plan import ProjectPlanTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.project_plan import ProjectPlanTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -560,12 +560,12 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.governance.governance_phase2_bodies import GovernancePhase2Bodies
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
-from worker_plan_internal.plan.stages.project_plan import ProjectPlanTask
-from worker_plan_internal.plan.stages.governance_phase1_audit import GovernancePhase1AuditTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.project_plan import ProjectPlanTask
+from worker_plan_internal.plan.nodes.governance_phase1_audit import GovernancePhase1AuditTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -580,12 +580,12 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.governance.governance_phase3_impl_plan import GovernancePhase3ImplPlan
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.format_json_for_use_in_query import format_json_for_use_in_query
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
-from worker_plan_internal.plan.stages.project_plan import ProjectPlanTask
-from worker_plan_internal.plan.stages.governance_phase2_bodies import GovernancePhase2BodiesTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.project_plan import ProjectPlanTask
+from worker_plan_internal.plan.nodes.governance_phase2_bodies import GovernancePhase2BodiesTask
 
 logger = logging.getLogger(__name__)
 ```
@@ -604,19 +604,19 @@ Same pattern. Imports `GovernancePhase6Extra`. Upstream includes all governance 
 """Pipeline stage: consolidate all governance phases into one document."""
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.stages.governance_phase1_audit import GovernancePhase1AuditTask
-from worker_plan_internal.plan.stages.governance_phase2_bodies import GovernancePhase2BodiesTask
-from worker_plan_internal.plan.stages.governance_phase3_impl_plan import GovernancePhase3ImplPlanTask
-from worker_plan_internal.plan.stages.governance_phase4_decision_escalation_matrix import GovernancePhase4DecisionEscalationMatrixTask
-from worker_plan_internal.plan.stages.governance_phase5_monitoring_progress import GovernancePhase5MonitoringProgressTask
-from worker_plan_internal.plan.stages.governance_phase6_extra import GovernancePhase6ExtraTask
+from worker_plan_internal.plan.nodes.governance_phase1_audit import GovernancePhase1AuditTask
+from worker_plan_internal.plan.nodes.governance_phase2_bodies import GovernancePhase2BodiesTask
+from worker_plan_internal.plan.nodes.governance_phase3_impl_plan import GovernancePhase3ImplPlanTask
+from worker_plan_internal.plan.nodes.governance_phase4_decision_escalation_matrix import GovernancePhase4DecisionEscalationMatrixTask
+from worker_plan_internal.plan.nodes.governance_phase5_monitoring_progress import GovernancePhase5MonitoringProgressTask
+from worker_plan_internal.plan.nodes.governance_phase6_extra import GovernancePhase6ExtraTask
 ```
 
 - [ ] **Step 4: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.consolidate_governance import ConsolidateGovernanceTask; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.consolidate_governance import ConsolidateGovernanceTask; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 6-7 pipeline stages (plan foundation & governance)"
 ```
 
@@ -656,8 +656,8 @@ Key imports per file:
 - [ ] **Step 2: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.team_markdown import TeamMarkdownTask; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.team_markdown import TeamMarkdownTask; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 8 pipeline stages (team)"
 ```
 
@@ -701,8 +701,8 @@ Key imports per file:
 - [ ] **Step 2: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.markdown_documents import MarkdownWithDocumentsToCreateAndFindTask; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.markdown_documents import MarkdownWithDocumentsToCreateAndFindTask; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 9-10 pipeline stages (analysis & documents)"
 ```
 
@@ -746,8 +746,8 @@ Key imports:
 - [ ] **Step 2: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.wbs_project_level1_level2_level3 import WBSProjectLevel1AndLevel2AndLevel3Task; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.wbs_project_level1_level2_level3 import WBSProjectLevel1AndLevel2AndLevel3Task; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 11 pipeline stages (WBS & pitch)"
 ```
 
@@ -785,8 +785,8 @@ Key imports:
 - [ ] **Step 2: Verify and commit**
 
 ```bash
-cd worker_plan && python -c "from worker_plan_internal.plan.stages.report import ReportTask; print('OK')"
-git add worker_plan/worker_plan_internal/plan/stages/
+cd worker_plan && python -c "from worker_plan_internal.plan.nodes.report import ReportTask; print('OK')"
+git add worker_plan/worker_plan_internal/plan/nodes/
 git commit -m "refactor: extract Phase 12-13 pipeline stages (schedule, review & report)"
 ```
 
@@ -795,7 +795,7 @@ git commit -m "refactor: extract Phase 12-13 pipeline stages (schedule, review &
 ### Task 9: Create FullPlanPipeline and slim run_plan_pipeline.py
 
 **Files:**
-- Create: `worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py`
+- Create: `worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py`
 - Modify: `worker_plan/worker_plan_internal/plan/run_plan_pipeline.py`
 
 - [ ] **Step 1: Create `stages/full_plan_pipeline.py`**
@@ -808,82 +808,82 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_api.filenames import FilenameEnum
 
 # Phase 1-2: Input & Validation, Purpose
-from worker_plan_internal.plan.stages.start_time import StartTimeTask
-from worker_plan_internal.plan.stages.setup import SetupTask
-from worker_plan_internal.plan.stages.redline_gate import RedlineGateTask
-from worker_plan_internal.plan.stages.premise_attack import PremiseAttackTask
-from worker_plan_internal.plan.stages.identify_purpose import IdentifyPurposeTask
-from worker_plan_internal.plan.stages.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.start_time import StartTimeTask
+from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.redline_gate import RedlineGateTask
+from worker_plan_internal.plan.nodes.premise_attack import PremiseAttackTask
+from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 
 # Phase 3: Strategic Options & Scenarios
-from worker_plan_internal.plan.stages.potential_levers import PotentialLeversTask
-from worker_plan_internal.plan.stages.deduplicate_levers import DeduplicateLeversTask
-from worker_plan_internal.plan.stages.enrich_levers import EnrichLeversTask
-from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
-from worker_plan_internal.plan.stages.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
-from worker_plan_internal.plan.stages.candidate_scenarios import CandidateScenariosTask
-from worker_plan_internal.plan.stages.select_scenario import SelectScenarioTask
-from worker_plan_internal.plan.stages.scenarios_markdown import ScenariosMarkdownTask
+from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
+from worker_plan_internal.plan.nodes.deduplicate_levers import DeduplicateLeversTask
+from worker_plan_internal.plan.nodes.enrich_levers import EnrichLeversTask
+from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
+from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
+from worker_plan_internal.plan.nodes.candidate_scenarios import CandidateScenariosTask
+from worker_plan_internal.plan.nodes.select_scenario import SelectScenarioTask
+from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
 
 # Phase 4-5: Context & Assumptions
-from worker_plan_internal.plan.stages.physical_locations import PhysicalLocationsTask
-from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
-from worker_plan_internal.plan.stages.identify_risks import IdentifyRisksTask
-from worker_plan_internal.plan.stages.make_assumptions import MakeAssumptionsTask
-from worker_plan_internal.plan.stages.distill_assumptions import DistillAssumptionsTask
-from worker_plan_internal.plan.stages.review_assumptions import ReviewAssumptionsTask
-from worker_plan_internal.plan.stages.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
+from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
+from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
+from worker_plan_internal.plan.nodes.identify_risks import IdentifyRisksTask
+from worker_plan_internal.plan.nodes.make_assumptions import MakeAssumptionsTask
+from worker_plan_internal.plan.nodes.distill_assumptions import DistillAssumptionsTask
+from worker_plan_internal.plan.nodes.review_assumptions import ReviewAssumptionsTask
+from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
 
 # Phase 6-7: Plan Foundation & Governance
-from worker_plan_internal.plan.stages.pre_project_assessment import PreProjectAssessmentTask
-from worker_plan_internal.plan.stages.project_plan import ProjectPlanTask
-from worker_plan_internal.plan.stages.governance_phase1_audit import GovernancePhase1AuditTask
-from worker_plan_internal.plan.stages.governance_phase2_bodies import GovernancePhase2BodiesTask
-from worker_plan_internal.plan.stages.governance_phase3_impl_plan import GovernancePhase3ImplPlanTask
-from worker_plan_internal.plan.stages.governance_phase4_decision_escalation_matrix import GovernancePhase4DecisionEscalationMatrixTask
-from worker_plan_internal.plan.stages.governance_phase5_monitoring_progress import GovernancePhase5MonitoringProgressTask
-from worker_plan_internal.plan.stages.governance_phase6_extra import GovernancePhase6ExtraTask
-from worker_plan_internal.plan.stages.consolidate_governance import ConsolidateGovernanceTask
+from worker_plan_internal.plan.nodes.pre_project_assessment import PreProjectAssessmentTask
+from worker_plan_internal.plan.nodes.project_plan import ProjectPlanTask
+from worker_plan_internal.plan.nodes.governance_phase1_audit import GovernancePhase1AuditTask
+from worker_plan_internal.plan.nodes.governance_phase2_bodies import GovernancePhase2BodiesTask
+from worker_plan_internal.plan.nodes.governance_phase3_impl_plan import GovernancePhase3ImplPlanTask
+from worker_plan_internal.plan.nodes.governance_phase4_decision_escalation_matrix import GovernancePhase4DecisionEscalationMatrixTask
+from worker_plan_internal.plan.nodes.governance_phase5_monitoring_progress import GovernancePhase5MonitoringProgressTask
+from worker_plan_internal.plan.nodes.governance_phase6_extra import GovernancePhase6ExtraTask
+from worker_plan_internal.plan.nodes.consolidate_governance import ConsolidateGovernanceTask
 
 # Phase 8: Team
-from worker_plan_internal.plan.stages.related_resources import RelatedResourcesTask
-from worker_plan_internal.plan.stages.find_team_members import FindTeamMembersTask
-from worker_plan_internal.plan.stages.enrich_team_contract_type import EnrichTeamMembersWithContractTypeTask
-from worker_plan_internal.plan.stages.enrich_team_background_story import EnrichTeamMembersWithBackgroundStoryTask
-from worker_plan_internal.plan.stages.enrich_team_environment_info import EnrichTeamMembersWithEnvironmentInfoTask
-from worker_plan_internal.plan.stages.review_team import ReviewTeamTask
-from worker_plan_internal.plan.stages.team_markdown import TeamMarkdownTask
+from worker_plan_internal.plan.nodes.related_resources import RelatedResourcesTask
+from worker_plan_internal.plan.nodes.find_team_members import FindTeamMembersTask
+from worker_plan_internal.plan.nodes.enrich_team_contract_type import EnrichTeamMembersWithContractTypeTask
+from worker_plan_internal.plan.nodes.enrich_team_background_story import EnrichTeamMembersWithBackgroundStoryTask
+from worker_plan_internal.plan.nodes.enrich_team_environment_info import EnrichTeamMembersWithEnvironmentInfoTask
+from worker_plan_internal.plan.nodes.review_team import ReviewTeamTask
+from worker_plan_internal.plan.nodes.team_markdown import TeamMarkdownTask
 
 # Phase 9-10: Analysis & Documents
-from worker_plan_internal.plan.stages.swot_analysis import SWOTAnalysisTask
-from worker_plan_internal.plan.stages.expert_review import ExpertReviewTask
-from worker_plan_internal.plan.stages.data_collection import DataCollectionTask
-from worker_plan_internal.plan.stages.identify_documents import IdentifyDocumentsTask
-from worker_plan_internal.plan.stages.filter_documents_to_find import FilterDocumentsToFindTask
-from worker_plan_internal.plan.stages.filter_documents_to_create import FilterDocumentsToCreateTask
-from worker_plan_internal.plan.stages.draft_documents_to_find import DraftDocumentsToFindTask
-from worker_plan_internal.plan.stages.draft_documents_to_create import DraftDocumentsToCreateTask
-from worker_plan_internal.plan.stages.markdown_documents import MarkdownWithDocumentsToCreateAndFindTask
+from worker_plan_internal.plan.nodes.swot_analysis import SWOTAnalysisTask
+from worker_plan_internal.plan.nodes.expert_review import ExpertReviewTask
+from worker_plan_internal.plan.nodes.data_collection import DataCollectionTask
+from worker_plan_internal.plan.nodes.identify_documents import IdentifyDocumentsTask
+from worker_plan_internal.plan.nodes.filter_documents_to_find import FilterDocumentsToFindTask
+from worker_plan_internal.plan.nodes.filter_documents_to_create import FilterDocumentsToCreateTask
+from worker_plan_internal.plan.nodes.draft_documents_to_find import DraftDocumentsToFindTask
+from worker_plan_internal.plan.nodes.draft_documents_to_create import DraftDocumentsToCreateTask
+from worker_plan_internal.plan.nodes.markdown_documents import MarkdownWithDocumentsToCreateAndFindTask
 
 # Phase 11: WBS & Pitch
-from worker_plan_internal.plan.stages.create_wbs_level1 import CreateWBSLevel1Task
-from worker_plan_internal.plan.stages.create_wbs_level2 import CreateWBSLevel2Task
-from worker_plan_internal.plan.stages.wbs_project_level1_and_level2 import WBSProjectLevel1AndLevel2Task
-from worker_plan_internal.plan.stages.create_pitch import CreatePitchTask
-from worker_plan_internal.plan.stages.convert_pitch_to_markdown import ConvertPitchToMarkdownTask
-from worker_plan_internal.plan.stages.identify_task_dependencies import IdentifyTaskDependenciesTask
-from worker_plan_internal.plan.stages.estimate_task_durations import EstimateTaskDurationsTask
-from worker_plan_internal.plan.stages.create_wbs_level3 import CreateWBSLevel3Task
-from worker_plan_internal.plan.stages.wbs_project_level1_level2_level3 import WBSProjectLevel1AndLevel2AndLevel3Task
+from worker_plan_internal.plan.nodes.create_wbs_level1 import CreateWBSLevel1Task
+from worker_plan_internal.plan.nodes.create_wbs_level2 import CreateWBSLevel2Task
+from worker_plan_internal.plan.nodes.wbs_project_level1_and_level2 import WBSProjectLevel1AndLevel2Task
+from worker_plan_internal.plan.nodes.create_pitch import CreatePitchTask
+from worker_plan_internal.plan.nodes.convert_pitch_to_markdown import ConvertPitchToMarkdownTask
+from worker_plan_internal.plan.nodes.identify_task_dependencies import IdentifyTaskDependenciesTask
+from worker_plan_internal.plan.nodes.estimate_task_durations import EstimateTaskDurationsTask
+from worker_plan_internal.plan.nodes.create_wbs_level3 import CreateWBSLevel3Task
+from worker_plan_internal.plan.nodes.wbs_project_level1_level2_level3 import WBSProjectLevel1AndLevel2AndLevel3Task
 
 # Phase 12-13: Schedule, Final Review & Report
-from worker_plan_internal.plan.stages.create_schedule import CreateScheduleTask
-from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
-from worker_plan_internal.plan.stages.executive_summary import ExecutiveSummaryTask
-from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndAnswersTask
-from worker_plan_internal.plan.stages.premortem import PremortemTask
-from worker_plan_internal.plan.stages.self_audit import SelfAuditTask
-from worker_plan_internal.plan.stages.report import ReportTask
+from worker_plan_internal.plan.nodes.create_schedule import CreateScheduleTask
+from worker_plan_internal.plan.nodes.review_plan import ReviewPlanTask
+from worker_plan_internal.plan.nodes.executive_summary import ExecutiveSummaryTask
+from worker_plan_internal.plan.nodes.questions_and_answers import QuestionsAndAnswersTask
+from worker_plan_internal.plan.nodes.premortem import PremortemTask
+from worker_plan_internal.plan.nodes.self_audit import SelfAuditTask
+from worker_plan_internal.plan.nodes.report import ReportTask
 ```
 
 Copy the `FullPlanPipeline` class body verbatim from SOURCE lines 3776-3848. The `requires()` dict references all the task classes imported above.
@@ -928,7 +928,7 @@ Change the `setup()` method in `ExecutePipeline` (around line 3902 in the origin
 def setup(self) -> None:
     # ... existing validation code stays the same ...
 
-    from worker_plan_internal.plan.stages.full_plan_pipeline import FullPlanPipeline
+    from worker_plan_internal.plan.nodes.full_plan_pipeline import FullPlanPipeline
     full_plan_pipeline_task = FullPlanPipeline(
         run_id_dir=self.run_id_dir,
         speedvsdetail=self.speedvsdetail,
@@ -972,7 +972,7 @@ Expected: All tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add worker_plan/worker_plan_internal/plan/stages/full_plan_pipeline.py
+git add worker_plan/worker_plan_internal/plan/nodes/full_plan_pipeline.py
 git add worker_plan/worker_plan_internal/plan/run_plan_pipeline.py
 git commit -m "refactor: slim run_plan_pipeline.py to framework-only, wire FullPlanPipeline from stages"
 ```
@@ -990,7 +990,7 @@ git commit -m "refactor: slim run_plan_pipeline.py to framework-only, wire FullP
 Add a new section after the existing guidelines:
 
 ```markdown
-## Pipeline Stages (`worker_plan_internal/plan/stages/`)
+## Pipeline Stages (`worker_plan_internal/plan/nodes/`)
 
 Each Luigi pipeline task lives in its own file under `stages/`. This enables:
 - Multiple agents working on different stages without merge conflicts
@@ -1051,7 +1051,7 @@ Expected: All tests pass.
 
 ```bash
 cd worker_plan && python -c "
-from worker_plan_internal.plan.stages.full_plan_pipeline import FullPlanPipeline
+from worker_plan_internal.plan.nodes.full_plan_pipeline import FullPlanPipeline
 from worker_plan_internal.plan.run_plan_pipeline import ExecutePipeline
 print(f'FullPlanPipeline requires {len(FullPlanPipeline(run_id_dir=\"/tmp/test\").requires())} tasks')
 print('Import chain: OK')
@@ -1069,7 +1069,7 @@ Expected: ~280 lines (down from 4,257).
 - [ ] **Step 4: Count stage files**
 
 ```bash
-ls worker_plan/worker_plan_internal/plan/stages/*.py | wc -l
+ls worker_plan/worker_plan_internal/plan/nodes/*.py | wc -l
 ```
 
 Expected: ~67 files (66 stages + `__init__.py` + `full_plan_pipeline.py`).

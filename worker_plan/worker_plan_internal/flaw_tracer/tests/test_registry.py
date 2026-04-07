@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from worker_plan_internal.flaw_tracer.registry import (
-    StageInfo,
+    NodeInfo,
     STAGES,
     find_stage_by_filename,
     get_upstream_files,
@@ -11,7 +11,7 @@ from worker_plan_internal.flaw_tracer.registry import (
 )
 
 
-class TestStageInfo(unittest.TestCase):
+class TestNodeInfo(unittest.TestCase):
     def test_stages_is_nonempty(self):
         self.assertGreater(len(STAGES), 40)
 

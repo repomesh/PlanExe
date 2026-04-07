@@ -3,7 +3,7 @@
 
 Replaces the former hand-maintained static registry with data extracted
 from the actual pipeline via extract_dag.  The public API is unchanged:
-  - find_stage_by_filename(filename) -> StageInfo | None
+  - find_stage_by_filename(filename) -> NodeInfo | None
   - get_upstream_files(stage_name, output_dir) -> list[tuple[str, Path]]
   - get_source_code_paths(stage_name) -> list[Path]
 """
@@ -17,7 +17,7 @@ _SOURCE_BASE = Path(__file__).resolve().parent.parent.parent  # worker_plan/
 
 
 @dataclass(frozen=True)
-class StageInfo:
+class NodeInfo:
     """One pipeline node."""
     name: str
     output_files: tuple[str, ...]
@@ -41,13 +41,13 @@ def _pick_primary_output(filenames: list[str]) -> str:
     return filenames[0] if filenames else ""
 
 
-def _build_registry() -> tuple[StageInfo, ...]:
+def _build_registry() -> tuple[NodeInfo, ...]:
     """Build the registry from Luigi task introspection."""
     dag = extract_dag()
     stages = []
     for node in dag["nodes"]:
         output_files = tuple(node["output_files"])
-        stages.append(StageInfo(
+        stages.append(NodeInfo(
             name=node["id"],
             output_files=output_files,
             primary_output=_pick_primary_output(node["output_files"]),
@@ -59,16 +59,16 @@ def _build_registry() -> tuple[StageInfo, ...]:
 
 # ── Build once at import time ──────────────────────────────────────────
 
-STAGES: tuple[StageInfo, ...] = _build_registry()
+STAGES: tuple[NodeInfo, ...] = _build_registry()
 
-_STAGE_BY_NAME: dict[str, StageInfo] = {s.name: s for s in STAGES}
-_STAGE_BY_FILENAME: dict[str, StageInfo] = {}
+_STAGE_BY_NAME: dict[str, NodeInfo] = {s.name: s for s in STAGES}
+_STAGE_BY_FILENAME: dict[str, NodeInfo] = {}
 for _stage in STAGES:
     for _fname in _stage.output_files:
         _STAGE_BY_FILENAME[_fname] = _stage
 
 
-def find_stage_by_filename(filename: str) -> StageInfo | None:
+def find_stage_by_filename(filename: str) -> NodeInfo | None:
     """Given an output filename, return the stage that produced it."""
     return _STAGE_BY_FILENAME.get(filename)
 

@@ -20,7 +20,7 @@ class TestStageInfo(unittest.TestCase):
             self.assertIsInstance(stage.name, str, f"{stage.name} name")
             self.assertIsInstance(stage.output_files, tuple, f"{stage.name} output_files")
             self.assertTrue(len(stage.output_files) > 0, f"{stage.name} has no output_files")
-            self.assertIsInstance(stage.upstream_stages, tuple, f"{stage.name} upstream_stages")
+            self.assertIsInstance(stage.depends_on, tuple, f"{stage.name} depends_on")
             self.assertIsInstance(stage.source_code_files, tuple, f"{stage.name} source_code_files")
             self.assertIsInstance(stage.primary_output, str, f"{stage.name} primary_output")
             self.assertIn(stage.primary_output, stage.output_files, f"{stage.name} primary_output not in output_files")
@@ -32,7 +32,7 @@ class TestStageInfo(unittest.TestCase):
     def test_upstream_references_are_valid(self):
         valid_names = {s.name for s in STAGES}
         for stage in STAGES:
-            for upstream in stage.upstream_stages:
+            for upstream in stage.depends_on:
                 self.assertIn(upstream, valid_names, f"{stage.name} references unknown upstream '{upstream}'")
 
 

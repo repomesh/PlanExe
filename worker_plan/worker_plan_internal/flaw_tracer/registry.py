@@ -21,7 +21,6 @@ class NodeInfo:
     """One pipeline node."""
     name: str
     output_files: tuple[str, ...]
-    primary_output: str  # preferred file to read when checking for flaws
     depends_on: tuple[str, ...] = ()
     source_code_files: tuple[str, ...] = ()
 
@@ -50,7 +49,6 @@ def _build_registry() -> tuple[NodeInfo, ...]:
         nodes.append(NodeInfo(
             name=entry["id"],
             output_files=output_files,
-            primary_output=_pick_primary_output(entry["output_files"]),
             depends_on=tuple(entry["depends_on"]),
             source_code_files=tuple(entry["source_files"]),
         ))
@@ -84,7 +82,10 @@ def get_upstream_files(node_name: str, output_dir: Path) -> list[tuple[str, Path
         upstream_node = _NODE_BY_NAME.get(upstream_name)
         if upstream_node is None:
             continue
-        primary_path = output_dir / upstream_node.primary_output
+        primary = _pick_primary_output(list(upstream_node.output_files))
+        if not primary:
+            continue
+        primary_path = output_dir / primary
         if primary_path.exists():
             result.append((upstream_name, primary_path))
     return result

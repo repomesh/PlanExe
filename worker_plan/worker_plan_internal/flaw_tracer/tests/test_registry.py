@@ -22,8 +22,6 @@ class TestNodeInfo(unittest.TestCase):
             self.assertTrue(len(node.output_files) > 0, f"{node.name} has no output_files")
             self.assertIsInstance(node.depends_on, tuple, f"{node.name} depends_on")
             self.assertIsInstance(node.source_code_files, tuple, f"{node.name} source_code_files")
-            self.assertIsInstance(node.primary_output, str, f"{node.name} primary_output")
-            self.assertIn(node.primary_output, node.output_files, f"{node.name} primary_output not in output_files")
 
     def test_no_duplicate_node_names(self):
         names = [n.name for n in NODES]

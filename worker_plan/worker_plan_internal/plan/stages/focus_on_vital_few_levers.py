@@ -11,9 +11,7 @@ from worker_plan_internal.plan.stages.enrich_levers import EnrichLeversTask
 
 
 class FocusOnVitalFewLeversTask(PlanTask):
-    """
-    Apply the 80/20 principle to the levers.
-    """
+    """Select the ~5 highest-impact levers by rating each as critical, high, or medium."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

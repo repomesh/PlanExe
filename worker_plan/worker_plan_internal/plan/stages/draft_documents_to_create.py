@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DraftDocumentsToCreateTask(PlanTask):
-    """
-    The "documents to create". Write bullet points to what each document roughly should contain.
-    """
+    """Draft content specs for each document to create: essential info, risks, and scenarios."""
     def output(self):
         return self.local_target(FilenameEnum.DRAFT_DOCUMENTS_TO_CREATE_CONSOLIDATED)
 

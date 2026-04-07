@@ -24,7 +24,10 @@ _WORKER_PLAN_DIR = Path(__file__).resolve().parent.parent  # worker_plan/
 # Module prefixes that are infrastructure/utilities, not implementation logic.
 # Imports from these are excluded from source_files auto-detection.
 _INFRASTRUCTURE_PREFIXES = (
-    "worker_plan_internal.plan.",
+    "worker_plan_internal.plan.stages.",
+    "worker_plan_internal.plan.run_plan_pipeline",
+    "worker_plan_internal.plan.pipeline_environment",
+    "worker_plan_internal.plan.ping_llm",
     "worker_plan_internal.llm_util.",
     "worker_plan_internal.llm_factory",
     "worker_plan_internal.luigi_util.",

@@ -4,7 +4,7 @@ from worker_plan_api.filenames import FilenameEnum
 
 
 class SetupTask(PlanTask):
-    """The plan prompt text provided by the user."""
+    """Load the user's plan prompt as the pipeline input."""
     def output(self):
         return self.local_target(FilenameEnum.INITIAL_PLAN)
 

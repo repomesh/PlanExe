@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase1AuditTask(PlanTask):
-    """Audit organizational governance structure and compliance requirements."""
+    """Design the governance structure and compliance requirements for the plan."""
 
     def requires(self):
         return {

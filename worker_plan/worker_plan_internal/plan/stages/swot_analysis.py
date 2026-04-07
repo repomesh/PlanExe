@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class SWOTAnalysisTask(PlanTask):
-    """Perform SWOT analysis on the project plan."""
+    """Identify strengths, weaknesses, opportunities, and threats tailored to the plan's purpose."""
 
     def requires(self):
         return {

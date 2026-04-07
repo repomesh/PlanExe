@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class EnrichTeamMembersWithEnvironmentInfoTask(PlanTask):
-    """Enrich team members with environmental and contextual information."""
+    """Add equipment needs and facility requirements for each team member's role."""
 
     def requires(self):
         return {

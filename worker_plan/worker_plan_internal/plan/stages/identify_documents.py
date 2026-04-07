@@ -16,9 +16,7 @@ from worker_plan_internal.plan.stages.expert_review import ExpertReviewTask
 
 
 class IdentifyDocumentsTask(PlanTask):
-    """
-    Identify documents that need to be created or found for the project.
-    """
+    """List documents the project needs — permits, contracts, specs, research, etc."""
     def output(self):
         return {
             "raw": self.local_target(FilenameEnum.IDENTIFIED_DOCUMENTS_RAW),

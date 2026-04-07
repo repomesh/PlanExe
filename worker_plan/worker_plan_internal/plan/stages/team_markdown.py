@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class TeamMarkdownTask(PlanTask):
-    """Generate the team information document in markdown."""
+    """Compile team roles, contracts, backgrounds, and equipment into one team document."""
 
     def requires(self):
         return {

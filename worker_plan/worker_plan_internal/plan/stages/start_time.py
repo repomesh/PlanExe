@@ -4,7 +4,7 @@ from worker_plan_api.filenames import FilenameEnum
 
 
 class StartTimeTask(PlanTask):
-    """The timestamp when the pipeline was started."""
+    """Record the pipeline start time."""
     def output(self):
         return self.local_target(FilenameEnum.START_TIME)
 

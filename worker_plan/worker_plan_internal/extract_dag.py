@@ -135,24 +135,32 @@ def _detect_implementation_files(cls: type) -> list[str]:
     return files
 
 
-def _extract_source_files(task: luigi.Task) -> list[str]:
-    """Get source files: task's own file + auto-detected implementation files."""
+def _extract_implementation(task: luigi.Task) -> dict[str, Any]:
+    """Get implementation info: workflow node file + auto-detected business logic files."""
     cls = type(task)
+    files: list[dict[str, str]] = []
 
-    # The task's own file
-    result: list[str] = []
+    # The task's own file (workflow node)
     try:
         task_file = Path(inspect.getfile(cls)).resolve()
-        result.append(str(task_file.relative_to(_WORKER_PLAN_DIR)))
+        files.append({
+            "role": "workflow_node",
+            "path": str(task_file.relative_to(_WORKER_PLAN_DIR)),
+        })
     except (TypeError, ValueError, OSError):
         pass
 
-    # Supplement with auto-detected implementation files
-    for f in _detect_implementation_files(cls):
-        if f not in result:
-            result.append(f)
+    # Auto-detected implementation files (business logic)
+    seen = {f["path"] for f in files}
+    for path in _detect_implementation_files(cls):
+        if path not in seen:
+            files.append({
+                "role": "business_logic",
+                "path": path,
+            })
+            seen.add(path)
 
-    return result
+    return {"files": files}
 
 
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
@@ -198,7 +206,7 @@ def extract_dag() -> dict[str, Any]:
         stage_name = _class_name_to_stage_name(class_name)
         description = cls.description() if hasattr(cls, "description") else ""
         output_files = _extract_output_filenames(task)
-        source_files = _extract_source_files(task)
+        implementation = _extract_implementation(task)
         depends_on_names = sorted(set(
             _class_name_to_stage_name(dep.__class__.__name__)
             for dep in upstream_tasks
@@ -209,7 +217,7 @@ def extract_dag() -> dict[str, Any]:
             "description": description,
             "output_files": output_files,
             "depends_on": depends_on_names,
-            "source_files": source_files,
+            "implementation": implementation,
         })
 
     _walk(root)

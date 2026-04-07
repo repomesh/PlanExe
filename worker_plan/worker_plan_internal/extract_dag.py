@@ -135,8 +135,8 @@ def _detect_implementation_files(cls: type) -> list[str]:
     return files
 
 
-def _extract_implementation(task: luigi.Task) -> dict[str, Any]:
-    """Get implementation info: workflow node file + auto-detected business logic files."""
+def _extract_source_files(task: luigi.Task) -> list[dict[str, str]]:
+    """Get source files: workflow node file + auto-detected business logic files."""
     cls = type(task)
     files: list[dict[str, str]] = []
 
@@ -160,7 +160,7 @@ def _extract_implementation(task: luigi.Task) -> dict[str, Any]:
             })
             seen.add(path)
 
-    return {"files": files}
+    return files
 
 
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
@@ -206,7 +206,7 @@ def extract_dag() -> dict[str, Any]:
         stage_name = _class_name_to_stage_name(class_name)
         description = cls.description() if hasattr(cls, "description") else ""
         artifacts = [{"path": f} for f in _extract_output_filenames(task)]
-        implementation = _extract_implementation(task)
+        source_files = _extract_source_files(task)
         depends_on_names = sorted(set(
             _class_name_to_stage_name(dep.__class__.__name__)
             for dep in upstream_tasks
@@ -217,7 +217,7 @@ def extract_dag() -> dict[str, Any]:
             "description": description,
             "artifacts": artifacts,
             "depends_on": depends_on_names,
-            "implementation": implementation,
+            "source_files": source_files,
         })
 
     _walk(root)

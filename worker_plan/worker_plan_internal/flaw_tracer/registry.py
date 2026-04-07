@@ -50,7 +50,7 @@ def _build_registry() -> tuple[NodeInfo, ...]:
             name=entry["id"],
             output_files=output_files,
             depends_on=tuple(entry["depends_on"]),
-            source_code_files=tuple(f["path"] for f in entry["implementation"]["files"]),
+            source_code_files=tuple(f["path"] for f in entry["source_files"]),
         ))
     return tuple(nodes)
 

@@ -11,9 +11,7 @@ from worker_plan_internal.plan.stages.potential_levers import PotentialLeversTas
 
 
 class DeduplicateLeversTask(PlanTask):
-    """
-    The potential levers usually have some redundant levers.
-    """
+    """Triage levers into primary, secondary, or remove."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConsolidateAssumptionsMarkdownTask(PlanTask):
-    """
-    Combines multiple small markdown documents into a single big document.
-    """
+    """Merge locations, currency, risks, and assumption stages into one reference document."""
     def requires(self):
         return {
             'identify_purpose': self.clone(IdentifyPurposeTask),

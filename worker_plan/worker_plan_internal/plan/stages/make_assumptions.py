@@ -14,9 +14,7 @@ from worker_plan_internal.plan.stages.identify_risks import IdentifyRisksTask
 
 
 class MakeAssumptionsTask(PlanTask):
-    """
-    Make assumptions about the plan.
-    """
+    """Fill information gaps with grounded assumptions about costs, timelines, and resources."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

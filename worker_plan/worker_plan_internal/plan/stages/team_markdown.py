@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class TeamMarkdownTask(PlanTask):
+    """Compile team roles, contracts, backgrounds, and equipment into one team document."""
+
     def requires(self):
         return {
             'enrich_team_members_with_environment_info': self.clone(EnrichTeamMembersWithEnvironmentInfoTask),

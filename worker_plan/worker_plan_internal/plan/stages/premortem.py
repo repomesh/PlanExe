@@ -21,6 +21,8 @@ from worker_plan_internal.plan.stages.questions_and_answers import QuestionsAndA
 
 
 class PremortemTask(PlanTask):
+    """Imagine the project has already failed — identify how and why it would happen."""
+
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.PREMORTEM_RAW),

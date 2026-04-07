@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class IdentifyTaskDependenciesTask(PlanTask):
-    """
-    This task identifies the dependencies between WBS tasks.
-    """
+    """Identify prerequisite relationships between WBS tasks for scheduling."""
     def output(self):
         return self.local_target(FilenameEnum.TASK_DEPENDENCIES_RAW)
 

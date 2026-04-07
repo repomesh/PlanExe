@@ -10,9 +10,7 @@ from worker_plan_internal.plan.stages.extract_constraints import ExtractConstrai
 
 
 class PotentialLeversTask(PlanTask):
-    """
-    Identify potential levers that can be adjusted.
-    """
+    """Brainstorm actionable levers — knobs the plan can turn to change outcomes."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

@@ -19,9 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class ExpertReviewTask(PlanTask):
-    """
-    Finds experts to review the SWOT analysis and have them provide criticism.
-    """
+    """Assemble a panel of domain experts and have them critique the plan."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

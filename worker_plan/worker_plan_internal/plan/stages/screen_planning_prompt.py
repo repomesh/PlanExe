@@ -7,10 +7,7 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class ScreenPlanningPromptTask(PlanTask):
-    """
-    Screen the user's prompt for quality before plan generation.
-    Classifies the prompt as USABLE or UNUSABLE.
-    """
+    """Flag prompts as UNUSABLE when there is high confidence the prompt is garbage."""
     def requires(self):
         return self.clone(SetupTask)
 

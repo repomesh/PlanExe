@@ -8,9 +8,7 @@ from worker_plan_internal.plan.stages.focus_on_vital_few_levers import FocusOnVi
 
 
 class StrategicDecisionsMarkdownTask(PlanTask):
-    """
-    Human readable markdown with the levers.
-    """
+    """Summarize the lever exploration pipeline into a readable strategic-decisions document."""
     def requires(self):
         return {
             'enriched_levers': self.clone(EnrichLeversTask),

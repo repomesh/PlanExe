@@ -13,9 +13,7 @@ from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyT
 
 
 class IdentifyRisksTask(PlanTask):
-    """
-    Identify risks for the plan, depending on the physical locations.
-    """
+    """Build a risk register covering strategic, operational, financial, and location-specific risks."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

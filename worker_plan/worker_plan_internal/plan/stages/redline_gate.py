@@ -7,6 +7,8 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class RedlineGateTask(PlanTask):
+    """Block prompts that cross policy, legal, or ethical red lines."""
+
     def requires(self):
         return self.clone(SetupTask)
 

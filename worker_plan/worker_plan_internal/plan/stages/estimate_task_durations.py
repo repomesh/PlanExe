@@ -15,20 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class EstimateTaskDurationsTask(PlanTask):
-    """
-    This task estimates durations for WBS tasks in chunks.
-
-    It depends on:
-      - ProjectPlanTask: providing the project plan JSON.
-      - WBSProjectLevel1AndLevel2Task: providing the major phases with subtasks and the task UUIDs.
-
-    For each chunk of 3 task IDs, a raw JSON file (e.g. "011-1-task_durations_raw.json") is written,
-    and an aggregated JSON file (defined by FilenameEnum.TASK_DURATIONS) is produced.
-
-    IDEA: 1st estimate the Tasks that have zero children.
-    2nd estimate tasks that have children where all children have been estimated.
-    repeat until all tasks have been estimated.
-    """
+    """Estimate realistic, minimum, and maximum durations for each WBS task bottom-up."""
     def output(self):
         return self.local_target(FilenameEnum.TASK_DURATIONS)
 

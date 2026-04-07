@@ -9,13 +9,7 @@ from worker_plan_internal.plan.stages.create_wbs_level3 import CreateWBSLevel3Ta
 
 
 class WBSProjectLevel1AndLevel2AndLevel3Task(PlanTask):
-    """
-    Create a WBS project from the WBS Level 1 and Level 2 and Level 3 JSON files.
-
-    It depends on:
-      - WBSProjectLevel1AndLevel2Task: providing the major phases with subtasks and the task UUIDs.
-      - CreateWBSLevel3Task: providing the decomposed tasks.
-    """
+    """Merge all three WBS levels into the complete project hierarchy (JSON + CSV)."""
     def output(self):
         return {
             'full': self.local_target(FilenameEnum.WBS_PROJECT_LEVEL1_AND_LEVEL2_AND_LEVEL3_FULL),

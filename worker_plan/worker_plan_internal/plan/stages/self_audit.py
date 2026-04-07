@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 class SelfAuditTask(PlanTask):
+    """Checklist-based diagnostic: find gaps, contradictions, and unsupported claims across all stages."""
+
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.SELF_AUDIT_RAW),

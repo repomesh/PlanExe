@@ -13,10 +13,7 @@ from worker_plan_internal.plan.stages.identify_documents import IdentifyDocument
 
 
 class FilterDocumentsToCreateTask(PlanTask):
-    """
-    The "documents to create" may be a long list of documents, some duplicates, irrelevant, not needed at an early stage of the project.
-    This task narrows down to a handful of relevant documents.
-    """
+    """Narrow the documents-to-create list to the most relevant ones for the current plan."""
     def output(self):
         return {
             "raw": self.local_target(FilenameEnum.FILTER_DOCUMENTS_TO_CREATE_RAW),

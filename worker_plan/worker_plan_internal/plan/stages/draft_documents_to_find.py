@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class DraftDocumentsToFindTask(PlanTask):
-    """
-    The "documents to find". Write bullet points to what each document roughly should contain.
-    """
+    """Draft content specs for each document to find: essential info, risks, and scenarios."""
     def output(self):
         return self.local_target(FilenameEnum.DRAFT_DOCUMENTS_TO_FIND_CONSOLIDATED)
 

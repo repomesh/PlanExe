@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class RelatedResourcesTask(PlanTask):
+    """Identify external resources needed: software, APIs, datasets, services, etc."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

@@ -13,9 +13,7 @@ from worker_plan_internal.plan.stages.candidate_scenarios import CandidateScenar
 
 
 class SelectScenarioTask(PlanTask):
-    """
-    Pick the best fitting scenario to make a plan for.
-    """
+    """Evaluate trade-offs and select the best scenario with a rationale."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

@@ -19,18 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreateWBSLevel3Task(PlanTask):
-    """
-    This task creates the Work Breakdown Structure (WBS) Level 3, by decomposing tasks from Level 2 into subtasks.
-
-    It depends on:
-      - ProjectPlanTask: provides the project plan JSON.
-      - WBSProjectLevel1AndLevel2Task: provides the major phases with subtasks and the task UUIDs.
-      - EstimateTaskDurationsTask: provides the aggregated task durations (task_duration_list).
-
-    For each task without any subtasks, a query is built and executed using the LLM.
-    The raw JSON result for each task is written to a file using the template from FilenameEnum.
-    Finally, all individual results are accumulated and written as an aggregated JSON file.
-    """
+    """Break Level 2 tasks into detailed subtasks (WBS Level 3)."""
     def output(self):
         return self.local_target(FilenameEnum.WBS_LEVEL3)
 

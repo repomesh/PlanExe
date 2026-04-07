@@ -20,6 +20,8 @@ from worker_plan_internal.plan.stages.review_plan import ReviewPlanTask
 
 
 class QuestionsAndAnswersTask(PlanTask):
+    """Anticipate stakeholder questions and provide clear answers from the plan."""
+
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_RAW),

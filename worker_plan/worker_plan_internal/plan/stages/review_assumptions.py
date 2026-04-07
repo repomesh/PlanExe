@@ -18,9 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReviewAssumptionsTask(PlanTask):
-    """
-    Find issues with the assumptions.
-    """
+    """Flag unreasonable, missing, or contradictory assumptions with recommendations."""
     def requires(self):
         return {
             'identify_purpose': self.clone(IdentifyPurposeTask),

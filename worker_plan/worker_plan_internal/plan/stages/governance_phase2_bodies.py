@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class GovernancePhase2BodiesTask(PlanTask):
+    """Define governance bodies and organizational hierarchy."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

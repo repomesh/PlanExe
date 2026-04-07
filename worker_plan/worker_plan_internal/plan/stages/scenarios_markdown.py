@@ -8,9 +8,7 @@ from worker_plan_internal.plan.stages.select_scenario import SelectScenarioTask
 
 
 class ScenariosMarkdownTask(PlanTask):
-    """
-    Present the scenarios in a human readable format.
-    """
+    """Format the selected scenario and rejected alternatives into a readable document."""
     def requires(self):
         return {
             'candidate_scenarios': self.clone(CandidateScenariosTask),

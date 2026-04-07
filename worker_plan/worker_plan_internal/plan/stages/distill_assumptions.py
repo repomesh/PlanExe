@@ -13,9 +13,7 @@ from worker_plan_internal.plan.stages.make_assumptions import MakeAssumptionsTas
 
 
 class DistillAssumptionsTask(PlanTask):
-    """
-    Distill raw assumption data.
-    """
+    """Condense verbose assumptions into concise, strategically important ones."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

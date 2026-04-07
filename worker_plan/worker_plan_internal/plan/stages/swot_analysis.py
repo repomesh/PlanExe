@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 
 class SWOTAnalysisTask(PlanTask):
+    """Identify strengths, weaknesses, opportunities, and threats tailored to the plan's purpose."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

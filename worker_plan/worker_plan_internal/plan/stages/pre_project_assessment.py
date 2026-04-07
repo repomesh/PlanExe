@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class PreProjectAssessmentTask(PlanTask):
+    """Evaluate project viability and readiness before detailed planning."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

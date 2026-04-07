@@ -10,6 +10,8 @@ from worker_plan_internal.plan.stages.governance_phase6_extra import GovernanceP
 
 
 class ConsolidateGovernanceTask(PlanTask):
+    """Consolidate all governance phases into a single markdown document."""
+
     def requires(self):
         return {
             'governance_phase1_audit': self.clone(GovernancePhase1AuditTask),

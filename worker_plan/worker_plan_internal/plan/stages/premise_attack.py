@@ -7,6 +7,8 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class PremiseAttackTask(PlanTask):
+    """Stress-test the plan's premise through five independent lenses to kill bad ideas early."""
+
     def requires(self):
         return self.clone(SetupTask)
 

@@ -11,9 +11,7 @@ from worker_plan_internal.plan.stages.deduplicate_levers import DeduplicateLever
 
 
 class EnrichLeversTask(PlanTask):
-    """
-    Enrich potential levers with more information.
-    """
+    """Add description, synergy, and conflict text to each lever."""
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

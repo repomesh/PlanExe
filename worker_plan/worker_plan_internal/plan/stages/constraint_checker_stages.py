@@ -30,7 +30,7 @@ def _read_constraints_json(task: PlanTask) -> str:
 
 
 class PotentialLeversConstraintTask(PlanTask):
-    """Check potential levers output for constraint violations."""
+    """Guardrail: verify brainstormed levers respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -49,7 +49,7 @@ class PotentialLeversConstraintTask(PlanTask):
 
 
 class DeduplicatedLeversConstraintTask(PlanTask):
-    """Check deduplicated levers output for constraint violations."""
+    """Guardrail: verify triaged levers still respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -68,7 +68,7 @@ class DeduplicatedLeversConstraintTask(PlanTask):
 
 
 class EnrichedLeversConstraintTask(PlanTask):
-    """Check enriched levers output for constraint violations."""
+    """Guardrail: verify enriched levers still respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -87,7 +87,7 @@ class EnrichedLeversConstraintTask(PlanTask):
 
 
 class VitalFewLeversConstraintTask(PlanTask):
-    """Check vital few levers output for constraint violations."""
+    """Guardrail: verify the selected vital levers respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -106,7 +106,7 @@ class VitalFewLeversConstraintTask(PlanTask):
 
 
 class CandidateScenariosConstraintTask(PlanTask):
-    """Check candidate scenarios output for constraint violations."""
+    """Guardrail: verify generated scenarios respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -125,7 +125,7 @@ class CandidateScenariosConstraintTask(PlanTask):
 
 
 class SelectedScenarioConstraintTask(PlanTask):
-    """Check selected scenario output for constraint violations."""
+    """Guardrail: verify the chosen scenario respects the user's constraints before planning begins."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),

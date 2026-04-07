@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class EnrichTeamMembersWithBackgroundStoryTask(PlanTask):
+    """Develop background story for each team member."""
+
     def requires(self):
         return {
             'setup': self.clone(SetupTask),

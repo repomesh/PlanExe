@@ -188,7 +188,7 @@ To insert a new `ValidateBudgetTask` between `CurrencyStrategyTask` and `Identif
 
 1. Create `stages/validate_budget.py`:
    ```python
-   from worker_plan_internal.plan.stages.currency_strategy import CurrencyStrategyTask
+   from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
 
    class ValidateBudgetTask(PlanTask):
        def requires(self):

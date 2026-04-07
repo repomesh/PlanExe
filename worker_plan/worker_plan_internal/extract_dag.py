@@ -24,7 +24,7 @@ _WORKER_PLAN_DIR = Path(__file__).resolve().parent.parent  # worker_plan/
 # Module prefixes that are infrastructure/utilities, not implementation logic.
 # Imports from these are excluded from source_files auto-detection.
 _INFRASTRUCTURE_PREFIXES = (
-    "worker_plan_internal.plan.stages.",
+    "worker_plan_internal.plan.nodes.",
     "worker_plan_internal.plan.run_plan_pipeline",
     "worker_plan_internal.plan.pipeline_environment",
     "worker_plan_internal.plan.ping_llm",
@@ -171,7 +171,7 @@ def extract_dag() -> dict[str, Any]:
 
     Returns a top-level schema object with stages sorted by pipeline order.
     """
-    from worker_plan_internal.plan.stages.full_plan_pipeline import FullPlanPipeline
+    from worker_plan_internal.plan.nodes.full_plan_pipeline import FullPlanPipeline
 
     root = FullPlanPipeline(run_id_dir=Path("/tmp/_dag_extract_dummy"))
 
@@ -220,7 +220,7 @@ def extract_dag() -> dict[str, Any]:
         "schema_version": "1.0",
         "pipeline_name": "planning_pipeline",
         "description": "DAG for PlanExe, an AI-driven project planning system.",
-        "stages": stages,
+        "nodes": stages,
     }
 
 
@@ -235,7 +235,7 @@ def main() -> None:
 
     if output_path:
         Path(output_path).write_text(dag_json + "\n", encoding="utf-8")
-        print(f"Wrote {len(dag['stages'])} stages to {output_path}", file=sys.stderr)
+        print(f"Wrote {len(dag['nodes'])} stages to {output_path}", file=sys.stderr)
     else:
         print(dag_json)
 

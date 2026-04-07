@@ -50,7 +50,7 @@ consumers.
   `rate_limit`, etc.) stored in `usage_metrics.jsonl`. Unknown errors preserve
   a truncated `error_detail` field.
 
-## Pipeline Stages (`worker_plan_internal/plan/stages/`)
+## Pipeline Stages (`worker_plan_internal/plan/nodes/`)
 
 Each Luigi pipeline task lives in its own file under `stages/`. This enables:
 - Multiple agents working on different stages without merge conflicts

@@ -12,7 +12,7 @@ from pathlib import Path
 from llama_index.core.llms.llm import LLM
 
 from worker_plan_internal.flaw_tracer.registry import (
-    find_stage_by_filename,
+    find_node_by_filename,
     get_upstream_files,
     get_source_code_paths,
 )
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TraceEntry:
     """One hop in a flaw's upstream trace."""
-    stage: str
+    node: str
     file: str
     evidence: str
     is_origin: bool = False
@@ -40,8 +40,8 @@ class TraceEntry:
 
 @dataclass
 class OriginInfo:
-    """Source code analysis at a flaw's origin stage."""
-    stage: str
+    """Source code analysis at a flaw's origin node."""
+    node: str
     file: str
     source_code_files: list[str]
     category: str  # "prompt_fixable", "domain_complexity", or "missing_input"
@@ -57,7 +57,7 @@ class TracedFlaw:
     severity: str
     starting_evidence: str
     trace: list[TraceEntry]
-    origin_stage: str | None = None
+    origin_node: str | None = None
     origin: OriginInfo | None = None
     depth: int = 0
     trace_complete: bool = True
@@ -114,7 +114,7 @@ class FlawTracer:
         self.max_depth = max_depth
         self.verbose = verbose
         self._llm_calls = 0
-        self._checked: set[tuple[str, str]] = set()  # (stage_name, flaw_description) dedup
+        self._checked: set[tuple[str, str]] = set()  # (node_name, flaw_description) dedup
         self._events = EventLogger(events_path)
 
     def trace(self, starting_file: str, flaw_description: str) -> FlawTraceResult:
@@ -127,12 +127,12 @@ class FlawTracer:
             raise FileNotFoundError(f"Starting file not found: {file_path}")
 
         file_content = file_path.read_text(encoding="utf-8")
-        stage = find_stage_by_filename(starting_file)
-        stage_name = stage.name if stage else "unknown"
+        found_node = find_node_by_filename(starting_file)
+        node_name = found_node.name if found_node else "unknown"
 
         # Phase 1: Identify flaws
         self._log(f"Phase 1: Identifying flaws in {starting_file}")
-        self._events.log("phase1_start", file=starting_file, stage=stage_name)
+        self._events.log("phase1_start", file=starting_file, node=node_name)
         identified = self._identify_flaws(starting_file, file_content, flaw_description)
         self._log(f"  Found {len(identified.flaws)} flaw(s)")
         self._events.log("phase1_done", flaws_found=len(identified.flaws),
@@ -147,7 +147,7 @@ class FlawTracer:
                              description=flaw.description, severity=flaw.severity)
 
             starting_entry = TraceEntry(
-                stage=stage_name,
+                node=node_name,
                 file=starting_file,
                 evidence=flaw.evidence,
                 is_origin=False,
@@ -161,26 +161,26 @@ class FlawTracer:
                 trace=[starting_entry],
             )
 
-            if stage and self.max_depth > 0:
-                self._trace_upstream(traced, stage_name, flaw.description, flaw.evidence, depth=0)
+            if found_node and self.max_depth > 0:
+                self._trace_upstream(traced, node_name, flaw.description, flaw.evidence, depth=0)
 
             # Mark the last trace entry as origin if no deeper origin was found
-            if traced.origin_stage is None and traced.trace:
+            if traced.origin_node is None and traced.trace:
                 last = traced.trace[-1]
                 last.is_origin = True
-                traced.origin_stage = last.stage
+                traced.origin_node = last.node
                 traced.depth = len(traced.trace) - 1
 
             # Phase 3: Source code analysis at origin (always, when origin is known)
-            if traced.origin_stage is not None:
-                self._events.log("phase3_start", flaw_id=flaw_id, origin_stage=traced.origin_stage)
+            if traced.origin_node is not None:
+                self._events.log("phase3_start", flaw_id=flaw_id, origin_node=traced.origin_node)
                 self._analyze_source_code(
-                    traced, traced.origin_stage, flaw.description,
-                    next((e.evidence for e in traced.trace if e.stage == traced.origin_stage), flaw.evidence)
+                    traced, traced.origin_node, flaw.description,
+                    next((e.evidence for e in traced.trace if e.node == traced.origin_node), flaw.evidence)
                 )
 
             self._events.log("trace_flaw_done", flaw_id=flaw_id,
-                             origin_stage=traced.origin_stage, depth=traced.depth)
+                             origin_node=traced.origin_node, depth=traced.depth)
             traced_flaws.append(traced)
 
         # Sort by depth (deepest origin first)
@@ -224,18 +224,18 @@ class FlawTracer:
     def _trace_upstream(
         self,
         traced: TracedFlaw,
-        current_stage: str,
+        current_node: str,
         flaw_description: str,
         evidence: str,
         depth: int,
     ) -> None:
-        """Recursively trace a flaw through upstream stages."""
+        """Recursively trace a flaw through upstream nodes."""
         if depth >= self.max_depth:
             traced.trace_complete = False
-            self._log(f"  Max depth {self.max_depth} reached at {current_stage}")
+            self._log(f"  Max depth {self.max_depth} reached at {current_node}")
             return
 
-        upstream_files = get_upstream_files(current_stage, self.output_dir)
+        upstream_files = get_upstream_files(current_node, self.output_dir)
         if not upstream_files:
             return  # No upstream = this is the origin
 
@@ -252,18 +252,18 @@ class FlawTracer:
 
             upstream_content = upstream_path.read_text(encoding="utf-8")
             self._log(f"  Checking upstream: {upstream_name} ({upstream_path.name})")
-            self._events.log("upstream_check", stage=upstream_name,
+            self._events.log("upstream_check", node=upstream_name,
                              file=upstream_path.name, depth=depth)
 
             result = self._check_upstream(flaw_description, evidence, upstream_path.name, upstream_content)
 
             if result.found:
                 self._log(f"  -> FOUND in {upstream_name}")
-                self._events.log("upstream_found", stage=upstream_name,
+                self._events.log("upstream_found", node=upstream_name,
                                  file=upstream_path.name, depth=depth)
                 found_upstream = True
                 entry = TraceEntry(
-                    stage=upstream_name,
+                    node=upstream_name,
                     file=upstream_path.name,
                     evidence=result.evidence or "",
                     is_origin=False,
@@ -277,22 +277,22 @@ class FlawTracer:
                 )
                 # First-match-wins: once an origin is found in one upstream
                 # branch, stop exploring others.
-                if traced.origin_stage is not None:
+                if traced.origin_node is not None:
                     return
 
         if not found_upstream:
-            # Current stage is the origin — flaw exists here but not in any upstream
-            traced.origin_stage = current_stage
+            # Current node is the origin — flaw exists here but not in any upstream
+            traced.origin_node = current_node
             traced.depth = len(traced.trace)
-            self._events.log("origin_found", stage=current_stage, depth=traced.depth)
-            # Mark the current stage entry as origin
+            self._events.log("origin_found", node=current_node, depth=traced.depth)
+            # Mark the current node entry as origin
             for entry in traced.trace:
-                if entry.stage == current_stage:
+                if entry.node == current_node:
                     entry.is_origin = True
 
-    def _analyze_source_code(self, traced: TracedFlaw, stage_name: str, flaw_description: str, evidence: str) -> None:
-        """Phase 3: Analyze source code at the origin stage."""
-        source_paths = get_source_code_paths(stage_name)
+    def _analyze_source_code(self, traced: TracedFlaw, node_name: str, flaw_description: str, evidence: str) -> None:
+        """Phase 3: Analyze source code at the origin node."""
+        source_paths = get_source_code_paths(node_name)
         if not source_paths:
             return
 
@@ -306,7 +306,7 @@ class FlawTracer:
         if not source_contents:
             return
 
-        self._log(f"  Phase 3: Analyzing source code for {stage_name}")
+        self._log(f"  Phase 3: Analyzing source code for {node_name}")
         messages = build_source_code_analysis_messages(flaw_description, evidence, source_contents)
 
         def execute(llm: LLM) -> SourceCodeAnalysisResult:
@@ -319,7 +319,7 @@ class FlawTracer:
             analysis = self.llm_executor.run(execute)
             source_file_names = [name for name, _ in source_contents]
             traced.origin = OriginInfo(
-                stage=stage_name,
+                node=node_name,
                 file=traced.trace[-1].file if traced.trace else "",
                 source_code_files=source_file_names,
                 category=analysis.category,
@@ -327,7 +327,7 @@ class FlawTracer:
                 suggestion=analysis.suggestion,
             )
         except Exception as e:
-            logger.warning(f"Source code analysis failed for {stage_name}: {e}")
+            logger.warning(f"Source code analysis failed for {node_name}: {e}")
 
     def _log(self, message: str) -> None:
         """Print to stderr if verbose mode is enabled."""

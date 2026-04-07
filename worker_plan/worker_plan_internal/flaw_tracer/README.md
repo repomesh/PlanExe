@@ -4,13 +4,13 @@ Root-cause analysis tool for PlanExe reports. Given a flaw observed in a pipelin
 
 ## How it works
 
-PlanExe runs a DAG of ~70 tasks. Each task reads upstream files, calls an LLM, and writes output files (prefixed `001-` through `030-`). Flaws introduced early propagate downstream into later stages and the final report.
+PlanExe runs a DAG of ~70 tasks. Each task reads upstream files, calls an LLM, and writes output files (prefixed `001-` through `030-`). Flaws introduced early propagate downstream into later nodes and the final report.
 
 The flaw tracer performs a recursive depth-first search:
 
 1. **Phase 1 — Identify flaws.** Reads the starting file and locates the specific flaw you described, plus any closely related flaws in the same problem family.
-2. **Phase 2 — Trace upstream.** For each flaw, walks upstream through the DAG one hop at a time, asking the LLM whether the flaw was *caused by* content in each input file (requires causal link, not just topical overlap). Continues until it finds a stage where the flaw exists in the output but not in any inputs.
-3. **Phase 3 — Analyze source code and classify.** At the origin stage, reads the Python source code and classifies the root cause:
+2. **Phase 2 — Trace upstream.** For each flaw, walks upstream through the DAG one hop at a time, asking the LLM whether the flaw was *caused by* content in each input file (requires causal link, not just topical overlap). Continues until it finds a node where the flaw exists in the output but not in any inputs.
+3. **Phase 3 — Analyze source code and classify.** At the origin node, reads the Python source code and classifies the root cause:
    - **Prompt fixable** — the prompt has a gap that can be fixed by editing it
    - **Domain complexity** — the topic is inherently uncertain or contentious, no prompt change resolves it
    - **Missing input** — the user's plan prompt didn't provide enough detail
@@ -111,7 +111,7 @@ A typical run finds 2-3 focused flaws and makes 15-30 LLM calls.
 ## Tips
 
 - **Start from `029-2-self_audit.md`.** This file already contains identified issues, so you're tracing *known* problems upstream rather than asking the LLM to find flaws from scratch.
-- **Trust the trace chains more than the suggestions.** The upstream path (which stages the flaw passed through) is mechanically grounded in the DAG. The suggestions are LLM opinions — useful starting points, not patches.
+- **Trust the trace chains more than the suggestions.** The upstream path (which nodes the flaw passed through) is mechanically grounded in the DAG. The suggestions are LLM opinions — useful starting points, not patches.
 - **Check the category before acting.** If the origin is `domain_complexity`, don't spend time tweaking the prompt. If it's `prompt_fixable`, the suggestion is likely actionable.
 - **Results are non-deterministic.** This is LLM judging LLM output. Two runs on the same input may produce slightly different traces. If a finding matters, run it twice.
 
@@ -119,7 +119,7 @@ A typical run finds 2-3 focused flaws and makes 15-30 LLM calls.
 
 - **LLM subjectivity.** Every hop in the trace is a judgment call by the LLM ("did this upstream file cause the downstream flaw?"). The causal-link requirement helps, but it's still one LLM's opinion.
 - **First-match-wins.** When a flaw has precursors in multiple parallel upstream branches, only the first branch found is followed. Real flaws often have multiple contributing causes.
-- **Static registry.** The DAG mapping is hand-maintained in `registry.py`. Adding, removing, or renaming pipeline stages requires a manual registry update — it won't auto-detect changes.
+- **Static registry.** The DAG mapping is hand-maintained in `registry.py`. Adding, removing, or renaming pipeline nodes requires a manual registry update — it won't auto-detect changes.
 - **Text-only.** The tracer can only catch flaws that leave textual evidence in intermediary files. Timing issues, model-specific quirks, or structural DAG problems are invisible to it.
 - **Diagnostic, not prescriptive.** It tells you *where* and *why*, but someone still has to decide what to do about it.
 

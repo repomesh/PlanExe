@@ -26,13 +26,13 @@ def _make_sample_result() -> FlawTraceResult:
                 severity="HIGH",
                 starting_evidence="CZK 500,000",
                 trace=[
-                    TraceEntry(stage="executive_summary", file="025-2-executive_summary.md", evidence="CZK 500,000", is_origin=False),
-                    TraceEntry(stage="project_plan", file="005-2-project_plan.md", evidence="Budget: 500k", is_origin=False),
-                    TraceEntry(stage="make_assumptions", file="003-5-make_assumptions.md", evidence="Assume budget of 500k", is_origin=True),
+                    TraceEntry(node="executive_summary", file="025-2-executive_summary.md", evidence="CZK 500,000", is_origin=False),
+                    TraceEntry(node="project_plan", file="005-2-project_plan.md", evidence="Budget: 500k", is_origin=False),
+                    TraceEntry(node="make_assumptions", file="003-5-make_assumptions.md", evidence="Assume budget of 500k", is_origin=True),
                 ],
-                origin_stage="make_assumptions",
+                origin_node="make_assumptions",
                 origin=OriginInfo(
-                    stage="make_assumptions",
+                    node="make_assumptions",
                     file="003-5-make_assumptions.md",
                     source_code_files=["make_assumptions.py"],
                     category="prompt_fixable",
@@ -47,9 +47,9 @@ def _make_sample_result() -> FlawTraceResult:
                 severity="MEDIUM",
                 starting_evidence="growing Czech market",
                 trace=[
-                    TraceEntry(stage="executive_summary", file="025-2-executive_summary.md", evidence="growing Czech market", is_origin=True),
+                    TraceEntry(node="executive_summary", file="025-2-executive_summary.md", evidence="growing Czech market", is_origin=True),
                 ],
-                origin_stage="executive_summary",
+                origin_node="executive_summary",
                 depth=1,
             ),
         ],
@@ -79,7 +79,7 @@ class TestWriteJsonReport(unittest.TestCase):
             data = json.loads(output_path.read_text(encoding="utf-8"))
             summary = data["summary"]
             self.assertEqual(summary["total_flaws"], 2)
-            self.assertEqual(summary["deepest_origin_stage"], "make_assumptions")
+            self.assertEqual(summary["deepest_origin_node"], "make_assumptions")
             self.assertEqual(summary["deepest_origin_depth"], 3)
             self.assertEqual(summary["llm_calls_made"], 8)
 
@@ -123,7 +123,7 @@ class TestWriteMarkdownReport(unittest.TestCase):
             write_markdown_report(result, output_path)
 
             content = output_path.read_text(encoding="utf-8")
-            self.assertIn("| Stage |", content)
+            self.assertIn("| Node |", content)
             self.assertIn("| File |", content)
 
     def test_empty_result_produces_valid_markdown(self):

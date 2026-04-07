@@ -64,7 +64,7 @@ class TestFlawTraceResult(unittest.TestCase):
             description="Budget fabricated",
             severity="HIGH",
             starting_evidence="CZK 500,000",
-            trace=[TraceEntry(stage="test", file="test.md", evidence="ev")],
+            trace=[TraceEntry(node="test", file="test.md", evidence="ev")],
         )
         result = FlawTraceResult(
             starting_file="test.md",
@@ -86,7 +86,7 @@ class TestTracedFlaw(unittest.TestCase):
             starting_evidence="ev",
             trace=[],
         )
-        self.assertIsNone(flaw.origin_stage)
+        self.assertIsNone(flaw.origin_node)
         self.assertIsNone(flaw.origin)
         self.assertEqual(flaw.depth, 0)
         self.assertTrue(flaw.trace_complete)
@@ -191,11 +191,11 @@ class TestFlawTracerUpstreamTrace(unittest.TestCase):
             self.assertEqual(len(result.flaws), 1)
             flaw = result.flaws[0]
             # The trace should include at least executive_summary and project_plan
-            trace_stages = [entry.stage for entry in flaw.trace]
-            self.assertIn("executive_summary", trace_stages)
-            self.assertIn("project_plan", trace_stages)
+            trace_nodes = [entry.node for entry in flaw.trace]
+            self.assertIn("executive_summary", trace_nodes)
+            self.assertIn("project_plan", trace_nodes)
             # Origin should be project_plan (flaw found there but not in its upstream 'setup')
-            self.assertEqual(flaw.origin_stage, "project_plan")
+            self.assertEqual(flaw.origin_node, "project_plan")
 
     def test_deduplication_works(self):
         """Stages already checked for the same flaw should be skipped."""
@@ -300,7 +300,7 @@ class TestFlawTracerMaxDepth(unittest.TestCase):
 
 
 class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
-    """Test that Phase 3 source code analysis is invoked at the origin stage."""
+    """Test that Phase 3 source code analysis is invoked at the origin node."""
 
     def test_source_code_analysis_called_at_origin(self):
         with TemporaryDirectory() as d:
@@ -322,11 +322,11 @@ class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
             # _analyze_source_code should have been called once for the origin
             mock_analyze.assert_called_once()
             args = mock_analyze.call_args
-            # First positional arg is the TracedFlaw, second is the stage name
+            # First positional arg is the TracedFlaw, second is the node name
             self.assertEqual(args[0][1], "executive_summary")
 
     def test_source_code_analysis_called_at_deep_origin(self):
-        """Phase 3 should run when the origin is found at a deeper upstream stage."""
+        """Phase 3 should run when the origin is found at a deeper upstream node."""
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create files for a chain: executive_summary -> project_plan (origin)
@@ -361,7 +361,7 @@ class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
             # Phase 3 should have been called at the deep origin (project_plan)
             mock_analyze.assert_called_once()
             args = mock_analyze.call_args
-            # Second positional arg is the origin stage name
+            # Second positional arg is the origin node name
             self.assertEqual(args[0][1], "project_plan")
 
 

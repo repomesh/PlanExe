@@ -118,7 +118,7 @@ class TestBuildSourceCodeAnalysisMessages(unittest.TestCase):
             flaw_description="Budget fabricated",
             evidence_quote="CZK 500,000",
             source_code_contents=[
-                ("stages/make_assumptions.py", "class MakeAssumptionsTask: ..."),
+                ("nodes/make_assumptions.py", "class MakeAssumptionsTask: ..."),
                 ("assume/make_assumptions.py", "def execute(llm, query): ..."),
             ],
         )

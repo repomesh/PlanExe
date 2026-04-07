@@ -29,7 +29,7 @@ class UpstreamCheckResult(BaseModel):
 
 
 class SourceCodeAnalysisResult(BaseModel):
-    """Result of analyzing source code at a flaw's origin stage."""
+    """Result of analyzing source code at a flaw's origin node."""
     category: Literal["prompt_fixable", "domain_complexity", "missing_input"] = Field(
         description=(
             "prompt_fixable: the prompt forgot to ask for something or has a gap that can be fixed by editing the prompt. "
@@ -88,7 +88,7 @@ def build_upstream_check_messages(
     system = (
         "You are tracing a flaw through a project planning pipeline to find where it originated.\n"
         "A downstream file contains a flaw. You are examining an upstream file that was an input "
-        "to the stage that produced the flawed output.\n\n"
+        "to the node that produced the flawed output.\n\n"
         "Determine if this upstream file CAUSED or CONTRIBUTED to the downstream flaw.\n"
         "This means the upstream file contains content that was carried forward, transformed, "
         "or amplified into the downstream flaw. Merely discussing a related topic is NOT enough.\n\n"
@@ -120,8 +120,8 @@ def build_source_code_analysis_messages(
         source_code_contents: list of (filename, content) tuples
     """
     system = (
-        "A flaw was introduced at this pipeline stage. The flaw exists in its output "
-        "but NOT in any of its inputs, so this stage created it.\n\n"
+        "A flaw was introduced at this pipeline node. The flaw exists in its output "
+        "but NOT in any of its inputs, so this node created it.\n\n"
         "First, classify the root cause into one of three categories:\n"
         "- prompt_fixable: The prompt has a gap or oversight that can be fixed by editing "
         "the prompt text. Example: the prompt asks for budget estimates but doesn't require "
@@ -131,7 +131,7 @@ def build_source_code_analysis_messages(
         "Example: caste enumeration in India is politically contentious regardless of how "
         "the prompt is worded.\n"
         "- missing_input: The user's original plan description didn't provide enough detail "
-        "for this stage to produce quality output. Example: the plan says 'open a shop' "
+        "for this node to produce quality output. Example: the plan says 'open a shop' "
         "without specifying location, budget, or target market.\n\n"
         "Then examine the source code to identify the specific cause. Be specific — point "
         "to lines or prompt phrases. Focus on the system prompt text and data transformation logic."

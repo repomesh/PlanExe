@@ -19,14 +19,14 @@ def write_json_report(result: FlawTraceResult, output_path: Path) -> None:
         "flaws": [],
         "summary": {
             "total_flaws": len(result.flaws),
-            "deepest_origin_stage": None,
+            "deepest_origin_node": None,
             "deepest_origin_depth": 0,
             "llm_calls_made": result.llm_calls_made,
         },
     }
 
     max_depth = 0
-    deepest_stage = None
+    deepest_node = None
 
     for flaw in result.flaws:
         flaw_data = {
@@ -36,7 +36,7 @@ def write_json_report(result: FlawTraceResult, output_path: Path) -> None:
             "starting_evidence": flaw.starting_evidence,
             "trace": [
                 {
-                    "stage": entry.stage,
+                    "node": entry.node,
                     "file": entry.file,
                     "evidence": entry.evidence,
                     "is_origin": entry.is_origin,
@@ -50,7 +50,7 @@ def write_json_report(result: FlawTraceResult, output_path: Path) -> None:
 
         if flaw.origin:
             flaw_data["origin"] = {
-                "stage": flaw.origin.stage,
+                "node": flaw.origin.node,
                 "file": flaw.origin.file,
                 "source_code_files": flaw.origin.source_code_files,
                 "category": flaw.origin.category,
@@ -60,12 +60,12 @@ def write_json_report(result: FlawTraceResult, output_path: Path) -> None:
 
         if flaw.depth > max_depth:
             max_depth = flaw.depth
-            deepest_stage = flaw.origin_stage
+            deepest_node = flaw.origin_node
 
         data["flaws"].append(flaw_data)
 
     data["flaws"].sort(key=lambda f: f["depth"], reverse=True)
-    data["summary"]["deepest_origin_stage"] = deepest_stage
+    data["summary"]["deepest_origin_node"] = deepest_node
     data["summary"]["deepest_origin_depth"] = max_depth
 
     output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -81,7 +81,7 @@ def write_markdown_report(result: FlawTraceResult, output_path: Path) -> None:
 
     if result.flaws:
         deepest = max(result.flaws, key=lambda f: f.depth)
-        lines.append(f"**Deepest origin:** {deepest.origin_stage} (depth {deepest.depth})")
+        lines.append(f"**Deepest origin:** {deepest.origin_node} (depth {deepest.depth})")
     lines.append(f"**LLM calls:** {result.llm_calls_made}")
     lines.append("")
 
@@ -93,10 +93,10 @@ def write_markdown_report(result: FlawTraceResult, output_path: Path) -> None:
         lines.append("")
 
         # Trace chain summary
-        stage_names = [entry.stage for entry in flaw.trace]
+        node_names = [entry.node for entry in flaw.trace]
         chain_parts = []
-        for name in stage_names:
-            if name == flaw.origin_stage:
+        for name in node_names:
+            if name == flaw.origin_node:
                 chain_parts.append(f"**{name}** (origin)")
             else:
                 chain_parts.append(name)
@@ -108,12 +108,12 @@ def write_markdown_report(result: FlawTraceResult, output_path: Path) -> None:
             lines.append("")
 
         # Trace table
-        lines.append("| Stage | File | Evidence |")
+        lines.append("| Node | File | Evidence |")
         lines.append("|-------|------|----------|")
         for entry in flaw.trace:
-            stage_cell = f"**{entry.stage}**" if entry.is_origin else entry.stage
+            node_cell = f"**{entry.node}**" if entry.is_origin else entry.node
             evidence_cell = _escape_table_cell(entry.evidence)
-            lines.append(f"| {stage_cell} | {entry.file} | {evidence_cell} |")
+            lines.append(f"| {node_cell} | {entry.file} | {evidence_cell} |")
         lines.append("")
 
         # Origin analysis

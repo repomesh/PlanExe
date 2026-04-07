@@ -2,12 +2,12 @@
 
 ## What works well
 
-- **DAG traversal is correct.** The registry maps all 70 stages, upstream resolution works, dedup prevents redundant checks, depth limiting works.
+- **DAG traversal is correct.** The registry maps all 70 nodes, upstream resolution works, dedup prevents redundant checks, depth limiting works.
 - **Phase 1 anchors to the user's flaw.** The user's specific flaw is always the first result, with additional flaws limited to the same problem family.
 - **Upstream checks require causal links.** The prompt requires the LLM to explain *how* upstream content caused the downstream flaw, not just topical overlap. This produces tighter, more accurate traces.
 - **Phase 3 classifies root causes.** Each origin is categorized as `prompt_fixable`, `domain_complexity`, or `missing_input`. Verified: the India census caste enumeration flaw is correctly classified as `domain_complexity`, while the workforce feasibility flaw is `prompt_fixable`.
 - **Evidence quotes are concise.** Both Phase 1 and Phase 2 prompts instruct the LLM to keep quotes under 200 characters.
-- **Source code filenames are disambiguated.** Shows `stages/identify_purpose.py` and `assume/identify_purpose.py` instead of duplicate bare filenames.
+- **Source code filenames are disambiguated.** Shows `nodes/identify_purpose.py` and `assume/identify_purpose.py` instead of duplicate bare filenames.
 - **Depth sorting is useful.** Deepest root causes appear first, matching the user's intent of finding the earliest upstream origin.
 - **Events.jsonl enables live monitoring.** Users can `tail -f events.jsonl` to watch progress instead of waiting blindly.
 - **Focused output.** A typical run finds 2-3 flaws in the same problem family and makes 15-30 LLM calls (down from 17 flaws / 153 calls before prompt improvements).
@@ -37,7 +37,7 @@ Before the fix, every suggestion was "modify the system prompt" even when the re
 
 ### Duplicate source code filenames (was LOW, fixed)
 
-Source code paths now include the parent directory (`stages/identify_purpose.py`) to disambiguate files with the same name in different packages.
+Source code paths now include the parent directory (`nodes/identify_purpose.py`) to disambiguate files with the same name in different packages.
 
 ## Open issues
 
@@ -47,7 +47,7 @@ This is LLM judging LLM output. Every upstream check is a subjective call. Two r
 
 ### MEDIUM: Static registry will drift
 
-The DAG mapping in `registry.py` is a hand-maintained copy of the pipeline topology. Adding, removing, or renaming stages requires a manual update — the registry won't auto-detect changes. If the registry falls out of sync, traces will silently miss stages or follow wrong paths.
+The DAG mapping in `registry.py` is a hand-maintained copy of the pipeline topology. Adding, removing, or renaming nodes requires a manual update — the registry won't auto-detect changes. If the registry falls out of sync, traces will silently miss nodes or follow wrong paths.
 
 **Fix direction:** Generate the registry from Luigi task introspection at startup, or add a CI check that compares the registry against the actual task classes.
 

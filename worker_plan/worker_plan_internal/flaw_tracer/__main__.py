@@ -99,7 +99,7 @@ def main() -> None:
     print(f"\nFlaws found: {len(result.flaws)}", file=sys.stderr)
     if result.flaws:
         deepest = max(result.flaws, key=lambda f: f.depth)
-        print(f"Deepest origin: {deepest.origin_stage} (depth {deepest.depth})", file=sys.stderr)
+        print(f"Deepest origin: {deepest.origin_node} (depth {deepest.depth})", file=sys.stderr)
     print(f"LLM calls made: {result.llm_calls_made}", file=sys.stderr)
     print(f"\nReports written:", file=sys.stderr)
     print(f"  JSON: {json_path}", file=sys.stderr)

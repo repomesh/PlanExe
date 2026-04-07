@@ -14,9 +14,7 @@ from worker_plan_internal.plan.stages.expert_review import ExpertReviewTask
 
 
 class DataCollectionTask(PlanTask):
-    """
-    Determine what kind of data is to be collected.
-    """
+    """Specify data-gathering actions needed to validate the plan: market, financial, regulatory, etc."""
     def output(self):
         return {
             'raw': self.local_target(FilenameEnum.DATA_COLLECTION_RAW),

@@ -17,15 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class CreatePitchTask(PlanTask):
-    """
-    Create a the pitch that explains the project plan, from multiple perspectives.
-
-    This task depends on:
-      - ProjectPlanTask: provides the project plan JSON.
-      - WBSProjectLevel1AndLevel2Task: containing the top level of the project plan.
-
-    The resulting pitch JSON is written to the file specified by FilenameEnum.PITCH.
-    """
+    """Create a compelling project pitch with target audience, call to action, and risk mitigation."""
     def output(self):
         return self.local_target(FilenameEnum.PITCH_RAW)
 

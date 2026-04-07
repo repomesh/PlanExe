@@ -7,9 +7,7 @@ from worker_plan_internal.plan.stages.setup import SetupTask
 
 
 class IdentifyPurposeTask(PlanTask):
-    """
-    Determine if this is this going to be a business/personal/other plan.
-    """
+    """Classify the plan as business, personal, or other to tailor downstream prompts."""
     def requires(self):
         return self.clone(SetupTask)
 

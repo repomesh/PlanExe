@@ -5,23 +5,23 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from worker_plan_internal.rca.tracer import (
-    FlawTraceResult,
-    TracedFlaw,
+    RCAResult,
+    TracedProblem,
     TraceEntry,
     OriginInfo,
 )
 from worker_plan_internal.rca.output import write_json_report, write_markdown_report
 
 
-def _make_sample_result() -> FlawTraceResult:
-    """Create a sample FlawTraceResult for testing."""
-    return FlawTraceResult(
+def _make_sample_result() -> RCAResult:
+    """Create a sample RCAResult for testing."""
+    return RCAResult(
         starting_file="025-2-executive_summary.md",
-        flaw_description="Budget is unvalidated",
+        problem_description="Budget is unvalidated",
         output_dir="/tmp/test_output",
-        flaws=[
-            TracedFlaw(
-                id="flaw_001",
+        problems=[
+            TracedProblem(
+                id="problem_001",
                 description="Budget of CZK 500,000 is unvalidated",
                 severity="HIGH",
                 starting_evidence="CZK 500,000",
@@ -41,8 +41,8 @@ def _make_sample_result() -> FlawTraceResult:
                 ),
                 depth=3,
             ),
-            TracedFlaw(
-                id="flaw_002",
+            TracedProblem(
+                id="problem_002",
                 description="Missing market sizing",
                 severity="MEDIUM",
                 starting_evidence="growing Czech market",
@@ -67,7 +67,7 @@ class TestWriteJsonReport(unittest.TestCase):
             self.assertTrue(output_path.exists())
             data = json.loads(output_path.read_text(encoding="utf-8"))
             self.assertIn("input", data)
-            self.assertIn("flaws", data)
+            self.assertIn("problems", data)
             self.assertIn("summary", data)
 
     def test_json_contains_correct_summary(self):
@@ -78,19 +78,19 @@ class TestWriteJsonReport(unittest.TestCase):
 
             data = json.loads(output_path.read_text(encoding="utf-8"))
             summary = data["summary"]
-            self.assertEqual(summary["total_flaws"], 2)
+            self.assertEqual(summary["total_problems"], 2)
             self.assertEqual(summary["deepest_origin_node"], "make_assumptions")
             self.assertEqual(summary["deepest_origin_depth"], 3)
             self.assertEqual(summary["llm_calls_made"], 8)
 
-    def test_json_flaws_sorted_by_depth(self):
+    def test_json_problems_sorted_by_depth(self):
         with TemporaryDirectory() as d:
             output_path = Path(d) / "root_cause_analysis.json"
             result = _make_sample_result()
             write_json_report(result, output_path)
 
             data = json.loads(output_path.read_text(encoding="utf-8"))
-            depths = [f["depth"] for f in data["flaws"]]
+            depths = [f["depth"] for f in data["problems"]]
             self.assertEqual(depths, sorted(depths, reverse=True))
 
 
@@ -103,9 +103,9 @@ class TestWriteMarkdownReport(unittest.TestCase):
 
             self.assertTrue(output_path.exists())
             content = output_path.read_text(encoding="utf-8")
-            self.assertIn("# Flaw Trace Report", content)
+            self.assertIn("# Root Cause Analysis Report", content)
 
-    def test_markdown_contains_flaw_details(self):
+    def test_markdown_contains_problem_details(self):
         with TemporaryDirectory() as d:
             output_path = Path(d) / "root_cause_analysis.md"
             result = _make_sample_result()
@@ -129,14 +129,14 @@ class TestWriteMarkdownReport(unittest.TestCase):
     def test_empty_result_produces_valid_markdown(self):
         with TemporaryDirectory() as d:
             output_path = Path(d) / "root_cause_analysis.md"
-            result = FlawTraceResult(
+            result = RCAResult(
                 starting_file="030-report.html",
-                flaw_description="test",
+                problem_description="test",
                 output_dir="/tmp",
-                flaws=[],
+                problems=[],
                 llm_calls_made=1,
             )
             write_markdown_report(result, output_path)
 
             content = output_path.read_text(encoding="utf-8")
-            self.assertIn("Flaws found:** 0", content)
+            self.assertIn("Problems found:** 0", content)

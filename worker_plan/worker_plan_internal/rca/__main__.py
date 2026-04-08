@@ -22,7 +22,7 @@ from worker_plan_internal.llm_factory import get_llm_names_by_priority
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Trace flaws in PlanExe reports upstream to their root cause.",
+        description="Trace problems in PlanExe reports upstream to their root cause.",
     )
     parser.add_argument(
         "--dir", required=True, type=Path,
@@ -42,7 +42,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--max-depth", type=int, default=15,
-        help="Maximum upstream hops per flaw (default: 15)",
+        help="Maximum upstream hops per problem (default: 15)",
     )
     parser.add_argument(
         "--verbose", action="store_true",
@@ -86,7 +86,7 @@ def main() -> None:
         events_path=events_path,
     )
 
-    print(f"Tracing flaws in {starting_file}...", file=sys.stderr)
+    print(f"Tracing problems in {starting_file}...", file=sys.stderr)
     result = tracer.trace(starting_file, args.problem)
 
     # Write reports
@@ -96,9 +96,9 @@ def main() -> None:
     write_markdown_report(result, md_path)
 
     # Print summary
-    print(f"\nFlaws found: {len(result.flaws)}", file=sys.stderr)
-    if result.flaws:
-        deepest = max(result.flaws, key=lambda f: f.depth)
+    print(f"\nProblems found: {len(result.problems)}", file=sys.stderr)
+    if result.problems:
+        deepest = max(result.problems, key=lambda p: p.depth)
         print(f"Deepest origin: {deepest.origin_node} (depth {deepest.depth})", file=sys.stderr)
     print(f"LLM calls made: {result.llm_calls_made}", file=sys.stderr)
     print(f"\nReports written:", file=sys.stderr)

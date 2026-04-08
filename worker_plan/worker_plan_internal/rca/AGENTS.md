@@ -70,7 +70,7 @@ The tool traces at the artifact level (which file introduced the problem) but ca
 
 2. **Minecraft escape v1** (`20251016_minecraft_escape`): Old prompts. Problem about zoning/permits. 5 problems, 43 LLM calls. User's problem not identified. Exposed Phase 1 anchoring problem.
 
-3. **Minecraft escape v2** (`20251016_minecraft_escape`): New prompts. 3 problems, 31 LLM calls, deepest origin: `identify_risks` (depth 5). User's problem correctly identified as flaw_001. All problems in same family (regulatory gaps).
+3. **Minecraft escape v2** (`20251016_minecraft_escape`): New prompts. 3 problems, 31 LLM calls, deepest origin: `identify_risks` (depth 5). User's problem correctly identified as problem_001. All problems in same family (regulatory gaps).
 
 4. **India census v2** (`20250101_india_census`): New prompts. 2 problems (down from 17), 17 LLM calls (down from 153), deepest origin: `potential_levers` (depth 6). User's problem correctly identified. Exposed Phase 3 "always blames prompt" limitation.
 

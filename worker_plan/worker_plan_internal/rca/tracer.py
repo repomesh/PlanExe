@@ -1,5 +1,5 @@
 # worker_plan/worker_plan_internal/rca/tracer.py
-"""Recursive depth-first flaw tracer for PlanExe pipeline outputs."""
+"""Recursive depth-first root cause analyzer for PlanExe pipeline outputs."""
 from __future__ import annotations
 
 import json
@@ -17,10 +17,10 @@ from worker_plan_internal.rca.registry import (
     get_source_code_paths,
 )
 from worker_plan_internal.rca.prompts import (
-    FlawIdentificationResult,
+    ProblemIdentificationResult,
     UpstreamCheckResult,
     SourceCodeAnalysisResult,
-    build_flaw_identification_messages,
+    build_problem_identification_messages,
     build_upstream_check_messages,
     build_source_code_analysis_messages,
 )
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TraceEntry:
-    """One hop in a flaw's upstream trace."""
+    """One hop in a problem's upstream trace."""
     node: str
     file: str
     evidence: str
@@ -40,7 +40,7 @@ class TraceEntry:
 
 @dataclass
 class OriginInfo:
-    """Source code analysis at a flaw's origin node."""
+    """Source code analysis at a problem's origin node."""
     node: str
     file: str
     source_code_files: list[str]
@@ -50,8 +50,8 @@ class OriginInfo:
 
 
 @dataclass
-class TracedFlaw:
-    """A fully traced flaw with its upstream chain."""
+class TracedProblem:
+    """A fully traced problem with its upstream chain."""
     id: str
     description: str
     severity: str
@@ -64,12 +64,12 @@ class TracedFlaw:
 
 
 @dataclass
-class FlawTraceResult:
-    """Complete result of a flaw trace run."""
+class RCAResult:
+    """Complete result of a root cause analysis run."""
     starting_file: str
-    flaw_description: str
+    problem_description: str
     output_dir: str
-    flaws: list[TracedFlaw]
+    problems: list[TracedProblem]
     llm_calls_made: int = 0
 
 
@@ -99,7 +99,7 @@ class EventLogger:
 
 
 class RootCauseAnalyzer:
-    """Traces flaws upstream through the PlanExe pipeline DAG."""
+    """Traces problems upstream through the PlanExe pipeline DAG."""
 
     def __init__(
         self,
@@ -114,11 +114,11 @@ class RootCauseAnalyzer:
         self.max_depth = max_depth
         self.verbose = verbose
         self._llm_calls = 0
-        self._checked: set[tuple[str, str]] = set()  # (node_name, flaw_description) dedup
+        self._checked: set[tuple[str, str]] = set()  # (node_name, problem_description) dedup
         self._events = EventLogger(events_path)
 
-    def trace(self, starting_file: str, flaw_description: str) -> FlawTraceResult:
-        """Main entry point. Identify flaws and trace each upstream."""
+    def trace(self, starting_file: str, problem_description: str) -> RCAResult:
+        """Main entry point. Identify problems and trace each upstream."""
         self._llm_calls = 0
         self._checked.clear()
 
@@ -130,39 +130,39 @@ class RootCauseAnalyzer:
         found_node = find_node_by_filename(starting_file)
         node_name = found_node.name if found_node else "unknown"
 
-        # Phase 1: Identify flaws
-        self._log(f"Phase 1: Identifying flaws in {starting_file}")
+        # Phase 1: Identify problems
+        self._log(f"Phase 1: Identifying problems in {starting_file}")
         self._events.log("phase1_start", file=starting_file, node=node_name)
-        identified = self._identify_flaws(starting_file, file_content, flaw_description)
-        self._log(f"  Found {len(identified.flaws)} flaw(s)")
-        self._events.log("phase1_done", flaws_found=len(identified.flaws),
-                         summaries=[f.description for f in identified.flaws])
+        identified = self._identify_problems(starting_file, file_content, problem_description)
+        self._log(f"  Found {len(identified.problems)} problem(s)")
+        self._events.log("phase1_done", problems_found=len(identified.problems),
+                         summaries=[p.description for p in identified.problems])
 
-        traced_flaws: list[TracedFlaw] = []
-        for i, flaw in enumerate(identified.flaws):
-            flaw_id = f"flaw_{i + 1:03d}"
-            self._log(f"\nTracing {flaw_id}: {flaw.description}")
-            self._events.log("trace_flaw_start", flaw_id=flaw_id,
-                             flaw_index=i + 1, flaw_total=len(identified.flaws),
-                             description=flaw.description, severity=flaw.severity)
+        traced_problems: list[TracedProblem] = []
+        for i, problem in enumerate(identified.problems):
+            problem_id = f"problem_{i + 1:03d}"
+            self._log(f"\nTracing {problem_id}: {problem.description}")
+            self._events.log("trace_problem_start", problem_id=problem_id,
+                             problem_index=i + 1, problem_total=len(identified.problems),
+                             description=problem.description, severity=problem.severity)
 
             starting_entry = TraceEntry(
                 node=node_name,
                 file=starting_file,
-                evidence=flaw.evidence,
+                evidence=problem.evidence,
                 is_origin=False,
             )
 
-            traced = TracedFlaw(
-                id=flaw_id,
-                description=flaw.description,
-                severity=flaw.severity,
-                starting_evidence=flaw.evidence,
+            traced = TracedProblem(
+                id=problem_id,
+                description=problem.description,
+                severity=problem.severity,
+                starting_evidence=problem.evidence,
                 trace=[starting_entry],
             )
 
             if found_node and self.max_depth > 0:
-                self._trace_upstream(traced, node_name, flaw.description, flaw.evidence, depth=0)
+                self._trace_upstream(traced, node_name, problem.description, problem.evidence, depth=0)
 
             # Mark the last trace entry as origin if no deeper origin was found
             if traced.origin_node is None and traced.trace:
@@ -173,45 +173,45 @@ class RootCauseAnalyzer:
 
             # Phase 3: Source code analysis at origin (always, when origin is known)
             if traced.origin_node is not None:
-                self._events.log("phase3_start", flaw_id=flaw_id, origin_node=traced.origin_node)
+                self._events.log("phase3_start", problem_id=problem_id, origin_node=traced.origin_node)
                 self._analyze_source_code(
-                    traced, traced.origin_node, flaw.description,
-                    next((e.evidence for e in traced.trace if e.node == traced.origin_node), flaw.evidence)
+                    traced, traced.origin_node, problem.description,
+                    next((e.evidence for e in traced.trace if e.node == traced.origin_node), problem.evidence)
                 )
 
-            self._events.log("trace_flaw_done", flaw_id=flaw_id,
+            self._events.log("trace_problem_done", problem_id=problem_id,
                              origin_node=traced.origin_node, depth=traced.depth)
-            traced_flaws.append(traced)
+            traced_problems.append(traced)
 
         # Sort by depth (deepest origin first)
-        traced_flaws.sort(key=lambda f: f.depth, reverse=True)
+        traced_problems.sort(key=lambda f: f.depth, reverse=True)
 
-        self._events.log("trace_complete", total_flaws=len(traced_flaws),
+        self._events.log("trace_complete", total_problems=len(traced_problems),
                          llm_calls=self._llm_calls)
 
-        return FlawTraceResult(
+        return RCAResult(
             starting_file=starting_file,
-            flaw_description=flaw_description,
+            problem_description=problem_description,
             output_dir=str(self.output_dir),
-            flaws=traced_flaws,
+            problems=traced_problems,
             llm_calls_made=self._llm_calls,
         )
 
-    def _identify_flaws(self, filename: str, file_content: str, user_description: str) -> FlawIdentificationResult:
-        """Phase 1: Ask LLM to identify discrete flaws in the starting file."""
-        messages = build_flaw_identification_messages(filename, file_content, user_description)
+    def _identify_problems(self, filename: str, file_content: str, user_description: str) -> ProblemIdentificationResult:
+        """Phase 1: Ask LLM to identify discrete problems in the starting file."""
+        messages = build_problem_identification_messages(filename, file_content, user_description)
 
-        def execute(llm: LLM) -> FlawIdentificationResult:
-            sllm = llm.as_structured_llm(FlawIdentificationResult)
+        def execute(llm: LLM) -> ProblemIdentificationResult:
+            sllm = llm.as_structured_llm(ProblemIdentificationResult)
             response = sllm.chat(messages)
             return response.raw
 
         self._llm_calls += 1
         return self.llm_executor.run(execute)
 
-    def _check_upstream(self, flaw_description: str, evidence: str, upstream_filename: str, upstream_content: str) -> UpstreamCheckResult:
-        """Phase 2: Ask LLM if a flaw exists in an upstream file."""
-        messages = build_upstream_check_messages(flaw_description, evidence, upstream_filename, upstream_content)
+    def _check_upstream(self, problem_description: str, evidence: str, upstream_filename: str, upstream_content: str) -> UpstreamCheckResult:
+        """Phase 2: Ask LLM if a problem exists in an upstream file."""
+        messages = build_upstream_check_messages(problem_description, evidence, upstream_filename, upstream_content)
 
         def execute(llm: LLM) -> UpstreamCheckResult:
             sllm = llm.as_structured_llm(UpstreamCheckResult)
@@ -223,13 +223,13 @@ class RootCauseAnalyzer:
 
     def _trace_upstream(
         self,
-        traced: TracedFlaw,
+        traced: TracedProblem,
         current_node: str,
-        flaw_description: str,
+        problem_description: str,
         evidence: str,
         depth: int,
     ) -> None:
-        """Recursively trace a flaw through upstream nodes."""
+        """Recursively trace a problem through upstream nodes."""
         if depth >= self.max_depth:
             traced.trace_complete = False
             self._log(f"  Max depth {self.max_depth} reached at {current_node}")
@@ -241,12 +241,12 @@ class RootCauseAnalyzer:
 
         found_upstream = False
         for upstream_name, upstream_path in upstream_files:
-            # Dedup key uses flaw_description so different flaws get independent
+            # Dedup key uses problem_description so different problems get independent
             # upstream checks. If the LLM returns duplicate descriptions, they
             # share check results.
-            dedup_key = (upstream_name, flaw_description)
+            dedup_key = (upstream_name, problem_description)
             if dedup_key in self._checked:
-                self._log(f"  Skipping {upstream_name} (already checked for this flaw)")
+                self._log(f"  Skipping {upstream_name} (already checked for this problem)")
                 continue
             self._checked.add(dedup_key)
 
@@ -255,7 +255,7 @@ class RootCauseAnalyzer:
             self._events.log("upstream_check", node=upstream_name,
                              file=upstream_path.name, depth=depth)
 
-            result = self._check_upstream(flaw_description, evidence, upstream_path.name, upstream_content)
+            result = self._check_upstream(problem_description, evidence, upstream_path.name, upstream_content)
 
             if result.found:
                 self._log(f"  -> FOUND in {upstream_name}")
@@ -272,7 +272,7 @@ class RootCauseAnalyzer:
 
                 # Recurse deeper
                 self._trace_upstream(
-                    traced, upstream_name, flaw_description,
+                    traced, upstream_name, problem_description,
                     result.evidence or evidence, depth + 1,
                 )
                 # First-match-wins: once an origin is found in one upstream
@@ -281,7 +281,7 @@ class RootCauseAnalyzer:
                     return
 
         if not found_upstream:
-            # Current node is the origin — flaw exists here but not in any upstream
+            # Current node is the origin — problem exists here but not in any upstream
             traced.origin_node = current_node
             traced.depth = len(traced.trace)
             self._events.log("origin_found", node=current_node, depth=traced.depth)
@@ -290,7 +290,7 @@ class RootCauseAnalyzer:
                 if entry.node == current_node:
                     entry.is_origin = True
 
-    def _analyze_source_code(self, traced: TracedFlaw, node_name: str, flaw_description: str, evidence: str) -> None:
+    def _analyze_source_code(self, traced: TracedProblem, node_name: str, problem_description: str, evidence: str) -> None:
         """Phase 3: Analyze source code at the origin node."""
         source_paths = get_source_code_paths(node_name)
         if not source_paths:
@@ -307,7 +307,7 @@ class RootCauseAnalyzer:
             return
 
         self._log(f"  Phase 3: Analyzing source code for {node_name}")
-        messages = build_source_code_analysis_messages(flaw_description, evidence, source_contents)
+        messages = build_source_code_analysis_messages(problem_description, evidence, source_contents)
 
         def execute(llm: LLM) -> SourceCodeAnalysisResult:
             sllm = llm.as_structured_llm(SourceCodeAnalysisResult)

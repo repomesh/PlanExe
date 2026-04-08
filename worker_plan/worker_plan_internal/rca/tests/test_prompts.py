@@ -2,38 +2,38 @@
 import unittest
 from llama_index.core.llms import ChatMessage, MessageRole
 from worker_plan_internal.rca.prompts import (
-    IdentifiedFlaw,
-    FlawIdentificationResult,
+    IdentifiedProblem,
+    ProblemIdentificationResult,
     UpstreamCheckResult,
     SourceCodeAnalysisResult,
-    build_flaw_identification_messages,
+    build_problem_identification_messages,
     build_upstream_check_messages,
     build_source_code_analysis_messages,
 )
 
 
 class TestPydanticModels(unittest.TestCase):
-    def test_identified_flaw_valid(self):
-        flaw = IdentifiedFlaw(
+    def test_identified_problem_valid(self):
+        problem = IdentifiedProblem(
             description="Budget figure is fabricated",
             evidence="The budget is CZK 500,000",
             severity="HIGH",
         )
-        self.assertEqual(flaw.severity, "HIGH")
+        self.assertEqual(problem.severity, "HIGH")
 
-    def test_identified_flaw_rejects_invalid_severity(self):
+    def test_identified_problem_rejects_invalid_severity(self):
         with self.assertRaises(Exception):
-            IdentifiedFlaw(
+            IdentifiedProblem(
                 description="test",
                 evidence="test",
                 severity="CRITICAL",
             )
 
-    def test_flaw_identification_result(self):
-        result = FlawIdentificationResult(flaws=[
-            IdentifiedFlaw(description="test", evidence="quote", severity="LOW"),
+    def test_problem_identification_result(self):
+        result = ProblemIdentificationResult(problems=[
+            IdentifiedProblem(description="test", evidence="quote", severity="LOW"),
         ])
-        self.assertEqual(len(result.flaws), 1)
+        self.assertEqual(len(result.problems), 1)
 
     def test_upstream_check_result_found(self):
         result = UpstreamCheckResult(found=True, evidence="quote", explanation="precursor")
@@ -64,12 +64,12 @@ class TestPydanticModels(unittest.TestCase):
             )
 
 
-class TestBuildFlawIdentificationMessages(unittest.TestCase):
+class TestBuildProblemIdentificationMessages(unittest.TestCase):
     def test_returns_chat_messages(self):
-        messages = build_flaw_identification_messages(
+        messages = build_problem_identification_messages(
             filename="030-report.html",
             file_content="<html>report content</html>",
-            user_flaw_description="budget is wrong",
+            user_problem_description="budget is wrong",
         )
         self.assertIsInstance(messages, list)
         self.assertEqual(len(messages), 2)
@@ -77,10 +77,10 @@ class TestBuildFlawIdentificationMessages(unittest.TestCase):
         self.assertEqual(messages[1].role, MessageRole.USER)
 
     def test_user_message_contains_inputs(self):
-        messages = build_flaw_identification_messages(
+        messages = build_problem_identification_messages(
             filename="025-2-executive_summary.md",
             file_content="# Summary\nBudget: 500k",
-            user_flaw_description="fabricated budget",
+            user_problem_description="fabricated budget",
         )
         user_content = messages[1].content
         self.assertIn("025-2-executive_summary.md", user_content)
@@ -91,7 +91,7 @@ class TestBuildFlawIdentificationMessages(unittest.TestCase):
 class TestBuildUpstreamCheckMessages(unittest.TestCase):
     def test_returns_chat_messages(self):
         messages = build_upstream_check_messages(
-            flaw_description="Budget is fabricated",
+            problem_description="Budget is fabricated",
             evidence_quote="CZK 500,000",
             upstream_filename="005-2-project_plan.md",
             upstream_file_content="# Project Plan\nBudget: 500k",
@@ -99,9 +99,9 @@ class TestBuildUpstreamCheckMessages(unittest.TestCase):
         self.assertIsInstance(messages, list)
         self.assertEqual(len(messages), 2)
 
-    def test_user_message_contains_flaw_and_upstream(self):
+    def test_user_message_contains_problem_and_upstream(self):
         messages = build_upstream_check_messages(
-            flaw_description="Missing market sizing",
+            problem_description="Missing market sizing",
             evidence_quote="growing Czech market",
             upstream_filename="003-5-make_assumptions.md",
             upstream_file_content="# Assumptions\nMarket is growing",
@@ -115,7 +115,7 @@ class TestBuildUpstreamCheckMessages(unittest.TestCase):
 class TestBuildSourceCodeAnalysisMessages(unittest.TestCase):
     def test_returns_chat_messages(self):
         messages = build_source_code_analysis_messages(
-            flaw_description="Budget fabricated",
+            problem_description="Budget fabricated",
             evidence_quote="CZK 500,000",
             source_code_contents=[
                 ("nodes/make_assumptions.py", "class MakeAssumptionsTask: ..."),
@@ -127,7 +127,7 @@ class TestBuildSourceCodeAnalysisMessages(unittest.TestCase):
 
     def test_user_message_contains_source_code(self):
         messages = build_source_code_analysis_messages(
-            flaw_description="Missing analysis",
+            problem_description="Missing analysis",
             evidence_quote="no data",
             source_code_contents=[
                 ("my_stage.py", "SYSTEM_PROMPT = 'Generate assumptions'"),

@@ -1,8 +1,8 @@
 # worker_plan/worker_plan_internal/rca/tests/test_tracer.py
-"""Tests for the flaw tracer recursive algorithm.
+"""Tests for the root cause analyzer recursive algorithm.
 
 Since ResponseMockLLM does NOT support as_structured_llm(), we mock the three
-private LLM-calling methods (_identify_flaws, _check_upstream,
+private LLM-calling methods (_identify_problems, _check_upstream,
 _analyze_source_code) directly.  This tests the tracing logic — recursion,
 deduplication, max depth — which is the important part.
 """
@@ -13,14 +13,14 @@ from unittest.mock import patch
 
 from worker_plan_internal.rca.tracer import (
     RootCauseAnalyzer,
-    FlawTraceResult,
-    TracedFlaw,
+    RCAResult,
+    TracedProblem,
     TraceEntry,
     OriginInfo,
 )
 from worker_plan_internal.rca.prompts import (
-    FlawIdentificationResult,
-    IdentifiedFlaw,
+    ProblemIdentificationResult,
+    IdentifiedProblem,
     UpstreamCheckResult,
 )
 from worker_plan_internal.llm_util.response_mockllm import ResponseMockLLM
@@ -45,58 +45,58 @@ def _make_tracer(output_dir: Path, max_depth: int = 15, verbose: bool = False) -
     )
 
 
-class TestFlawTraceResult(unittest.TestCase):
+class TestRCAResult(unittest.TestCase):
     def test_dataclass_creation(self):
-        result = FlawTraceResult(
+        result = RCAResult(
             starting_file="030-report.html",
-            flaw_description="test",
+            problem_description="test",
             output_dir="/tmp/test",
-            flaws=[],
+            problems=[],
             llm_calls_made=0,
         )
         self.assertEqual(result.starting_file, "030-report.html")
-        self.assertEqual(len(result.flaws), 0)
+        self.assertEqual(len(result.problems), 0)
         self.assertEqual(result.llm_calls_made, 0)
 
-    def test_dataclass_with_flaws(self):
-        flaw = TracedFlaw(
-            id="flaw_001",
+    def test_dataclass_with_problems(self):
+        problem = TracedProblem(
+            id="problem_001",
             description="Budget fabricated",
             severity="HIGH",
             starting_evidence="CZK 500,000",
             trace=[TraceEntry(node="test", file="test.md", evidence="ev")],
         )
-        result = FlawTraceResult(
+        result = RCAResult(
             starting_file="test.md",
-            flaw_description="test",
+            problem_description="test",
             output_dir="/tmp/test",
-            flaws=[flaw],
+            problems=[problem],
             llm_calls_made=1,
         )
-        self.assertEqual(len(result.flaws), 1)
-        self.assertEqual(result.flaws[0].severity, "HIGH")
+        self.assertEqual(len(result.problems), 1)
+        self.assertEqual(result.problems[0].severity, "HIGH")
 
 
-class TestTracedFlaw(unittest.TestCase):
+class TestTracedProblem(unittest.TestCase):
     def test_defaults(self):
-        flaw = TracedFlaw(
-            id="flaw_001",
+        problem = TracedProblem(
+            id="problem_001",
             description="test",
             severity="LOW",
             starting_evidence="ev",
             trace=[],
         )
-        self.assertIsNone(flaw.origin_node)
-        self.assertIsNone(flaw.origin)
-        self.assertEqual(flaw.depth, 0)
-        self.assertTrue(flaw.trace_complete)
+        self.assertIsNone(problem.origin_node)
+        self.assertIsNone(problem.origin)
+        self.assertEqual(problem.depth, 0)
+        self.assertTrue(problem.trace_complete)
 
 
 class TestRootCauseAnalyzerPhase1(unittest.TestCase):
-    """Test flaw identification (Phase 1) with mocked LLM methods."""
+    """Test problem identification (Phase 1) with mocked LLM methods."""
 
-    def test_identify_flaws_returns_flaws(self):
-        """The tracer should produce TracedFlaw objects from Phase 1 identification."""
+    def test_identify_problems(self):
+        """The analyzer should produce TracedProblem objects from Phase 1 identification."""
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create a minimal output file
@@ -105,10 +105,10 @@ class TestRootCauseAnalyzerPhase1(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            # Mock Phase 1: identify flaws
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(
+            # Mock Phase 1: identify problems
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(
                         description="Budget is unvalidated",
                         evidence="CZK 500,000",
                         severity="HIGH",
@@ -116,15 +116,15 @@ class TestRootCauseAnalyzerPhase1(unittest.TestCase):
                 ]
             )
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
                 result = tracer.trace("025-2-executive_summary.md", "budget is unvalidated")
 
-            self.assertIsInstance(result, FlawTraceResult)
-            self.assertGreaterEqual(len(result.flaws), 1)
-            flaw = result.flaws[0]
-            self.assertEqual(flaw.description, "Budget is unvalidated")
-            self.assertEqual(flaw.severity, "HIGH")
+            self.assertIsInstance(result, RCAResult)
+            self.assertGreaterEqual(len(result.problems), 1)
+            problem = result.problems[0]
+            self.assertEqual(problem.description, "Budget is unvalidated")
+            self.assertEqual(problem.severity, "HIGH")
 
     def test_file_not_found_raises(self):
         """The tracer should raise FileNotFoundError for missing starting files."""
@@ -137,7 +137,7 @@ class TestRootCauseAnalyzerPhase1(unittest.TestCase):
 class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
     """Test upstream tracing (Phase 2) with a simple two-level chain."""
 
-    def test_traces_flaw_upstream(self):
+    def test_traces_problem_upstream(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create files for a chain: executive_summary -> project_plan -> setup
@@ -151,10 +151,10 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            # Mock Phase 1: identify flaws
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(
+            # Mock Phase 1: identify problems
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(
                         description="Budget fabricated",
                         evidence="CZK 500,000",
                         severity="HIGH",
@@ -166,10 +166,10 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
             upstream_call_count = 0
             upstream_responses = {}
 
-            def mock_check_upstream(flaw_desc, evidence, upstream_filename, upstream_content):
+            def mock_check_upstream(problem_desc, evidence, upstream_filename, upstream_content):
                 nonlocal upstream_call_count
                 upstream_call_count += 1
-                # project_plan has the flaw; others are clean
+                # project_plan has the problem; others are clean
                 if "project_plan" in upstream_filename:
                     return UpstreamCheckResult(
                         found=True,
@@ -183,22 +183,22 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
                         explanation="clean",
                     )
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "budget is fabricated")
 
-            self.assertEqual(len(result.flaws), 1)
-            flaw = result.flaws[0]
+            self.assertEqual(len(result.problems), 1)
+            problem = result.problems[0]
             # The trace should include at least executive_summary and project_plan
-            trace_nodes = [entry.node for entry in flaw.trace]
+            trace_nodes = [entry.node for entry in problem.trace]
             self.assertIn("executive_summary", trace_nodes)
             self.assertIn("project_plan", trace_nodes)
-            # Origin should be project_plan (flaw found there but not in its upstream 'setup')
-            self.assertEqual(flaw.origin_node, "project_plan")
+            # Origin should be project_plan (problem found there but not in its upstream 'setup')
+            self.assertEqual(problem.origin_node, "project_plan")
 
     def test_deduplication_works(self):
-        """Stages already checked for the same flaw should be skipped."""
+        """Stages already checked for the same problem should be skipped."""
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # executive_summary depends on strategic_decisions_markdown, scenarios_markdown, etc.
@@ -213,21 +213,21 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="Budget fabricated", evidence="500k", severity="HIGH")
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="Budget fabricated", evidence="500k", severity="HIGH")
                 ]
             )
 
             checked_stages = []
 
-            def mock_check_upstream(flaw_desc, evidence, upstream_filename, upstream_content):
+            def mock_check_upstream(problem_desc, evidence, upstream_filename, upstream_content):
                 checked_stages.append(upstream_filename)
                 if "project_plan" in upstream_filename:
                     return UpstreamCheckResult(found=True, evidence="500k", explanation="found here")
                 return UpstreamCheckResult(found=False, evidence=None, explanation="clean")
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "budget fabricated")
@@ -249,20 +249,20 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
 
             tracer = _make_tracer(output_dir, max_depth=0)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="test flaw", evidence="500k", severity="LOW")
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="test problem", evidence="500k", severity="LOW")
                 ]
             )
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream') as mock_check, \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "test")
 
-            self.assertEqual(len(result.flaws), 1)
+            self.assertEqual(len(result.problems), 1)
             # With max_depth=0, no upstream tracing happens
-            self.assertEqual(len(result.flaws[0].trace), 1)  # only the starting file
+            self.assertEqual(len(result.problems[0].trace), 1)  # only the starting file
             # _check_upstream should never have been called
             mock_check.assert_not_called()
 
@@ -279,24 +279,24 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
 
             tracer = _make_tracer(output_dir, max_depth=1)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="flaw", evidence="500k", severity="MEDIUM")
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="problem", evidence="500k", severity="MEDIUM")
                 ]
             )
 
-            def always_found(flaw_desc, evidence, upstream_filename, upstream_content):
+            def always_found(problem_desc, evidence, upstream_filename, upstream_content):
                 return UpstreamCheckResult(found=True, evidence="500k", explanation="found")
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=always_found), \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "test")
 
-            self.assertEqual(len(result.flaws), 1)
-            flaw = result.flaws[0]
+            self.assertEqual(len(result.problems), 1)
+            problem = result.problems[0]
             # trace_complete should be False because max depth was hit
-            self.assertFalse(flaw.trace_complete)
+            self.assertFalse(problem.trace_complete)
 
 
 class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
@@ -309,20 +309,20 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="flaw", evidence="500k", severity="HIGH")
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="problem", evidence="500k", severity="HIGH")
                 ]
             )
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
                 result = tracer.trace("025-2-executive_summary.md", "test")
 
             # _analyze_source_code should have been called once for the origin
             mock_analyze.assert_called_once()
             args = mock_analyze.call_args
-            # First positional arg is the TracedFlaw, second is the node name
+            # First positional arg is the TracedProblem, second is the node name
             self.assertEqual(args[0][1], "executive_summary")
 
     def test_source_code_analysis_called_at_deep_origin(self):
@@ -339,21 +339,21 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="Budget fabricated", evidence="500k", severity="HIGH")
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="Budget fabricated", evidence="500k", severity="HIGH")
                 ]
             )
 
-            def mock_check_upstream(flaw_desc, evidence, upstream_filename, upstream_content):
-                # project_plan has the flaw; others are clean
+            def mock_check_upstream(problem_desc, evidence, upstream_filename, upstream_content):
+                # project_plan has the problem; others are clean
                 if "project_plan" in upstream_filename:
                     return UpstreamCheckResult(
                         found=True, evidence="Budget: 500k", explanation="Budget originates here"
                     )
                 return UpstreamCheckResult(found=False, evidence=None, explanation="clean")
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
                 result = tracer.trace("025-2-executive_summary.md", "budget fabricated")
@@ -365,40 +365,40 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
             self.assertEqual(args[0][1], "project_plan")
 
 
-class TestRootCauseAnalyzerMultipleFlaws(unittest.TestCase):
-    """Test that multiple flaws are traced independently."""
+class TestRootCauseAnalyzerMultipleProblems(unittest.TestCase):
+    """Test that multiple problems are traced independently."""
 
-    def test_traces_multiple_flaws(self):
+    def test_traces_multiple_problems(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k\nTimeline: 2 months", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="Budget fabricated", evidence="500k", severity="HIGH"),
-                    IdentifiedFlaw(description="Timeline unrealistic", evidence="2 months", severity="MEDIUM"),
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="Budget fabricated", evidence="500k", severity="HIGH"),
+                    IdentifiedProblem(description="Timeline unrealistic", evidence="2 months", severity="MEDIUM"),
                 ]
             )
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "multiple issues")
 
-            self.assertEqual(len(result.flaws), 2)
-            descriptions = {f.description for f in result.flaws}
+            self.assertEqual(len(result.problems), 2)
+            descriptions = {f.description for f in result.problems}
             self.assertIn("Budget fabricated", descriptions)
             self.assertIn("Timeline unrealistic", descriptions)
-            # Each flaw should have a unique ID
-            ids = [f.id for f in result.flaws]
+            # Each problem should have a unique ID
+            ids = [f.id for f in result.problems]
             self.assertEqual(len(ids), len(set(ids)))
 
 
 class TestRootCauseAnalyzerSortsByDepth(unittest.TestCase):
     """Test that results are sorted by depth (deepest origin first)."""
 
-    def test_flaws_sorted_by_depth_descending(self):
+    def test_problems_sorted_by_depth_descending(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             (output_dir / "025-2-executive_summary.md").write_text("content", encoding="utf-8")
@@ -409,31 +409,31 @@ class TestRootCauseAnalyzerSortsByDepth(unittest.TestCase):
 
             tracer = _make_tracer(output_dir)
 
-            mock_identification = FlawIdentificationResult(
-                flaws=[
-                    IdentifiedFlaw(description="shallow flaw", evidence="ev1", severity="LOW"),
-                    IdentifiedFlaw(description="deep flaw", evidence="ev2", severity="HIGH"),
+            mock_identification = ProblemIdentificationResult(
+                problems=[
+                    IdentifiedProblem(description="shallow problem", evidence="ev1", severity="LOW"),
+                    IdentifiedProblem(description="deep problem", evidence="ev2", severity="HIGH"),
                 ]
             )
 
             call_count = 0
 
-            def mock_check_upstream(flaw_desc, evidence, upstream_filename, upstream_content):
+            def mock_check_upstream(problem_desc, evidence, upstream_filename, upstream_content):
                 nonlocal call_count
                 call_count += 1
-                # For "deep flaw", find it in project_plan
-                if "deep flaw" in flaw_desc and "project_plan" in upstream_filename:
+                # For "deep problem", find it in project_plan
+                if "deep problem" in problem_desc and "project_plan" in upstream_filename:
                     return UpstreamCheckResult(found=True, evidence="ev2", explanation="found")
                 return UpstreamCheckResult(found=False, evidence=None, explanation="clean")
 
-            with patch.object(tracer, '_identify_flaws', return_value=mock_identification), \
+            with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
                 result = tracer.trace("025-2-executive_summary.md", "test")
 
-            self.assertEqual(len(result.flaws), 2)
+            self.assertEqual(len(result.problems), 2)
             # Deepest origin should be first
-            self.assertGreaterEqual(result.flaws[0].depth, result.flaws[1].depth)
+            self.assertGreaterEqual(result.problems[0].depth, result.problems[1].depth)
 
 
 if __name__ == "__main__":

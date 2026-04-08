@@ -6,7 +6,7 @@ If there are too many levers, I don’t want to blindly discard the extra ones, 
 It’s more important that the quality of the text content of the levers are getting improved on.
 
 The output contains near duplicates, these have to be deduplicated. A few lever names appear twice.
-The deduplication is done in the deduplicate_levers.py script.
+The triage is done in the triage_levers.py script.
 
 PROMPT> python -m worker_plan_internal.lever.identify_potential_levers
 """
@@ -34,7 +34,7 @@ This step (IdentifyPotentialLevers) is part of a 6-step solution-space
 exploration pipeline inside run_plan_pipeline.py:
 
   1. IdentifyPotentialLevers  ← you are here
-  2. DeduplicateLevers        — removes near-duplicate levers
+  2. TriageLevers             — removes near-duplicate levers
   3. EnrichLevers             — adds description, synergy, and conflict text
   4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
   5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
@@ -214,7 +214,7 @@ class DocumentDetails(BaseModel):
         description="A concise strategic analysis (around 100 words) of the project's core tensions and trade-offs. This rationale must JUSTIFY why the selected levers are the most critical levers for decision-making. For example, explain how the chosen levers navigate the fundamental conflicts between speed, cost, scope, and quality."
     )
     # No max_length constraint: if a model returns more than 7 levers, the downstream
-    # DeduplicateLeversTask handles extras. A hard cap would discard the entire response
+    # TriageLeversTask handles extras. A hard cap would discard the entire response
     # and waste tokens retrying.
     levers: list[Lever] = Field(
         min_length=5,
@@ -384,7 +384,7 @@ class IdentifyPotentialLevers:
         )
 
         # Adaptive loop: keep calling until we have enough levers.
-        # Over-generation is fine — DeduplicateLeversTask handles extras.
+        # Over-generation is fine — TriageLeversTask handles extras.
         min_levers = 15
         max_calls = 5
         responses: list[DocumentDetails] = []

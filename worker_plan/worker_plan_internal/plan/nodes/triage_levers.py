@@ -1,7 +1,7 @@
-"""DeduplicateLeversTask - The potential levers usually have some redundant levers."""
+"""TriageLeversTask - The potential levers usually have some redundant levers."""
 import json
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
-from worker_plan_internal.lever.deduplicate_levers import DeduplicateLevers
+from worker_plan_internal.lever.triage_levers import TriageLevers
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_internal.plan.nodes.setup import SetupTask
@@ -10,7 +10,7 @@ from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
 
 
-class DeduplicateLeversTask(PlanTask):
+class TriageLeversTask(PlanTask):
     """Triage levers into primary, secondary, or remove."""
     def requires(self):
         return {
@@ -22,7 +22,7 @@ class DeduplicateLeversTask(PlanTask):
 
     def output(self):
         return {
-            'raw': self.local_target(FilenameEnum.DEDUPLICATED_LEVERS_RAW)
+            'raw': self.local_target(FilenameEnum.TRIAGED_LEVERS_RAW)
         }
 
     def run_inner(self):
@@ -44,7 +44,7 @@ class DeduplicateLeversTask(PlanTask):
             f"File 'plan_type.md':\n{plan_type_markdown}"
         )
 
-        deduplicate_levers = DeduplicateLevers.execute(
+        triage_levers = TriageLevers.execute(
             llm_executor,
             project_context=query,
             raw_levers_list=lever_item_list
@@ -52,4 +52,4 @@ class DeduplicateLeversTask(PlanTask):
 
         # Write the result to disk.
         output_raw_path = self.output()['raw'].path
-        deduplicate_levers.save_raw(str(output_raw_path))
+        triage_levers.save_raw(str(output_raw_path))

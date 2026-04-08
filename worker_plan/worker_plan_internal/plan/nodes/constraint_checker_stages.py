@@ -10,7 +10,7 @@ from worker_plan_internal.diagnostics.constraint_checker import ConstraintChecke
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.plan.nodes.extract_constraints import ExtractConstraintsTask
 from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
-from worker_plan_internal.plan.nodes.deduplicate_levers import DeduplicateLeversTask
+from worker_plan_internal.plan.nodes.triage_levers import TriageLeversTask
 from worker_plan_internal.plan.nodes.enrich_levers import EnrichLeversTask
 from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
 from worker_plan_internal.plan.nodes.candidate_scenarios import CandidateScenariosTask
@@ -48,22 +48,22 @@ class PotentialLeversConstraintTask(PlanTask):
         result.save_raw(self.output().path)
 
 
-class DeduplicatedLeversConstraintTask(PlanTask):
+class TriagedLeversConstraintTask(PlanTask):
     """Guardrail: verify triaged levers still respect the user's constraints."""
     def requires(self):
         return {
             'extract_constraints': self.clone(ExtractConstraintsTask),
-            'deduplicate_levers': self.clone(DeduplicateLeversTask),
+            'triage_levers': self.clone(TriageLeversTask),
         }
 
     def output(self):
-        return self.local_target(FilenameEnum.DEDUPLICATED_LEVERS_CONSTRAINT)
+        return self.local_target(FilenameEnum.TRIAGED_LEVERS_CONSTRAINT)
 
     def run_with_llm(self, llm: LLM) -> None:
         constraints_json = _read_constraints_json(self)
-        with self.input()['deduplicate_levers']['raw'].open("r") as f:
+        with self.input()['triage_levers']['raw'].open("r") as f:
             stage_output_json = f.read()
-        result = ConstraintChecker.execute(llm, constraints_json, stage_output_json, "deduplicated_levers")
+        result = ConstraintChecker.execute(llm, constraints_json, stage_output_json, "triaged_levers")
         result.save_raw(self.output().path)
 
 

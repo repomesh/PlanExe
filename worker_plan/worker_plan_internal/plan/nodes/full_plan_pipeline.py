@@ -14,7 +14,7 @@ from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 
 # Phase 3
 from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
-from worker_plan_internal.plan.nodes.deduplicate_levers import DeduplicateLeversTask
+from worker_plan_internal.plan.nodes.triage_levers import TriageLeversTask
 from worker_plan_internal.plan.nodes.enrich_levers import EnrichLeversTask
 from worker_plan_internal.plan.nodes.focus_on_vital_few_levers import FocusOnVitalFewLeversTask
 from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
@@ -23,7 +23,7 @@ from worker_plan_internal.plan.nodes.select_scenario import SelectScenarioTask
 from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
 from worker_plan_internal.plan.nodes.constraint_checker_stages import (
     PotentialLeversConstraintTask,
-    DeduplicatedLeversConstraintTask,
+    TriagedLeversConstraintTask,
     EnrichedLeversConstraintTask,
     VitalFewLeversConstraintTask,
     CandidateScenariosConstraintTask,
@@ -103,7 +103,7 @@ class FullPlanPipeline(PlanTask):
             'identify_purpose': self.clone(IdentifyPurposeTask),
             'plan_type': self.clone(PlanTypeTask),
             'potential_levers': self.clone(PotentialLeversTask),
-            'deduplicate_levers': self.clone(DeduplicateLeversTask),
+            'triage_levers': self.clone(TriageLeversTask),
             'enriched_levers': self.clone(EnrichLeversTask),
             'focus_on_vital_few_levers': self.clone(FocusOnVitalFewLeversTask),
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
@@ -111,7 +111,7 @@ class FullPlanPipeline(PlanTask):
             'select_scenario': self.clone(SelectScenarioTask),
             'scenarios_markdown': self.clone(ScenariosMarkdownTask),
             'potential_levers_constraint': self.clone(PotentialLeversConstraintTask),
-            'deduplicated_levers_constraint': self.clone(DeduplicatedLeversConstraintTask),
+            'triaged_levers_constraint': self.clone(TriagedLeversConstraintTask),
             'enriched_levers_constraint': self.clone(EnrichedLeversConstraintTask),
             'vital_few_levers_constraint': self.clone(VitalFewLeversConstraintTask),
             'candidate_scenarios_constraint': self.clone(CandidateScenariosConstraintTask),

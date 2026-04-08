@@ -13,4 +13,4 @@ The MCP plan_resume tool rejects snapshots whose stored pipeline_version
 differs from the current value with error code PIPELINE_VERSION_MISMATCH.
 """
 
-PIPELINE_VERSION: int = 1
+PIPELINE_VERSION: int = 2

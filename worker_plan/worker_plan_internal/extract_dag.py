@@ -135,29 +135,75 @@ def _detect_implementation_files(cls: type) -> list[str]:
     return files
 
 
-def _extract_source_files(task: luigi.Task) -> list[str]:
-    """Get source files: task's own file + auto-detected implementation files."""
+def _extract_source_files(task: luigi.Task) -> list[dict[str, str]]:
+    """Get source files: workflow node file + auto-detected business logic files."""
     cls = type(task)
+    files: list[dict[str, str]] = []
 
-    # The task's own file
-    result: list[str] = []
+    # The task's own file (workflow node)
     try:
         task_file = Path(inspect.getfile(cls)).resolve()
-        result.append(str(task_file.relative_to(_WORKER_PLAN_DIR)))
+        files.append({
+            "role": "workflow_node",
+            "path": str(task_file.relative_to(_WORKER_PLAN_DIR)),
+        })
     except (TypeError, ValueError, OSError):
         pass
 
-    # Supplement with auto-detected implementation files
-    for f in _detect_implementation_files(cls):
-        if f not in result:
-            result.append(f)
+    # Auto-detected implementation files (business logic)
+    seen = {f["path"] for f in files}
+    for path in _detect_implementation_files(cls):
+        if path not in seen:
+            files.append({
+                "role": "business_logic",
+                "path": path,
+            })
+            seen.add(path)
 
-    return result
+    return files
+
+
+def _pick_primary_output(filenames: list[str]) -> str:
+    """Pick the most likely file to be read from a node's outputs.
+
+    Preference: .md > .html > non-raw file > first file.
+    """
+    for ext in (".md", ".html"):
+        for f in filenames:
+            if f.endswith(ext):
+                return f
+    non_raw = [f for f in filenames if "_raw" not in f]
+    if non_raw:
+        return non_raw[0]
+    return filenames[0] if filenames else ""
+
+
+def _extract_inputs(upstream_tasks: list[luigi.Task]) -> list[dict[str, str]]:
+    """Build inputs list: for each upstream task, identify the primary artifact it provides."""
+    inputs: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    for dep in upstream_tasks:
+        node_name = _class_name_to_stage_name(dep.__class__.__name__)
+        if node_name in seen:
+            continue
+        seen.add(node_name)
+
+        output_files = _extract_output_filenames(dep)
+        primary = _pick_primary_output(output_files)
+        if primary:
+            inputs.append({
+                "from_node": node_name,
+                "artifact_path": primary,
+            })
+
+    inputs.sort(key=lambda x: x["from_node"])
+    return inputs
 
 
 def _output_sort_key(stage: dict[str, Any]) -> tuple[int, int, str]:
     """Sort key: numeric prefix from the first output filename, then name."""
-    filename = stage["output_files"][0] if stage.get("output_files") else ""
+    filename = stage["artifacts"][0]["path"] if stage.get("artifacts") else ""
     match = re.match(r"(\d+)-?(\d+)?", filename)
     if match:
         major = int(match.group(1))
@@ -197,18 +243,15 @@ def extract_dag() -> dict[str, Any]:
         cls = type(task)
         stage_name = _class_name_to_stage_name(class_name)
         description = cls.description() if hasattr(cls, "description") else ""
-        output_files = _extract_output_filenames(task)
+        artifacts = [{"path": f} for f in _extract_output_filenames(task)]
+        inputs = _extract_inputs(upstream_tasks)
         source_files = _extract_source_files(task)
-        depends_on_names = sorted(set(
-            _class_name_to_stage_name(dep.__class__.__name__)
-            for dep in upstream_tasks
-        ))
 
         stages.append({
             "id": stage_name,
             "description": description,
-            "output_files": output_files,
-            "depends_on": depends_on_names,
+            "artifacts": artifacts,
+            "inputs": inputs,
             "source_files": source_files,
         })
 

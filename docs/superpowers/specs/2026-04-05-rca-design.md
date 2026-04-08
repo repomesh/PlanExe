@@ -7,18 +7,18 @@
 
 ## Goal
 
-A CLI tool that takes a PlanExe output directory, a starting file, and a flaw description, then recursively traces the flaw upstream through the DAG of intermediary files to find where it originated. Produces both JSON and markdown output. Built on PlanExe's existing LLM infrastructure so it can eventually become a pipeline stage.
+A CLI tool that takes a PlanExe output directory, a starting file, and a problem description, then recursively traces the problem upstream through the DAG of intermediary files to find where it originated. Produces both JSON and markdown output. Built on PlanExe's existing LLM infrastructure so it can eventually become a pipeline stage.
 
 ## Architecture
 
-The tool performs a recursive depth-first search through the pipeline DAG. Starting from a downstream file where a flaw is observed, it walks upstream one hop at a time — reading input files, asking an LLM whether the flaw or a precursor exists there, and continuing until it reaches a stage where the flaw exists in the output but not in any inputs. At that origin point, it reads the stage's source code to identify the likely cause.
+The tool performs a recursive depth-first search through the pipeline DAG. Starting from a downstream file where a problem is observed, it walks upstream one hop at a time — reading input files, asking an LLM whether the problem or a precursor exists there, and continuing until it reaches a node where the problem exists in the output but not in any inputs. At that origin point, it reads the node's source code to identify the likely cause.
 
-Three LLM prompts drive the analysis: flaw identification (once at the start), upstream checking (at each hop), and source code analysis (at each origin). All use Pydantic models for structured output and LLMExecutor for fallback resilience.
+Three LLM prompts drive the analysis: problem identification (once at the start), upstream checking (at each hop), and source code analysis (at each origin). All use Pydantic models for structured output and LLMExecutor for fallback resilience.
 
 ## Components
 
 ```
-worker_plan/worker_plan_internal/flaw_tracer/
+worker_plan/worker_plan_internal/rca/
     __init__.py
     __main__.py      — CLI entry point (argparse, LLM setup, orchestration)
     registry.py      — Static DAG mapping: stages, output files, dependencies, source code paths
@@ -33,16 +33,16 @@ A static Python data structure mapping the full pipeline topology. Each entry de
 
 ```python
 @dataclass
-class StageInfo:
+class NodeInfo:
     name: str                       # e.g., "potential_levers"
     output_files: list[str]         # e.g., ["002-9-potential_levers_raw.json", "002-10-potential_levers.json"]
-    upstream_stages: list[str]      # e.g., ["setup", "identify_purpose", "plan_type", "extract_constraints"]
+    inputs: list[str]      # e.g., ["setup", "identify_purpose", "plan_type", "extract_constraints"]
     source_code_files: list[str]    # Relative to worker_plan/, e.g., ["worker_plan_internal/plan/stages/potential_levers.py", "worker_plan_internal/lever/identify_potential_levers.py"]
 ```
 
 The registry covers all ~48 pipeline stages. Key functions:
 
-- `find_stage_by_filename(filename: str) -> StageInfo | None` — Given an output filename, return the stage that produced it.
+- `find_node_by_filename(filename: str) -> NodeInfo | None` — Given an output filename, return the stage that produced it.
 - `get_upstream_files(stage_name: str, output_dir: Path) -> list[tuple[str, Path]]` — Return `(stage_name, file_path)` pairs for all upstream stages, resolved against the output directory. Skip files that don't exist on disk. When a stage has multiple output files (e.g., both `_raw.json` and `.json`), prefer the clean/processed file since that's what downstream stages consume. If only the raw file exists, use that.
 - `get_source_code_paths(stage_name: str) -> list[Path]` — Return absolute paths to source code files for a stage.
 
@@ -53,103 +53,103 @@ The mapping is derived from the Luigi task classes (`requires()` and `output()` 
 Three Pydantic models for structured LLM output:
 
 ```python
-class IdentifiedFlaw(BaseModel):
-    description: str = Field(description="One-sentence description of the flaw")
-    evidence: str = Field(description="Direct quote from the file demonstrating the flaw")
+class IdentifiedProblem(BaseModel):
+    description: str = Field(description="One-sentence description of the problem")
+    evidence: str = Field(description="Direct quote from the file demonstrating the problem")
     severity: Literal["HIGH", "MEDIUM", "LOW"] = Field(
         description="HIGH: fabricated data or missing critical analysis. MEDIUM: weak reasoning or vague claims. LOW: minor gaps."
     )
 
-class FlawIdentificationResult(BaseModel):
-    flaws: list[IdentifiedFlaw] = Field(description="List of discrete flaws found in the file")
+class ProblemIdentificationResult(BaseModel):
+    problems: list[IdentifiedProblem] = Field(description="List of discrete problems found in the file")
 
 class UpstreamCheckResult(BaseModel):
-    found: bool = Field(description="True if this file contains the flaw or a precursor to it")
+    found: bool = Field(description="True if this file contains the problem or a precursor to it")
     evidence: str | None = Field(description="Direct quote from the file if found, null otherwise")
-    explanation: str = Field(description="How this connects to the downstream flaw, or why this file is clean")
+    explanation: str = Field(description="How this connects to the downstream problem, or why this file is clean")
 
 class SourceCodeAnalysisResult(BaseModel):
-    likely_cause: str = Field(description="What in the prompt or logic likely caused the flaw")
+    likely_cause: str = Field(description="What in the prompt or logic likely caused the problem")
     relevant_code_section: str = Field(description="The specific code or prompt text responsible")
-    suggestion: str = Field(description="How to fix or prevent this flaw")
+    suggestion: str = Field(description="How to fix or prevent this problem")
 ```
 
 Three prompt-building functions, each returning a `list[ChatMessage]`:
 
-**`build_flaw_identification_prompt(filename, file_content, user_flaw_description)`**
+**`build_problem_identification_messages(filename, file_content, user_problem_description)`**
 
 System message:
 ```
 You are analyzing an intermediary file from a project planning pipeline.
-The user has identified problems in this output. Identify each discrete flaw.
-For each flaw, provide a short description, a direct quote as evidence, and a severity level.
-Only identify real flaws — do not flag stylistic preferences or minor formatting issues.
+The user has identified problems in this output. Identify each discrete problem.
+For each problem, provide a short description, a direct quote as evidence, and a severity level.
+Only identify real problems — do not flag stylistic preferences or minor formatting issues.
 ```
 
-User message contains the filename, file content, and the user's flaw description.
+User message contains the filename, file content, and the user's problem description.
 
-**`build_upstream_check_prompt(flaw_description, evidence_quote, upstream_filename, upstream_file_content)`**
+**`build_upstream_check_messages(problem_description, evidence_quote, upstream_filename, upstream_file_content)`**
 
 System message:
 ```
-You are tracing a flaw through a project planning pipeline to find where it originated.
-A downstream file contains a flaw. You are examining an upstream file that was an input
-to the stage that produced the flawed output. Determine if this upstream file contains
+You are tracing a problem through a project planning pipeline to find where it originated.
+A downstream file contains a problem. You are examining an upstream file that was an input
+to the stage that produced the problematic output. Determine if this upstream file contains
 the same problem or a precursor to it.
 ```
 
-User message contains the flaw details and the upstream file content.
+User message contains the problem details and the upstream file content.
 
-**`build_source_code_analysis_prompt(flaw_description, evidence_quote, source_code_contents)`**
+**`build_source_code_analysis_messages(problem_description, evidence_quote, source_code_contents)`**
 
 System message:
 ```
-A flaw was introduced at this pipeline stage. The flaw exists in its output but NOT
+A problem was introduced at this pipeline stage. The problem exists in its output but NOT
 in any of its inputs. Examine the source code to identify what in the prompt text,
-logic, or processing likely caused this flaw. Be specific — point to lines or prompt phrases.
+logic, or processing likely caused this problem. Be specific — point to lines or prompt phrases.
 ```
 
-User message contains the flaw details and the concatenated source code.
+User message contains the problem details and the concatenated source code.
 
 ### `tracer.py` — Recursive Tracing Algorithm
 
 ```python
-class FlawTracer:
+class RootCauseAnalyzer:
     def __init__(self, output_dir: Path, llm_executor: LLMExecutor, source_code_base: Path, max_depth: int = 15, verbose: bool = False):
         ...
 
-    def trace(self, starting_file: str, flaw_description: str) -> FlawTraceResult:
+    def trace(self, starting_file: str, problem_description: str) -> RCAResult:
         """Main entry point. Returns the complete trace result."""
         ...
 ```
 
 The `trace` method implements three phases:
 
-**Phase 1 — Identify flaws.**
-Read the starting file. Build the flaw identification prompt with the file content and user's description. Call the LLM via `LLMExecutor.run()` using `llm.as_structured_llm(FlawIdentificationResult)`. Returns a list of `IdentifiedFlaw` objects.
+**Phase 1 — Identify problems.**
+Read the starting file. Build the problem identification prompt with the file content and user's description. Call the LLM via `LLMExecutor.run()` using `llm.as_structured_llm(ProblemIdentificationResult)`. Returns a list of `IdentifiedProblem` objects.
 
 **Phase 2 — Recursive upstream trace.**
-For each identified flaw, call `_trace_flaw_upstream(flaw, stage_name, current_file, depth)`:
+For each identified problem, call `_trace_upstream(problem, node_name, current_file, depth)`:
 
-1. Look up the current stage's upstream stages via the registry.
-2. For each upstream stage, resolve its output files on disk.
+1. Look up the current node's upstream nodes via the registry.
+2. For each upstream node, resolve its output files on disk.
 3. Read each upstream file. Build the upstream check prompt. Call the LLM.
-4. If `found=True`: append to the trace chain and recurse into that stage's upstream dependencies.
+4. If `found=True`: append to the trace chain and recurse into that node's upstream dependencies.
 5. If `found=False`: this branch is clean, stop.
 6. If depth reaches `max_depth`: stop and mark trace as incomplete.
 
-**Deduplication:** Track which `(stage_name, flaw_description)` pairs have already been analyzed. If two flaws converge on the same upstream file, reuse the earlier result.
+**Deduplication:** Track which `(node_name, problem_description)` pairs have already been analyzed. If two problems converge on the same upstream file, reuse the earlier result.
 
-**Multiple upstream branches:** When a stage has multiple upstream inputs and the flaw is found in more than one, follow all branches. The trace can fork — the JSON output represents this as a list of trace entries per flaw (each entry has a stage and file), ordered from downstream to upstream.
+**Multiple upstream branches:** When a node has multiple upstream inputs and the problem is found in more than one, follow all branches. The trace can fork — the JSON output represents this as a list of trace entries per problem (each entry has a node and file), ordered from downstream to upstream.
 
 **Phase 3 — Source code analysis at origin.**
-When a flaw is found in a stage's output but not in any of its inputs, that stage is the origin. Read the source code files for that stage (via registry). Build the source code analysis prompt. Call the LLM. Attach the result to the flaw's origin data.
+When a problem is found in a node's output but not in any of its inputs, that node is the origin. Read the source code files for that node (via registry). Build the source code analysis prompt. Call the LLM. Attach the result to the problem's origin data.
 
 ### `output.py` — Report Generation
 
 Two functions:
 
-**`write_json_report(result: FlawTraceResult, output_path: Path)`**
+**`write_json_report(result: RCAResult, output_path: Path)`**
 
 Writes the full trace as JSON:
 
@@ -157,32 +157,32 @@ Writes the full trace as JSON:
 {
     "input": {
         "starting_file": "030-report.html",
-        "flaw_description": "...",
+        "problem_description": "...",
         "output_dir": "/path/to/output",
         "timestamp": "2026-04-05T14:30:00Z"
     },
-    "flaws": [
+    "problems": [
         {
-            "id": "flaw_001",
+            "id": "problem_001",
             "description": "Budget of CZK 500,000 is unvalidated",
             "severity": "HIGH",
             "starting_evidence": "quote from starting file...",
             "trace": [
                 {
-                    "stage": "executive_summary",
+                    "node": "executive_summary",
                     "file": "025-2-executive_summary.md",
                     "evidence": "...",
                     "is_origin": false
                 },
                 {
-                    "stage": "make_assumptions",
+                    "node": "make_assumptions",
                     "file": "003-5-make_assumptions.md",
                     "evidence": "...",
                     "is_origin": true
                 }
             ],
             "origin": {
-                "stage": "make_assumptions",
+                "node": "make_assumptions",
                 "file": "003-5-make_assumptions.md",
                 "source_code_files": ["stages/make_assumptions.py", "assumption/make_assumptions.py"],
                 "likely_cause": "The prompt asks the LLM to...",
@@ -192,33 +192,33 @@ Writes the full trace as JSON:
         }
     ],
     "summary": {
-        "total_flaws": 3,
-        "deepest_origin_stage": "make_assumptions",
+        "total_problems": 3,
+        "deepest_origin_node": "make_assumptions",
         "deepest_origin_depth": 3,
         "llm_calls_made": 12
     }
 }
 ```
 
-**`write_markdown_report(result: FlawTraceResult, output_path: Path)`**
+**`write_markdown_report(result: RCAResult, output_path: Path)`**
 
 Writes a human-readable report:
 
 ```markdown
-# Flaw Trace Report
+# Root Cause Analysis Report
 
 **Input:** 030-report.html
-**Flaws found:** 3
+**Problems found:** 3
 **Deepest origin:** make_assumptions (depth 3)
 
 ---
 
-## Flaw 1 (HIGH): Budget of CZK 500,000 is unvalidated
+## Problem 1 (HIGH): Budget of CZK 500,000 is unvalidated
 
 **Trace:** executive_summary -> project_plan -> **make_assumptions** (origin)
 
-| Stage | File | Evidence |
-|-------|------|----------|
+| Node | File | Evidence |
+|------|------|----------|
 | executive_summary | 025-2-executive_summary.md | "The budget is CZK 500,000..." |
 | project_plan | 005-2-project_plan.md | "Estimated budget: CZK 500,000..." |
 | **make_assumptions** | 003-5-make_assumptions.md | "Assume total budget..." |
@@ -229,15 +229,15 @@ without requiring external data sources...
 **Suggestion:** Add a validation step that...
 ```
 
-Flaws are sorted by depth (deepest origin first) so the most upstream root cause appears at the top.
+Problems are sorted by depth (deepest origin first) so the most upstream root cause appears at the top.
 
 ### `__main__.py` — CLI Entry Point
 
 ```
-python -m worker_plan_internal.flaw_tracer \
+python -m worker_plan_internal.rca \
     --dir /path/to/output \
     --file 030-report.html \
-    --flaw "The budget is CZK 500,000 but this number appears unvalidated..." \
+    --problem "The budget is CZK 500,000 but this number appears unvalidated..." \
     --output-dir /path/to/output \
     --max-depth 15 \
     --verbose
@@ -246,16 +246,16 @@ python -m worker_plan_internal.flaw_tracer \
 Arguments:
 - `--dir` (required): Path to the output directory containing intermediary files.
 - `--file` (required): Starting file to analyze, relative to `--dir`.
-- `--flaw` (required): Text description of the observed flaw(s).
-- `--output-dir` (optional): Where to write `flaw_trace.json` and `flaw_trace.md`. Defaults to `--dir`.
-- `--max-depth` (optional): Maximum upstream hops per flaw. Default 15.
+- `--problem` (required): Text description of the observed problem(s).
+- `--output-dir` (optional): Where to write `root_cause_analysis.json` and `root_cause_analysis.md`. Defaults to `--dir`.
+- `--max-depth` (optional): Maximum upstream hops per problem. Default 15.
 - `--verbose` (optional): Print each LLM call and result to stderr as the trace runs.
 
 Orchestration:
 1. Parse arguments.
 2. Load model profile via `PlanExeLLMConfig.load()` and create `LLMExecutor` with priority-ordered models from the profile.
-3. Create `FlawTracer` instance.
-4. Call `tracer.trace(starting_file, flaw_description)`.
+3. Create `RootCauseAnalyzer` instance.
+4. Call `analyzer.trace(starting_file, problem_description)`.
 5. Write JSON and markdown reports via `output.py`.
 6. Print summary to stdout.
 
@@ -270,7 +270,7 @@ Orchestration:
 ## Scope Boundaries
 
 **In scope:**
-- CLI tool with `--dir`, `--file`, `--flaw`, `--output-dir`, `--max-depth`, `--verbose`.
+- CLI tool with `--dir`, `--file`, `--problem`, `--output-dir`, `--max-depth`, `--verbose`.
 - Static registry of all ~48 pipeline stages with dependencies and source code paths.
 - Recursive depth-first upstream tracing with three LLM prompt types.
 - JSON + markdown output sorted by trace depth.

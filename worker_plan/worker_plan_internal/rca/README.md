@@ -1,6 +1,6 @@
 # Root Cause Analysis (RCA) for PlanExe
 
-Given a problem observed in a pipeline output, this tool traces upstream through the DAG of intermediary artifacts to find where the problem originated and classify its root cause.
+Given a problem observed in a pipeline output, this tool traces upstream through the DAG of intermediary artifacts to find where the problem originated and classify its root cause. The classification (`prompt_fixable`, `domain_complexity`, `missing_input`) tells the self-improve loop whether a problem can be fixed automatically by editing a prompt, or whether it requires human input or is an inherent domain limitation.
 
 ## How it works
 

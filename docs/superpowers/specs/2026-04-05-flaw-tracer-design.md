@@ -1,4 +1,9 @@
-# Flaw Tracer — Root-Cause Analysis for PlanExe Reports
+# Root Cause Analysis (RCA) for PlanExe Reports
+
+> **Historical note:** This spec was written under the name "flaw tracer". The module
+> may be renamed to `rca`, `trace`, `provenance`, or `upstream_tracer` in a future PR.
+> The static DAG registry described here has since been replaced by `extract_dag.py`
+> which introspects the Luigi task graph at import time.
 
 ## Goal
 

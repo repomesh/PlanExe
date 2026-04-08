@@ -1,10 +1,15 @@
-# Flaw Tracer Implementation Plan
+# Root Cause Analysis (RCA) Implementation Plan
+
+> **Historical note:** This plan was written under the name "flaw tracer". The module
+> may be renamed to `rca`, `trace`, `provenance`, or `upstream_tracer` in a future PR.
+> The static DAG registry described here has since been replaced by `extract_dag.py`
+> which introspects the Luigi task graph at import time.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a CLI tool that traces flaws in PlanExe reports upstream through the pipeline DAG to find root causes.
+**Goal:** Build a CLI tool that traces problems in PlanExe reports upstream through the pipeline DAG to find root causes.
 
-**Architecture:** Recursive depth-first search through a static DAG registry. Three LLM prompts (flaw identification, upstream check, source code analysis) use Pydantic structured output via LLMExecutor. Produces JSON + markdown reports.
+**Architecture:** Recursive depth-first search using a DAG registry built from Luigi task introspection. Three LLM prompts (problem identification, upstream check, source code analysis) use Pydantic structured output via LLMExecutor. Produces JSON + markdown reports.
 
 **Tech Stack:** Python 3.13, llama-index LLM infrastructure, Pydantic v2, argparse, pytest
 

@@ -1,4 +1,4 @@
-# worker_plan/worker_plan_internal/flaw_tracer/tests/test_tracer.py
+# worker_plan/worker_plan_internal/rca/tests/test_tracer.py
 """Tests for the flaw tracer recursive algorithm.
 
 Since ResponseMockLLM does NOT support as_structured_llm(), we mock the three
@@ -11,14 +11,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from worker_plan_internal.flaw_tracer.tracer import (
-    FlawTracer,
+from worker_plan_internal.rca.tracer import (
+    RootCauseAnalyzer,
     FlawTraceResult,
     TracedFlaw,
     TraceEntry,
     OriginInfo,
 )
-from worker_plan_internal.flaw_tracer.prompts import (
+from worker_plan_internal.rca.prompts import (
     FlawIdentificationResult,
     IdentifiedFlaw,
     UpstreamCheckResult,
@@ -34,10 +34,10 @@ def _make_executor() -> LLMExecutor:
     return LLMExecutor(llm_models=llm_models)
 
 
-def _make_tracer(output_dir: Path, max_depth: int = 15, verbose: bool = False) -> FlawTracer:
-    """Create a FlawTracer with a dummy executor."""
+def _make_tracer(output_dir: Path, max_depth: int = 15, verbose: bool = False) -> RootCauseAnalyzer:
+    """Create a RootCauseAnalyzer with a dummy executor."""
     executor = _make_executor()
-    return FlawTracer(
+    return RootCauseAnalyzer(
         output_dir=output_dir,
         llm_executor=executor,
         max_depth=max_depth,
@@ -92,7 +92,7 @@ class TestTracedFlaw(unittest.TestCase):
         self.assertTrue(flaw.trace_complete)
 
 
-class TestFlawTracerPhase1(unittest.TestCase):
+class TestRootCauseAnalyzerPhase1(unittest.TestCase):
     """Test flaw identification (Phase 1) with mocked LLM methods."""
 
     def test_identify_flaws_returns_flaws(self):
@@ -134,7 +134,7 @@ class TestFlawTracerPhase1(unittest.TestCase):
                 tracer.trace("nonexistent.md", "test")
 
 
-class TestFlawTracerUpstreamTrace(unittest.TestCase):
+class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
     """Test upstream tracing (Phase 2) with a simple two-level chain."""
 
     def test_traces_flaw_upstream(self):
@@ -240,7 +240,7 @@ class TestFlawTracerUpstreamTrace(unittest.TestCase):
                              f"Dedup failed: checked {checked_stages}")
 
 
-class TestFlawTracerMaxDepth(unittest.TestCase):
+class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
     def test_respects_max_depth_zero(self):
         """With max_depth=0, no upstream tracing happens."""
         with TemporaryDirectory() as d:
@@ -299,7 +299,7 @@ class TestFlawTracerMaxDepth(unittest.TestCase):
             self.assertFalse(flaw.trace_complete)
 
 
-class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
+class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
     """Test that Phase 3 source code analysis is invoked at the origin node."""
 
     def test_source_code_analysis_called_at_origin(self):
@@ -365,7 +365,7 @@ class TestFlawTracerSourceCodeAnalysis(unittest.TestCase):
             self.assertEqual(args[0][1], "project_plan")
 
 
-class TestFlawTracerMultipleFlaws(unittest.TestCase):
+class TestRootCauseAnalyzerMultipleFlaws(unittest.TestCase):
     """Test that multiple flaws are traced independently."""
 
     def test_traces_multiple_flaws(self):
@@ -395,7 +395,7 @@ class TestFlawTracerMultipleFlaws(unittest.TestCase):
             self.assertEqual(len(ids), len(set(ids)))
 
 
-class TestFlawTracerSortsByDepth(unittest.TestCase):
+class TestRootCauseAnalyzerSortsByDepth(unittest.TestCase):
     """Test that results are sorted by depth (deepest origin first)."""
 
     def test_flaws_sorted_by_depth_descending(self):

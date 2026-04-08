@@ -1,13 +1,5 @@
 # Root Cause Analysis (RCA) for PlanExe
 
-> **Naming note:** This module is currently named `flaw_tracer`. Candidate names under consideration:
-> - `rca` — direct, matches the goal (root cause analysis)
-> - `trace` — short, verb-oriented
-> - `provenance` — emphasizes the artifact lineage aspect
-> - `upstream_tracer` — describes the direction of analysis
->
-> The module may be renamed in a future PR.
-
 Given a problem observed in a pipeline output, this tool traces upstream through the DAG of intermediary artifacts to find where the problem originated and classify its root cause.
 
 ## How it works
@@ -53,7 +45,7 @@ cd worker_plan
 Basic usage:
 
 ```bash
-/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output \
     --file 030-report.html \
     --flaw "Description of the problem you observed" \
@@ -88,7 +80,7 @@ You can start from any intermediary artifact. Common starting points:
 Trace a problem from the self-audit:
 
 ```bash
-/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20250101_india_census \
     --file 029-2-self_audit.md \
     --flaw "No Real-World Proof. The plan combines a digital census with caste enumeration at an unprecedented scale, lacking independent evidence of success." \
@@ -99,7 +91,7 @@ Trace a problem from the self-audit:
 Trace a zoning/permits problem:
 
 ```bash
-/opt/homebrew/bin/python3.11 -m worker_plan_internal.flaw_tracer \
+/opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20251016_minecraft_escape \
     --file 029-2-self_audit.md \
     --flaw "Infeasible Constraints Rated MEDIUM because the plan mentions zoning and permits but lacks specifics for the Shanghai location." \
@@ -158,5 +150,5 @@ The tool implements the investigation strategy described in `docs/proposals/133-
 
 ```bash
 cd worker_plan
-/opt/homebrew/bin/python3.11 -m pytest worker_plan_internal/flaw_tracer/tests/ -v
+/opt/homebrew/bin/python3.11 -m pytest worker_plan_internal/rca/tests/ -v
 ```

@@ -1,10 +1,10 @@
-# worker_plan/worker_plan_internal/flaw_tracer/output.py
+# worker_plan/worker_plan_internal/rca/output.py
 """JSON and markdown report generation for flaw trace results."""
 import json
 from datetime import datetime, UTC
 from pathlib import Path
 
-from worker_plan_internal.flaw_tracer.tracer import FlawTraceResult
+from worker_plan_internal.rca.tracer import FlawTraceResult
 
 
 def write_json_report(result: FlawTraceResult, output_path: Path) -> None:

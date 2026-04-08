@@ -1,8 +1,5 @@
 # Root Cause Analysis (RCA) — Status and Known Issues
 
-> **Naming note:** This module is currently `flaw_tracer`. Candidates for rename:
-> `rca`, `trace`, `provenance`, `upstream_tracer`. See README.md for rationale.
-
 ## What works well
 
 - **DAG is auto-generated.** The registry builds from `extract_dag.py` via Luigi task introspection at import time — no hand-maintained mapping. Adding, removing, or renaming pipeline nodes requires zero manual updates.

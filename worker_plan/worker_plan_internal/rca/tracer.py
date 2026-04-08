@@ -1,4 +1,4 @@
-# worker_plan/worker_plan_internal/flaw_tracer/tracer.py
+# worker_plan/worker_plan_internal/rca/tracer.py
 """Recursive depth-first flaw tracer for PlanExe pipeline outputs."""
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from pathlib import Path
 
 from llama_index.core.llms.llm import LLM
 
-from worker_plan_internal.flaw_tracer.registry import (
+from worker_plan_internal.rca.registry import (
     find_node_by_filename,
     get_upstream_files,
     get_source_code_paths,
 )
-from worker_plan_internal.flaw_tracer.prompts import (
+from worker_plan_internal.rca.prompts import (
     FlawIdentificationResult,
     UpstreamCheckResult,
     SourceCodeAnalysisResult,
@@ -98,7 +98,7 @@ class EventLogger:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
 
-class FlawTracer:
+class RootCauseAnalyzer:
     """Traces flaws upstream through the PlanExe pipeline DAG."""
 
     def __init__(

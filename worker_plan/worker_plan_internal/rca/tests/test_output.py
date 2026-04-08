@@ -1,16 +1,16 @@
-# worker_plan/worker_plan_internal/flaw_tracer/tests/test_output.py
+# worker_plan/worker_plan_internal/rca/tests/test_output.py
 import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from worker_plan_internal.flaw_tracer.tracer import (
+from worker_plan_internal.rca.tracer import (
     FlawTraceResult,
     TracedFlaw,
     TraceEntry,
     OriginInfo,
 )
-from worker_plan_internal.flaw_tracer.output import write_json_report, write_markdown_report
+from worker_plan_internal.rca.output import write_json_report, write_markdown_report
 
 
 def _make_sample_result() -> FlawTraceResult:

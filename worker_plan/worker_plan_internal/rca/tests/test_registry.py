@@ -1,8 +1,8 @@
-# worker_plan/worker_plan_internal/flaw_tracer/tests/test_registry.py
+# worker_plan/worker_plan_internal/rca/tests/test_registry.py
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from worker_plan_internal.flaw_tracer.registry import (
+from worker_plan_internal.rca.registry import (
     NodeInfo,
     NODES,
     find_node_by_filename,

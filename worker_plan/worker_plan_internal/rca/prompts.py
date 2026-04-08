@@ -1,5 +1,5 @@
-# worker_plan/worker_plan_internal/flaw_tracer/prompts.py
-"""Pydantic models and prompt builders for the flaw tracer."""
+# worker_plan/worker_plan_internal/rca/prompts.py
+"""Pydantic models and prompt builders for RCA."""
 from typing import Literal
 from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole

@@ -1,7 +1,7 @@
-# worker_plan/worker_plan_internal/flaw_tracer/tests/test_prompts.py
+# worker_plan/worker_plan_internal/rca/tests/test_prompts.py
 import unittest
 from llama_index.core.llms import ChatMessage, MessageRole
-from worker_plan_internal.flaw_tracer.prompts import (
+from worker_plan_internal.rca.prompts import (
     IdentifiedFlaw,
     FlawIdentificationResult,
     UpstreamCheckResult,

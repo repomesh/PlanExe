@@ -1,5 +1,5 @@
-# worker_plan/worker_plan_internal/flaw_tracer/registry.py
-"""DAG registry for the flaw tracer, built from Luigi task introspection.
+# worker_plan/worker_plan_internal/rca/registry.py
+"""DAG registry for RCA, built from Luigi task introspection.
 
 Replaces the former hand-maintained static registry with data extracted
 from the actual pipeline via extract_dag.  The public API is unchanged:

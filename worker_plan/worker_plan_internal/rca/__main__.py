@@ -1,8 +1,8 @@
-# worker_plan/worker_plan_internal/flaw_tracer/__main__.py
-"""CLI entry point for the flaw tracer.
+# worker_plan/worker_plan_internal/rca/__main__.py
+"""CLI entry point for RCA (root cause analysis).
 
 Usage:
-    python -m worker_plan_internal.flaw_tracer \
+    python -m worker_plan_internal.rca \
         --dir /path/to/output \
         --file 030-report.html \
         --flaw "The budget appears unvalidated..." \
@@ -14,8 +14,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from worker_plan_internal.flaw_tracer.tracer import FlawTracer
-from worker_plan_internal.flaw_tracer.output import write_json_report, write_markdown_report
+from worker_plan_internal.rca.tracer import RootCauseAnalyzer
+from worker_plan_internal.rca.output import write_json_report, write_markdown_report
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFromName, RetryConfig
 from worker_plan_internal.llm_factory import get_llm_names_by_priority
 
@@ -78,7 +78,7 @@ def main() -> None:
 
     events_path = report_dir / "events.jsonl"
 
-    tracer = FlawTracer(
+    tracer = RootCauseAnalyzer(
         output_dir=output_dir,
         llm_executor=executor,
         max_depth=args.max_depth,

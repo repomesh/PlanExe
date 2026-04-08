@@ -5,7 +5,7 @@ Usage:
     python -m worker_plan_internal.rca \
         --dir /path/to/output \
         --file 030-report.html \
-        --flaw "The budget appears unvalidated..." \
+        --problem "The budget appears unvalidated..." \
         --output-dir /path/to/output \
         --max-depth 15 \
         --verbose
@@ -33,12 +33,12 @@ def main() -> None:
         help="Starting file to analyze (relative to --dir)",
     )
     parser.add_argument(
-        "--flaw", required=True,
-        help="Text description of the observed flaw(s)",
+        "--problem", required=True,
+        help="Text description of the observed problem(s)",
     )
     parser.add_argument(
         "--output-dir", type=Path, default=None,
-        help="Where to write flaw_trace.json and flaw_trace.md (defaults to --dir)",
+        help="Where to write root_cause_analysis.json and root_cause_analysis.md (defaults to --dir)",
     )
     parser.add_argument(
         "--max-depth", type=int, default=15,
@@ -87,11 +87,11 @@ def main() -> None:
     )
 
     print(f"Tracing flaws in {starting_file}...", file=sys.stderr)
-    result = tracer.trace(starting_file, args.flaw)
+    result = tracer.trace(starting_file, args.problem)
 
     # Write reports
-    json_path = report_dir / "flaw_trace.json"
-    md_path = report_dir / "flaw_trace.md"
+    json_path = report_dir / "root_cause_analysis.json"
+    md_path = report_dir / "root_cause_analysis.md"
     write_json_report(result, json_path)
     write_markdown_report(result, md_path)
 

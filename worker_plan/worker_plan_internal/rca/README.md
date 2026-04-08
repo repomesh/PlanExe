@@ -17,7 +17,7 @@ The tool performs a recursive depth-first search:
    - **Domain complexity** — the topic is inherently uncertain or contentious, no prompt change resolves it
    - **Missing input** — the user's plan prompt didn't provide enough detail
 
-Output is a JSON file (`flaw_trace.json`), a markdown report (`flaw_trace.md`), and a live event log (`events.jsonl`), sorted by trace depth so the deepest root cause appears first.
+Output is a JSON file (`root_cause_analysis.json`), a markdown report (`root_cause_analysis.md`), and a live event log (`events.jsonl`), sorted by trace depth so the deepest root cause appears first.
 
 ## DAG integration
 
@@ -48,7 +48,7 @@ Basic usage:
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output \
     --file 030-report.html \
-    --flaw "Description of the problem you observed" \
+    --problem "Description of the problem you observed" \
     --verbose
 ```
 
@@ -58,7 +58,7 @@ Basic usage:
 |----------|----------|-------------|
 | `--dir` | Yes | Path to the output directory containing intermediary artifacts |
 | `--file` | Yes | Starting artifact to analyze (relative to `--dir`) |
-| `--flaw` | Yes | Text description of the observed problem(s) |
+| `--problem` | Yes | Text description of the observed problem(s) |
 | `--output-dir` | No | Where to write reports (defaults to `--dir`) |
 | `--max-depth` | No | Maximum upstream hops per problem (default: 15) |
 | `--verbose` | No | Print each LLM call to stderr as the trace runs |
@@ -83,7 +83,7 @@ Trace a problem from the self-audit:
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20250101_india_census \
     --file 029-2-self_audit.md \
-    --flaw "No Real-World Proof. The plan combines a digital census with caste enumeration at an unprecedented scale, lacking independent evidence of success." \
+    --problem "No Real-World Proof. The plan combines a digital census with caste enumeration at an unprecedented scale, lacking independent evidence of success." \
     --output-dir /tmp/rca-analysis \
     --verbose
 ```
@@ -94,7 +94,7 @@ Trace a zoning/permits problem:
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20251016_minecraft_escape \
     --file 029-2-self_audit.md \
-    --flaw "Infeasible Constraints Rated MEDIUM because the plan mentions zoning and permits but lacks specifics for the Shanghai location." \
+    --problem "Infeasible Constraints Rated MEDIUM because the plan mentions zoning and permits but lacks specifics for the Shanghai location." \
     --output-dir /tmp/rca-analysis2 \
     --verbose
 ```
@@ -111,8 +111,8 @@ tail -f /tmp/rca-analysis/events.jsonl
 
 Each run produces three files in `--output-dir` (or `--dir` if not specified):
 
-- `flaw_trace.json` — machine-readable trace with full details
-- `flaw_trace.md` — human-readable report with trace tables
+- `root_cause_analysis.json` — machine-readable trace with full details
+- `root_cause_analysis.md` — human-readable report with trace tables
 - `events.jsonl` — live event log for monitoring progress
 
 Problems are sorted by trace depth (deepest root cause first). Each problem's origin includes a **category** (`prompt_fixable`, `domain_complexity`, or `missing_input`) so you know whether the fix is a prompt edit, a domain limitation to accept, or a need for more detail in the plan input.

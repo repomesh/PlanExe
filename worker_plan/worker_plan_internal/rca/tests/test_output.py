@@ -60,7 +60,7 @@ def _make_sample_result() -> FlawTraceResult:
 class TestWriteJsonReport(unittest.TestCase):
     def test_writes_valid_json(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.json"
+            output_path = Path(d) / "root_cause_analysis.json"
             result = _make_sample_result()
             write_json_report(result, output_path)
 
@@ -72,7 +72,7 @@ class TestWriteJsonReport(unittest.TestCase):
 
     def test_json_contains_correct_summary(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.json"
+            output_path = Path(d) / "root_cause_analysis.json"
             result = _make_sample_result()
             write_json_report(result, output_path)
 
@@ -85,7 +85,7 @@ class TestWriteJsonReport(unittest.TestCase):
 
     def test_json_flaws_sorted_by_depth(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.json"
+            output_path = Path(d) / "root_cause_analysis.json"
             result = _make_sample_result()
             write_json_report(result, output_path)
 
@@ -97,7 +97,7 @@ class TestWriteJsonReport(unittest.TestCase):
 class TestWriteMarkdownReport(unittest.TestCase):
     def test_writes_markdown_file(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.md"
+            output_path = Path(d) / "root_cause_analysis.md"
             result = _make_sample_result()
             write_markdown_report(result, output_path)
 
@@ -107,7 +107,7 @@ class TestWriteMarkdownReport(unittest.TestCase):
 
     def test_markdown_contains_flaw_details(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.md"
+            output_path = Path(d) / "root_cause_analysis.md"
             result = _make_sample_result()
             write_markdown_report(result, output_path)
 
@@ -118,7 +118,7 @@ class TestWriteMarkdownReport(unittest.TestCase):
 
     def test_markdown_contains_trace_table(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.md"
+            output_path = Path(d) / "root_cause_analysis.md"
             result = _make_sample_result()
             write_markdown_report(result, output_path)
 
@@ -128,7 +128,7 @@ class TestWriteMarkdownReport(unittest.TestCase):
 
     def test_empty_result_produces_valid_markdown(self):
         with TemporaryDirectory() as d:
-            output_path = Path(d) / "flaw_trace.md"
+            output_path = Path(d) / "root_cause_analysis.md"
             result = FlawTraceResult(
                 starting_file="030-report.html",
                 flaw_description="test",

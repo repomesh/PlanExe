@@ -283,7 +283,7 @@ class RootCauseAnalyzer:
         if not found_upstream:
             # Current node is the origin — problem exists here but not in any upstream
             traced.origin_node = current_node
-            traced.depth = len(traced.trace)
+            traced.depth = len(traced.trace) - 1
             self._events.log("origin_found", node=current_node, depth=traced.depth)
             # Mark the current node entry as origin
             for entry in traced.trace:

@@ -147,8 +147,8 @@ if __name__ == "__main__":
             the_json = json.load(f)
         return the_json
 
-    plan_json = load_json('002-project_plan.json')
-    wbs_json = load_json('005-wbs_level2.json')
+    plan_json = load_json('project_plan.json')
+    wbs_json = load_json('wbs_level2.json')
 
     query = IdentifyWBSTaskDependencies.format_query(plan_json, wbs_json)
 

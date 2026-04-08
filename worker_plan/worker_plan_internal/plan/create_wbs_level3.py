@@ -205,10 +205,10 @@ if __name__ == "__main__":
             the_json = json.load(f)
         return the_json
 
-    plan_json = load_json('002-project_plan.json')
-    wbs_level1_json = load_json('006-wbs_level1.json')
-    wbs_level2_json = load_json('008-wbs_level2.json')
-    wbs_level2_task_durations_json = load_json('012-task_durations.json')
+    plan_json = load_json('project_plan.json')
+    wbs_level1_json = load_json('wbs_level1.json')
+    wbs_level2_json = load_json('wbs_level2.json')
+    wbs_level2_task_durations_json = load_json('task_durations.json')
     decompose_task_id = "1c690f4a-ae8e-493d-9e47-6da58ef5b24c"
 
     query = CreateWBSLevel3.format_query(plan_json, wbs_level1_json, wbs_level2_json, wbs_level2_task_durations_json, decompose_task_id)

@@ -47,7 +47,7 @@ class CreateWBSTableCSV:
 
 if __name__ == "__main__":
     # TODO: Eliminate hardcoded paths
-    path = '/Users/neoneye/Desktop/planexe_data/011-wbs_project.json'
+    path = '/Users/neoneye/Desktop/planexe_data/wbs_project.json'
 
     print(f"loading file: {path}")
     with open(path, 'r', encoding='utf-8') as f:

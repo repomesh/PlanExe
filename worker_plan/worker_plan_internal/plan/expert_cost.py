@@ -247,20 +247,20 @@ if __name__ == "__main__":
             the_text = f.read()
         return the_text
 
-    plan_txt = load_text('001-plan.txt')
+    plan_txt = load_text('plan.txt')
     document_plan = Document(name="vague_plan_description.txt", content=plan_txt)
 
-    project_plan_json = load_json('002-project_plan.json')
+    project_plan_json = load_json('project_plan.json')
     project_plan = format_json_for_use_in_query(project_plan_json)
     document_project_plan = Document(name="project_plan.json", content=project_plan)
 
-    swot_analysis_md = load_text('004-swot_analysis.md')
+    swot_analysis_md = load_text('swot_analysis.md')
     document_swot_analysis = Document(name="swot_analysis.md", content=swot_analysis_md)
 
-    expert_list_json = load_json('006-experts.json')
+    expert_list_json = load_json('experts.json')
 
-    path_wbs_table_csv = os.path.join(basepath, '016-wbs_table.csv')
-    path_wbs_project_json = os.path.join(basepath, '016-wbs_project.json')
+    path_wbs_table_csv = os.path.join(basepath, 'wbs_table.csv')
+    path_wbs_project_json = os.path.join(basepath, 'wbs_project.json')
     wbs_table = WBSTableForCostEstimation.create(path_wbs_table_csv, path_wbs_project_json)
     wbs_df = wbs_table.wbs_table_df.copy()
 

@@ -84,7 +84,7 @@ The category classification (`prompt_fixable` / `domain_complexity` / `missing_i
 
 The tool is diagnostic, not prescriptive. It tells you *where* a problem originated and *why*, but someone still has to decide what to do. It can't catch problems that don't leave textual evidence — timing issues, model-specific quirks, or structural DAG problems are invisible.
 
-Starting from `029-2-self_audit.md` is the sweet spot. That file already contains identified issues, so the tracer is tracing known problems upstream rather than discovering problems from scratch.
+Starting from `self_audit.md` is the sweet spot. That file already contains identified issues, so the tracer is tracing known problems upstream rather than discovering problems from scratch.
 
 Before relying on this for automated decisions (e.g., in the self-improve loop), it needs more diverse test runs (10+ plans) and reproducibility testing.
 

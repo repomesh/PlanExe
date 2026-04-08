@@ -41,10 +41,10 @@ class TestPurgeOldRuns(unittest.TestCase):
         path = os.path.join(self.test_run_dir, dirname)
         os.makedirs(path, exist_ok=True)
         if with_start:
-            with open(os.path.join(path, "001-1-start_time.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(path, "start_time.json"), "w", encoding="utf-8") as f:
                 f.write("{}")
         if with_plan:
-            with open(os.path.join(path, "001-2-plan.txt"), "w", encoding="utf-8") as f:
+            with open(os.path.join(path, "plan.txt"), "w", encoding="utf-8") as f:
                 f.write("plan")
         self._set_mtime(path, hours_old)
 

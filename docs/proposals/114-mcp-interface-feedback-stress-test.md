@@ -507,7 +507,7 @@ No stale error information leaked between states.
 
 ### Files list ordering fix
 
-The files list in `plan_status` now shows the most recent 10 files instead of the first 10. When the plan completed, the agent saw `029-2-self_audit.md`, `030-report.html`, `999-pipeline_complete.txt` etc. instead of the same early pipeline files every time. Much more useful for monitoring progress.
+The files list in `plan_status` now shows the most recent 10 files instead of the first 10. When the plan completed, the agent saw `self_audit.md`, `report.html`, `pipeline_complete.txt` etc. instead of the same early pipeline files every time. Much more useful for monitoring progress.
 
 ### Agent-server capability mismatch (systemic observation)
 

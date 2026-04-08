@@ -67,7 +67,7 @@ class TestPydanticModels(unittest.TestCase):
 class TestBuildProblemIdentificationMessages(unittest.TestCase):
     def test_returns_chat_messages(self):
         messages = build_problem_identification_messages(
-            filename="030-report.html",
+            filename="report.html",
             file_content="<html>report content</html>",
             user_problem_description="budget is wrong",
         )
@@ -78,12 +78,12 @@ class TestBuildProblemIdentificationMessages(unittest.TestCase):
 
     def test_user_message_contains_inputs(self):
         messages = build_problem_identification_messages(
-            filename="025-2-executive_summary.md",
+            filename="executive_summary.md",
             file_content="# Summary\nBudget: 500k",
             user_problem_description="fabricated budget",
         )
         user_content = messages[1].content
-        self.assertIn("025-2-executive_summary.md", user_content)
+        self.assertIn("executive_summary.md", user_content)
         self.assertIn("# Summary", user_content)
         self.assertIn("fabricated budget", user_content)
 
@@ -93,7 +93,7 @@ class TestBuildUpstreamCheckMessages(unittest.TestCase):
         messages = build_upstream_check_messages(
             problem_description="Budget is fabricated",
             evidence_quote="CZK 500,000",
-            upstream_filename="005-2-project_plan.md",
+            upstream_filename="project_plan.md",
             upstream_file_content="# Project Plan\nBudget: 500k",
         )
         self.assertIsInstance(messages, list)
@@ -103,13 +103,13 @@ class TestBuildUpstreamCheckMessages(unittest.TestCase):
         messages = build_upstream_check_messages(
             problem_description="Missing market sizing",
             evidence_quote="growing Czech market",
-            upstream_filename="003-5-make_assumptions.md",
+            upstream_filename="make_assumptions.md",
             upstream_file_content="# Assumptions\nMarket is growing",
         )
         user_content = messages[1].content
         self.assertIn("Missing market sizing", user_content)
         self.assertIn("growing Czech market", user_content)
-        self.assertIn("003-5-make_assumptions.md", user_content)
+        self.assertIn("make_assumptions.md", user_content)
 
 
 class TestBuildSourceCodeAnalysisMessages(unittest.TestCase):

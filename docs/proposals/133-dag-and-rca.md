@@ -81,7 +81,7 @@ Example:
 
 {
   "id": "executive_summary_markdown",
-  "path": "025-2-executive_summary.md",
+  "path": "executive_summary.md",
   "format": "md",
   "role": "summary_markdown"
 }
@@ -132,7 +132,7 @@ A stronger format could allow fields like:
 
 {
   "from_node": "executive_summary",
-  "artifact_path": "025-2-executive_summary.md",
+  "artifact_path": "executive_summary.md",
   "used_for": "decision-maker summary section"
 }
 
@@ -143,7 +143,7 @@ How RCA can work with the current format
 Goal
 
 The goal of RCA is to answer questions like:
-	•	Why is a false claim shown in 030-report.html?
+	•	Why is a false claim shown in report.html?
 	•	Which upstream artifact first contained it?
 	•	Which node likely introduced it?
 	•	Which source file should be inspected first?
@@ -153,7 +153,7 @@ Investigation strategy
 Step 1: Start from the final artifact
 
 Begin with the final output artifact, such as:
-	•	030-report.html
+	•	report.html
 
 Find the node that produces it.
 
@@ -210,15 +210,15 @@ Suppose the final report contains the false claim:
 The project requires 12 full-time engineers.
 
 A practical investigation would look like this:
-	1.	search 030-report.html for the claim
+	1.	search report.html for the claim
 	2.	inspect the report node inputs
-	3.	search 025-2-executive_summary.md
-	4.	search 024-2-review_plan.md
-	5.	search 013-team.md
-	6.	if the claim appears in 013-team.md, inspect the team_markdown node
+	3.	search executive_summary.md
+	4.	search review_plan.md
+	5.	search team.md
+	6.	if the claim appears in team.md, inspect the team_markdown node
 	7.	inspect that node’s inputs:
-	•	011-2-enrich_team_members_environment_info.json
-	•	012-review_team_raw.json
+	•	enrich_team_members_environment_info.json
+	•	review_team_raw.json
 	8.	search those artifacts for the same claim or the numeric value
 	9.	continue upstream until the earliest occurrence is found
 	10.	inspect the producing node’s source_files
@@ -255,7 +255,7 @@ Example:
 
 {
   "id": "review_plan_markdown",
-  "path": "024-2-review_plan.md",
+  "path": "review_plan.md",
   "format": "md",
   "role": "review_output"
 }
@@ -266,7 +266,7 @@ Example:
 
 {
   "from_node": "review_plan",
-  "artifact_path": "024-2-review_plan.md",
+  "artifact_path": "review_plan.md",
   "used_for": "quality review section"
 }
 

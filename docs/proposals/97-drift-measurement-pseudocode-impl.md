@@ -34,7 +34,7 @@ The task runs **after** the pipeline has fully completed. It is an optional post
 ```
 
 Inputs required:
-- `001-2-initial_plan.txt` — the original user prompt (already exists)
+- `plan.txt` — the original user prompt (already exists)
 - `final-report.md` or equivalent final plan artifact (already exists)
 
 Output:
@@ -219,7 +219,7 @@ class DriftEvaluationTask(PlanTask):
 
     def requires(self):
         return {
-            'prompt': self.clone(SetupTask),          # 001-2-initial_plan.txt
+            'prompt': self.clone(SetupTask),          # plan.txt
             'report': self.clone(FinalReportTask),     # or equivalent final artifact
         }
 

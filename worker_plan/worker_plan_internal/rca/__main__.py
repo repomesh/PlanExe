@@ -4,7 +4,7 @@
 Usage:
     python -m worker_plan_internal.rca \
         --dir /path/to/output \
-        --file 030-report.html \
+        --file report.html \
         --problem "The budget appears unvalidated..." \
         --output-dir /path/to/output \
         --max-depth 15 \

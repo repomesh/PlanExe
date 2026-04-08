@@ -36,22 +36,22 @@ class TestNodeInfo(unittest.TestCase):
 
 class TestFindNodeByFilename(unittest.TestCase):
     def test_find_report(self):
-        node = find_node_by_filename("030-report.html")
+        node = find_node_by_filename("report.html")
         self.assertIsNotNone(node)
         self.assertEqual(node.name, "report")
 
     def test_find_potential_levers_clean(self):
-        node = find_node_by_filename("002-10-potential_levers.json")
+        node = find_node_by_filename("potential_levers.json")
         self.assertIsNotNone(node)
         self.assertEqual(node.name, "potential_levers")
 
     def test_find_potential_levers_raw(self):
-        node = find_node_by_filename("002-9-potential_levers_raw.json")
+        node = find_node_by_filename("potential_levers_raw.json")
         self.assertIsNotNone(node)
         self.assertEqual(node.name, "potential_levers")
 
     def test_find_executive_summary(self):
-        node = find_node_by_filename("025-2-executive_summary.md")
+        node = find_node_by_filename("executive_summary.md")
         self.assertIsNotNone(node)
         self.assertEqual(node.name, "executive_summary")
 
@@ -70,10 +70,10 @@ class TestGetUpstreamFiles(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create the expected upstream files on disk
-            (output_dir / "001-2-plan.txt").write_text("plan", encoding="utf-8")
-            (output_dir / "002-6-identify_purpose.md").write_text("purpose", encoding="utf-8")
-            (output_dir / "002-8-plan_type.md").write_text("type", encoding="utf-8")
-            (output_dir / "002-0-extract_constraints.md").write_text("constraints", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("plan", encoding="utf-8")
+            (output_dir / "identify_purpose.md").write_text("purpose", encoding="utf-8")
+            (output_dir / "plan_type.md").write_text("type", encoding="utf-8")
+            (output_dir / "extract_constraints.md").write_text("constraints", encoding="utf-8")
 
             result = get_upstream_files("potential_levers", output_dir)
             node_names = [name for name, _ in result]
@@ -86,7 +86,7 @@ class TestGetUpstreamFiles(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Only create one of the upstream files
-            (output_dir / "001-2-plan.txt").write_text("plan", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("plan", encoding="utf-8")
 
             result = get_upstream_files("potential_levers", output_dir)
             node_names = [name for name, _ in result]

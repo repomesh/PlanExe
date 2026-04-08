@@ -303,10 +303,10 @@ populate_baseline.py                # script to populate baseline from zip files
 baseline/                           # current outputs (extracted from dataset zips)
   train/
     20260310_hong_kong_game/
-      001-1-start_time.json
-      001-2-plan.txt
+      start_time.json
+      plan.txt
       ...
-      030-report.html
+      report.html
     20250329_gta_game/
       ...
     20250321_silo/
@@ -338,8 +338,8 @@ history/                                      # captured output, global run coun
       outputs.jsonl
       outputs/
         20250321_silo/
-          002-9-potential_levers_raw.json
-          002-10-potential_levers.json
+          potential_levers_raw.json
+          potential_levers.json
           activity_overview.json
           usage_metrics.jsonl
         20260310_hong_kong_game/
@@ -382,7 +382,7 @@ scores/                             # longitudinal tracking
 full_plan_comparisons/              # Stage 3 periodic full-plan regenerations
   2026-03-20/
     hong_kong_game/
-      030-report.html
+      report.html
     kpi_comparison.json
 ```
 

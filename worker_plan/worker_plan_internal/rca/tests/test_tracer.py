@@ -48,13 +48,13 @@ def _make_tracer(output_dir: Path, max_depth: int = 15, verbose: bool = False) -
 class TestRCAResult(unittest.TestCase):
     def test_dataclass_creation(self):
         result = RCAResult(
-            starting_file="030-report.html",
+            starting_file="report.html",
             problem_description="test",
             output_dir="/tmp/test",
             problems=[],
             llm_calls_made=0,
         )
-        self.assertEqual(result.starting_file, "030-report.html")
+        self.assertEqual(result.starting_file, "report.html")
         self.assertEqual(len(result.problems), 0)
         self.assertEqual(result.llm_calls_made, 0)
 
@@ -100,7 +100,7 @@ class TestRootCauseAnalyzerPhase1(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create a minimal output file
-            report_file = output_dir / "025-2-executive_summary.md"
+            report_file = output_dir / "executive_summary.md"
             report_file.write_text("# Summary\nBudget: CZK 500,000", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
@@ -118,7 +118,7 @@ class TestRootCauseAnalyzerPhase1(unittest.TestCase):
 
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
-                result = tracer.trace("025-2-executive_summary.md", "budget is unvalidated")
+                result = tracer.trace("executive_summary.md", "budget is unvalidated")
 
             self.assertIsInstance(result, RCAResult)
             self.assertGreaterEqual(len(result.problems), 1)
@@ -141,13 +141,13 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create files for a chain: executive_summary -> project_plan -> setup
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: CZK 500,000", encoding="utf-8")
-            (output_dir / "005-2-project_plan.md").write_text("Budget: CZK 500,000", encoding="utf-8")
-            (output_dir / "001-2-plan.txt").write_text("Open a tea shop", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: CZK 500,000", encoding="utf-8")
+            (output_dir / "project_plan.md").write_text("Budget: CZK 500,000", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("Open a tea shop", encoding="utf-8")
             # Create other upstream files that executive_summary depends on
-            (output_dir / "002-14-strategic_decisions.md").write_text("decisions", encoding="utf-8")
-            (output_dir / "002-19-scenarios.md").write_text("scenarios", encoding="utf-8")
-            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
+            (output_dir / "strategic_decisions.md").write_text("decisions", encoding="utf-8")
+            (output_dir / "scenarios.md").write_text("scenarios", encoding="utf-8")
+            (output_dir / "consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -186,7 +186,7 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "budget is fabricated")
+                result = tracer.trace("executive_summary.md", "budget is fabricated")
 
             self.assertEqual(len(result.problems), 1)
             problem = result.problems[0]
@@ -204,12 +204,12 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
             # executive_summary depends on strategic_decisions_markdown, scenarios_markdown, etc.
             # project_plan also depends on strategic_decisions_markdown, scenarios_markdown.
             # When we trace through project_plan, those shared upstreams should be skipped.
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "005-2-project_plan.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "001-2-plan.txt").write_text("Open a tea shop", encoding="utf-8")
-            (output_dir / "002-14-strategic_decisions.md").write_text("decisions", encoding="utf-8")
-            (output_dir / "002-19-scenarios.md").write_text("scenarios", encoding="utf-8")
-            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "project_plan.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("Open a tea shop", encoding="utf-8")
+            (output_dir / "strategic_decisions.md").write_text("decisions", encoding="utf-8")
+            (output_dir / "scenarios.md").write_text("scenarios", encoding="utf-8")
+            (output_dir / "consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -230,7 +230,7 @@ class TestRootCauseAnalyzerUpstreamTrace(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "budget fabricated")
+                result = tracer.trace("executive_summary.md", "budget fabricated")
 
             # Count unique filenames checked — dedup should prevent re-checking
             # strategic_decisions and scenarios at the project_plan level
@@ -245,7 +245,7 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
         """With max_depth=0, no upstream tracing happens."""
         with TemporaryDirectory() as d:
             output_dir = Path(d)
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
 
             tracer = _make_tracer(output_dir, max_depth=0)
 
@@ -258,7 +258,7 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream') as mock_check, \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "test")
+                result = tracer.trace("executive_summary.md", "test")
 
             self.assertEqual(len(result.problems), 1)
             # With max_depth=0, no upstream tracing happens
@@ -270,12 +270,12 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
         """With max_depth=1, tracing should stop after one level of upstream."""
         with TemporaryDirectory() as d:
             output_dir = Path(d)
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "005-2-project_plan.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "001-2-plan.txt").write_text("plan", encoding="utf-8")
-            (output_dir / "002-14-strategic_decisions.md").write_text("decisions", encoding="utf-8")
-            (output_dir / "002-19-scenarios.md").write_text("scenarios", encoding="utf-8")
-            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "project_plan.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("plan", encoding="utf-8")
+            (output_dir / "strategic_decisions.md").write_text("decisions", encoding="utf-8")
+            (output_dir / "scenarios.md").write_text("scenarios", encoding="utf-8")
+            (output_dir / "consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
 
             tracer = _make_tracer(output_dir, max_depth=1)
 
@@ -291,7 +291,7 @@ class TestRootCauseAnalyzerMaxDepth(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=always_found), \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "test")
+                result = tracer.trace("executive_summary.md", "test")
 
             self.assertEqual(len(result.problems), 1)
             problem = result.problems[0]
@@ -305,7 +305,7 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
     def test_source_code_analysis_called_at_origin(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -317,7 +317,7 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
 
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
-                result = tracer.trace("025-2-executive_summary.md", "test")
+                result = tracer.trace("executive_summary.md", "test")
 
             # _analyze_source_code should have been called once for the origin
             mock_analyze.assert_called_once()
@@ -330,12 +330,12 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
             # Create files for a chain: executive_summary -> project_plan (origin)
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "005-2-project_plan.md").write_text("Budget: 500k", encoding="utf-8")
-            (output_dir / "001-2-plan.txt").write_text("Open a tea shop", encoding="utf-8")
-            (output_dir / "002-14-strategic_decisions.md").write_text("decisions", encoding="utf-8")
-            (output_dir / "002-19-scenarios.md").write_text("scenarios", encoding="utf-8")
-            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "project_plan.md").write_text("Budget: 500k", encoding="utf-8")
+            (output_dir / "plan.txt").write_text("Open a tea shop", encoding="utf-8")
+            (output_dir / "strategic_decisions.md").write_text("decisions", encoding="utf-8")
+            (output_dir / "scenarios.md").write_text("scenarios", encoding="utf-8")
+            (output_dir / "consolidate_assumptions_full.md").write_text("assumptions", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -356,7 +356,7 @@ class TestRootCauseAnalyzerSourceCodeAnalysis(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code') as mock_analyze:
-                result = tracer.trace("025-2-executive_summary.md", "budget fabricated")
+                result = tracer.trace("executive_summary.md", "budget fabricated")
 
             # Phase 3 should have been called at the deep origin (project_plan)
             mock_analyze.assert_called_once()
@@ -371,7 +371,7 @@ class TestRootCauseAnalyzerMultipleProblems(unittest.TestCase):
     def test_traces_multiple_problems(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
-            (output_dir / "025-2-executive_summary.md").write_text("Budget: 500k\nTimeline: 2 months", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("Budget: 500k\nTimeline: 2 months", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -384,7 +384,7 @@ class TestRootCauseAnalyzerMultipleProblems(unittest.TestCase):
 
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "multiple issues")
+                result = tracer.trace("executive_summary.md", "multiple issues")
 
             self.assertEqual(len(result.problems), 2)
             descriptions = {f.description for f in result.problems}
@@ -401,11 +401,11 @@ class TestRootCauseAnalyzerSortsByDepth(unittest.TestCase):
     def test_problems_sorted_by_depth_descending(self):
         with TemporaryDirectory() as d:
             output_dir = Path(d)
-            (output_dir / "025-2-executive_summary.md").write_text("content", encoding="utf-8")
-            (output_dir / "005-2-project_plan.md").write_text("content", encoding="utf-8")
-            (output_dir / "002-14-strategic_decisions.md").write_text("content", encoding="utf-8")
-            (output_dir / "002-19-scenarios.md").write_text("content", encoding="utf-8")
-            (output_dir / "003-10-consolidate_assumptions_full.md").write_text("content", encoding="utf-8")
+            (output_dir / "executive_summary.md").write_text("content", encoding="utf-8")
+            (output_dir / "project_plan.md").write_text("content", encoding="utf-8")
+            (output_dir / "strategic_decisions.md").write_text("content", encoding="utf-8")
+            (output_dir / "scenarios.md").write_text("content", encoding="utf-8")
+            (output_dir / "consolidate_assumptions_full.md").write_text("content", encoding="utf-8")
 
             tracer = _make_tracer(output_dir)
 
@@ -429,7 +429,7 @@ class TestRootCauseAnalyzerSortsByDepth(unittest.TestCase):
             with patch.object(tracer, '_identify_problems', return_value=mock_identification), \
                  patch.object(tracer, '_check_upstream', side_effect=mock_check_upstream), \
                  patch.object(tracer, '_analyze_source_code'):
-                result = tracer.trace("025-2-executive_summary.md", "test")
+                result = tracer.trace("executive_summary.md", "test")
 
             self.assertEqual(len(result.problems), 2)
             # Deepest origin should be first

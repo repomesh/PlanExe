@@ -16,7 +16,7 @@ from worker_plan_internal.rca.output import write_json_report, write_markdown_re
 def _make_sample_result() -> RCAResult:
     """Create a sample RCAResult for testing."""
     return RCAResult(
-        starting_file="025-2-executive_summary.md",
+        starting_file="executive_summary.md",
         problem_description="Budget is unvalidated",
         output_dir="/tmp/test_output",
         problems=[
@@ -26,14 +26,14 @@ def _make_sample_result() -> RCAResult:
                 severity="HIGH",
                 starting_evidence="CZK 500,000",
                 trace=[
-                    TraceEntry(node="executive_summary", file="025-2-executive_summary.md", evidence="CZK 500,000", is_origin=False),
-                    TraceEntry(node="project_plan", file="005-2-project_plan.md", evidence="Budget: 500k", is_origin=False),
-                    TraceEntry(node="make_assumptions", file="003-5-make_assumptions.md", evidence="Assume budget of 500k", is_origin=True),
+                    TraceEntry(node="executive_summary", file="executive_summary.md", evidence="CZK 500,000", is_origin=False),
+                    TraceEntry(node="project_plan", file="project_plan.md", evidence="Budget: 500k", is_origin=False),
+                    TraceEntry(node="make_assumptions", file="make_assumptions.md", evidence="Assume budget of 500k", is_origin=True),
                 ],
                 origin_node="make_assumptions",
                 origin=OriginInfo(
                     node="make_assumptions",
-                    file="003-5-make_assumptions.md",
+                    file="make_assumptions.md",
                     source_code_files=["make_assumptions.py"],
                     category="prompt_fixable",
                     likely_cause="Prompt generates budget without data",
@@ -47,7 +47,7 @@ def _make_sample_result() -> RCAResult:
                 severity="MEDIUM",
                 starting_evidence="growing Czech market",
                 trace=[
-                    TraceEntry(node="executive_summary", file="025-2-executive_summary.md", evidence="growing Czech market", is_origin=True),
+                    TraceEntry(node="executive_summary", file="executive_summary.md", evidence="growing Czech market", is_origin=True),
                 ],
                 origin_node="executive_summary",
                 depth=1,
@@ -130,7 +130,7 @@ class TestWriteMarkdownReport(unittest.TestCase):
         with TemporaryDirectory() as d:
             output_path = Path(d) / "root_cause_analysis.md"
             result = RCAResult(
-                starting_file="030-report.html",
+                starting_file="report.html",
                 problem_description="test",
                 output_dir="/tmp",
                 problems=[],

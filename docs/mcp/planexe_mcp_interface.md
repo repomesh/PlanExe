@@ -522,7 +522,7 @@ Use `plan_resume` when `plan_status` shows `failed` or `stopped` and plan genera
 
 **Required semantics**
 
-- The MCP tool only accepts plans in `failed` state. However, the underlying Luigi mechanism is more general: Luigi skips any task whose output file already exists and re-executes any task whose output file is missing. This means a completed plan can be partially re-run by deleting `999-pipeline_complete.txt` and the output files of the tasks you want to regenerate — Luigi will re-execute those tasks and all their downstream dependents. The MCP API does not yet expose this capability; it is available when running the pipeline locally via `run_plan_pipeline.py`.
+- The MCP tool only accepts plans in `failed` state. However, the underlying Luigi mechanism is more general: Luigi skips any task whose output file already exists and re-executes any task whose output file is missing. This means a completed plan can be partially re-run by deleting `pipeline_complete.txt` and the output files of the tasks you want to regenerate — Luigi will re-execute those tasks and all their downstream dependents. The MCP API does not yet expose this capability; it is available when running the pipeline locally via `run_plan_pipeline.py`.
 - On success, the same plan_id is reset to `pending` and requeued.
 - Prior artifacts are **preserved** — the worker restores the output directory from the stored zip snapshot.
 - `resume_count` tracks how many times the plan has been resumed.
@@ -577,7 +577,7 @@ Bump `PIPELINE_VERSION` whenever the pipeline changes in a way that would break 
 - Save directory is `PLANEXE_PATH`.
 - If `PLANEXE_PATH` is unset, save to current working directory.
 - If `PLANEXE_PATH` points to a file (not a directory), return an error.
-- Filenames are `<plan_id>-030-report.html` or `<plan_id>-run.zip`.
+- Filenames are `<plan_id>-report.html` or `<plan_id>-run.zip`.
 - If a filename already exists, append `-1`, `-2`, ... before extension.
 - Successful responses include `saved_path`.
 

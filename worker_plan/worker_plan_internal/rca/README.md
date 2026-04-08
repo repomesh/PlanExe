@@ -47,7 +47,7 @@ Basic usage:
 ```bash
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output \
-    --file 030-report.html \
+    --file report.html \
     --problem "Description of the problem you observed" \
     --verbose
 ```
@@ -69,11 +69,11 @@ You can start from any intermediary artifact. Common starting points:
 
 | File | What it is |
 |------|------------|
-| `030-report.html` | The final HTML report (largest, most problems to find) |
-| `029-2-self_audit.md` | Self-audit (already identifies issues — good for tracing them back) |
-| `025-2-executive_summary.md` | Executive summary |
-| `024-2-review_plan.md` | Plan review |
-| `028-2-premortem.md` | Premortem analysis |
+| `report.html` | The final HTML report (largest, most problems to find) |
+| `self_audit.md` | Self-audit (already identifies issues — good for tracing them back) |
+| `executive_summary.md` | Executive summary |
+| `review_plan.md` | Plan review |
+| `premortem.md` | Premortem analysis |
 
 ### Examples
 
@@ -82,7 +82,7 @@ Trace a problem from the self-audit:
 ```bash
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20250101_india_census \
-    --file 029-2-self_audit.md \
+    --file self_audit.md \
     --problem "No Real-World Proof. The plan combines a digital census with caste enumeration at an unprecedented scale, lacking independent evidence of success." \
     --output-dir /tmp/rca-analysis \
     --verbose
@@ -93,7 +93,7 @@ Trace a zoning/permits problem:
 ```bash
 /opt/homebrew/bin/python3.11 -m worker_plan_internal.rca \
     --dir /path/to/output/20251016_minecraft_escape \
-    --file 029-2-self_audit.md \
+    --file self_audit.md \
     --problem "Infeasible Constraints Rated MEDIUM because the plan mentions zoning and permits but lacks specifics for the Shanghai location." \
     --output-dir /tmp/rca-analysis2 \
     --verbose
@@ -123,7 +123,7 @@ A typical run finds 2-3 focused problems and makes 15-30 LLM calls.
 
 The tool implements the investigation strategy described in `docs/proposals/133-dag-and-rca.md`:
 
-1. Start from the final artifact (e.g., `030-report.html`)
+1. Start from the final artifact (e.g., `report.html`)
 2. Inspect direct input artifacts to the producing node
 3. Search those artifacts for the false claim or problem
 4. When found upstream, recurse into that node's inputs
@@ -133,7 +133,7 @@ The tool implements the investigation strategy described in `docs/proposals/133-
 
 ## Tips
 
-- **Start from `029-2-self_audit.md`.** This file already contains identified issues, so you're tracing *known* problems upstream rather than asking the LLM to find problems from scratch.
+- **Start from `self_audit.md`.** This file already contains identified issues, so you're tracing *known* problems upstream rather than asking the LLM to find problems from scratch.
 - **Trust the trace chains more than the suggestions.** The upstream path (which nodes the problem passed through) is mechanically grounded in the DAG. The suggestions are LLM opinions — useful starting points, not patches.
 - **Check the category before acting.** If the origin is `domain_complexity`, don't spend time tweaking the prompt. If it's `prompt_fixable`, the suggestion is likely actionable.
 - **Results are non-deterministic.** This is LLM judging LLM output. Two runs on the same input may produce slightly different traces. If a finding matters, run it twice.

@@ -68,7 +68,7 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
   "state": "failed",
   "error": {
     "failure_reason": "generation_error",
-    "failed_step": "016-expert_criticism",
+    "failed_step": "expert_criticism",
     "message": "LLM provider returned 503",
     "recoverable": true
   }
@@ -248,7 +248,7 @@ This is a trust gap: the agent cannot confidently tell the user "your plan is re
   "sections_complete": 108,
   "sections_partial": 2,
   "partial_details": [
-    {"step": "016-expert_criticism", "note": "2/8 experts provided feedback"}
+    {"step": "expert_criticism", "note": "2/8 experts provided feedback"}
   ]
 }
 ```

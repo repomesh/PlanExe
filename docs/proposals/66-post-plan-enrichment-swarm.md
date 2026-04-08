@@ -67,7 +67,7 @@ An OpenClaw file-watch hook (or a simple `inotifywait` wrapper on the run root) 
 
 ```bash
 # Example hook: watch for completion signal
-inotifywait -m -r /run --include '999-pipeline_complete\.txt' -e create \
+inotifywait -m -r /run --include 'pipeline_complete\.txt' -e create \
   | while read dir event file; do
       planexe-enrich "$dir"
     done

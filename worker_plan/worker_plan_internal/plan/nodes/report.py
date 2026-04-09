@@ -88,7 +88,6 @@ class ReportTask(PlanTask):
         rg.append_html('Questions & Answers', self.input()['questions_and_answers']['html'].path)
         rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
         rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
-        rg.append_markdown_with_tables('Prompt Adherence', self.input()['prompt_adherence']['markdown'].path)
         rg.append_initial_prompt_vetted(
             document_title='Initial Prompt Vetted',
             initial_prompt_file_path=self.input()['setup'].path,
@@ -97,4 +96,5 @@ class ReportTask(PlanTask):
             redline_gate_markdown_file_path=self.input()['redline_gate']['markdown'].path,
             premise_attack_markdown_file_path=self.input()['premise_attack']['markdown'].path
         )
+        rg.append_markdown_with_tables('Prompt Adherence', self.input()['prompt_adherence']['markdown'].path)
         rg.save_report(self.output().path, title=title, execute_plan_section_hidden=REPORT_EXECUTE_PLAN_SECTION_HIDDEN)

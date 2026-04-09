@@ -14,20 +14,20 @@ from worker_plan_internal.diagnostics.prompt_adherence import (
 class TestDirectiveModel(unittest.TestCase):
     def test_directive_valid(self):
         d = Directive(
-            directive_id="D1",
+            directive_index=1,
             directive_type=DirectiveType.CONSTRAINT,
             text="Budget: DKK 500M",
             importance_5=5,
         )
-        self.assertEqual(d.directive_id, "D1")
+        self.assertEqual(d.directive_index, 1)
         self.assertEqual(d.directive_type, DirectiveType.CONSTRAINT)
         self.assertEqual(d.importance_5, 5)
 
     def test_directive_extraction_result(self):
         result = DirectiveExtractionResult(
             directives=[
-                Directive(directive_id="D1", directive_type=DirectiveType.CONSTRAINT, text="Budget: DKK 500M", importance_5=5),
-                Directive(directive_id="D2", directive_type=DirectiveType.STATED_FACT, text="East Wing demolished", importance_5=5),
+                Directive(directive_index=1, directive_type=DirectiveType.CONSTRAINT, text="Budget: DKK 500M", importance_5=5),
+                Directive(directive_index=2, directive_type=DirectiveType.STATED_FACT, text="East Wing demolished", importance_5=5),
             ]
         )
         self.assertEqual(len(result.directives), 2)
@@ -36,7 +36,7 @@ class TestDirectiveModel(unittest.TestCase):
 class TestAdherenceResultModel(unittest.TestCase):
     def test_adherence_result_valid(self):
         r = AdherenceResult(
-            directive_id="D1",
+            directive_index=1,
             adherence_5=3,
             category=AdherenceCategory.SOFTENED,
             evidence="Budget adjusted to DKK 800M",
@@ -49,12 +49,12 @@ class TestAdherenceResultModel(unittest.TestCase):
         result = AdherenceScoreResult(
             results=[
                 AdherenceResult(
-                    directive_id="D1", adherence_5=5,
+                    directive_index=1, adherence_5=5,
                     category=AdherenceCategory.FULLY_HONORED,
                     evidence="Budget: DKK 500M", explanation="Honored exactly.",
                 ),
                 AdherenceResult(
-                    directive_id="D2", adherence_5=1,
+                    directive_index=2, adherence_5=1,
                     category=AdherenceCategory.CONTRADICTED,
                     evidence="Demolition permit required", explanation="Plan ignores stated fact.",
                 ),
@@ -67,19 +67,19 @@ class TestPromptAdherenceMarkdown(unittest.TestCase):
     def test_convert_to_markdown_produces_report(self):
         directives = DirectiveExtractionResult(
             directives=[
-                Directive(directive_id="D1", directive_type=DirectiveType.CONSTRAINT, text="Budget: DKK 500M", importance_5=5),
-                Directive(directive_id="D2", directive_type=DirectiveType.STATED_FACT, text="East Wing demolished", importance_5=5),
+                Directive(directive_index=1, directive_type=DirectiveType.CONSTRAINT, text="Budget: DKK 500M", importance_5=5),
+                Directive(directive_index=2, directive_type=DirectiveType.STATED_FACT, text="East Wing demolished", importance_5=5),
             ]
         )
         scores = AdherenceScoreResult(
             results=[
                 AdherenceResult(
-                    directive_id="D1", adherence_5=5,
+                    directive_index=1, adherence_5=5,
                     category=AdherenceCategory.FULLY_HONORED,
                     evidence="Budget: DKK 500M", explanation="Honored.",
                 ),
                 AdherenceResult(
-                    directive_id="D2", adherence_5=1,
+                    directive_index=2, adherence_5=1,
                     category=AdherenceCategory.CONTRADICTED,
                     evidence="Demolition permit required",
                     explanation="Plan contradicts stated fact.",
@@ -95,14 +95,14 @@ class TestPromptAdherenceMarkdown(unittest.TestCase):
     def test_overall_score_calculation(self):
         directives = DirectiveExtractionResult(
             directives=[
-                Directive(directive_id="D1", directive_type=DirectiveType.CONSTRAINT, text="A", importance_5=5),
-                Directive(directive_id="D2", directive_type=DirectiveType.STATED_FACT, text="B", importance_5=5),
+                Directive(directive_index=1, directive_type=DirectiveType.CONSTRAINT, text="A", importance_5=5),
+                Directive(directive_index=2, directive_type=DirectiveType.STATED_FACT, text="B", importance_5=5),
             ]
         )
         scores = AdherenceScoreResult(
             results=[
-                AdherenceResult(directive_id="D1", adherence_5=5, category=AdherenceCategory.FULLY_HONORED, evidence="", explanation=""),
-                AdherenceResult(directive_id="D2", adherence_5=1, category=AdherenceCategory.CONTRADICTED, evidence="", explanation=""),
+                AdherenceResult(directive_index=1, adherence_5=5, category=AdherenceCategory.FULLY_HONORED, evidence="", explanation=""),
+                AdherenceResult(directive_index=2, adherence_5=1, category=AdherenceCategory.CONTRADICTED, evidence="", explanation=""),
             ]
         )
         score = PromptAdherence.calculate_overall_score(directives, scores)

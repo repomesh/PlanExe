@@ -32,7 +32,7 @@ class DirectiveType(str, Enum):
 
 
 class Directive(BaseModel):
-    directive_id: str = Field(description="Enumerate as 'D1', 'D2', 'D3', etc.")
+    directive_index: int = Field(description="Index of this directive, starting from 1.")
     directive_type: Literal["constraint", "stated_fact", "requirement", "banned", "intent"] = Field(description=(
         "constraint: explicit numeric or scope limits (budget, timeline, capacity). "
         "stated_fact: things the user says are already true about the world. "
@@ -60,7 +60,7 @@ class AdherenceCategory(str, Enum):
 
 
 class AdherenceResult(BaseModel):
-    directive_id: str = Field(description="References a directive from Phase 1.")
+    directive_index: int = Field(description="References a directive_index from Phase 1.")
     adherence_5: int = Field(description="1 (ignored/contradicted) to 5 (fully honored).")
     category: Literal["fully_honored", "partially_honored", "softened", "ignored", "contradicted", "unsolicited_caveat"] = Field(description=(
         "fully_honored: plan respects this exactly. "
@@ -254,11 +254,11 @@ class PromptAdherence:
         """Weighted average: sum(adherence_5 * importance_5) / sum(5 * importance_5) as integer percentage."""
         if not directives.directives:
             return 100
-        importance_map = {d.directive_id: d.importance_5 for d in directives.directives}
+        importance_map = {d.directive_index: d.importance_5 for d in directives.directives}
         weighted_sum = 0
         max_sum = 0
         for r in scores.results:
-            importance = importance_map.get(r.directive_id, 3)
+            importance = importance_map.get(r.directive_index, 3)
             weighted_sum += r.adherence_5 * importance
             max_sum += 5 * importance
         if max_sum == 0:
@@ -272,7 +272,7 @@ class PromptAdherence:
         lines.append("")
 
         # Build lookup
-        importance_map = {d.directive_id: d for d in directives.directives}
+        importance_map = {d.directive_index: d for d in directives.directives}
 
         # Calculate overall score
         overall = PromptAdherence.calculate_overall_score(directives, scores)
@@ -282,7 +282,7 @@ class PromptAdherence:
         # Sort by severity: importance * (6 - adherence), worst first
         scored_items = []
         for r in scores.results:
-            d = importance_map.get(r.directive_id)
+            d = importance_map.get(r.directive_index)
             importance = d.importance_5 if d else 3
             severity = importance * (6 - r.adherence_5)
             scored_items.append((severity, d, r))
@@ -297,7 +297,7 @@ class PromptAdherence:
             directive_text = d.text if d else "Unknown"
             directive_type = d.directive_type if d else "unknown"
             lines.append(
-                f"| {r.directive_id} | {_escape_table_cell(directive_text)} "
+                f"| {r.directive_index} | {_escape_table_cell(directive_text)} "
                 f"| {directive_type} | {d.importance_5 if d else '?'}/5 "
                 f"| {r.adherence_5}/5 | {r.category} |"
             )
@@ -310,7 +310,7 @@ class PromptAdherence:
             lines.append("")
             for _, d, r in poor_items:
                 directive_text = d.text if d else "Unknown"
-                lines.append(f"### {r.directive_id}: {directive_text}")
+                lines.append(f"### {r.directive_index}: {directive_text}")
                 lines.append("")
                 lines.append(f"- **Category:** {r.category}")
                 lines.append(f"- **Adherence:** {r.adherence_5}/5")

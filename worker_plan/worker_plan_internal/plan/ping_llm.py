@@ -37,9 +37,9 @@ def _validate_run_dir(run_id_dir: Path) -> None:
         raise FileNotFoundError(
             f"The '{FilenameEnum.START_TIME.value}' file does not exist in the run_id_dir: {run_id_dir!r}"
         )
-    if not (run_id_dir / FilenameEnum.INITIAL_PLAN.value).exists():
+    if not (run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value).exists():
         raise FileNotFoundError(
-            f"The '{FilenameEnum.INITIAL_PLAN.value}' file does not exist in the run_id_dir: {run_id_dir!r}"
+            f"The '{FilenameEnum.INITIAL_PLAN_RAW.value}' file does not exist in the run_id_dir: {run_id_dir!r}"
         )
 
 

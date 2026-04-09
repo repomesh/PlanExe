@@ -2,6 +2,7 @@ from enum import Enum
 
 class FilenameEnum(str, Enum):
     START_TIME = "start_time.json"
+    INITIAL_PLAN_RAW = "plan_raw.json"
     INITIAL_PLAN = "plan.txt"
     PLANEXE_METADATA = "planexe_metadata.json"
     SCREEN_PLANNING_PROMPT_RAW = "screen_planning_prompt.json"

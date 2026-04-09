@@ -301,7 +301,7 @@ class PromptAdherence:
         lines.append("")
 
         # Detail section for poorly-scored directives
-        poor_items = [(sev, d, r) for sev, d, r in scored_items if r.adherence_5 <= 3]
+        poor_items = [(sev, d, r) for sev, d, r in scored_items if r.adherence_5 < 5]
         poor_items.sort(key=lambda x: x[0], reverse=True)
         if poor_items:
             lines.append("## Issues")

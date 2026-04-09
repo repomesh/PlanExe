@@ -286,7 +286,7 @@ class PromptAdherence:
             importance = d.importance_5 if d else 3
             severity = importance * (6 - r.adherence_5)
             scored_items.append((severity, d, r))
-        scored_items.sort(key=lambda x: x[0], reverse=True)
+        scored_items.sort(key=lambda x: x[2].directive_index)
 
         # Summary table
         lines.append("## Summary")
@@ -305,12 +305,13 @@ class PromptAdherence:
 
         # Detail section for poorly-scored directives
         poor_items = [(sev, d, r) for sev, d, r in scored_items if r.adherence_5 <= 3]
+        poor_items.sort(key=lambda x: x[0], reverse=True)
         if poor_items:
             lines.append("## Issues")
             lines.append("")
             for _, d, r in poor_items:
                 directive_text = d.text if d else "Unknown"
-                lines.append(f"### {r.directive_index}: {directive_text}")
+                lines.append(f"### Issue {r.directive_index} - {directive_text}")
                 lines.append("")
                 lines.append(f"- **Category:** {_format_category(r.category)}")
                 lines.append(f"- **Adherence:** {r.adherence_5}/5")

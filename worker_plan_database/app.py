@@ -1399,7 +1399,7 @@ def process_pending_tasks() -> bool:
 
     # write the task prompt to the run_id_dir
     plan_file = PlanFile.create(vague_plan_description=prompt, start_time=start_time)
-    plan_file.save(str(run_id_dir / FilenameEnum.INITIAL_PLAN.value))
+    plan_file.save(str(run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value))
 
     with app.app_context():
         event_context = {

@@ -128,6 +128,8 @@ class FilenameEnum(str, Enum):
     PREMORTEM_MARKDOWN = "premortem.md"
     SELF_AUDIT_RAW = "self_audit_raw.json"
     SELF_AUDIT_MARKDOWN = "self_audit.md"
+    PROMPT_ADHERENCE_RAW = "prompt_adherence_raw.json"
+    PROMPT_ADHERENCE_MARKDOWN = "prompt_adherence.md"
     REPORT = "report.html"
     PIPELINE_COMPLETE = "pipeline_complete.txt"
 

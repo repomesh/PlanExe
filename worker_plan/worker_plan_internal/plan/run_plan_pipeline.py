@@ -213,8 +213,8 @@ class ExecutePipeline:
             raise NotADirectoryError(f"The run_id_dir is not a directory: {self.run_id_dir!r}")
         if not (self.run_id_dir / FilenameEnum.START_TIME.value).exists():
             raise FileNotFoundError(f"The '{FilenameEnum.START_TIME.value}' file does not exist in the run_id_dir: {self.run_id_dir!r}")
-        if not (self.run_id_dir / FilenameEnum.INITIAL_PLAN.value).exists():
-            raise FileNotFoundError(f"The '{FilenameEnum.INITIAL_PLAN.value}' file does not exist in the run_id_dir: {self.run_id_dir!r}")
+        if not (self.run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value).exists():
+            raise FileNotFoundError(f"The '{FilenameEnum.INITIAL_PLAN_RAW.value}' file does not exist in the run_id_dir: {self.run_id_dir!r}")
 
         from worker_plan_internal.plan.nodes.full_plan_pipeline import FullPlanPipeline
         full_plan_pipeline_task = FullPlanPipeline(

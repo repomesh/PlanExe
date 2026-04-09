@@ -13,7 +13,7 @@ class TestPingLLMReport(unittest.TestCase):
         with TemporaryDirectory() as temp_dir:
             run_id_dir = Path(temp_dir)
             (run_id_dir / FilenameEnum.START_TIME.value).write_text("{}", encoding="utf-8")
-            (run_id_dir / FilenameEnum.INITIAL_PLAN.value).write_text("Ping test", encoding="utf-8")
+            (run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value).write_text('{"plan_prompt": "Ping test", "pretty_date": "1984-Apr-09"}', encoding="utf-8")
 
             bad_llm = ResponseMockLLM(responses=["raise:BAD"])
             good_llm = ResponseMockLLM(responses=["PONG ok"])

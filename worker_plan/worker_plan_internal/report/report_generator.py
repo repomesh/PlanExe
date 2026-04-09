@@ -125,7 +125,7 @@ class ReportGenerator:
         if md_data is None:
             logging.warning(f"Document: '{document_title}'. Could not read markdown file: {file_path}")
             return
-        html = markdown.markdown(md_data, extensions=['tables'])
+        html = markdown.markdown(md_data, extensions=['tables', 'fenced_code'])
         self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
     
     def append_csv(self, document_title: str, file_path: Path, css_classes: list[str] = []):

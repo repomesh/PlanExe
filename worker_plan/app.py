@@ -223,7 +223,7 @@ def create_run_directory(request: StartRunRequest) -> tuple[str, Path]:
     start_time_file.save(run_dir / FilenameEnum.START_TIME.value)
 
     plan_file = PlanFile.create(vague_plan_description=request.plan_prompt, start_time=start_time)
-    plan_file.save(run_dir / FilenameEnum.INITIAL_PLAN.value)
+    plan_file.save(run_dir / FilenameEnum.INITIAL_PLAN_RAW.value)
 
     return run_id, run_dir.resolve()
 

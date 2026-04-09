@@ -11,7 +11,7 @@ import json
 import logging
 from enum import Enum
 from dataclasses import dataclass
-from typing import List
+from typing import List, Literal
 from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
@@ -33,7 +33,7 @@ class DirectiveType(str, Enum):
 
 class Directive(BaseModel):
     directive_id: str = Field(description="Enumerate as 'D1', 'D2', 'D3', etc.")
-    directive_type: DirectiveType = Field(description=(
+    directive_type: Literal["constraint", "stated_fact", "requirement", "banned", "intent"] = Field(description=(
         "constraint: explicit numeric or scope limits (budget, timeline, capacity). "
         "stated_fact: things the user says are already true about the world. "
         "requirement: what must be built or done. "
@@ -62,7 +62,7 @@ class AdherenceCategory(str, Enum):
 class AdherenceResult(BaseModel):
     directive_id: str = Field(description="References a directive from Phase 1.")
     adherence_5: int = Field(description="1 (ignored/contradicted) to 5 (fully honored).")
-    category: AdherenceCategory = Field(description=(
+    category: Literal["fully_honored", "partially_honored", "softened", "ignored", "contradicted", "unsolicited_caveat"] = Field(description=(
         "fully_honored: plan respects this exactly. "
         "partially_honored: plan addresses it but incompletely. "
         "softened: plan weakens the requirement. "
@@ -295,11 +295,11 @@ class PromptAdherence:
         lines.append("|----|-----------|------|------------|-----------|----------|")
         for _, d, r in scored_items:
             directive_text = d.text if d else "Unknown"
-            directive_type = d.directive_type.value if d else "unknown"
+            directive_type = d.directive_type if d else "unknown"
             lines.append(
                 f"| {r.directive_id} | {_escape_table_cell(directive_text)} "
                 f"| {directive_type} | {d.importance_5 if d else '?'}/5 "
-                f"| {r.adherence_5}/5 | {r.category.value} |"
+                f"| {r.adherence_5}/5 | {r.category} |"
             )
         lines.append("")
 
@@ -312,7 +312,7 @@ class PromptAdherence:
                 directive_text = d.text if d else "Unknown"
                 lines.append(f"### {r.directive_id}: {directive_text}")
                 lines.append("")
-                lines.append(f"- **Category:** {r.category.value}")
+                lines.append(f"- **Category:** {r.category}")
                 lines.append(f"- **Adherence:** {r.adherence_5}/5")
                 lines.append(f"- **Importance:** {d.importance_5 if d else '?'}/5")
                 lines.append(f"- **Evidence:** {r.evidence}")

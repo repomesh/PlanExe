@@ -25,6 +25,7 @@ from worker_plan_internal.plan.nodes.create_schedule import CreateScheduleTask
 from worker_plan_internal.plan.nodes.questions_and_answers import QuestionsAndAnswersTask
 from worker_plan_internal.plan.nodes.premortem import PremortemTask
 from worker_plan_internal.plan.nodes.self_audit import SelfAuditTask
+from worker_plan_internal.plan.nodes.prompt_adherence import PromptAdherenceTask
 from worker_plan_internal.plan.nodes.screen_planning_prompt import ScreenPlanningPromptTask
 
 
@@ -58,7 +59,8 @@ class ReportTask(PlanTask):
             'create_schedule': self.clone(CreateScheduleTask),
             'questions_and_answers': self.clone(QuestionsAndAnswersTask),
             'premortem': self.clone(PremortemTask),
-            'self_audit': self.clone(SelfAuditTask)
+            'self_audit': self.clone(SelfAuditTask),
+            'prompt_adherence': self.clone(PromptAdherenceTask),
         }
 
     def run_inner(self):
@@ -86,6 +88,7 @@ class ReportTask(PlanTask):
         rg.append_html('Questions & Answers', self.input()['questions_and_answers']['html'].path)
         rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
         rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
+        rg.append_markdown_with_tables('Prompt Adherence', self.input()['prompt_adherence']['markdown'].path)
         rg.append_initial_prompt_vetted(
             document_title='Initial Prompt Vetted',
             initial_prompt_file_path=self.input()['setup'].path,

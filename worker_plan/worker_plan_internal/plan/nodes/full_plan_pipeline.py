@@ -88,6 +88,7 @@ from worker_plan_internal.plan.nodes.executive_summary import ExecutiveSummaryTa
 from worker_plan_internal.plan.nodes.questions_and_answers import QuestionsAndAnswersTask
 from worker_plan_internal.plan.nodes.premortem import PremortemTask
 from worker_plan_internal.plan.nodes.self_audit import SelfAuditTask
+from worker_plan_internal.plan.nodes.prompt_adherence import PromptAdherenceTask
 from worker_plan_internal.plan.nodes.report import ReportTask
 
 
@@ -163,6 +164,7 @@ class FullPlanPipeline(PlanTask):
             'questions_and_answers': self.clone(QuestionsAndAnswersTask),
             'premortem': self.clone(PremortemTask),
             'self_audit': self.clone(SelfAuditTask),
+            'prompt_adherence': self.clone(PromptAdherenceTask),
             'report': self.clone(ReportTask),
         }
 

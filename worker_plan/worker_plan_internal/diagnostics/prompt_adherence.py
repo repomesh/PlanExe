@@ -271,12 +271,25 @@ class PromptAdherence:
         # Build lookup
         importance_map = {d.directive_index: d for d in directives.directives}
 
-        # Calculate overall score
-        overall = PromptAdherence.calculate_overall_score(directives, scores)
+        # Calculate overall score with math breakdown
+        weighted_sum = 0
+        max_sum = 0
+        math_parts = []
+        for r in scores.results:
+            d = importance_map.get(r.directive_index)
+            importance = d.importance_5 if d else 3
+            weighted_sum += r.adherence_5 * importance
+            max_sum += 5 * importance
+            math_parts.append(f"{r.adherence_5}×{importance}")
+        overall = round(weighted_sum * 100 / max_sum) if max_sum > 0 else 100
         lines.append(f"**Overall Adherence: {overall}%**")
         lines.append("")
+        if math_parts:
+            math_str = " + ".join(math_parts)
+            lines.append(f"({math_str}) / {max_sum} = {overall}%")
+            lines.append("")
 
-        # Sort by severity: importance * (6 - adherence), worst first
+        # Sort by directive index
         scored_items = []
         for r in scores.results:
             d = importance_map.get(r.directive_index)

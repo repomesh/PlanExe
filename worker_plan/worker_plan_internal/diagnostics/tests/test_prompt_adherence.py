@@ -87,7 +87,7 @@ class TestPromptAdherenceMarkdown(unittest.TestCase):
             ]
         )
         markdown = PromptAdherence.convert_to_markdown(directives, scores)
-        self.assertIn("# Prompt Adherence Report", markdown)
+        self.assertNotIn("# Prompt Adherence Report", markdown)
         self.assertIn("Budget: DKK 500M", markdown)
         self.assertIn("Contradicted", markdown)
         self.assertIn("Overall Adherence", markdown)

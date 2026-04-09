@@ -268,9 +268,6 @@ class PromptAdherence:
     @staticmethod
     def convert_to_markdown(directives: DirectiveExtractionResult, scores: AdherenceScoreResult) -> str:
         lines: list[str] = []
-        lines.append("# Prompt Adherence Report")
-        lines.append("")
-
         # Build lookup
         importance_map = {d.directive_index: d for d in directives.directives}
 

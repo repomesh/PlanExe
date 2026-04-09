@@ -299,7 +299,7 @@ class PromptAdherence:
             lines.append(
                 f"| {r.directive_index} | {_escape_table_cell(directive_text)} "
                 f"| {directive_type} | {d.importance_5 if d else '?'}/5 "
-                f"| {r.adherence_5}/5 | {r.category} |"
+                f"| {r.adherence_5}/5 | {_format_category(r.category)} |"
             )
         lines.append("")
 
@@ -312,7 +312,7 @@ class PromptAdherence:
                 directive_text = d.text if d else "Unknown"
                 lines.append(f"### {r.directive_index}: {directive_text}")
                 lines.append("")
-                lines.append(f"- **Category:** {r.category}")
+                lines.append(f"- **Category:** {_format_category(r.category)}")
                 lines.append(f"- **Adherence:** {r.adherence_5}/5")
                 lines.append(f"- **Importance:** {d.importance_5 if d else '?'}/5")
                 lines.append(f"- **Evidence:** {r.evidence}")
@@ -320,6 +320,20 @@ class PromptAdherence:
                 lines.append("")
 
         return "\n".join(lines)
+
+
+_CATEGORY_LABELS = {
+    "fully_honored": "Fully honored",
+    "partially_honored": "Partially honored",
+    "softened": "Softened",
+    "ignored": "Ignored",
+    "contradicted": "Contradicted",
+    "unsolicited_caveat": "Unsolicited caveat",
+}
+
+
+def _format_category(category: str) -> str:
+    return _CATEGORY_LABELS.get(category, category)
 
 
 def _escape_table_cell(text: str) -> str:

@@ -244,6 +244,17 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
         }
         arguments.update(arguments_extra)
 
+    # Ensure a request timeout is set so LLM calls don't hang indefinitely.
+    # Ollama uses "request_timeout"; all others (OpenRouter, Anthropic, LMStudio)
+    # use "timeout" inherited from the OpenAI base class.
+    _DEFAULT_TIMEOUT = 300  # 5 minutes
+    if class_name == "Ollama":
+        if "request_timeout" not in arguments:
+            arguments["request_timeout"] = _DEFAULT_TIMEOUT
+    else:
+        if "timeout" not in arguments:
+            arguments["timeout"] = _DEFAULT_TIMEOUT
+
     # Dynamically instantiate the class
     try:
         llm_class = globals()[class_name]  # Get class from global scope

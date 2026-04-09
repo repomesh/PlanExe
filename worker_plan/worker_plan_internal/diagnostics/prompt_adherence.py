@@ -295,7 +295,7 @@ class PromptAdherence:
         lines.append("|----|-----------|------|------------|-----------|----------|")
         for _, d, r in scored_items:
             directive_text = d.text if d else "Unknown"
-            directive_type = d.directive_type if d else "unknown"
+            directive_type = _DIRECTIVE_TYPE_LABELS.get(d.directive_type, d.directive_type) if d else "Unknown"
             lines.append(
                 f"| {r.directive_index} | {_escape_table_cell(directive_text)} "
                 f"| {directive_type} | {d.importance_5 if d else '?'}/5 "
@@ -320,6 +320,15 @@ class PromptAdherence:
                 lines.append("")
 
         return "\n".join(lines)
+
+
+_DIRECTIVE_TYPE_LABELS = {
+    "constraint": "Constraint",
+    "stated_fact": "Stated fact",
+    "requirement": "Requirement",
+    "banned": "Banned",
+    "intent": "Intent",
+}
 
 
 _CATEGORY_LABELS = {

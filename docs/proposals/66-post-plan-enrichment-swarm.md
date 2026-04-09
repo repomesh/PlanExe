@@ -39,15 +39,15 @@ This is not a modification to PlanExe. The planning pipeline is untouched. The s
 
 A PlanExe run for even a simple plan (e.g. a small Connecticut egg farm) produces:
 
-- `017-5-identified_documents_to_find.json` — a structured list of real documents that need to be located (zoning ordinances, predator population data, health codes, etc.)
-- `017-6-identified_documents_to_create.json` — a structured list of internal documents to draft (Project Charter, Risk Register, Communication Plan, etc.)
-- `023-4-wbs_project_level1_and_level2_and_level3.csv` — a full Level 1–4 WBS with task UUIDs
-- `026-3-schedule_gantt_machai.csv` — project schedule with start/end dates per task
-- `021-task_dependencies_raw.json` — dependency graph
-- `003-11-consolidate_assumptions_short.md` — key assumptions in plain Markdown
-- `013-team.md` — role roster with contract types
-- `005-2-project_plan.md` — master plan with resources, permits, and budget narrative
-- `002-21-physical_locations.md` — jurisdiction(s) where the project will run
+- `identified_documents_to_find.json` — a structured list of real documents that need to be located (zoning ordinances, predator population data, health codes, etc.)
+- `identified_documents_to_create.json` — a structured list of internal documents to draft (Project Charter, Risk Register, Communication Plan, etc.)
+- `wbs_project_level1_and_level2_and_level3.csv` — a full Level 1–4 WBS with task UUIDs
+- `schedule_gantt_machai.csv` — project schedule with start/end dates per task
+- `task_dependencies_raw.json` — dependency graph
+- `consolidate_assumptions_short.md` — key assumptions in plain Markdown
+- `team.md` — role roster with contract types
+- `project_plan.md` — master plan with resources, permits, and budget narrative
+- `physical_locations.md` — jurisdiction(s) where the project will run
 
 All of these are machine-readable and semantically rich. Without enrichment they just sit in a folder.
 
@@ -57,17 +57,17 @@ All of these are machine-readable and semantically rich. Without enrichment they
 
 ### Trigger
 
-PlanExe writes `999-pipeline_complete.txt` to the run directory when the pipeline finishes. This file is the trigger.
+PlanExe writes `pipeline_complete.txt` to the run directory when the pipeline finishes. This file is the trigger.
 
 ```
-/run/29131a8e-95d1-4f43-9891-920fae2b90ef/999-pipeline_complete.txt
+/run/29131a8e-95d1-4f43-9891-920fae2b90ef/pipeline_complete.txt
 ```
 
 An OpenClaw file-watch hook (or a simple `inotifywait` wrapper on the run root) detects the file and fires the enrichment swarm:
 
 ```bash
 # Example hook: watch for completion signal
-inotifywait -m -r /run --include '999-pipeline_complete\.txt' -e create \
+inotifywait -m -r /run --include 'pipeline_complete\.txt' -e create \
   | while read dir event file; do
       planexe-enrich "$dir"
     done
@@ -132,8 +132,8 @@ steps:
       planexe-enrich-agent document-executor
         --run-dir "$run_dir"
         --plan-repo "$plan_repo"
-        --find-list "017-5-identified_documents_to_find.json"
-        --create-list "017-6-identified_documents_to_create.json"
+        --find-list "identified_documents_to_find.json"
+        --create-list "identified_documents_to_create.json"
         --output-dir "docs/"
         --json
     condition: "! git -C $plan_repo ls-files --error-unmatch docs/project-charter.md 2>/dev/null"
@@ -160,9 +160,9 @@ steps:
       planexe-enrich-agent project-board
         --run-dir "$run_dir"
         --github-repo "$github_repo"
-        --wbs-csv "023-4-wbs_project_level1_and_level2_and_level3.csv"
-        --gantt-csv "026-3-schedule_gantt_machai.csv"
-        --deps-json "021-task_dependencies_raw.json"
+        --wbs-csv "wbs_project_level1_and_level2_and_level3.csv"
+        --gantt-csv "schedule_gantt_machai.csv"
+        --deps-json "task_dependencies_raw.json"
         --json
     condition: $commit_documents.exitcode == 0
 
@@ -181,9 +181,9 @@ steps:
       planexe-enrich-agent project-board
         --run-dir "$run_dir"
         --github-repo "$github_repo"
-        --wbs-csv "023-4-wbs_project_level1_and_level2_and_level3.csv"
-        --gantt-csv "026-3-schedule_gantt_machai.csv"
-        --deps-json "021-task_dependencies_raw.json"
+        --wbs-csv "wbs_project_level1_and_level2_and_level3.csv"
+        --gantt-csv "schedule_gantt_machai.csv"
+        --deps-json "task_dependencies_raw.json"
         --apply
         --json
     condition: $approve_board.approved
@@ -194,7 +194,7 @@ steps:
       planexe-enrich-agent assumption-validator
         --run-dir "$run_dir"
         --plan-repo "$plan_repo"
-        --assumptions-md "003-11-consolidate_assumptions_short.md"
+        --assumptions-md "consolidate_assumptions_short.md"
         --output "validation/assumptions-check.md"
         --json
     condition: "! git -C $plan_repo ls-files --error-unmatch validation/assumptions-check.md 2>/dev/null"
@@ -221,8 +221,8 @@ steps:
       planexe-enrich-agent team-sourcer
         --run-dir "$run_dir"
         --plan-repo "$plan_repo"
-        --team-md "013-team.md"
-        --project-plan-md "005-2-project_plan.md"
+        --team-md "team.md"
+        --project-plan-md "project_plan.md"
         --output-dir "sourcing/"
         --json
     condition: "! git -C $plan_repo ls-files --error-unmatch sourcing/team-leads.md 2>/dev/null"
@@ -249,8 +249,8 @@ steps:
       planexe-enrich-agent compliance-researcher
         --run-dir "$run_dir"
         --plan-repo "$plan_repo"
-        --project-plan-md "005-2-project_plan.md"
-        --locations-md "002-21-physical_locations.md"
+        --project-plan-md "project_plan.md"
+        --locations-md "physical_locations.md"
         --output "compliance/requirements.md"
         --json
     condition: "! git -C $plan_repo ls-files --error-unmatch compliance/requirements.md 2>/dev/null"
@@ -295,8 +295,8 @@ lobster resume <resumeToken> --approve
 
 **Inputs:**
 ```
-{run_dir}/017-5-identified_documents_to_find.json
-{run_dir}/017-6-identified_documents_to_create.json
+{run_dir}/identified_documents_to_find.json
+{run_dir}/identified_documents_to_create.json
 ```
 
 **Example input item (find-list):**
@@ -353,8 +353,8 @@ docs/
 planexe-enrich-agent document-executor \
   --run-dir /run/UUID \
   --plan-repo /repos/my-plan \
-  --find-list 017-5-identified_documents_to_find.json \
-  --create-list 017-6-identified_documents_to_create.json \
+  --find-list identified_documents_to_find.json \
+  --create-list identified_documents_to_create.json \
   --output-dir docs/ \
   --json
 # stdout: { "created": 12, "fetched": 8, "skipped": 0, "errors": [] }
@@ -368,9 +368,9 @@ planexe-enrich-agent document-executor \
 
 **Inputs:**
 ```
-{run_dir}/023-4-wbs_project_level1_and_level2_and_level3.csv
-{run_dir}/026-3-schedule_gantt_machai.csv
-{run_dir}/021-task_dependencies_raw.json
+{run_dir}/wbs_project_level1_and_level2_and_level3.csv
+{run_dir}/schedule_gantt_machai.csv
+{run_dir}/task_dependencies_raw.json
 ```
 
 **Example WBS row:**
@@ -391,7 +391,7 @@ project_key,project_name,project_start_date,project_end_date,...
 1. Parse WBS CSV: Level 2 rows → GitHub milestones (with start/end from Gantt CSV).
 2. Parse WBS CSV: Level 3 rows → GitHub issues (assigned to milestone, labelled with Level 1).
 3. Parse WBS CSV: Level 4 rows → GitHub sub-issues (linked to parent Level 3 issue).
-4. Parse `021-task_dependencies_raw.json` → add "Depends on: #N" lines to issue bodies.
+4. Parse `task_dependencies_raw.json` → add "Depends on: #N" lines to issue bodies.
 5. In dry-run mode (`--json` only): emit the plan as JSON without creating anything.
 6. In apply mode (`--apply`): call `gh api` to create milestones and issues.
 
@@ -416,9 +416,9 @@ GitHub project: acme/egg-farm-ct
 planexe-enrich-agent project-board \
   --run-dir /run/UUID \
   --github-repo owner/repo \
-  --wbs-csv 023-4-wbs_project_level1_and_level2_and_level3.csv \
-  --gantt-csv 026-3-schedule_gantt_machai.csv \
-  --deps-json 021-task_dependencies_raw.json \
+  --wbs-csv wbs_project_level1_and_level2_and_level3.csv \
+  --gantt-csv schedule_gantt_machai.csv \
+  --deps-json task_dependencies_raw.json \
   --json
 # stdout: { "milestones": 6, "issues": 42, "sub_issues": 127, "plan": [...] }
 
@@ -435,7 +435,7 @@ planexe-enrich-agent project-board ... --apply --json
 
 **Input:**
 ```
-{run_dir}/003-11-consolidate_assumptions_short.md
+{run_dir}/consolidate_assumptions_short.md
 ```
 
 **Example assumption (from actual egg-farm run):**
@@ -483,7 +483,7 @@ Notes: Plan-specific; no external data source applies.
 planexe-enrich-agent assumption-validator \
   --run-dir /run/UUID \
   --plan-repo /repos/my-plan \
-  --assumptions-md 003-11-consolidate_assumptions_short.md \
+  --assumptions-md consolidate_assumptions_short.md \
   --output validation/assumptions-check.md \
   --json
 # stdout: { "confirmed": 1, "uncertain": 1, "contradicted": 0, "unverifiable": 1 }
@@ -497,8 +497,8 @@ planexe-enrich-agent assumption-validator \
 
 **Inputs:**
 ```
-{run_dir}/013-team.md         (role roster with contract types)
-{run_dir}/005-2-project_plan.md  (resources section)
+{run_dir}/team.md         (role roster with contract types)
+{run_dir}/project_plan.md  (resources section)
 ```
 
 **Example input (from actual egg-farm run):**
@@ -511,10 +511,10 @@ planexe-enrich-agent assumption-validator \
 ```
 
 **Actions:**
-1. Parse role names and contract types from `013-team.md`.
-2. Extract location from `002-21-physical_locations.md` (e.g. "Litchfield County, CT").
+1. Parse role names and contract types from `team.md`.
+2. Extract location from `physical_locations.md` (e.g. "Litchfield County, CT").
 3. For each role: run targeted web searches for real professionals/vendors in that location.
-4. For each resource mentioned in `005-2-project_plan.md`: find actual local suppliers.
+4. For each resource mentioned in `project_plan.md`: find actual local suppliers.
 5. Compile findings with names, contact info, and notes.
 
 **Outputs committed to plan repo:**
@@ -542,8 +542,8 @@ Example `team-leads.md`:
 planexe-enrich-agent team-sourcer \
   --run-dir /run/UUID \
   --plan-repo /repos/my-plan \
-  --team-md 013-team.md \
-  --project-plan-md 005-2-project_plan.md \
+  --team-md team.md \
+  --project-plan-md project_plan.md \
   --output-dir sourcing/ \
   --json
 # stdout: { "roles_sourced": 8, "vendors_found": 5, "errors": [] }
@@ -557,8 +557,8 @@ planexe-enrich-agent team-sourcer \
 
 **Inputs:**
 ```
-{run_dir}/005-2-project_plan.md      (permits mentioned)
-{run_dir}/002-21-physical_locations.md  (jurisdiction)
+{run_dir}/project_plan.md      (permits mentioned)
+{run_dir}/physical_locations.md  (jurisdiction)
 ```
 
 **Example location (actual run):**
@@ -569,8 +569,8 @@ A small farm in Litchfield County, CT
 ```
 
 **Actions:**
-1. Extract jurisdiction (state, county, municipality) from `002-21-physical_locations.md`.
-2. Extract permit types and regulatory domains mentioned in `005-2-project_plan.md`.
+1. Extract jurisdiction (state, county, municipality) from `physical_locations.md`.
+2. Extract permit types and regulatory domains mentioned in `project_plan.md`.
 3. For each regulatory requirement: search for actual permit names, forms, fees, and filing procedures.
 4. Compile into a structured compliance report.
 
@@ -608,8 +608,8 @@ Example output:
 planexe-enrich-agent compliance-researcher \
   --run-dir /run/UUID \
   --plan-repo /repos/my-plan \
-  --project-plan-md 005-2-project_plan.md \
-  --locations-md 002-21-physical_locations.md \
+  --project-plan-md project_plan.md \
+  --locations-md physical_locations.md \
   --output compliance/requirements.md \
   --json
 # stdout: { "requirements_found": 8, "jurisdictions_searched": 3, "errors": [] }
@@ -653,8 +653,8 @@ skills/
       git_state.py                    # Shared: idempotency checks, commit helpers
     tests/
       fixtures/
-        017-5-identified_documents_to_find.json   # Sample from real run
-        023-4-wbs_project_level1_and_level2_and_level3.csv
+        identified_documents_to_find.json   # Sample from real run
+        wbs_project_level1_and_level2_and_level3.csv
       test_document_executor.py
       test_project_board_setup.py
       test_assumption_validator.py

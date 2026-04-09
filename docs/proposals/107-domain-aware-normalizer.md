@@ -401,9 +401,9 @@ MakeAssumptions → [QuantifiedAssumptionExtractor] → [FermiSanityCheck] → [
 
 The three new tasks (in brackets) are inserted between the existing MakeAssumptions and DistillAssumptions tasks. Each produces output files following PlanExe's standard naming convention:
 
-- `003-12-fermi_sanity_check_report.json` — detailed per-assumption verdicts
-- `003-13-fermi_sanity_check_summary.md` — human-readable summary of findings
-- `003-14-normalized_assumptions.json` — all assumptions in standard representation
+- `fermi_sanity_check_report.json` — detailed per-assumption verdicts
+- `fermi_sanity_check_summary.md` — human-readable summary of findings
+- `normalized_assumptions.json` — all assumptions in standard representation
 
 The FermiSanityCheck report includes a section on ethical flags, making it visible to both the downstream pipeline tasks and human reviewers.
 

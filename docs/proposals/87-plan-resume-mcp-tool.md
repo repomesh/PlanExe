@@ -72,7 +72,7 @@ From the module docstring:
 ```
 In order to resume an unfinished run.
 Insert the run_id_dir of the thing you want to resume.
-If it's an already finished run, then remove the "999-pipeline_complete.txt" file.
+If it's an already finished run, then remove the "pipeline_complete.txt" file.
 PROMPT> ./planexe create_plan --run-id-dir /absolute/path/to/PlanExe_20250216_150332
 ```
 

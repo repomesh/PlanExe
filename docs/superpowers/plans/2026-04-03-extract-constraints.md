@@ -573,14 +573,14 @@ git commit -m "Add unit and LLM integration tests for extract_constraints"
 In `worker_plan/worker_plan_api/filenames.py`, insert after line 8 (`SCREEN_PLANNING_PROMPT_MARKDOWN`):
 
 ```python
-    EXTRACT_CONSTRAINTS_RAW = "002-0-extract_constraints_raw.json"
-    EXTRACT_CONSTRAINTS_MARKDOWN = "002-0-extract_constraints.md"
+    EXTRACT_CONSTRAINTS_RAW = "extract_constraints_raw.json"
+    EXTRACT_CONSTRAINTS_MARKDOWN = "extract_constraints.md"
 ```
 
 - [ ] **Step 2: Verify syntax**
 
 Run: `cd worker_plan && /opt/homebrew/bin/python3.11 -c "from worker_plan_api.filenames import FilenameEnum; print(FilenameEnum.EXTRACT_CONSTRAINTS_RAW.value)"`
-Expected: `002-0-extract_constraints_raw.json`
+Expected: `extract_constraints_raw.json`
 
 - [ ] **Step 3: Commit**
 

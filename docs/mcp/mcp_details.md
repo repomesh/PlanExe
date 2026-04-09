@@ -223,7 +223,7 @@ curl -H "X-API-Key: pex_0123456789abcdef" -O "https://mcp.planexe.org/download/2
 
 Download report:
 ```bash
-curl -H "X-API-Key: pex_0123456789abcdef" -O "https://mcp.planexe.org/download/2d57a448-1b09-45aa-ad37-e69891ff6ec7/030-report.html"
+curl -H "X-API-Key: pex_0123456789abcdef" -O "https://mcp.planexe.org/download/2d57a448-1b09-45aa-ad37-e69891ff6ec7/report.html"
 ```
 
 ## Tool Catalog, `mcp_local`
@@ -248,7 +248,7 @@ Example call:
 - Save directory is `PLANEXE_PATH`, or current working directory if unset.
 - Non-existing directories are created automatically.
 - If `PLANEXE_PATH` points to a file, download fails.
-- Filename is prefixed with plan id (for example `<plan_id>-030-report.html`).
+- Filename is prefixed with plan id (for example `<plan_id>-report.html`).
 - Response includes `saved_path` with the exact local file location.
 
 ## Minimal error-handling contract

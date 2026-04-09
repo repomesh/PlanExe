@@ -7,7 +7,7 @@ Each lever is classified as:
   secondary — useful but supporting, kept
   remove    — redundant or overlapping, discarded
 
-PROMPT> python -m worker_plan_internal.lever.deduplicate_levers
+PROMPT> python -m worker_plan_internal.lever.triage_levers
 
 """
 import json
@@ -31,11 +31,11 @@ generation downstream.
 
 Pipeline context
 ----------------
-This step (DeduplicateLevers) is part of a 6-step solution-space
+This step (TriageLevers) is part of a 6-step solution-space
 exploration pipeline inside run_plan_pipeline.py:
 
   1. IdentifyPotentialLevers  — brainstorms 15-20 raw levers
-  2. DeduplicateLevers        ← you are here
+  2. TriageLevers             ← you are here
   3. EnrichLevers             — adds description, synergy, and conflict text
   4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
   5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
@@ -145,16 +145,16 @@ compare them against each other before making decisions.
 
 
 @dataclass
-class DeduplicateLevers:
+class TriageLevers:
     """Holds the results of the deduplication."""
     user_prompt: str
     system_prompt: str
     response: List[LeverDecision]
-    deduplicated_levers: List[OutputLever]
+    triaged_levers: List[OutputLever]
     metadata: List[Dict[str, Any]]
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, project_context: str, raw_levers_list: List[dict]) -> 'DeduplicateLevers':
+    def execute(cls, llm_executor: LLMExecutor, project_context: str, raw_levers_list: List[dict]) -> 'TriageLevers':
         """
         Executes the deduplication process using a single batch LLM call.
 
@@ -272,16 +272,16 @@ class DeduplicateLevers:
             user_prompt=project_context,
             system_prompt=system_prompt,
             response=decisions,
-            deduplicated_levers=output_levers,
+            triaged_levers=output_levers,
             metadata=metadata_list,
         )
 
-    def to_dict(self, include_response=True, include_deduplicated_levers=True, include_metadata=True, include_system_prompt=True, include_user_prompt=True) -> dict:
+    def to_dict(self, include_response=True, include_triaged_levers=True, include_metadata=True, include_system_prompt=True, include_user_prompt=True) -> dict:
         d = {}
         if include_response:
             d["response"] = [item.model_dump() for item in self.response]
-        if include_deduplicated_levers:
-            d['deduplicated_levers'] = [lever.model_dump() for lever in self.deduplicated_levers]
+        if include_triaged_levers:
+            d['triaged_levers'] = [lever.model_dump() for lever in self.triaged_levers]
         if include_metadata:
             d['metadata'] = self.metadata
         if include_system_prompt:
@@ -295,7 +295,7 @@ class DeduplicateLevers:
 
     def save_clean(self, file_path: Path) -> None:
         """Saves the final, deduplicated list of levers to a JSON file."""
-        output_data = [lever.model_dump() for lever in self.deduplicated_levers]
+        output_data = [lever.model_dump() for lever in self.triaged_levers]
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(output_data, f, indent=2)
@@ -324,23 +324,23 @@ if __name__ == "__main__":
     with open(input_file, 'r', encoding='utf-8') as f:
         raw_levers_data = json.load(f)
 
-    output_file = f"deduplicate_levers_{prompt_id}.json"
+    output_file = f"triage_levers_{prompt_id}.json"
 
     model_names = ["ollama-llama3.1"]
     llm_models = LLMModelFromName.from_names(model_names)
     llm_executor = LLMExecutor(llm_models=llm_models)
 
     # --- Run Deduplication ---
-    result = DeduplicateLevers.execute(
+    result = TriageLevers.execute(
         llm_executor=llm_executor,
         project_context=project_context,
         raw_levers_list=raw_levers_data
     )
 
-    d = result.to_dict(include_response=True, include_deduplicated_levers=True, include_metadata=True, include_system_prompt=False, include_user_prompt=False)
+    d = result.to_dict(include_response=True, include_triaged_levers=True, include_metadata=True, include_system_prompt=False, include_user_prompt=False)
     d_json = json.dumps(d, indent=2)
     logger.info(f"Deduplication result: {d_json}")
-    logger.info(f"Lever count after deduplication: {len(result.deduplicated_levers)}.")
+    logger.info(f"Lever count after triage: {len(result.triaged_levers)}.")
 
     # --- Save Output ---
     result.save_clean(output_file)

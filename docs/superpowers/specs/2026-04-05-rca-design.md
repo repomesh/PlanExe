@@ -35,7 +35,7 @@ A static Python data structure mapping the full pipeline topology. Each entry de
 @dataclass
 class NodeInfo:
     name: str                       # e.g., "potential_levers"
-    output_files: list[str]         # e.g., ["002-9-potential_levers_raw.json", "002-10-potential_levers.json"]
+    output_files: list[str]         # e.g., ["potential_levers_raw.json", "potential_levers.json"]
     inputs: list[str]      # e.g., ["setup", "identify_purpose", "plan_type", "extract_constraints"]
     source_code_files: list[str]    # Relative to worker_plan/, e.g., ["worker_plan_internal/plan/stages/potential_levers.py", "worker_plan_internal/lever/identify_potential_levers.py"]
 ```
@@ -156,7 +156,7 @@ Writes the full trace as JSON:
 ```json
 {
     "input": {
-        "starting_file": "030-report.html",
+        "starting_file": "report.html",
         "problem_description": "...",
         "output_dir": "/path/to/output",
         "timestamp": "2026-04-05T14:30:00Z"
@@ -170,20 +170,20 @@ Writes the full trace as JSON:
             "trace": [
                 {
                     "node": "executive_summary",
-                    "file": "025-2-executive_summary.md",
+                    "file": "executive_summary.md",
                     "evidence": "...",
                     "is_origin": false
                 },
                 {
                     "node": "make_assumptions",
-                    "file": "003-5-make_assumptions.md",
+                    "file": "make_assumptions.md",
                     "evidence": "...",
                     "is_origin": true
                 }
             ],
             "origin": {
                 "node": "make_assumptions",
-                "file": "003-5-make_assumptions.md",
+                "file": "make_assumptions.md",
                 "source_code_files": ["stages/make_assumptions.py", "assumption/make_assumptions.py"],
                 "likely_cause": "The prompt asks the LLM to...",
                 "suggestion": "Add a validation step that..."
@@ -207,7 +207,7 @@ Writes a human-readable report:
 ```markdown
 # Root Cause Analysis Report
 
-**Input:** 030-report.html
+**Input:** report.html
 **Problems found:** 3
 **Deepest origin:** make_assumptions (depth 3)
 
@@ -219,9 +219,9 @@ Writes a human-readable report:
 
 | Node | File | Evidence |
 |------|------|----------|
-| executive_summary | 025-2-executive_summary.md | "The budget is CZK 500,000..." |
-| project_plan | 005-2-project_plan.md | "Estimated budget: CZK 500,000..." |
-| **make_assumptions** | 003-5-make_assumptions.md | "Assume total budget..." |
+| executive_summary | executive_summary.md | "The budget is CZK 500,000..." |
+| project_plan | project_plan.md | "Estimated budget: CZK 500,000..." |
+| **make_assumptions** | make_assumptions.md | "Assume total budget..." |
 
 **Root cause:** The prompt asks the LLM to generate budget assumptions
 without requiring external data sources...
@@ -236,7 +236,7 @@ Problems are sorted by depth (deepest origin first) so the most upstream root ca
 ```
 python -m worker_plan_internal.rca \
     --dir /path/to/output \
-    --file 030-report.html \
+    --file report.html \
     --problem "The budget is CZK 500,000 but this number appears unvalidated..." \
     --output-dir /path/to/output \
     --max-depth 15 \

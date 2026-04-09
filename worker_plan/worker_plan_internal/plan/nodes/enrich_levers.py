@@ -7,7 +7,7 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_internal.plan.nodes.setup import SetupTask
 from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
 from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
-from worker_plan_internal.plan.nodes.deduplicate_levers import DeduplicateLeversTask
+from worker_plan_internal.plan.nodes.triage_levers import TriageLeversTask
 
 
 class EnrichLeversTask(PlanTask):
@@ -17,7 +17,7 @@ class EnrichLeversTask(PlanTask):
             'setup': self.clone(SetupTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),
             'plan_type': self.clone(PlanTypeTask),
-            'deduplicate_levers': self.clone(DeduplicateLeversTask),
+            'triage_levers': self.clone(TriageLeversTask),
         }
 
     def output(self):
@@ -35,9 +35,9 @@ class EnrichLeversTask(PlanTask):
             identify_purpose_markdown = f.read()
         with self.input()['plan_type']['markdown'].open("r") as f:
             plan_type_markdown = f.read()
-        with self.input()['deduplicate_levers']['raw'].open("r") as f:
+        with self.input()['triage_levers']['raw'].open("r") as f:
             json_dict = json.load(f)
-            lever_item_list = json_dict["deduplicated_levers"]
+            lever_item_list = json_dict["triaged_levers"]
 
         query = (
             f"File 'plan.txt':\n{plan_prompt}\n\n"

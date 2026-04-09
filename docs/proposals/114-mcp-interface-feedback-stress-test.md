@@ -68,7 +68,7 @@ During the stress test, Plan 1 (20f1cfac) stalled at 5.5% with zero diagnostic i
   "state": "failed",
   "error": {
     "failure_reason": "generation_error",
-    "failed_step": "016-expert_criticism",
+    "failed_step": "expert_criticism",
     "message": "LLM provider returned 503",
     "recoverable": true
   }
@@ -248,7 +248,7 @@ This is a trust gap: the agent cannot confidently tell the user "your plan is re
   "sections_complete": 108,
   "sections_partial": 2,
   "partial_details": [
-    {"step": "016-expert_criticism", "note": "2/8 experts provided feedback"}
+    {"step": "expert_criticism", "note": "2/8 experts provided feedback"}
   ]
 }
 ```
@@ -507,7 +507,7 @@ No stale error information leaked between states.
 
 ### Files list ordering fix
 
-The files list in `plan_status` now shows the most recent 10 files instead of the first 10. When the plan completed, the agent saw `029-2-self_audit.md`, `030-report.html`, `999-pipeline_complete.txt` etc. instead of the same early pipeline files every time. Much more useful for monitoring progress.
+The files list in `plan_status` now shows the most recent 10 files instead of the first 10. When the plan completed, the agent saw `self_audit.md`, `report.html`, `pipeline_complete.txt` etc. instead of the same early pipeline files every time. Much more useful for monitoring progress.
 
 ### Agent-server capability mismatch (systemic observation)
 

@@ -3,7 +3,7 @@ PROMPT> python -m worker_plan_internal.plan.run_plan_pipeline
 
 In order to resume an unfinished run.
 Insert the run_id_dir of the thing you want to resume.
-If it's an already finished run, then remove the "999-pipeline_complete.txt" file.
+If it's an already finished run, then remove the "pipeline_complete.txt" file.
 PROMPT> RUN_ID_DIR=/absolute/path/to/PlanExe_20250216_150332 python -m worker_plan_internal.plan.run_plan_pipeline
 """
 from dataclasses import dataclass, field
@@ -301,7 +301,7 @@ class ExecutePipeline:
             logger.warning(f"Could not list files in {run_id_dir}: {e}")
 
         ignore_files = [
-            ExtraFilenameEnum.EXPECTED_FILENAMES1_JSON.value,
+            ExtraFilenameEnum.EXPECTED_FILENAMES_JSON.value,
             ExtraFilenameEnum.LOG_TXT.value,
             ExtraFilenameEnum.PIPELINE_STOP_REQUESTED_FLAG.value,
             ExtraFilenameEnum.USAGE_METRICS_JSONL.value,
@@ -311,7 +311,7 @@ class ExecutePipeline:
         # logger.debug(f"Files in run_id_dir for {job.run_id}: {files}") # Debug, can be noisy
         # logger.debug(f"Number of files in run_id_dir for {job.run_id}: {len(files)}") # Debug
 
-        # Determine the progress, by comparing the generated files with the expected_filenames1.json
+        # Determine the progress, by comparing the generated files with the expected_filenames.json
         set_files = set(files)
         set_expected_files = set(self.all_expected_filenames)
         intersection_files = set_files & set_expected_files
@@ -392,8 +392,8 @@ class ExecutePipeline:
         set_usage_metrics_path(usage_metrics_path)
         logger.info(f"Usage metrics will be written to {usage_metrics_path}")
 
-        # create a json file with the expected filenames. Save it to the run/run_id/expected_filenames1.json
-        expected_filenames_path = self.run_id_dir / ExtraFilenameEnum.EXPECTED_FILENAMES1_JSON.value
+        # create a json file with the expected filenames. Save it to the run/run_id/expected_filenames.json
+        expected_filenames_path = self.run_id_dir / ExtraFilenameEnum.EXPECTED_FILENAMES_JSON.value
         with open(expected_filenames_path, "w") as f:
             json.dump(self.all_expected_filenames, f, indent=2)
         logger.info(f"Saved {len(self.all_expected_filenames)} expected filenames to {expected_filenames_path}")

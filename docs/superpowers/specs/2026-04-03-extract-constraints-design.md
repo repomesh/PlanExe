@@ -72,8 +72,8 @@ Output:
 
 **FilenameEnum entries:**
 ```python
-EXTRACT_CONSTRAINTS_RAW = "002-0-extract_constraints_raw.json"
-EXTRACT_CONSTRAINTS_MARKDOWN = "002-0-extract_constraints.md"
+EXTRACT_CONSTRAINTS_RAW = "extract_constraints_raw.json"
+EXTRACT_CONSTRAINTS_MARKDOWN = "extract_constraints.md"
 ```
 
 **Pipeline registration** in `full_plan_pipeline.py`:

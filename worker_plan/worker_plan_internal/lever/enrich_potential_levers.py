@@ -36,7 +36,7 @@ This step (EnrichLevers) is part of a 6-step solution-space exploration
 pipeline inside run_plan_pipeline.py:
 
   1. IdentifyPotentialLevers  — brainstorms 15-20 raw levers
-  2. DeduplicateLevers        — removes near-duplicate levers
+  2. TriageLevers             — removes near-duplicate levers
   3. EnrichLevers             ← you are here
   4. FocusOnVitalFewLevers    — filters down to 4-6 high-impact levers
   5. ScenarioGeneration       — builds 3 scenarios (aggressive, medium, safe)
@@ -360,8 +360,8 @@ if __name__ == "__main__":
         raise ValueError("Prompt item not found.")
     project_plan = prompt_item.prompt
 
-    # This file is created by deduplicate_levers.py
-    input_file = os.path.join(os.path.dirname(__file__), 'test_data', f'deduplicate_levers_{prompt_id}.json')
+    # This file is created by triage_levers.py
+    input_file = os.path.join(os.path.dirname(__file__), 'test_data', f'triage_levers_{prompt_id}.json')
     output_file = f"enrich_potential_levers_{prompt_id}.json"
     
     if not os.path.exists(input_file):

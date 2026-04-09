@@ -205,7 +205,7 @@ After `plan_create`, there is no indication of credits consumed or remaining. Fo
 
 ### 5.7 Complete files array in `plan_status` for completed plans
 
-**Status:** Partially addressed. The `files` array now returns the **most recent 10** files instead of the first 10, so agents see what was just produced (e.g. `019-swot_analysis.md`) rather than always the same early pipeline files (`001-start_time.json`). `files_count` gives the total. Full manifest support for completed plans remains open.
+**Status:** Partially addressed. The `files` array now returns the **most recent 10** files instead of the first 10, so agents see what was just produced (e.g. `swot_analysis.md`) rather than always the same early pipeline files (`start_time.json`). `files_count` gives the total. Full manifest support for completed plans remains open.
 
 **Source:** Claude Code agent feedback (2026-03-02).
 

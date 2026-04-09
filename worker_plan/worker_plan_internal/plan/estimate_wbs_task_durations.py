@@ -149,8 +149,8 @@ if __name__ == "__main__":
             the_json = json.load(f)
         return the_json
 
-    plan_json = load_json('002-project_plan.json')
-    wbs_level2_json = load_json('006-wbs_level2.json')
+    plan_json = load_json('project_plan.json')
+    wbs_level2_json = load_json('wbs_level2.json')
 
     task_ids = [
         "c6a249af-b8d3-4d4c-b3ef-8a5caa8793d4",

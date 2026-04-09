@@ -25,7 +25,7 @@ These tests exercise the MCP server, database, and worker interactions without i
 
 **Variant — worker-side check:**
 1. Bypass the MCP-layer check (e.g. manually set `parameters["pipeline_version"]` to match current).
-2. But ensure the `001-3-planexe_metadata.json` in the zip snapshot has a different version.
+2. But ensure the `planexe_metadata.json` in the zip snapshot has a different version.
 3. Let the worker pick up the resumed plan.
 4. Assert: worker sets plan to failed with progress_message containing "Not resumable".
 
@@ -87,7 +87,7 @@ These tests invoke real LLMs and are non-deterministic, slow (~10-20 min per pla
 4. Call `plan_file_info` with `artifact: "report"` — assert `download_url` is present.
 5. Call `plan_file_info` with `artifact: "zip"` — assert `download_url` is present.
 6. Download the report and verify it is valid HTML containing expected sections.
-7. Download the zip and verify `001-3-planexe_metadata.json` is present with correct `pipeline_version`.
+7. Download the zip and verify `planexe_metadata.json` is present with correct `pipeline_version`.
 
 ### 7. Resume after mid-generation failure
 

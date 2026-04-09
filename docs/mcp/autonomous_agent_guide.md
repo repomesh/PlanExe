@@ -123,11 +123,11 @@ An advanced pattern: use PlanExe to plan the agent's own work.
 4. Agent executes the plan step by step, tracking progress against the WBS
 
 Key files in the zip for agent consumption:
-- `018-2-wbs_level1.json` — High-level work packages
-- `018-5-wbs_level2.json` — Detailed tasks within each package
-- `023-2-wbs_level3.json` — Sub-tasks with effort estimates
-- `004-2-pre_project_assessment.json` — Feasibility assessment
-- `003-6-distill_assumptions_raw.json` — Key assumptions to validate
+- `wbs_level1.json` — High-level work packages
+- `wbs_level2.json` — Detailed tasks within each package
+- `wbs_level3.json` — Sub-tasks with effort estimates
+- `pre_project_assessment.json` — Feasibility assessment
+- `distill_assumptions_raw.json` — Key assumptions to validate
 
 ## Prompt writing tips for agents
 

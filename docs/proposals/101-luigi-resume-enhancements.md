@@ -85,9 +85,9 @@ Behavior:
 ```
 $ planexe invalidate SelectScenarioTask --run-dir ./run/Qwen_Clean_v1
 Would delete:
-  run/Qwen_Clean_v1/002-17-selected_scenario_raw.json
-  run/Qwen_Clean_v1/002-18-selected_scenario.json
-  run/Qwen_Clean_v1/002-19-scenarios.md
+  run/Qwen_Clean_v1/selected_scenario_raw.json
+  run/Qwen_Clean_v1/selected_scenario.json
+  run/Qwen_Clean_v1/scenarios.md
 Proceed? [y/N]
 ```
 
@@ -101,7 +101,7 @@ Tonight we needed to re-run `SelectScenarioTask` after applying a fix. Without k
 
 ### The problem
 
-The input plan (`001-2-plan.txt`) is locked in at run start. If a user wants to refine the plan description mid-run — clarify scope, correct a factual error, tighten the framing — there is no supported path. The only option is start a new run from scratch.
+The input plan (`plan.txt`) is locked in at run start. If a user wants to refine the plan description mid-run — clarify scope, correct a factual error, tighten the framing — there is no supported path. The only option is start a new run from scratch.
 
 ### What we want
 

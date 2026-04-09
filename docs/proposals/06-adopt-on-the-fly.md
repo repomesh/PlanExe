@@ -6,9 +6,9 @@ This is a concrete implementation plan for making PlanExe's agent behavior adapt
 
 PlanExe already has multiple "early classification" concepts and quality gates that we can build on:
 
-- **Purpose classification (business/personal/other)**: `worker_plan/worker_plan_internal/assume/identify_purpose.py` produces `002-6-identify_purpose.md` and is already used downstream (e.g., SWOT prompt selection).
+- **Purpose classification (business/personal/other)**: `worker_plan/worker_plan_internal/assume/identify_purpose.py` produces `identify_purpose.md` and is already used downstream (e.g., SWOT prompt selection).
 
-- **Plan type classification (digital/physical)**: `worker_plan/worker_plan_internal/assume/identify_plan_type.py` produces `002-8-plan_type.md`. Note: it intentionally labels most software development as "physical" (because it assumes a physical workspace/devices).
+- **Plan type classification (digital/physical)**: `worker_plan/worker_plan_internal/assume/identify_plan_type.py` produces `plan_type.md`. Note: it intentionally labels most software development as "physical" (because it assumes a physical workspace/devices).
 
 - **Levers pipeline**: `worker_plan/worker_plan_internal/lever/*` produces potential levers -> deduped -> enriched -> "vital few" -> scenarios/strategic decisions.
 

@@ -290,9 +290,11 @@ class PromptAdherence:
         lines.append(f"**Overall Adherence: {overall}%**")
         lines.append("")
         if weighted_parts:
+            lines.append("```")
             lines.append(f"IMPORTANCE_ADHERENCE_SUM = ({' + '.join(weighted_parts)}) = {weighted_sum}")
             lines.append(f"IMPORTANCE_SUM = {' + '.join(importance_parts)} = {importance_sum}")
             lines.append(f"OVERALL_ADHERENCE = IMPORTANCE_ADHERENCE_SUM / (IMPORTANCE_SUM × 5) = {weighted_sum} / {importance_sum * 5} = {overall}%")
+            lines.append("```")
             lines.append("")
 
         # Sort by directive index

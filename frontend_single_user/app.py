@@ -751,68 +751,33 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                 )
 
     with gr.Tab("Settings"):
-        speedvsdetail_items = [
-            ("Ping", SpeedVsDetailEnum.PING_LLM),
-            ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
-            ("Fast, but few details", SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS),
-        ]
+        gr.Markdown("Settings tab placeholder — testing if tab opens without hanging.")
         speedvsdetail_radio = gr.Radio(
-            speedvsdetail_items,
+            [("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)],
             value=SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
             label="Speed vs Detail",
-            interactive=True 
+            interactive=True,
+            visible=False,
         )
-
-        if CONFIG.visible_llm_info:
-            if llm_info.ollama_status == OllamaStatus.ollama_not_running:
-                gr.Markdown("**Ollama is not running**, so Ollama models are unavailable. Please start Ollama to use them.")
-            elif llm_info.ollama_status == OllamaStatus.mixed:
-                gr.Markdown("**Mixed. Some Ollama models are running, but some are NOT running.**, You may have to start the ones that aren't running.")
-
-            if len(llm_info.error_message_list) > 0:
-                gr.Markdown("**Error messages:**")
-                for error_message in llm_info.error_message_list:
-                    gr.Markdown(f"- {error_message}")
-
         model_radio = gr.Radio(
-            available_model_names,
+            available_model_names[:1] if available_model_names else [("default", "default")],
             value=default_model_value,
             label="Model",
-            interactive=True 
+            interactive=True,
+            visible=False,
         )
-
         model_profile_radio = gr.Radio(
-            [
-                ("Baseline", ModelProfileEnum.BASELINE.value),
-                ("Premium", ModelProfileEnum.PREMIUM.value),
-                ("Frontier", ModelProfileEnum.FRONTIER.value),
-                ("Custom", ModelProfileEnum.CUSTOM.value),
-            ],
+            [("Baseline", ModelProfileEnum.BASELINE.value)],
             value=ModelProfileEnum.BASELINE.value,
             label="Model Profile",
-            info="Select which profile file is used by auto model selection.",
             interactive=True,
+            visible=False,
         )
-        gr.Markdown(
-            "\n".join(
-                [
-                    "**Profile details**",
-                    "- `baseline` -> `llm_config/baseline.json` (default balanced profile).",
-                    "- `premium` -> `llm_config/premium.json` (higher-cost model ordering).",
-                    "- `frontier` -> `llm_config/frontier.json` (most capable model ordering).",
-                    "- `custom` -> `llm_config/custom.json` or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME` (filename only, e.g. `custom.json`).",
-                    "- The exact models come from the selected JSON file priorities.",
-                ]
-            )
-        )
-        profile_models_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
-
+        profile_models_markdown = gr.Markdown("", visible=False)
         openrouter_api_key_text = gr.Textbox(
             label="OpenRouter API Key",
             type="password",
-            placeholder="Enter your OpenRouter API key (required)",
-            info="Sign up at [OpenRouter](https://openrouter.ai/) to get an API key. A small top-up (e.g. 5 USD) is needed to access paid models.",
-            visible=CONFIG.visible_openrouter_api_key_textbox
+            visible=False,
         )
 
     with gr.Tab("Advanced"):

@@ -857,10 +857,9 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: Only open_dir .load — testing if a single .load works.
+    # DEBUG: .load with a no-op function, no outputs.
     demo_text2plan.load(
-        fn=update_open_dir_button_visibility,
-        outputs=[open_dir_btn]
+        fn=lambda: None,
     )
 
 def run_app():

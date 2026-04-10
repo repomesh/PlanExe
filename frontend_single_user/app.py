@@ -857,10 +857,17 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: .load outputting to a markdown component.
-    demo_text2plan.load(
-        fn=lambda: "loaded",
-        outputs=[status_markdown]
+    # Restore settings from BrowserState when it loads from localStorage.
+    # We use browser_state.change instead of demo_text2plan.load because
+    # Gradio 6.11 has a bug where .load with outputs breaks tab switching.
+    browser_state.change(
+        fn=initialize_browser_settings,
+        inputs=[browser_state, session_state],
+        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, browser_state, session_state]
+    ).then(
+        fn=check_api_key,
+        inputs=[session_state],
+        outputs=[api_key_warning]
     )
 
 def run_app():

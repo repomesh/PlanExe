@@ -745,40 +745,74 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                 download_output = gr.File(label="Download latest output (excluding log.txt) as zip")
 
             with gr.Column(scale=1, min_width=300):
-                gr.Markdown("*(Examples disabled for debugging)*")
-                # examples = gr.Examples(
-                #     examples=gradio_examples,
-                #     inputs=[prompt_input],
-                # )
+                examples = gr.Examples(
+                    examples=gradio_examples,
+                    inputs=[prompt_input],
+                )
 
     with gr.Tab("Settings"):
-        gr.Markdown("Settings tab placeholder — testing if tab opens without hanging.")
+        speedvsdetail_items = [
+            ("Ping", SpeedVsDetailEnum.PING_LLM),
+            ("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW),
+            ("Fast, but few details", SpeedVsDetailEnum.FAST_BUT_SKIP_DETAILS),
+        ]
         speedvsdetail_radio = gr.Radio(
-            [("All details, but slow", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)],
+            speedvsdetail_items,
             value=SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW,
             label="Speed vs Detail",
-            interactive=True,
-            visible=False,
+            interactive=True
         )
+
+        if CONFIG.visible_llm_info:
+            if llm_info.ollama_status == OllamaStatus.ollama_not_running:
+                gr.Markdown("**Ollama is not running**, so Ollama models are unavailable. Please start Ollama to use them.")
+            elif llm_info.ollama_status == OllamaStatus.mixed:
+                gr.Markdown("**Mixed. Some Ollama models are running, but some are NOT running.**, You may have to start the ones that aren't running.")
+
+            if len(llm_info.error_message_list) > 0:
+                gr.Markdown("**Error messages:**")
+                for error_message in llm_info.error_message_list:
+                    gr.Markdown(f"- {error_message}")
+
         model_radio = gr.Radio(
-            available_model_names[:1] if available_model_names else [("default", "default")],
+            available_model_names,
             value=default_model_value,
             label="Model",
-            interactive=True,
-            visible=False,
+            interactive=True
         )
+
         model_profile_radio = gr.Radio(
-            [("Baseline", ModelProfileEnum.BASELINE.value)],
+            [
+                ("Baseline", ModelProfileEnum.BASELINE.value),
+                ("Premium", ModelProfileEnum.PREMIUM.value),
+                ("Frontier", ModelProfileEnum.FRONTIER.value),
+                ("Custom", ModelProfileEnum.CUSTOM.value),
+            ],
             value=ModelProfileEnum.BASELINE.value,
             label="Model Profile",
+            info="Select which profile file is used by auto model selection.",
             interactive=True,
-            visible=False,
         )
-        profile_models_markdown = gr.Markdown("", visible=False)
+        gr.Markdown(
+            "\n".join(
+                [
+                    "**Profile details**",
+                    "- `baseline` -> `llm_config/baseline.json` (default balanced profile).",
+                    "- `premium` -> `llm_config/premium.json` (higher-cost model ordering).",
+                    "- `frontier` -> `llm_config/frontier.json` (most capable model ordering).",
+                    "- `custom` -> `llm_config/custom.json` or `PLANEXE_LLM_CONFIG_CUSTOM_FILENAME` (filename only, e.g. `custom.json`).",
+                    "- The exact models come from the selected JSON file priorities.",
+                ]
+            )
+        )
+        profile_models_markdown = gr.Markdown(_profile_models_markdown(ModelProfileEnum.BASELINE.value))
+
         openrouter_api_key_text = gr.Textbox(
             label="OpenRouter API Key",
             type="password",
-            visible=False,
+            placeholder="Enter your OpenRouter API key (required)",
+            info="Sign up at [OpenRouter](https://openrouter.ai/) to get an API key. A small top-up (e.g. 5 USD) is needed to access paid models.",
+            visible=CONFIG.visible_openrouter_api_key_textbox
         )
 
     with gr.Tab("Advanced"):
@@ -856,6 +890,48 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
         outputs=[status_markdown, session_state]
     )
     # The download file value is updated by run_planner generator outputs.
+
+    # Settings change callbacks — update session_state and profile display.
+    settings_change_inputs = [openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+    settings_change_outputs = [profile_models_markdown, active_config_markdown, session_state]
+
+    def update_settings_on_change(openrouter_api_key, model, speedvsdetail, model_profile, session_state: SessionState):
+        session_state.openrouter_api_key = openrouter_api_key
+        session_state.llm_model = model
+        session_state.speedvsdetail = speedvsdetail
+        session_state.model_profile = model_profile
+        profile_markdown = _profile_models_markdown(model_profile)
+        return profile_markdown, "", session_state
+
+    openrouter_api_key_text.change(
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
+
+    model_radio.change(
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
+
+    speedvsdetail_radio.change(
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
+
+    model_profile_radio.change(
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
+
+    purge_button.click(
+        fn=trigger_purge_runs,
+        inputs=[purge_max_age_hours, session_state],
+        outputs=[purge_status, session_state]
+    )
 
     # Restore settings from BrowserState when it loads from localStorage.
     # We use browser_state.change instead of demo_text2plan.load because

@@ -203,15 +203,15 @@
                 </select>
                 <span class="method-info" id="method-info">Recommended: payload not captured in logs</span>
             </div>
+            <div class="select-container">
+                <label for="user-id-override">User ID override:</label>
+                <input type="text" id="user-id-override" placeholder="{{ user_id }}" style="font-family:monospace; font-size:14px; padding:4px 8px; border:1px solid #ccc; border-radius:4px; width:320px;">
+                <span style="font-size:12px; color:#999;">Leave empty to use current user</span>
+            </div>
             <button id="submit-button">Submit</button>
         </div>
         <div class="iframe-container">
             <iframe name="run-iframe" title="Run Page"></iframe>
-        </div>
-        <div class="userid-container">
-            <label for="user-id-override">User ID override:</label>
-            <input type="text" id="user-id-override" placeholder="{{ user_id }}" style="font-family:monospace; font-size:14px; padding:4px 8px; border:1px solid #ccc; border-radius:4px; width:320px; margin-left:8px;">
-            <span style="font-size:12px; color:#999; margin-left:8px;">Leave empty to use current user</span>
         </div>
     </div>
 

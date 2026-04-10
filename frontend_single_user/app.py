@@ -857,68 +857,13 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # Unified change callbacks for settings.
-    # NOTE: trigger="change" is Gradio's default. We must NOT output back to
-    # any component that is also an input — that would create an infinite
-    # client-side event loop (component changes → callback → component changes → …).
-    # We also avoid outputting to browser_state here; BrowserState updates
-    # can re-trigger .load in some Gradio versions, causing a cascade.
-    # Instead, browser_state is only written by initialize_browser_settings on load.
-    settings_change_inputs = [openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
-    settings_change_outputs = [profile_models_markdown, active_config_markdown, session_state]
-
-    def update_settings_on_change(openrouter_api_key, model, speedvsdetail, model_profile, session_state: SessionState):
-        session_state.openrouter_api_key = openrouter_api_key
-        session_state.llm_model = model
-        session_state.speedvsdetail = speedvsdetail
-        session_state.model_profile = model_profile
-        profile_markdown = _profile_models_markdown(model_profile)
-        return profile_markdown, "", session_state
-
-    openrouter_api_key_text.change(
-        fn=update_settings_on_change,
-        inputs=settings_change_inputs,
-        outputs=settings_change_outputs,
-    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
-
-    model_radio.change(
-        fn=update_settings_on_change,
-        inputs=settings_change_inputs,
-        outputs=settings_change_outputs,
-    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
-
-    speedvsdetail_radio.change(
-        fn=update_settings_on_change,
-        inputs=settings_change_inputs,
-        outputs=settings_change_outputs,
-    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
-
-    model_profile_radio.change(
-        fn=update_settings_on_change,
-        inputs=settings_change_inputs,
-        outputs=settings_change_outputs,
-    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
-
-    purge_button.click(
-        fn=trigger_purge_runs,
-        inputs=[purge_max_age_hours, session_state],
-        outputs=[purge_status, session_state]
-    )
-
-    # Initialize settings on load from persistent browser_state.
-    demo_text2plan.load(
-        fn=initialize_browser_settings,
-        inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, browser_state, session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
-    demo_text2plan.load(
-        fn=update_open_dir_button_visibility,
-        outputs=[open_dir_btn]
-    )
+    # DEBUG: All settings callbacks, .load handlers disabled to isolate hang.
+    # purge_button.click(...)
+    # openrouter_api_key_text.change(...)
+    # model_radio.change(...)
+    # speedvsdetail_radio.change(...)
+    # model_profile_radio.change(...)
+    # demo_text2plan.load(...)
 
 def run_app():
     # print("Environment variables Gradio:\n" + get_env_as_string() + "\n\n\n")

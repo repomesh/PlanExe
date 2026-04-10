@@ -745,10 +745,11 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
                 download_output = gr.File(label="Download latest output (excluding log.txt) as zip")
 
             with gr.Column(scale=1, min_width=300):
-                examples = gr.Examples(
-                    examples=gradio_examples,
-                    inputs=[prompt_input],
-                )
+                gr.Markdown("*(Examples disabled for debugging)*")
+                # examples = gr.Examples(
+                #     examples=gradio_examples,
+                #     inputs=[prompt_input],
+                # )
 
     with gr.Tab("Settings"):
         gr.Markdown("Settings tab placeholder — testing if tab opens without hanging.")

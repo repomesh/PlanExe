@@ -382,7 +382,8 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     session_state.speedvsdetail = speedvsdetail
     session_state.model_profile = model_profile
     profile_markdown = _profile_models_markdown(model_profile)
-    return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", browser_state, session_state
+    open_dir_visible = gr.update(visible=is_open_dir_service_running())
+    return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", open_dir_visible, browser_state, session_state
 
 def save_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state):
     """Persist current settings to BrowserState. Called on submit/retry, not on every change."""
@@ -939,7 +940,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     browser_state.change(
         fn=initialize_browser_settings,
         inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, browser_state, session_state]
+        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, open_dir_btn, browser_state, session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],

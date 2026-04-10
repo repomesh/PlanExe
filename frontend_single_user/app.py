@@ -384,7 +384,8 @@ def initialize_browser_settings(browser_state, session_state: SessionState):
     profile_markdown = _profile_models_markdown(model_profile)
     return openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", browser_state, session_state
 
-def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state, session_state: SessionState):
+def save_browser_settings_callback(openrouter_api_key, model, speedvsdetail, model_profile, browser_state):
+    """Persist current settings to BrowserState. Called on submit/retry, not on every change."""
     try:
         settings = json.loads(browser_state) if browser_state else {}
     except Exception:
@@ -393,13 +394,7 @@ def update_browser_settings_callback(openrouter_api_key, model, speedvsdetail, m
     settings["model_radio"] = model
     settings["speedvsdetail_radio"] = speedvsdetail
     settings["model_profile_radio"] = model_profile
-    updated_browser_state = json.dumps(settings)
-    session_state.openrouter_api_key = openrouter_api_key
-    session_state.llm_model = model
-    session_state.speedvsdetail = speedvsdetail
-    session_state.model_profile = model_profile
-    profile_markdown = _profile_models_markdown(model_profile)
-    return updated_browser_state, openrouter_api_key, model, speedvsdetail, model_profile, profile_markdown, "", session_state
+    return json.dumps(settings)
 
 def run_planner(submit_or_retry_button, plan_prompt, browser_state, session_state: SessionState):
     """
@@ -849,6 +844,10 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
         inputs=session_state,
         outputs=[status_markdown, session_state]
     ).then(
+        fn=save_browser_settings_callback,
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state],
+        outputs=[browser_state]
+    ).then(
         fn=run_planner,
         inputs=[submit_btn, prompt_input, browser_state, session_state],
         outputs=[output_markdown, download_output, session_state]
@@ -861,6 +860,10 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
         fn=clear_status,
         inputs=session_state,
         outputs=[status_markdown, session_state]
+    ).then(
+        fn=save_browser_settings_callback,
+        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state],
+        outputs=[browser_state]
     ).then(
         fn=run_planner,
         inputs=[retry_btn, prompt_input, browser_state, session_state],
@@ -889,45 +892,46 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     # The download file value is updated by run_planner generator outputs.
 
     # Unified change callbacks for settings.
+    # NOTE: trigger="change" is Gradio's default. We must NOT output back to
+    # any component that is also an input — that would create an infinite
+    # client-side event loop (component changes → callback → component changes → …).
+    # We also avoid outputting to browser_state here; BrowserState updates
+    # can re-trigger .load in some Gradio versions, causing a cascade.
+    # Instead, browser_state is only written by initialize_browser_settings on load.
+    settings_change_inputs = [openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, session_state]
+    settings_change_outputs = [profile_models_markdown, active_config_markdown, session_state]
+
+    def update_settings_on_change(openrouter_api_key, model, speedvsdetail, model_profile, session_state: SessionState):
+        session_state.openrouter_api_key = openrouter_api_key
+        session_state.llm_model = model
+        session_state.speedvsdetail = speedvsdetail
+        session_state.model_profile = model_profile
+        profile_markdown = _profile_models_markdown(model_profile)
+        return profile_markdown, "", session_state
+
     openrouter_api_key_text.change(
-        fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
 
     model_radio.change(
-        fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
 
     speedvsdetail_radio.change(
-        fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
 
     model_profile_radio.change(
-        fn=update_browser_settings_callback,
-        inputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, browser_state, session_state],
-        outputs=[browser_state, openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
+        fn=update_settings_on_change,
+        inputs=settings_change_inputs,
+        outputs=settings_change_outputs,
+    ).then(fn=check_api_key, inputs=[session_state], outputs=[api_key_warning])
 
     purge_button.click(
         fn=trigger_purge_runs,

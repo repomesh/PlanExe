@@ -949,6 +949,27 @@ def plan():
     )
 
 
+@plan_routes_bp.route("/plan/import", methods=["GET", "POST"])
+@login_required
+def plan_import():
+    message = None
+    message_type = None
+    if request.method == "POST":
+        zip_file = request.files.get("zip_file")
+        if zip_file is None or zip_file.filename == "":
+            message = "No file selected."
+            message_type = "error"
+        elif not zip_file.filename.endswith(".zip"):
+            message = "Please upload a .zip file."
+            message_type = "error"
+        else:
+            # TODO: process the zip file
+            logger.info("Plan import: received zip file %r (%s bytes)", zip_file.filename, zip_file.content_length)
+            message = f"Uploaded {zip_file.filename} (not yet processed)."
+            message_type = "success"
+    return render_template("plan_import.html", message=message, message_type=message_type)
+
+
 @plan_routes_bp.route("/plan/stop", methods=["POST"])
 @login_required
 def plan_stop():

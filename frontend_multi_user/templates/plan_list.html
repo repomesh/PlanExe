@@ -131,7 +131,10 @@
 {% endblock %}
 
 {% block content %}
-<h1 class="plan-list-title">Plans</h1>
+<div style="display:flex; justify-content:space-between; align-items:center;">
+    <h1 class="plan-list-title">Plans</h1>
+    <a href="/plan/import" style="padding:6px 14px; font-size:0.8rem; font-weight:600; color:var(--color-text); background:var(--color-bg-soft); border:1px solid var(--color-border); border-radius:var(--radius-lg); text-decoration:none; white-space:nowrap;">Import Plan</a>
+</div>
 <p class="plan-list-subtitle">Technical queue view · newest first · click row to inspect</p>
 <div class="plan-list-wrap">
     {% if plan_rows %}

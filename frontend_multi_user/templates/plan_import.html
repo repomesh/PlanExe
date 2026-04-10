@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Import Plan - PlanExe{% endblock %}
+{% block head %}
+<style>
+    .import-title {
+        margin: 0 0 8px;
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+    .import-subtitle {
+        margin: 0 0 20px;
+        font-size: 0.82rem;
+        color: var(--color-text-secondary);
+    }
+    .import-wrap {
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-card-bg);
+        padding: 24px;
+        max-width: 500px;
+    }
+    .import-label {
+        display: block;
+        font-size: 0.82rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--color-text);
+    }
+    .import-file-input {
+        display: block;
+        margin-bottom: 16px;
+        font-size: 0.82rem;
+    }
+    .import-submit {
+        padding: 8px 20px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #fff;
+        background: var(--color-primary, #0066cc);
+        border: none;
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+    }
+    .import-submit:hover {
+        opacity: 0.9;
+    }
+    .import-back {
+        display: inline-block;
+        margin-bottom: 16px;
+        font-size: 0.82rem;
+        color: var(--color-primary, #0066cc);
+        text-decoration: none;
+    }
+    .import-message {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: var(--radius-lg);
+        font-size: 0.82rem;
+    }
+    .import-message-success {
+        background: #e6f4ea;
+        color: #1a7f37;
+        border: 1px solid #a3d9a5;
+    }
+    .import-message-error {
+        background: #fdecea;
+        color: #c0392b;
+        border: 1px solid #e6b0aa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/plan" class="import-back">&larr; Back to Plans</a>
+<h1 class="import-title">Import Plan</h1>
+<p class="import-subtitle">Upload a plan zip file to import it.</p>
+
+<div class="import-wrap">
+    <form method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="import-label" for="zip-file">Select zip file</label>
+        <input class="import-file-input" type="file" id="zip-file" name="zip_file" accept=".zip" required>
+        <button class="import-submit" type="submit">Upload</button>
+    </form>
+
+    {% if message %}
+    <div class="import-message {% if message_type == 'error' %}import-message-error{% else %}import-message-success{% endif %}">
+        {{ message }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

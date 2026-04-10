@@ -857,9 +857,10 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: .load with a no-op function, no outputs.
+    # DEBUG: .load outputting to a markdown component.
     demo_text2plan.load(
-        fn=lambda: None,
+        fn=lambda: "loaded",
+        outputs=[status_markdown]
     )
 
 def run_app():

@@ -857,27 +857,7 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: .load with minimal outputs (no settings components).
-    def initialize_browser_settings_minimal(browser_state, session_state: SessionState):
-        try:
-            settings = json.loads(browser_state) if browser_state else {}
-        except Exception:
-            settings = {}
-        session_state.openrouter_api_key = settings.get("openrouter_api_key_text", "")
-        session_state.llm_model = settings.get("model_radio", default_model_value)
-        session_state.speedvsdetail = settings.get("speedvsdetail_radio", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)
-        session_state.model_profile = settings.get("model_profile_radio", ModelProfileEnum.BASELINE.value)
-        return session_state
-
-    demo_text2plan.load(
-        fn=initialize_browser_settings_minimal,
-        inputs=[browser_state, session_state],
-        outputs=[session_state]
-    ).then(
-        fn=check_api_key,
-        inputs=[session_state],
-        outputs=[api_key_warning]
-    )
+    # DEBUG: Only open_dir .load — no browser_state involved.
     demo_text2plan.load(
         fn=update_open_dir_button_visibility,
         outputs=[open_dir_btn]

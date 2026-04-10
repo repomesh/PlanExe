@@ -857,8 +857,11 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: All .load handlers disabled.
-    pass
+    # DEBUG: Only open_dir .load — testing if a single .load works.
+    demo_text2plan.load(
+        fn=update_open_dir_button_visibility,
+        outputs=[open_dir_btn]
+    )
 
 def run_app():
     # print("Environment variables Gradio:\n" + get_env_as_string() + "\n\n\n")

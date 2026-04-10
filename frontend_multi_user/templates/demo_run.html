@@ -208,14 +208,18 @@
         <div class="iframe-container">
             <iframe name="run-iframe" title="Run Page"></iframe>
         </div>
-        <div class="userid-container">User ID: <span>{{ user_id }}</span></div>
+        <div class="userid-container">
+            <label for="user-id-override">User ID override:</label>
+            <input type="text" id="user-id-override" placeholder="{{ user_id }}" style="font-family:monospace; font-size:14px; padding:4px 8px; border:1px solid #ccc; border-radius:4px; width:320px; margin-left:8px;">
+            <span style="font-size:12px; color:#999; margin-left:8px;">Leave empty to use current user</span>
+        </div>
     </div>
 
     <!-- Hidden form used to POST to /run into the iframe -->
     <form id="run-form" action="/run" method="POST" target="run-iframe" style="display: none">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="prompt" id="form-prompt" value="">
-        <input type="hidden" name="user_id" value="{{ user_id }}">
+        <input type="hidden" name="user_id" id="form-user-id" value="{{ user_id }}">
         <input type="hidden" name="nonce" value="{{ nonce }}">
         <!-- Values are submitted only when enabled (not disabled) -->
         <input type="hidden" name="speed_vs_detail" id="form-speed-vs-detail" value="ping_llm">
@@ -289,14 +293,16 @@
             const iframeContainer = document.querySelector('.iframe-container');
             const inputContainer = document.querySelector('.input-container');
             const iframe = iframeContainer.querySelector('iframe');
+            const userIdOverride = document.getElementById('user-id-override').value.trim();
+            const effectiveUserId = userIdOverride || '{{ user_id }}';
 
             if (methodSelect.value === 'GET') {
                 // GET method: build URL with query parameters
-                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id={{ user_id }}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}&model_profile=${encodeURIComponent(modelProfileValue)}`;
+                let url = `/run?prompt=${encodeURIComponent(promptValue)}&user_id=${encodeURIComponent(effectiveUserId)}&nonce={{ nonce }}&speed_vs_detail=${encodeURIComponent(speedVsDetailValue)}&model_profile=${encodeURIComponent(modelProfileValue)}`;
                 if (developerChecked) {
                     url += '&developer';
                 }
-                
+
                 // Update iframe src with the prompt
                 iframe.src = url;
             } else {
@@ -304,6 +310,7 @@
                 const form = document.getElementById('run-form');
                 document.getElementById('form-prompt').value = promptValue;
                 document.getElementById('form-model-profile').value = modelProfileValue;
+                document.getElementById('form-user-id').value = effectiveUserId;
 
                 // Submit flags only when checked (disable when unchecked so they are not submitted)
                 const developerInput = document.getElementById('form-developer');

@@ -406,9 +406,9 @@ def ping_stream():
     return response
 
 
-@admin_routes_bp.route("/demo_run")
+@admin_routes_bp.route("/admin/demo_run")
 @_admin_required
-def demo_run():
+def admin_demo_run():
     from src.app import _model_profile_options, DEMO_FORM_RUN_PROMPT_UUIDS
     user_id = str(current_user.id)
     nonce = "DEMO_" + str(uuid.uuid4())
@@ -417,14 +417,18 @@ def demo_run():
     for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
         prompt_item = prompt_catalog.find(prompt_uuid)
         if prompt_item is None:
-            logger.error(f"Prompt item not found for uuid: {prompt_uuid} in demo_run")
+            logger.error(f"Prompt item not found for uuid: {prompt_uuid} in admin_demo_run")
             return "Error: Demo prompt configuration missing.", 500
         prompts.append(prompt_item.prompt)
 
-    return render_template(
-        "demo_run.html",
+    admin_ext = current_app.extensions.get("admin", [None])
+    admin_obj = admin_ext[0] if isinstance(admin_ext, list) and admin_ext else None
+    template_args = dict(
         user_id=user_id,
         prompts=prompts,
         nonce=nonce,
         model_profile_options=_model_profile_options(),
     )
+    if admin_obj:
+        return admin_obj.index_view.render("admin/demo_run.html", **template_args)
+    return render_template("admin/demo_run.html", **template_args)

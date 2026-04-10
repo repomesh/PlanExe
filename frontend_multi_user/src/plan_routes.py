@@ -626,8 +626,9 @@ def run():
     )
 
     if current_user.is_admin:
-        admin_account = _get_current_user_account()
-        user_id_param = str(admin_account.id) if admin_account else current_app.config["ADMIN_USERNAME"]
+        if not user_id_param:
+            admin_account = _get_current_user_account()
+            user_id_param = str(admin_account.id) if admin_account else current_app.config["ADMIN_USERNAME"]
     else:
         user_id_param = str(current_user.id)
 

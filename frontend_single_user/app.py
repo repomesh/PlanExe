@@ -857,11 +857,22 @@ with gr.Blocks(title="PlanExe") as demo_text2plan:
     )
     # The download file value is updated by run_planner generator outputs.
 
-    # DEBUG: Only .load handlers re-enabled.
+    # DEBUG: .load with minimal outputs (no settings components).
+    def initialize_browser_settings_minimal(browser_state, session_state: SessionState):
+        try:
+            settings = json.loads(browser_state) if browser_state else {}
+        except Exception:
+            settings = {}
+        session_state.openrouter_api_key = settings.get("openrouter_api_key_text", "")
+        session_state.llm_model = settings.get("model_radio", default_model_value)
+        session_state.speedvsdetail = settings.get("speedvsdetail_radio", SpeedVsDetailEnum.ALL_DETAILS_BUT_SLOW)
+        session_state.model_profile = settings.get("model_profile_radio", ModelProfileEnum.BASELINE.value)
+        return session_state
+
     demo_text2plan.load(
-        fn=initialize_browser_settings,
+        fn=initialize_browser_settings_minimal,
         inputs=[browser_state, session_state],
-        outputs=[openrouter_api_key_text, model_radio, speedvsdetail_radio, model_profile_radio, profile_models_markdown, active_config_markdown, browser_state, session_state]
+        outputs=[session_state]
     ).then(
         fn=check_api_key,
         inputs=[session_state],

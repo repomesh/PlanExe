@@ -949,6 +949,85 @@ def plan():
     )
 
 
+def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
+    """Validate and clean an uploaded zip for plan import.
+
+    Returns dict with keys:
+        error: str or None — error message if invalid
+        cleaned_zip: bytes or None — cleaned zip data if valid
+    """
+    # Verify it's a valid zip
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_data))
+    except (zipfile.BadZipFile, Exception) as exc:
+        return {"error": f"Invalid zip file: {exc}", "cleaned_zip": None}
+
+    # Build the set of allowed filenames from FilenameEnum
+    allowed_filenames: set[str] = set()
+    for member in FilenameEnum:
+        value = member.value
+        if "{}" in value:
+            # Template filenames like "expert_criticism_{}_raw.json" — skip exact match,
+            # we'll match these by suffix below
+            continue
+        allowed_filenames.add(value)
+    allowed_filenames.add("pipeline_complete.txt")
+
+    # Template suffixes for filenames with {} placeholders
+    template_suffixes: list[str] = []
+    for member in FilenameEnum:
+        value = member.value
+        if "{}" in value:
+            # e.g. "expert_criticism_{}_raw.json" -> "_raw.json" after the placeholder
+            suffix = value.split("{}")[1]
+            prefix = value.split("{}")[0]
+            template_suffixes.append((prefix, suffix))
+
+    files_to_delete = {e.value for e in ExtraFilenameEnum}
+    unrecognized = []
+
+    for info in zf.infolist():
+        # Skip directories
+        if info.is_dir():
+            continue
+        name = info.filename
+        # Strip a single leading directory if present (e.g. "run_id/plan.txt" -> "plan.txt")
+        basename = name.split("/")[-1] if "/" in name else name
+
+        if basename in files_to_delete:
+            continue
+        if basename in allowed_filenames:
+            continue
+        # Check template patterns
+        matched = False
+        for prefix, suffix in template_suffixes:
+            if basename.startswith(prefix) and basename.endswith(suffix):
+                matched = True
+                break
+        if not matched:
+            unrecognized.append(basename)
+
+    if unrecognized:
+        preview = ", ".join(unrecognized[:10])
+        if len(unrecognized) > 10:
+            preview += f", ... ({len(unrecognized)} total)"
+        return {"error": f"Zip contains unrecognized files: {preview}", "cleaned_zip": None}
+
+    # Rebuild the zip without the files to delete
+    out_buf = io.BytesIO()
+    with zipfile.ZipFile(out_buf, "w", compression=zipfile.ZIP_DEFLATED) as out_zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
+            if basename in files_to_delete:
+                continue
+            out_zf.writestr(info, zf.read(info.filename))
+    zf.close()
+
+    return {"error": None, "cleaned_zip": out_buf.getvalue()}
+
+
 @plan_routes_bp.route("/plan/import", methods=["GET", "POST"])
 @login_required
 def plan_import():
@@ -970,31 +1049,36 @@ def plan_import():
                 message = f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."
                 message_type = "error"
             else:
-                try:
-                    user_id = str(current_user.id)
-                    plan = PlanItem(
-                        prompt=f"[Imported from {zip_file.filename}]",
-                        state=PlanState.import_pending,
-                        user_id=user_id,
-                        parameters={
-                            "trigger_source": "frontend import",
-                            "import_filename": zip_file.filename,
-                            "pipeline_version": PIPELINE_VERSION,
-                        },
-                        run_zip_snapshot=zip_data,
-                    )
-                    db.session.add(plan)
-                    db.session.commit()
-                    logger.info(
-                        "Plan import: created plan %s from %r (%s bytes) for user %s",
-                        plan.id, zip_file.filename, zip_size, user_id,
-                    )
-                    return redirect(url_for("plan_routes.plan", id=str(plan.id)))
-                except Exception as exc:
-                    db.session.rollback()
-                    logger.error("Plan import failed for %r: %s", zip_file.filename, exc)
-                    message = "Import failed. Please try again."
+                result = _validate_and_clean_import_zip(zip_data)
+                if result["error"]:
+                    message = result["error"]
                     message_type = "error"
+                else:
+                    try:
+                        user_id = str(current_user.id)
+                        plan = PlanItem(
+                            prompt=f"[Imported from {zip_file.filename}]",
+                            state=PlanState.import_pending,
+                            user_id=user_id,
+                            parameters={
+                                "trigger_source": "frontend import",
+                                "import_filename": zip_file.filename,
+                                "pipeline_version": PIPELINE_VERSION,
+                            },
+                            run_zip_snapshot=result["cleaned_zip"],
+                        )
+                        db.session.add(plan)
+                        db.session.commit()
+                        logger.info(
+                            "Plan import: created plan %s from %r (%s bytes, cleaned %s bytes) for user %s",
+                            plan.id, zip_file.filename, zip_size, len(result["cleaned_zip"]), user_id,
+                        )
+                        return redirect(url_for("plan_routes.plan", id=str(plan.id)))
+                    except Exception as exc:
+                        db.session.rollback()
+                        logger.error("Plan import failed for %r: %s", zip_file.filename, exc)
+                        message = "Import failed. Please try again."
+                        message_type = "error"
     return render_template("plan_import.html", message=message, message_type=message_type)
 
 

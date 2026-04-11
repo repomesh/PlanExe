@@ -1007,22 +1007,25 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         if not matched:
             unrecognized.append(basename)
 
-    if unrecognized:
-        preview = ", ".join(unrecognized[:10])
-        if len(unrecognized) > 10:
-            preview += f", ... ({len(unrecognized)} total)"
-        return {"error": f"Zip contains unrecognized files: {preview}", "cleaned_zip": None}
-
-    # Rebuild the zip without the files to delete
+    # Rebuild the zip: keep only recognized FilenameEnum files, skip extras and unrecognized
+    skip_files = files_to_delete | set(unrecognized)
     out_buf = io.BytesIO()
+    kept_count = 0
     with zipfile.ZipFile(out_buf, "w", compression=zipfile.ZIP_DEFLATED) as out_zf:
         for info in zf.infolist():
             if info.is_dir():
                 continue
             basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
-            if basename in files_to_delete:
+            if basename in skip_files:
                 continue
             out_zf.writestr(info, zf.read(info.filename))
+            kept_count += 1
+
+    if unrecognized:
+        logger.info("Plan import: skipped %d unrecognized files", len(unrecognized))
+
+    if kept_count == 0:
+        return {"error": "Zip contains no recognized PlanExe files.", "cleaned_zip": None}
     zf.close()
 
     return {"error": None, "cleaned_zip": out_buf.getvalue()}

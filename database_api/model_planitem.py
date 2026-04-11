@@ -38,6 +38,7 @@ class PlanState(enum.Enum):
     completed = 3
     failed = 4
     stopped = 5
+    import_pending = 6
 
 
 class PlanItem(db.Model):

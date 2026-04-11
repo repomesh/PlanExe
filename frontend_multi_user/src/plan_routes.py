@@ -963,10 +963,29 @@ def plan_import():
             message = "Please upload a .zip file."
             message_type = "error"
         else:
-            # TODO: process the zip file
-            logger.info("Plan import: received zip file %r (%s bytes)", zip_file.filename, zip_file.content_length)
-            message = f"Uploaded {zip_file.filename} (not yet processed)."
-            message_type = "success"
+            zip_data = zip_file.read()
+            zip_size = len(zip_data)
+            max_zip_size = 50 * 1024 * 1024  # 50 MB
+            if zip_size > max_zip_size:
+                message = f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."
+                message_type = "error"
+            else:
+                user_id = str(current_user.id)
+                plan = PlanItem(
+                    prompt=f"[Imported from {zip_file.filename}]",
+                    state=PlanState.import_pending,
+                    user_id=user_id,
+                    parameters={
+                        "trigger_source": "frontend import",
+                        "import_filename": zip_file.filename,
+                        "pipeline_version": PIPELINE_VERSION,
+                    },
+                    run_zip_snapshot=zip_data,
+                )
+                db.session.add(plan)
+                db.session.commit()
+                logger.info("Plan import: created plan %s from %r (%s bytes) for user %s", plan.id, zip_file.filename, zip_size, user_id)
+                return redirect(url_for("plan_routes.plan", id=str(plan.id)))
     return render_template("plan_import.html", message=message, message_type=message_type)
 
 

@@ -965,7 +965,7 @@ def plan_import():
         else:
             zip_data = zip_file.read()
             zip_size = len(zip_data)
-            max_zip_size = 50 * 1024 * 1024  # 50 MB
+            max_zip_size = 10 * 1024 * 1024  # 10 MB
             if zip_size > max_zip_size:
                 message = f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."
                 message_type = "error"

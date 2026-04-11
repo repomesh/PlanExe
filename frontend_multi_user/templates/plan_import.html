@@ -12,26 +12,45 @@
         font-size: 0.82rem;
         color: var(--color-text-secondary);
     }
-    .import-wrap {
-        border: 1px solid var(--color-border);
+    .import-dropzone {
+        border: 2px dashed var(--color-border);
         border-radius: var(--radius-lg);
         background: var(--color-card-bg);
-        padding: 24px;
+        padding: 48px 24px;
         max-width: 500px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
     }
-    .import-label {
-        display: block;
+    .import-dropzone.drag-over {
+        border-color: var(--color-primary, #0066cc);
+        background: #e3f2fd;
+    }
+    .import-dropzone-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        color: var(--color-text-secondary);
+    }
+    .import-dropzone-text {
+        font-size: 0.9rem;
+        color: var(--color-text-secondary);
+        margin-bottom: 4px;
+    }
+    .import-dropzone-hint {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        opacity: 0.7;
+    }
+    .import-dropzone-filename {
+        margin-top: 12px;
         font-size: 0.82rem;
         font-weight: 600;
-        margin-bottom: 8px;
         color: var(--color-text);
-    }
-    .import-file-input {
-        display: block;
-        margin-bottom: 16px;
-        font-size: 0.82rem;
+        display: none;
     }
     .import-submit {
+        display: none;
+        margin-top: 16px;
         padding: 8px 20px;
         font-size: 0.82rem;
         font-weight: 600;
@@ -40,6 +59,8 @@
         border: none;
         border-radius: var(--radius-lg);
         cursor: pointer;
+        max-width: 500px;
+        width: 100%;
     }
     .import-submit:hover {
         opacity: 0.9;
@@ -56,6 +77,7 @@
         padding: 10px 14px;
         border-radius: var(--radius-lg);
         font-size: 0.82rem;
+        max-width: 500px;
     }
     .import-message-success {
         background: #e6f4ea;
@@ -75,18 +97,70 @@
 <h1 class="import-title">Import Plan</h1>
 <p class="import-subtitle">Upload a plan zip file to import it.</p>
 
-<div class="import-wrap">
-    <form method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <label class="import-label" for="zip-file">Select zip file</label>
-        <input class="import-file-input" type="file" id="zip-file" name="zip_file" accept=".zip" required>
-        <button class="import-submit" type="submit">Upload</button>
-    </form>
+<form id="import-form" method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" id="zip-file" name="zip_file" accept=".zip" style="display:none">
 
-    {% if message %}
-    <div class="import-message {% if message_type == 'error' %}import-message-error{% else %}import-message-success{% endif %}">
-        {{ message }}
+    <div class="import-dropzone" id="dropzone">
+        <div class="import-dropzone-icon">&#128230;</div>
+        <div class="import-dropzone-text">Drop a .zip file here or click to browse</div>
+        <div class="import-dropzone-hint">.zip files only, max 10 MB</div>
+        <div class="import-dropzone-filename" id="filename-display"></div>
     </div>
-    {% endif %}
+    <button class="import-submit" id="submit-btn" type="submit">Upload</button>
+</form>
+
+{% if message %}
+<div class="import-message {% if message_type == 'error' %}import-message-error{% else %}import-message-success{% endif %}">
+    {{ message }}
 </div>
+{% endif %}
+
+<script>
+(function() {
+    var dropzone = document.getElementById('dropzone');
+    var fileInput = document.getElementById('zip-file');
+    var filenameDisplay = document.getElementById('filename-display');
+    var submitBtn = document.getElementById('submit-btn');
+
+    function showFile(file) {
+        filenameDisplay.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+        filenameDisplay.style.display = 'block';
+        submitBtn.style.display = 'block';
+    }
+
+    dropzone.addEventListener('click', function() {
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            showFile(fileInput.files[0]);
+        }
+    });
+
+    dropzone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', function() {
+        dropzone.classList.remove('drag-over');
+    });
+
+    dropzone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            fileInput.files = files;
+            showFile(files[0]);
+        }
+    });
+
+    // Prevent browser default drop behavior on the whole page
+    document.addEventListener('dragover', function(e) { e.preventDefault(); });
+    document.addEventListener('drop', function(e) { e.preventDefault(); });
+})();
+</script>
 {% endblock %}

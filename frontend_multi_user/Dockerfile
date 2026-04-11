@@ -37,5 +37,5 @@ ENV PLANEXE_FRONTEND_MULTIUSER_WORKERS=4
 CMD gunicorn wsgi:app \
     --bind 0.0.0.0:${PLANEXE_FRONTEND_MULTIUSER_PORT:-5000} \
     --workers ${PLANEXE_FRONTEND_MULTIUSER_WORKERS} \
-    --timeout 60 \
+    --timeout 120 \
     --chdir /app/frontend_multi_user/src

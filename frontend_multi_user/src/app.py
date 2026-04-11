@@ -531,11 +531,12 @@ class MyFlaskApp:
             one enum name does not poison the attempt for the other.
             """
             for type_name in ("taskstate", "planstate"):
-                try:
-                    with self.db.engine.begin() as conn:
-                        conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
-                except Exception as exc:
-                    logger.debug("ALTER TYPE %s: %s", type_name, exc)
+                for enum_value in ("stopped", "import_pending"):
+                    try:
+                        with self.db.engine.begin() as conn:
+                            conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{enum_value}'"))
+                    except Exception as exc:
+                        logger.debug("ALTER TYPE %s ADD VALUE %s: %s", type_name, enum_value, exc)
 
         def _ensure_last_progress_at_column() -> None:
             insp = inspect(self.db.engine)

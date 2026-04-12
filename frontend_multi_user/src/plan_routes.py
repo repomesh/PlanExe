@@ -1061,6 +1061,11 @@ def plan_resume_from_zip():
 @login_required
 def plan_resume_from_zip_upload():
     """JSON API for zip upload. Called via fetch() from the resume-from-zip page."""
+    if not current_user.is_admin:
+        user = _get_current_user_account()
+        if user and (user.credits_balance or 0) < Decimal("0.1"):
+            return jsonify({"error": "Insufficient credits. At least 0.1 credits required to resume a plan."}), 402
+
     zip_file = request.files.get("zip_file")
     if zip_file is None or zip_file.filename == "":
         return jsonify({"error": "No file selected."}), 400

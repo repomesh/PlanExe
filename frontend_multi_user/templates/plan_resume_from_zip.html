@@ -30,6 +30,19 @@
         font-weight: 600;
         font-size: 0.82rem;
         color: var(--color-text);
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .import-how-it-works summary::-webkit-details-marker { display: none; }
+    .import-how-it-works summary::before {
+        content: "\25B6";
+        font-size: 0.6rem;
+        transition: transform 0.15s;
+    }
+    .import-how-it-works[open] summary::before {
+        transform: rotate(90deg);
     }
     .import-how-it-works ol {
         margin: 8px 0 0;

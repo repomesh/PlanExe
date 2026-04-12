@@ -123,6 +123,7 @@
 {% endblock %}
 
 {% block content %}
+<div style="max-width:560px; margin:0 auto;">
 <h1 class="import-title">Resume from Zip</h1>
 <p class="import-subtitle">
     Upload a PlanExe zip to resume generation. Edit files inside the zip before uploading to steer the output &mdash; changes to early-stage files will propagate downstream.
@@ -161,6 +162,7 @@
 </div>
 <button class="import-submit" id="submit-btn" type="button">Upload & Resume</button>
 <div id="message-area"></div>
+</div>
 
 <script>
 (function() {

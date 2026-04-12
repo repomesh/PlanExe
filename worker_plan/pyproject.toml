@@ -68,7 +68,7 @@ dependencies = [
     "marshmallow==3.24.2",
     "mdurl==0.1.2",
     # "mistralai==1.5.2",
-    "multidict==6.7.0",
+    "multidict==6.7.1",
     "mypy-extensions==1.1.0",
     "nest-asyncio==1.6.0",
     "networkx==3.6.1",

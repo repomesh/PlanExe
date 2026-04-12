@@ -1101,7 +1101,11 @@ def plan_import_upload():
             "resume": True,
         }
         if plan_raw and plan_raw.get("pretty_date"):
-            parameters["start_date"] = plan_raw["pretty_date"]
+            try:
+                parsed = datetime.strptime(plan_raw["pretty_date"], "%Y-%b-%d")
+                parameters["start_date"] = parsed.strftime("%Y-%m-%d")
+            except (ValueError, TypeError):
+                pass  # Skip unparseable dates
 
         plan = PlanItem(
             prompt=prompt,

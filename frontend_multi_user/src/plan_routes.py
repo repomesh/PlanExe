@@ -1007,7 +1007,7 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         if not matched:
             unrecognized.append(basename)
 
-    # Rebuild the zip: keep only recognized FilenameEnum files, skip extras and unrecognized
+    # Rebuild the zip: keep only recognized FilenameEnum files, flatten paths to basenames
     skip_files = files_to_delete | set(unrecognized)
     out_buf = io.BytesIO()
     kept_count = 0
@@ -1018,7 +1018,8 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
             basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
             if basename in skip_files:
                 continue
-            out_zf.writestr(info, zf.read(info.filename))
+            # Flatten: write with basename only so extractall puts files directly in run_id_dir
+            out_zf.writestr(basename, zf.read(info.filename))
             kept_count += 1
 
     if unrecognized:

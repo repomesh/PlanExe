@@ -955,12 +955,14 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
     Returns dict with keys:
         error: str or None — error message if invalid
         cleaned_zip: bytes or None — cleaned zip data if valid
+        plan_raw: dict or None — parsed plan_raw.json if present
+        metadata: dict or None — parsed planexe_metadata.json if present
     """
     # Verify it's a valid zip
     try:
         zf = zipfile.ZipFile(io.BytesIO(zip_data))
     except (zipfile.BadZipFile, Exception) as exc:
-        return {"error": f"Invalid zip file: {exc}", "cleaned_zip": None}
+        return {"error": f"Invalid zip file: {exc}", "cleaned_zip": None, "plan_raw": None, "metadata": None}
 
     # Build the set of allowed filenames from FilenameEnum
     allowed_filenames: set[str] = set()
@@ -1026,10 +1028,26 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         logger.info("Plan import: skipped %d unrecognized files", len(unrecognized))
 
     if kept_count == 0:
-        return {"error": "Zip contains no recognized PlanExe files.", "cleaned_zip": None}
+        return {"error": "Zip contains no recognized PlanExe files.", "cleaned_zip": None, "plan_raw": None, "metadata": None}
+
+    # Extract plan_raw.json and planexe_metadata.json if present
+    plan_raw = None
+    metadata = None
+    for info in zf.infolist():
+        basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
+        if basename == FilenameEnum.INITIAL_PLAN_RAW.value:
+            try:
+                plan_raw = json.loads(zf.read(info.filename))
+            except (json.JSONDecodeError, Exception):
+                pass
+        elif basename == FilenameEnum.PLANEXE_METADATA.value:
+            try:
+                metadata = json.loads(zf.read(info.filename))
+            except (json.JSONDecodeError, Exception):
+                pass
     zf.close()
 
-    return {"error": None, "cleaned_zip": out_buf.getvalue()}
+    return {"error": None, "cleaned_zip": out_buf.getvalue(), "plan_raw": plan_raw, "metadata": metadata}
 
 
 @plan_routes_bp.route("/plan/import", methods=["GET"])
@@ -1063,17 +1081,33 @@ def plan_import_upload():
         user_id = str(current_user.id)
         raw_profile = request.form.get("model_profile")
         selected_model_profile = normalize_model_profile(raw_profile).value
+
+        # Use plan_raw.json prompt if available, otherwise fallback
+        plan_raw = result.get("plan_raw")
+        prompt = plan_raw.get("plan_prompt", "") if plan_raw else ""
+        if not prompt:
+            prompt = f"[Imported from {zip_file.filename}]"
+
+        # Use pipeline_version from planexe_metadata.json if available
+        metadata = result.get("metadata")
+        snapshot_version = metadata.get("pipeline_version") if metadata else None
+        effective_version = snapshot_version if snapshot_version is not None else PIPELINE_VERSION
+
+        parameters = {
+            "trigger_source": "frontend import",
+            "import_filename": zip_file.filename,
+            "pipeline_version": effective_version,
+            "model_profile": selected_model_profile,
+            "resume": True,
+        }
+        if plan_raw and plan_raw.get("pretty_date"):
+            parameters["start_date"] = plan_raw["pretty_date"]
+
         plan = PlanItem(
-            prompt=f"[Imported from {zip_file.filename}]",
+            prompt=prompt,
             state=PlanState.pending,
             user_id=user_id,
-            parameters={
-                "trigger_source": "frontend import",
-                "import_filename": zip_file.filename,
-                "pipeline_version": PIPELINE_VERSION,
-                "model_profile": selected_model_profile,
-                "resume": True,
-            },
+            parameters=parameters,
             run_zip_snapshot=result["cleaned_zip"],
         )
         db.session.add(plan)

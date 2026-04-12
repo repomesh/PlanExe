@@ -1031,58 +1031,56 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
     return {"error": None, "cleaned_zip": out_buf.getvalue()}
 
 
-@plan_routes_bp.route("/plan/import", methods=["GET", "POST"])
+@plan_routes_bp.route("/plan/import", methods=["GET"])
 @login_required
 def plan_import():
-    message = None
-    message_type = None
-    if request.method == "POST":
-        zip_file = request.files.get("zip_file")
-        if zip_file is None or zip_file.filename == "":
-            message = "No file selected."
-            message_type = "error"
-        elif not zip_file.filename.endswith(".zip"):
-            message = "Please upload a .zip file."
-            message_type = "error"
-        else:
-            zip_data = zip_file.read()
-            zip_size = len(zip_data)
-            max_zip_size = 10 * 1024 * 1024  # 10 MB
-            if zip_size > max_zip_size:
-                message = f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."
-                message_type = "error"
-            else:
-                result = _validate_and_clean_import_zip(zip_data)
-                if result["error"]:
-                    message = result["error"]
-                    message_type = "error"
-                else:
-                    try:
-                        user_id = str(current_user.id)
-                        plan = PlanItem(
-                            prompt=f"[Imported from {zip_file.filename}]",
-                            state=PlanState.import_pending,
-                            user_id=user_id,
-                            parameters={
-                                "trigger_source": "frontend import",
-                                "import_filename": zip_file.filename,
-                                "pipeline_version": PIPELINE_VERSION,
-                            },
-                            run_zip_snapshot=result["cleaned_zip"],
-                        )
-                        db.session.add(plan)
-                        db.session.commit()
-                        logger.info(
-                            "Plan import: created plan %s from %r (%s bytes, cleaned %s bytes) for user %s",
-                            plan.id, zip_file.filename, zip_size, len(result["cleaned_zip"]), user_id,
-                        )
-                        return redirect(url_for("plan_routes.plan", id=str(plan.id)))
-                    except Exception as exc:
-                        db.session.rollback()
-                        logger.error("Plan import failed for %r: %s", zip_file.filename, exc)
-                        message = "Import failed. Please try again."
-                        message_type = "error"
-    return render_template("plan_import.html", message=message, message_type=message_type)
+    return render_template("plan_import.html")
+
+
+@plan_routes_bp.route("/plan/import/upload", methods=["POST"])
+@login_required
+def plan_import_upload():
+    """JSON API for zip upload. Called via fetch() from the import page."""
+    zip_file = request.files.get("zip_file")
+    if zip_file is None or zip_file.filename == "":
+        return jsonify({"error": "No file selected."}), 400
+    if not zip_file.filename.endswith(".zip"):
+        return jsonify({"error": "Please upload a .zip file."}), 400
+
+    zip_data = zip_file.read()
+    zip_size = len(zip_data)
+    max_zip_size = 10 * 1024 * 1024  # 10 MB
+    if zip_size > max_zip_size:
+        return jsonify({"error": f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."}), 400
+
+    result = _validate_and_clean_import_zip(zip_data)
+    if result["error"]:
+        return jsonify({"error": result["error"]}), 400
+
+    try:
+        user_id = str(current_user.id)
+        plan = PlanItem(
+            prompt=f"[Imported from {zip_file.filename}]",
+            state=PlanState.import_pending,
+            user_id=user_id,
+            parameters={
+                "trigger_source": "frontend import",
+                "import_filename": zip_file.filename,
+                "pipeline_version": PIPELINE_VERSION,
+            },
+            run_zip_snapshot=result["cleaned_zip"],
+        )
+        db.session.add(plan)
+        db.session.commit()
+        logger.info(
+            "Plan import: created plan %s from %r (%s bytes, cleaned %s bytes) for user %s",
+            plan.id, zip_file.filename, zip_size, len(result["cleaned_zip"]), user_id,
+        )
+        return jsonify({"plan_id": str(plan.id)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Plan import failed for %r: %s", zip_file.filename, exc)
+        return jsonify({"error": "Import failed. Please try again."}), 500
 
 
 @plan_routes_bp.route("/plan/stop", methods=["POST"])

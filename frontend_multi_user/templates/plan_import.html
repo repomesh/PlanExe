@@ -65,6 +65,10 @@
     .import-submit:hover {
         opacity: 0.9;
     }
+    .import-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
     .import-back {
         display: inline-block;
         margin-bottom: 16px;
@@ -97,24 +101,16 @@
 <h1 class="import-title">Import Plan</h1>
 <p class="import-subtitle">Upload a plan zip file to import it.</p>
 
-<form id="import-form" method="POST" enctype="multipart/form-data">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <input type="file" id="zip-file" name="zip_file" accept=".zip" style="display:none">
+<input type="file" id="zip-file" accept=".zip" style="display:none">
 
-    <div class="import-dropzone" id="dropzone">
-        <div class="import-dropzone-icon">&#128230;</div>
-        <div class="import-dropzone-text">Drop a .zip file here or click to browse</div>
-        <div class="import-dropzone-hint">.zip files only, max 10 MB</div>
-        <div class="import-dropzone-filename" id="filename-display"></div>
-    </div>
-    <button class="import-submit" id="submit-btn" type="submit">Upload</button>
-</form>
-
-{% if message %}
-<div class="import-message {% if message_type == 'error' %}import-message-error{% else %}import-message-success{% endif %}">
-    {{ message }}
+<div class="import-dropzone" id="dropzone">
+    <div class="import-dropzone-icon">&#128230;</div>
+    <div class="import-dropzone-text">Drop a .zip file here or click to browse</div>
+    <div class="import-dropzone-hint">.zip files only, max 10 MB</div>
+    <div class="import-dropzone-filename" id="filename-display"></div>
 </div>
-{% endif %}
+<button class="import-submit" id="submit-btn" type="button">Upload</button>
+<div id="message-area"></div>
 
 <script>
 (function() {
@@ -122,11 +118,19 @@
     var fileInput = document.getElementById('zip-file');
     var filenameDisplay = document.getElementById('filename-display');
     var submitBtn = document.getElementById('submit-btn');
+    var messageArea = document.getElementById('message-area');
+    var selectedFile = null;
 
     function showFile(file) {
+        selectedFile = file;
         filenameDisplay.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
         filenameDisplay.style.display = 'block';
         submitBtn.style.display = 'block';
+        messageArea.innerHTML = '';
+    }
+
+    function showMessage(text, type) {
+        messageArea.innerHTML = '<div class="import-message import-message-' + type + '">' + text + '</div>';
     }
 
     dropzone.addEventListener('click', function() {
@@ -139,14 +143,12 @@
         }
     });
 
-    // Entire window is the drop target
     document.addEventListener('dragover', function(e) {
         e.preventDefault();
         dropzone.classList.add('drag-over');
     });
 
     document.addEventListener('dragleave', function(e) {
-        // Only remove highlight when leaving the window entirely
         if (!e.relatedTarget && e.clientX === 0 && e.clientY === 0) {
             dropzone.classList.remove('drag-over');
         }
@@ -160,6 +162,41 @@
             fileInput.files = files;
             showFile(files[0]);
         }
+    });
+
+    submitBtn.addEventListener('click', function() {
+        if (!selectedFile) return;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+        messageArea.innerHTML = '';
+
+        var formData = new FormData();
+        formData.append('zip_file', selectedFile);
+        formData.append('csrf_token', '{{ csrf_token() }}');
+
+        fetch('/plan/import/upload', {
+            method: 'POST',
+            body: formData,
+        })
+        .then(function(response) {
+            return response.json().then(function(data) {
+                return { ok: response.ok, data: data };
+            });
+        })
+        .then(function(result) {
+            if (result.ok && result.data.plan_id) {
+                window.location.href = '/plan?id=' + result.data.plan_id;
+            } else {
+                showMessage(result.data.error || 'Upload failed.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload';
+            }
+        })
+        .catch(function(err) {
+            showMessage('Upload failed: ' + err.message, 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload';
+        });
     });
 })();
 </script>

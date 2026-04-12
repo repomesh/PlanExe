@@ -222,7 +222,7 @@
         formData.append('model_profile', document.getElementById('model-profile-select').value);
         formData.append('csrf_token', '{{ csrf_token() }}');
 
-        fetch('/plan/import/upload', { method: 'POST', body: formData })
+        fetch('/plan/resume-from-zip/upload', { method: 'POST', body: formData })
         .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
         .then(function(result) {
             if (result.ok && result.data.plan_id) {

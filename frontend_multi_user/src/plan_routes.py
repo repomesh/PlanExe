@@ -1050,17 +1050,17 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
     return {"error": None, "cleaned_zip": out_buf.getvalue(), "plan_raw": plan_raw, "metadata": metadata}
 
 
-@plan_routes_bp.route("/plan/import", methods=["GET"])
+@plan_routes_bp.route("/plan/resume-from-zip", methods=["GET"])
 @login_required
-def plan_import():
+def plan_resume_from_zip():
     from src.app import _model_profile_options
-    return render_template("plan_import.html", model_profile_options=_model_profile_options())
+    return render_template("plan_resume_from_zip.html", model_profile_options=_model_profile_options())
 
 
-@plan_routes_bp.route("/plan/import/upload", methods=["POST"])
+@plan_routes_bp.route("/plan/resume-from-zip/upload", methods=["POST"])
 @login_required
-def plan_import_upload():
-    """JSON API for zip upload. Called via fetch() from the import page."""
+def plan_resume_from_zip_upload():
+    """JSON API for zip upload. Called via fetch() from the resume-from-zip page."""
     zip_file = request.files.get("zip_file")
     if zip_file is None or zip_file.filename == "":
         return jsonify({"error": "No file selected."}), 400

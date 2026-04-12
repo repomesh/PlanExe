@@ -1062,7 +1062,8 @@ class MyFlaskApp:
                             user_id = str(user.id)
                             credits_balance = to_credit_decimal(user.credits_balance)
                             credits_balance_display = format_credit_display(user.credits_balance)
-                            can_create_plan = credits_balance >= Decimal("2")
+                            min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+                            can_create_plan = credits_balance >= min_credits
 
                     if user_id:
                         # Generate a nonce so the user can start a plan from the dashboard

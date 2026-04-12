@@ -755,8 +755,9 @@ def create_plan():
         user = db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
         if not user:
             return jsonify({"error": "User not found"}), 400
-        if to_credit_decimal(user.credits_balance) < Decimal("2"):
-            return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
+        min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+        if to_credit_decimal(user.credits_balance) < min_credits:
+            return jsonify({"error": f"Insufficient credits (minimum {min_credits} required)"}), 402
         first_key = (
             UserApiKey.query
             .filter_by(user_id=user.id, revoked_at=None)
@@ -1063,8 +1064,9 @@ def plan_resume_from_zip_upload():
     """JSON API for zip upload. Called via fetch() from the resume-from-zip page."""
     if not current_user.is_admin:
         user = _get_current_user_account()
-        if user and (user.credits_balance or 0) < Decimal("0.1"):
-            return jsonify({"error": "Insufficient credits. At least 0.1 credits required to resume a plan."}), 402
+        min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+        if user and to_credit_decimal(user.credits_balance) < min_credits:
+            return jsonify({"error": f"Insufficient credits. At least {min_credits} credits required."}), 402
 
     zip_file = request.files.get("zip_file")
     if zip_file is None or zip_file.filename == "":

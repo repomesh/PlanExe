@@ -79,7 +79,7 @@ dependencies = [
     "orjson==3.11.6",
     "packaging==25.0",
     "pandas==2.3.3",
-    "pillow==12.1.1",
+    "pillow==12.2.0",
     "propcache==0.4.1",
     "pydantic==2.12.5",
     "pydantic_core==2.41.5",

@@ -531,7 +531,7 @@ class MyFlaskApp:
             one enum name does not poison the attempt for the other.
             """
             for type_name in ("taskstate", "planstate"):
-                for enum_value in ("stopped", "import_pending"):
+                for enum_value in ("stopped",):
                     try:
                         with self.db.engine.begin() as conn:
                             conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{enum_value}'"))

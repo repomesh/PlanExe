@@ -361,7 +361,7 @@ def ensure_stopped_state() -> None:
     created after that rename will have ``planstate``.  We try both names.
     """
     for type_name in ("taskstate", "planstate"):
-        for enum_value in ("stopped", "import_pending"):
+        for enum_value in ("stopped",):
             try:
                 with db.engine.begin() as conn:
                     conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{enum_value}'"))

@@ -109,7 +109,15 @@
     <div class="import-dropzone-hint">.zip files only, max 10 MB</div>
     <div class="import-dropzone-filename" id="filename-display"></div>
 </div>
-<button class="import-submit" id="submit-btn" type="button">Upload</button>
+<div id="import-options" style="display:none; max-width:500px; margin-top:16px;">
+    <label style="font-size:0.82rem; font-weight:600; display:block; margin-bottom:6px;">Model profile</label>
+    <select id="model-profile-select" style="padding:6px 10px; font-size:0.82rem; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-card-bg); width:100%;">
+        {% for opt in model_profile_options %}
+        <option value="{{ opt.value }}" {% if opt.value == "baseline" %}selected{% endif %}>{{ opt.title }} — {{ opt.subtitle }}</option>
+        {% endfor %}
+    </select>
+</div>
+<button class="import-submit" id="submit-btn" type="button">Upload & Resume</button>
 <div id="message-area"></div>
 
 <script>
@@ -121,10 +129,13 @@
     var messageArea = document.getElementById('message-area');
     var selectedFile = null;
 
+    var importOptions = document.getElementById('import-options');
+
     function showFile(file) {
         selectedFile = file;
         filenameDisplay.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
         filenameDisplay.style.display = 'block';
+        importOptions.style.display = 'block';
         submitBtn.style.display = 'block';
         messageArea.innerHTML = '';
     }
@@ -170,8 +181,10 @@
         submitBtn.textContent = 'Uploading...';
         messageArea.innerHTML = '';
 
+        var modelProfile = document.getElementById('model-profile-select').value;
         var formData = new FormData();
         formData.append('zip_file', selectedFile);
+        formData.append('model_profile', modelProfile);
         formData.append('csrf_token', '{{ csrf_token() }}');
 
         fetch('/plan/import/upload', {

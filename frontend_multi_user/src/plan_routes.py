@@ -1034,7 +1034,8 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
 @plan_routes_bp.route("/plan/import", methods=["GET"])
 @login_required
 def plan_import():
-    return render_template("plan_import.html")
+    from src.app import _model_profile_options
+    return render_template("plan_import.html", model_profile_options=_model_profile_options())
 
 
 @plan_routes_bp.route("/plan/import/upload", methods=["POST"])
@@ -1059,14 +1060,18 @@ def plan_import_upload():
 
     try:
         user_id = str(current_user.id)
+        raw_profile = request.form.get("model_profile")
+        selected_model_profile = normalize_model_profile(raw_profile).value
         plan = PlanItem(
             prompt=f"[Imported from {zip_file.filename}]",
-            state=PlanState.import_pending,
+            state=PlanState.pending,
             user_id=user_id,
             parameters={
                 "trigger_source": "frontend import",
                 "import_filename": zip_file.filename,
                 "pipeline_version": PIPELINE_VERSION,
+                "model_profile": selected_model_profile,
+                "resume": True,
             },
             run_zip_snapshot=result["cleaned_zip"],
         )

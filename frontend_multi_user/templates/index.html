@@ -145,43 +145,6 @@
         font-size: 0.95rem;
     }
 
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 16px;
-        margin-bottom: 32px;
-    }
-    .stat-card {
-        background: var(--color-bg-soft);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        padding: 20px 24px;
-        text-align: center;
-    }
-    .stat-value {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: var(--color-text);
-        line-height: 1.2;
-    }
-    .stat-value.credits {
-        color: #059669;
-    }
-    .stat-card-link {
-        display: block;
-        text-decoration: none;
-        color: inherit;
-        transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    .stat-card-link:hover {
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 1px var(--color-primary);
-    }
-    .stat-card-link .stat-value.credits {
-        text-decoration: underline;
-        text-underline-offset: 3px;
-        text-decoration-color: rgba(5, 150, 105, 0.4);
-    }
     .stat-card-link:hover .stat-value.credits {
         text-decoration-color: var(--color-primary);
     }
@@ -601,7 +564,6 @@
         .hero { padding: 40px 0 32px; }
         .hero-actions { flex-direction: column; align-items: center; }
         .btn-hero-outline { margin-left: 0; }
-        .stats-row { grid-template-columns: 1fr; }
     }
 </style>
 {% endblock %}
@@ -614,22 +576,12 @@
     <p>Your PlanExe dashboard &mdash; manage your plans and credits.</p>
 </div>
 
-<div class="stats-row">
-    <a href="{{ url_for('account') }}" class="stat-card stat-card-link" title="Manage credits and add more via Stripe">
-        <div class="stat-value credits">{{ credits_balance_display }}</div>
-        <div class="stat-label">Credits{% if not can_create_plan and not is_admin %} · Add more{% endif %}</div>
-    </a>
-    <div class="stat-card">
-        <div class="stat-value">{{ total_tasks_count }}</div>
-        <div class="stat-label">Plans</div>
-    </div>
-</div>
 
 {# ── Start New Plan form ────────────────────────────────────── #}
 <div class="new-plan-section">
     <div class="new-plan-header">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <h2>Start a New Plan</h2>
+        <h2>Create a New Plan</h2>
     </div>
     <div class="new-plan-body">
         {% if example_prompts %}
@@ -690,26 +642,6 @@
     </div>
 </div>
 
-{% if recent_tasks %}
-<h2 class="section-title">Recent Plans</h2>
-<div class="tasks-list">
-    {% for task in recent_tasks %}
-    <a class="task-row-link" href="{{ url_for('plan_routes.plan') }}?id={{ task.id }}">
-    <div class="task-row">
-        <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
-        <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
-        <span class="task-meta">
-            {% if task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
-        </span>
-    </div>
-    </a>
-    {% endfor %}
-</div>
-{% else %}
-<div class="empty-state">
-    <p>You haven't created any plans yet. Describe your idea above and click <strong>Generate Plan</strong> to get started.</p>
-</div>
-{% endif %}
 
 {% elif is_admin %}
 {# ─── Admin shortcut ────────────────────────────────────────── #}

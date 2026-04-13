@@ -989,7 +989,7 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
     unrecognized = []
 
     for info in zf.infolist():
-        # Skip directories, symlinks, and other non-regular files
+        # Skip directories
         if info.is_dir():
             continue
         name = info.filename

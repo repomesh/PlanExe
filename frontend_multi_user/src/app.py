@@ -1038,113 +1038,109 @@ class MyFlaskApp:
         @self.app.route('/')
         def index():
             user = None
-            recent_tasks: list[SimpleNamespace] = []
-            total_tasks_count = 0
             is_admin = False
-            nonce = None
-            user_id = None
-            can_create_plan = False
-            example_prompts: list[str] = []
-            credits_balance_display = "0"
+            onboarding_steps: list[dict] = []
+
             if current_user.is_authenticated:
                 is_admin = current_user.is_admin
                 try:
                     if is_admin:
                         admin_account = _get_current_user_account()
-                        user_id = str(admin_account.id) if admin_account else self.admin_username
                         user = SimpleNamespace(name="Admin", given_name=None)
-                        credits_balance_display = "Full access"
-                        can_create_plan = True
+                        user_id = str(admin_account.id) if admin_account else self.admin_username
                     else:
                         user_uuid = uuid.UUID(str(current_user.id))
                         user = self.db.session.get(UserAccount, user_uuid)
-                        if user:
-                            user_id = str(user.id)
-                            credits_balance = to_credit_decimal(user.credits_balance)
-                            credits_balance_display = format_credit_display(user.credits_balance)
-                            min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
-                            can_create_plan = credits_balance >= min_credits
+                        user_id = str(user.id) if user else None
 
-                    if user_id:
-                        # Generate a nonce so the user can start a plan from the dashboard
-                        nonce = 'DASH_' + str(uuid.uuid4())
+                    if user and user_id:
+                        # Step 1: Account created (always done if logged in)
+                        onboarding_steps.append({
+                            "title": "Create account",
+                            "done": True,
+                            "detail": "Signed in",
+                            "link": None,
+                        })
+
+                        # Step 2: Deposit credits
+                        if is_admin:
+                            has_credits = True
+                            credit_detail = "Full access"
+                        else:
+                            credits_balance = to_credit_decimal(user.credits_balance)
+                            tx_count = CreditHistory.query.filter_by(user_id=user.id).count()
+                            has_credits = credits_balance > 0 or tx_count > 1
+                            credit_detail = format_credit_display(user.credits_balance) if has_credits else "No credits yet"
+                        onboarding_steps.append({
+                            "title": "Deposit credits",
+                            "done": has_credits,
+                            "detail": credit_detail,
+                            "link": url_for('account') if not has_credits else None,
+                        })
+
+                        # Step 3: Create API key
+                        key_count = UserApiKey.query.filter_by(user_id=user.id if not is_admin else admin_account.id, revoked_at=None).count() if not is_admin else UserApiKey.query.filter_by(user_id=admin_account.id, revoked_at=None).count()
+                        has_key = key_count >= 1
+                        if key_count == 0:
+                            key_detail = "No API keys yet"
+                        elif key_count == 1:
+                            key_detail = "1 API key"
+                        else:
+                            key_detail = f"{key_count} API keys"
+                        onboarding_steps.append({
+                            "title": "Create API key",
+                            "done": has_key,
+                            "detail": key_detail,
+                            "link": url_for('account') if not has_key else None,
+                        })
+
+                        # Step 4: Use MCP (check if any API key has LLM calls)
+                        total_llm_calls = 0
+                        if has_key:
+                            user_key_ids = [
+                                str(k.id) for k in UserApiKey.query
+                                .filter_by(user_id=user.id if not is_admin else admin_account.id, revoked_at=None)
+                                .all()
+                            ]
+                            if user_key_ids:
+                                try:
+                                    total_llm_calls = (
+                                        self.db.session.query(func.count(TokenMetrics.id))
+                                        .filter(TokenMetrics.api_key_id.in_(user_key_ids))
+                                        .scalar() or 0
+                                    )
+                                except Exception:
+                                    self.db.session.rollback()
+                        used_mcp = total_llm_calls >= 1
+                        onboarding_steps.append({
+                            "title": "Connect via MCP",
+                            "done": used_mcp,
+                            "detail": f"{total_llm_calls} LLM calls" if used_mcp else "Not connected yet",
+                            "link": "https://docs.planexe.org/mcp/mcp_welcome/" if not used_mcp else None,
+                        })
+
+                        # Step 5: Create 5+ plans
                         uid_filter = (
                             PlanItem.user_id.in_(_admin_user_ids())
                             if is_admin
                             else PlanItem.user_id == str(user_id)
                         )
-                        try:
-                            recent_task_rows = (
-                                self.db.session.query(
-                                    PlanItem.id,
-                                    PlanItem.state,
-                                    PlanItem.stop_requested,
-                                    func.substr(PlanItem.prompt, 1, 240).label("prompt_preview"),
-                                )
-                                .filter(uid_filter)
-                                .order_by(PlanItem.timestamp_created.desc())
-                                .limit(10)
-                                .all()
-                            )
-                        except DataError:
-                            self.db.session.rollback()
-                            logger.warning(
-                                "Detected invalid UTF-8 in task_item.prompt for user_id=%s while loading dashboard; "
-                                "falling back without prompt previews.",
-                                user_id,
-                                exc_info=True,
-                            )
-                            recent_task_rows = (
-                                self.db.session.query(
-                                    PlanItem.id,
-                                    PlanItem.state,
-                                    PlanItem.stop_requested,
-                                )
-                                .filter(uid_filter)
-                                .order_by(PlanItem.timestamp_created.desc())
-                                .limit(10)
-                                .all()
-                            )
-                        recent_tasks = []
-                        for task in recent_task_rows:
-                            prompt_preview = getattr(task, "prompt_preview", None)
-                            if prompt_preview is None:
-                                from src.plan_routes import _load_prompt_preview_safe
-                                prompt_text = _load_prompt_preview_safe(task.id)
-                            else:
-                                prompt_text = (prompt_preview or "").strip() or "[Prompt unavailable]"
-                            state = task.state if isinstance(task.state, PlanState) else None
-                            recent_tasks.append(
-                                SimpleNamespace(
-                                    id=str(task.id),
-                                    state=state,
-                                    prompt=prompt_text,
-                                )
-                            )
-                        total_tasks_count = (
-                            PlanItem.query
-                            .filter(uid_filter)
-                            .count()
-                        )
-                        # Load example prompts for the "Start New Plan" form
-                        for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
-                            prompt_item = self.prompt_catalog.find(prompt_uuid)
-                            if prompt_item:
-                                example_prompts.append(prompt_item.prompt)
+                        total_plans = PlanItem.query.filter(uid_filter).count()
+                        is_superuser = total_plans >= 5
+                        onboarding_steps.append({
+                            "title": "Superuser",
+                            "done": is_superuser,
+                            "detail": f"{total_plans} plans created" if is_superuser else f"{total_plans}/5 plans",
+                            "link": None,
+                        })
                 except Exception:
                     logger.debug("Could not load dashboard data", exc_info=True)
+
             return render_template(
                 'index.html',
                 user=user,
-                credits_balance_display=credits_balance_display,
-                can_create_plan=can_create_plan,
-                total_tasks_count=total_tasks_count,
-                recent_tasks=recent_tasks,
                 is_admin=is_admin,
-                nonce=nonce,
-                user_id=user_id,
-                example_prompts=example_prompts,
-                model_profile_options=_model_profile_options(),
+                onboarding_steps=onboarding_steps,
             )
 
         @self.app.route('/models')

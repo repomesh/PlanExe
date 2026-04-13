@@ -130,33 +130,89 @@
         text-decoration: underline;
     }
 
-    /* ── Dashboard (signed in) ──────────────────────── */
-    .dashboard-welcome {
-        margin-bottom: 32px;
-    }
-    .dashboard-welcome h1 {
-        font-size: 1.75rem;
+    /* ── Onboarding steps ──────────────────────────── */
+    .onboarding-title {
+        font-size: 1.1rem;
         font-weight: 700;
         margin: 0 0 4px;
     }
-    .dashboard-welcome p {
+    .onboarding-subtitle {
+        font-size: 0.82rem;
         color: var(--color-text-secondary);
-        margin: 0;
-        font-size: 0.95rem;
+        margin: 0 0 20px;
     }
-
-    .stat-card-link:hover .stat-value.credits {
-        text-decoration-color: var(--color-primary);
+    .onboarding-steps {
+        max-width: 480px;
     }
-    .stat-label {
-        font-size: 0.8rem;
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .onboarding-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--color-border);
+    }
+    .onboarding-step:last-child {
+        border-bottom: none;
+    }
+    .onboarding-check {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+        font-size: 0.7rem;
+        color: transparent;
+    }
+    .onboarding-check.done {
+        background: #059669;
+        border-color: #059669;
+        color: #fff;
+    }
+    .onboarding-check.done::after {
+        content: "\2713";
+    }
+    .onboarding-step-body {
+        flex: 1;
+        min-width: 0;
+    }
+    .onboarding-step-title {
+        font-size: 0.88rem;
         font-weight: 600;
-        margin-top: 4px;
+        color: var(--color-text);
+        margin: 0;
     }
-
+    .onboarding-step.pending .onboarding-step-title {
+        color: var(--color-text-secondary);
+    }
+    .onboarding-step-detail {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        margin: 2px 0 0;
+    }
+    .onboarding-step-link {
+        font-size: 0.75rem;
+        color: var(--color-primary, #0066cc);
+        text-decoration: none;
+    }
+    .onboarding-step-link:hover {
+        text-decoration: underline;
+    }
+    .superuser-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #92400e;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
     .quick-actions {
         display: flex;
         gap: 12px;
@@ -226,6 +282,30 @@
 {% block content %}
 {% if user %}
 {# ─── Dashboard for signed-in users ─────────────────────────── #}
+<h1 class="onboarding-title">Getting Started</h1>
+<p class="onboarding-subtitle">Connect PlanExe with your AI assistant to create plans.</p>
+
+<div class="onboarding-steps">
+    {% for step in onboarding_steps %}
+    <div class="onboarding-step {% if not step.done %}pending{% endif %}">
+        <div class="onboarding-check {% if step.done %}done{% endif %}"></div>
+        <div class="onboarding-step-body">
+            <p class="onboarding-step-title">
+                {{ step.title }}
+                {% if step.title == "Superuser" and step.done %}
+                <span class="superuser-badge">Superuser</span>
+                {% endif %}
+            </p>
+            <p class="onboarding-step-detail">
+                {{ step.detail }}
+                {% if step.link %}
+                &middot; <a href="{{ step.link }}" class="onboarding-step-link">{% if "docs.planexe" in step.link %}Setup guide{% else %}Go{% endif %} &rarr;</a>
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% endfor %}
+</div>
 
 {% elif is_admin %}
 {# ─── Admin shortcut ────────────────────────────────────────── #}

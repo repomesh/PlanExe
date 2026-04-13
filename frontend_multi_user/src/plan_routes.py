@@ -992,8 +992,6 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         # Skip directories, symlinks, and other non-regular files
         if info.is_dir():
             continue
-        if info.external_attr >> 16 & 0o170000 == 0o120000:  # symlink
-            continue
         name = info.filename
         # Skip path traversal attempts
         if ".." in name or name.startswith("/"):

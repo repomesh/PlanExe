@@ -695,6 +695,34 @@ def run():
     return render_template("run_via_database.html", run_id=task_id)
 
 
+@plan_routes_bp.route("/plan/create", methods=["GET"])
+@login_required
+def plan_create_page():
+    from src.app import _model_profile_options, DEMO_FORM_RUN_PROMPT_UUIDS
+    prompt_catalog = current_app.config["PROMPT_CATALOG"]
+    example_prompts: list[str] = []
+    for prompt_uuid in DEMO_FORM_RUN_PROMPT_UUIDS:
+        prompt_item = prompt_catalog.find(prompt_uuid)
+        if prompt_item:
+            example_prompts.append(prompt_item.prompt)
+
+    can_create_plan = True
+    if not current_user.is_admin:
+        user = _get_current_user_account()
+        if user:
+            min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+            can_create_plan = to_credit_decimal(user.credits_balance) >= min_credits
+
+    nonce = "CREATE_" + str(uuid.uuid4())
+    return render_template(
+        "plan_create.html",
+        can_create_plan=can_create_plan,
+        nonce=nonce,
+        example_prompts=example_prompts,
+        model_profile_options=_model_profile_options(),
+    )
+
+
 @plan_routes_bp.route("/create_plan", methods=["POST"])
 @login_required
 @_nocache

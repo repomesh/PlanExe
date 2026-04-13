@@ -245,6 +245,7 @@
                     <span class="site-brand-label">Home</span>
                 </a>
                 {% if current_user_name %}
+                    <a href="{{ url_for('plan_routes.plan_create_page') }}" class="{% if request.endpoint == 'plan_routes.plan_create_page' %}nav-active{% endif %}">Create</a>
                     <a href="{{ url_for('plan_routes.plan') }}" class="{% if request.endpoint == 'plan_routes.plan' and not request.args.get('id') %}nav-active{% endif %}">Plans</a>
                     <a href="{{ url_for('models') }}" class="{% if request.endpoint == 'models' %}nav-active{% endif %}">Models</a>
                 {% endif %}

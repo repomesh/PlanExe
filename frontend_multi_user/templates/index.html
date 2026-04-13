@@ -130,70 +130,103 @@
         text-decoration: underline;
     }
 
-    /* ── Dashboard (signed in) ──────────────────────── */
-    .dashboard-welcome {
-        margin-bottom: 32px;
-    }
-    .dashboard-welcome h1 {
-        font-size: 1.75rem;
+    /* ── Onboarding steps ──────────────────────────── */
+    .onboarding-title {
+        font-size: 1.1rem;
         font-weight: 700;
         margin: 0 0 4px;
     }
-    .dashboard-welcome p {
+    .onboarding-subtitle {
+        font-size: 0.82rem;
         color: var(--color-text-secondary);
-        margin: 0;
-        font-size: 0.95rem;
+        margin: 0 0 20px;
     }
-
-    .stats-row {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 16px;
-        margin-bottom: 32px;
+    .onboarding-steps {
+        max-width: 480px;
     }
-    .stat-card {
-        background: var(--color-bg-soft);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        padding: 20px 24px;
-        text-align: center;
+    .onboarding-step {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--color-border);
     }
-    .stat-value {
-        font-size: 1.75rem;
-        font-weight: 800;
-        color: var(--color-text);
-        line-height: 1.2;
+    .onboarding-step:last-child {
+        border-bottom: none;
     }
-    .stat-value.credits {
-        color: #059669;
+    .onboarding-check {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2px solid var(--color-border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1px;
+        font-size: 0.7rem;
+        color: transparent;
     }
-    .stat-card-link {
-        display: block;
-        text-decoration: none;
-        color: inherit;
-        transition: border-color 0.15s, box-shadow 0.15s;
+    .onboarding-check.done {
+        background: #059669;
+        border-color: #059669;
+        color: #fff;
     }
-    .stat-card-link:hover {
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 1px var(--color-primary);
+    .onboarding-check.done::after {
+        content: "\2713";
     }
-    .stat-card-link .stat-value.credits {
-        text-decoration: underline;
-        text-underline-offset: 3px;
-        text-decoration-color: rgba(5, 150, 105, 0.4);
+    .onboarding-step-body {
+        flex: 1;
+        min-width: 0;
     }
-    .stat-card-link:hover .stat-value.credits {
-        text-decoration-color: var(--color-primary);
-    }
-    .stat-label {
-        font-size: 0.8rem;
-        color: var(--color-text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+    .onboarding-step-title {
+        font-size: 0.88rem;
         font-weight: 600;
-        margin-top: 4px;
+        color: var(--color-text);
+        margin: 0;
     }
-
+    .onboarding-step.pending .onboarding-step-title {
+        color: var(--color-text-secondary);
+    }
+    .onboarding-step-desc {
+        font-size: 0.78rem;
+        color: var(--color-text-secondary);
+        margin: 4px 0 0;
+        line-height: 1.5;
+    }
+    .onboarding-step-desc a {
+        color: var(--color-primary, #0066cc);
+        font-weight: 600;
+        text-decoration: none;
+    }
+    .onboarding-step-desc a:hover {
+        text-decoration: underline;
+    }
+    .onboarding-step-detail {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        margin: 2px 0 0;
+    }
+    .onboarding-step-link {
+        font-size: 0.75rem;
+        color: var(--color-primary, #0066cc);
+        text-decoration: none;
+    }
+    .onboarding-step-link:hover {
+        text-decoration: underline;
+    }
+    .superuser-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 10px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #92400e;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
     .quick-actions {
         display: flex;
         gap: 12px;
@@ -234,353 +267,8 @@
         color: var(--color-text);
     }
 
-    /* Recent tasks table */
-    .section-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        margin: 0 0 16px;
-    }
-    .tasks-list {
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-    }
-    .task-row {
-        display: flex;
-        align-items: center;
-        gap: 16px;
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--color-border);
-        background: var(--color-bg);
-        transition: background 0.1s;
-    }
-    .task-row-link {
-        display: block;
-        text-decoration: none;
-        color: inherit;
-    }
-    .task-row:last-child {
-        border-bottom: none;
-    }
-    .task-row:hover {
-        background: var(--color-bg-soft);
-    }
-    .task-row-link:hover {
-        text-decoration: none;
-    }
-    .task-status {
-        flex-shrink: 0;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-    }
-    .task-status.completed { background: #10b981; }
-    .task-status.processing { background: #f59e0b; }
-    .task-status.pending { background: #94a3b8; }
-    .task-status.failed { background: #ef4444; }
-    .task-status.stopped { background: #ea580c; }
-    .task-prompt {
-        flex: 1;
-        font-size: 0.9rem;
-        color: var(--color-text);
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        min-width: 0;
-    }
-    .task-meta {
-        flex-shrink: 0;
-        font-size: 0.8rem;
-        color: var(--color-text-secondary);
-        white-space: nowrap;
-    }
-    .empty-state {
-        text-align: center;
-        padding: 48px 24px;
-        color: var(--color-text-secondary);
-    }
-    .empty-state p {
-        margin: 0 0 16px;
-        font-size: 0.95rem;
-    }
 
-    /* ── New plan form ──────────────────────────────── */
-    .new-plan-section {
-        background: var(--color-card-bg);
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius-lg);
-        margin-bottom: 32px;
-        box-shadow: 0 1px 3px var(--color-card-shadow);
-    }
-    .new-plan-header {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 16px 20px;
-        border-bottom: 1px solid var(--color-border);
-    }
-    .new-plan-header svg {
-        width: 20px;
-        height: 20px;
-        color: var(--color-primary);
-        flex-shrink: 0;
-    }
-    .new-plan-header h2 {
-        font-size: 1.05rem;
-        font-weight: 700;
-        margin: 0;
-    }
-    .new-plan-body {
-        padding: 20px;
-    }
-    .new-plan-body textarea {
-        width: 100%;
-        min-height: 120px;
-        padding: 12px 14px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        font-family: var(--font-sans);
-        font-size: 0.9rem;
-        line-height: 1.5;
-        resize: vertical;
-        outline: none;
-        transition: border-color 0.15s;
-        box-sizing: border-box;
-        color: var(--color-text);
-        background: var(--color-bg);
-    }
-    .new-plan-body textarea:focus {
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-    .new-plan-body textarea::placeholder {
-        color: var(--color-text-secondary);
-    }
-    .example-chips {
-        display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-        margin-bottom: 12px;
-    }
-    .example-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 5px 12px;
-        background: var(--color-bg-soft);
-        border: 1px solid var(--color-border);
-        border-radius: 20px;
-        font-size: 0.78rem;
-        font-weight: 500;
-        color: var(--color-text-secondary);
-        cursor: pointer;
-        transition: border-color 0.15s, color 0.15s;
-    }
-    .example-chip:hover {
-        border-color: var(--color-primary);
-        color: var(--color-primary);
-    }
-    .new-plan-footer {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        margin-top: 14px;
-    }
-    .new-plan-footer .footer-spacer {
-        flex: 1 1 auto;
-    }
-    .new-plan-footer .model-profile-inline {
-        width: auto;
-        min-width: 0;
-        max-width: none;
-    }
-    .model-profile-picker {
-        position: relative;
-    }
-    .model-profile-button {
-        width: auto;
-        display: flex;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 0;
-        padding: 6px 8px;
-        border-radius: 8px;
-        border: 1px solid var(--color-border);
-        background: var(--color-bg-soft);
-        color: var(--color-text);
-        cursor: pointer;
-        text-align: left;
-    }
-    .model-profile-button:hover {
-        border-color: var(--color-primary);
-    }
-    .model-profile-selected {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.2;
-    }
-    .model-profile-title {
-        font-size: 0.82rem;
-        font-weight: 700;
-    }
-    .model-profile-subtitle {
-        font-size: 0.75rem;
-        color: var(--color-text-secondary);
-    }
-    .model-profile-caret {
-        color: var(--color-text);
-        opacity: 0.95;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 16px;
-        height: 16px;
-        flex: 0 0 16px;
-    }
-    .model-profile-caret svg {
-        width: 16px;
-        height: 16px;
-        display: block;
-    }
-    .model-profile-menu {
-        position: absolute;
-        top: calc(100% + 6px);
-        left: 0;
-        width: max-content;
-        min-width: 260px;
-        z-index: 20;
-        background: var(--color-bg);
-        border: 1px solid var(--color-border);
-        border-radius: 8px;
-        box-shadow: 0 8px 24px var(--color-card-shadow);
-        overflow: hidden;
-        display: none;
-    }
-    .model-profile-menu.open {
-        display: block;
-    }
-    .model-profile-menu-header {
-        padding: 8px 12px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        color: var(--color-text-secondary);
-        border-bottom: 1px solid var(--color-border);
-        background: var(--color-bg-soft);
-    }
-    .model-profile-option {
-        width: 100%;
-        border: none;
-        border-bottom: 1px solid var(--color-border);
-        background: transparent;
-        color: var(--color-text);
-        text-align: left;
-        padding: 10px 12px;
-        cursor: pointer;
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-    }
-    .model-profile-option:last-child {
-        border-bottom: none;
-    }
-    .model-profile-option:hover {
-        background: var(--color-bg-soft);
-    }
-    /* ── Start date picker ─────────────────────────── */
-    .start-date-wrapper {
-        display: flex;
-        align-items: center;
-    }
-    .start-date-toggle {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        padding: 6px 8px;
-        background: none;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        font-family: var(--font-sans);
-        font-size: 0.8rem;
-        color: var(--color-text-secondary);
-        cursor: pointer;
-        transition: border-color 0.15s, color 0.15s;
-    }
-    .start-date-toggle:hover {
-        border-color: var(--color-primary);
-        color: var(--color-primary);
-    }
-    .start-date-toggle svg {
-        width: 14px;
-        height: 14px;
-    }
-    .start-date-row {
-        display: none;
-        align-items: center;
-        gap: 8px;
-    }
-    .start-date-row.open {
-        display: flex;
-    }
-    .start-date-row input[type="date"] {
-        padding: 6px 10px;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        font-family: var(--font-sans);
-        font-size: 0.82rem;
-        color: var(--color-text);
-        background: var(--color-bg);
-        outline: none;
-        transition: border-color 0.15s;
-    }
-    .start-date-row input[type="datetime-local"]:focus {
-        border-color: var(--color-primary);
-        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-    }
-    .start-date-clear {
-        padding: 4px 8px;
-        background: none;
-        border: 1px solid var(--color-border);
-        border-radius: var(--radius);
-        font-family: var(--font-sans);
-        font-size: 0.75rem;
-        color: var(--color-text-secondary);
-        cursor: pointer;
-        transition: border-color 0.15s, color 0.15s;
-    }
-    .start-date-clear:hover {
-        border-color: var(--color-primary);
-        color: var(--color-primary);
-    }
-    .btn-start-plan {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 10px 28px;
-        background: var(--color-primary);
-        color: #fff;
-        border: none;
-        border-radius: var(--radius);
-        font-size: 0.9rem;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.1s;
-    }
-    .btn-start-plan:hover {
-        background: var(--color-primary-hover);
-        transform: translateY(-1px);
-    }
-    .btn-start-plan:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-        transform: none;
-    }
-    .btn-start-plan svg {
-        width: 16px;
-        height: 16px;
-    }
+
     /* ── Admin view ─────────────────────────────────── */
     .admin-notice {
         text-align: center;
@@ -601,7 +289,6 @@
         .hero { padding: 40px 0 32px; }
         .hero-actions { flex-direction: column; align-items: center; }
         .btn-hero-outline { margin-left: 0; }
-        .stats-row { grid-template-columns: 1fr; }
     }
 </style>
 {% endblock %}
@@ -609,106 +296,54 @@
 {% block content %}
 {% if user %}
 {# ─── Dashboard for signed-in users ─────────────────────────── #}
-<div class="dashboard-welcome">
-    <h1>Welcome back, {{ user.name or user.given_name or "there" }}</h1>
-    <p>Your PlanExe dashboard &mdash; manage your plans and credits.</p>
-</div>
+<div style="max-width:480px; margin:0 auto;">
+<h1 class="onboarding-title">Onboarding</h1>
+<p class="onboarding-subtitle">Connect PlanExe with your AI assistant to create plans.</p>
 
-<div class="stats-row">
-    <a href="{{ url_for('account') }}" class="stat-card stat-card-link" title="Manage credits and add more via Stripe">
-        <div class="stat-value credits">{{ credits_balance_display }}</div>
-        <div class="stat-label">Credits{% if not can_create_plan and not is_admin %} · Add more{% endif %}</div>
-    </a>
-    <div class="stat-card">
-        <div class="stat-value">{{ total_tasks_count }}</div>
-        <div class="stat-label">Plans</div>
-    </div>
-</div>
-
-{# ── Start New Plan form ────────────────────────────────────── #}
-<div class="new-plan-section">
-    <div class="new-plan-header">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
-        <h2>Start a New Plan</h2>
-    </div>
-    <div class="new-plan-body">
-        {% if example_prompts %}
-        <div class="example-chips">
-            {% for ep in example_prompts %}
-            <button type="button" class="example-chip" data-index="{{ loop.index0 }}">Example {{ loop.index }}</button>
-            {% endfor %}
+<div class="onboarding-steps">
+    {% for step in onboarding_steps %}
+    <div class="onboarding-step {% if not step.done %}pending{% endif %}">
+        <div class="onboarding-check {% if step.done %}done{% endif %}"></div>
+        <div class="onboarding-step-body">
+            <p class="onboarding-step-title">
+                {{ step.title }}
+                {% if step.title == "Superuser" and step.done %}
+                <span class="superuser-badge">Superuser</span>
+                {% endif %}
+            </p>
+            {% if not step.done and step.description %}
+            <p class="onboarding-step-desc">{{ step.description | safe }}</p>
+            {% endif %}
+            <p class="onboarding-step-detail">
+                {{ step.detail }}
+                {% if step.link %}
+                &middot; <a href="{{ step.link }}" class="onboarding-step-link">{% if "docs.planexe" in step.link %}Setup guide{% else %}Go{% endif %} &rarr;</a>
+                {% endif %}
+            </p>
         </div>
-        {% endif %}
-        <form id="new-plan-form" method="POST" action="{{ url_for('plan_routes.create_plan') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="speed_vs_detail" value="all_details_but_slow">
-            <textarea name="prompt" id="plan-prompt" placeholder="Describe your project or idea in detail. The more context you provide, the better the plan will be." required></textarea>
-            <input type="hidden" name="start_date" id="start-date-hidden" value="">
-            <div class="new-plan-footer">
-                <div class="start-date-wrapper">
-                    <button type="button" class="start-date-toggle" id="start-date-toggle">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                        Set start date
-                    </button>
-                    <div class="start-date-row" id="start-date-row">
-                        <input type="date" id="start-date-input">
-                        <button type="button" class="start-date-clear" id="start-date-clear">Clear</button>
-                    </div>
-                </div>
-                <div class="footer-spacer"></div>
-                <div class="model-profile-inline model-profile-picker">
-                    {% set default_profile_option = model_profile_options[0] %}
-                    <input type="hidden" name="model_profile" id="model-profile" value="{{ default_profile_option.value }}">
-                    <button type="button" id="model-profile-button" class="model-profile-button" aria-haspopup="listbox" aria-expanded="false" title="Select model profile">
-                        <span class="model-profile-title" id="model-profile-selected-title">{{ default_profile_option.title }}</span>
-                        <span class="model-profile-caret" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </span>
-                    </button>
-                    <div id="model-profile-menu" class="model-profile-menu" role="listbox">
-                        <div class="model-profile-menu-header">Select model profile</div>
-                        {% for profile_option in model_profile_options %}
-                        <button type="button" class="model-profile-option" data-value="{{ profile_option.value }}">
-                            <span class="model-profile-title">{{ profile_option.title }}</span>
-                            <span class="model-profile-subtitle">{{ profile_option.subtitle }}</span>
-                        </button>
-                        {% endfor %}
-                    </div>
-                </div>
-                <button type="submit" class="btn-start-plan" id="btn-start-plan" title="Generate a plan from your prompt" {% if not can_create_plan %}disabled{% endif %}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    {% if not can_create_plan %}
-                        Insufficient credits
-                    {% else %}
-                        Generate Plan
-                    {% endif %}
-                </button>
-            </div>
-        </form>
     </div>
-</div>
-
-{% if recent_tasks %}
-<h2 class="section-title">Recent Plans</h2>
-<div class="tasks-list">
-    {% for task in recent_tasks %}
-    <a class="task-row-link" href="{{ url_for('plan_routes.plan') }}?id={{ task.id }}">
-    <div class="task-row">
-        <span class="task-status {{ task.state.name if task.state else 'pending' }}"></span>
-        <span class="task-prompt" title="{{ task.prompt }}">{{ task.prompt }}</span>
-        <span class="task-meta">
-            {% if task.state %}{{ task.state.name | capitalize }}{% else %}Pending{% endif %}
-        </span>
-    </div>
-    </a>
     {% endfor %}
 </div>
-{% else %}
-<div class="empty-state">
-    <p>You haven't created any plans yet. Describe your idea above and click <strong>Generate Plan</strong> to get started.</p>
+
+<p style="margin-top:28px; font-size:0.82rem; color:var(--color-text-secondary);">
+    Need help? Join the <a href="https://planexe.org/discord/" target="_blank" style="color:var(--color-primary, #0066cc); text-decoration:none; font-weight:600;">PlanExe Discord</a> for setup assistance and community support.
+</p>
 </div>
+
+{% if onboarding_debug %}
+<details style="margin-top:24px; font-size:0.75rem; color:var(--color-text-secondary);">
+    <summary style="cursor:pointer; font-weight:600;">Debug: onboarding data</summary>
+    <pre style="margin-top:8px; padding:10px; background:var(--color-bg-soft); border:1px solid var(--color-border); border-radius:var(--radius); overflow-x:auto;">{% for step in onboarding_steps %}
+{{ step.title }}:
+  done: {{ step.done }}
+  detail: {{ step.detail }}
+  link: {{ step.link or "—" }}
+{% endfor %}
+Override steps with URL parameters (1=done, 0=pending):
+  /?debug=1&step1=1&step2=1&step3=1&step4=1&step5=1  — all done
+  /?debug=1&step1=1&step2=0&step3=0&step4=0&step5=0  — new user
+  /?debug=1&step5=1                                    — force superuser</pre>
+</details>
 {% endif %}
 
 {% elif is_admin %}
@@ -764,119 +399,4 @@
 </section>
 {% endif %}
 
-{% if user and example_prompts %}
-<script>
-    // Example prompts loaded from the server
-    var examplePrompts = {{ example_prompts | tojson | safe }};
-    var textarea = document.getElementById('plan-prompt');
-
-    // Example chip click handlers — fill textarea with the example prompt
-    document.querySelectorAll('.example-chip').forEach(function(chip) {
-        chip.addEventListener('click', function() {
-            var idx = parseInt(this.getAttribute('data-index'), 10);
-            if (examplePrompts[idx]) {
-                textarea.value = examplePrompts[idx];
-                textarea.focus();
-            }
-        });
-    });
-</script>
-{% endif %}
-{% if user %}
-<script>
-    (function() {
-        var toggle = document.getElementById('start-date-toggle');
-        var row = document.getElementById('start-date-row');
-        var dateInput = document.getElementById('start-date-input');
-        var hiddenDate = document.getElementById('start-date-hidden');
-        var clearBtn = document.getElementById('start-date-clear');
-
-        if (!toggle || !row || !dateInput || !hiddenDate || !clearBtn) return;
-
-        toggle.addEventListener('click', function() {
-            var isOpen = row.classList.contains('open');
-            if (isOpen) {
-                row.classList.remove('open');
-                toggle.style.display = '';
-            } else {
-                row.classList.add('open');
-                toggle.style.display = 'none';
-            }
-        });
-
-        clearBtn.addEventListener('click', function() {
-            dateInput.value = '';
-            hiddenDate.value = '';
-            row.classList.remove('open');
-            toggle.style.display = '';
-        });
-
-        function toISO8601WithOffset(dateStr) {
-            // dateStr is "YYYY-MM-DD" from the date input.
-            // Build a local Date at 20:55 to get the correct timezone offset.
-            var d = new Date(dateStr + 'T20:55:00');
-            if (isNaN(d.getTime())) return '';
-            var off = -d.getTimezoneOffset();
-            var sign = off >= 0 ? '+' : '-';
-            var absOff = Math.abs(off);
-            var hh = String(Math.floor(absOff / 60)).padStart(2, '0');
-            var mm = String(absOff % 60).padStart(2, '0');
-            return dateStr + 'T20:55:00' + sign + hh + ':' + mm;
-        }
-
-        dateInput.addEventListener('change', function() {
-            hiddenDate.value = dateInput.value ? toISO8601WithOffset(dateInput.value) : '';
-        });
-    })();
-</script>
-{% endif %}
-{% if user %}
-<script>
-    (function() {
-        var hiddenInput = document.getElementById('model-profile');
-        var button = document.getElementById('model-profile-button');
-        var menu = document.getElementById('model-profile-menu');
-        var titleEl = document.getElementById('model-profile-selected-title');
-
-        if (!hiddenInput || !button || !menu || !titleEl) {
-            return;
-        }
-
-        function closeMenu() {
-            menu.classList.remove('open');
-            button.setAttribute('aria-expanded', 'false');
-        }
-
-        function selectOption(optionEl) {
-            var value = optionEl.getAttribute('data-value') || 'baseline';
-            var nextTitle = optionEl.querySelector('.model-profile-title');
-            hiddenInput.value = value;
-            titleEl.textContent = nextTitle ? nextTitle.textContent : 'Baseline';
-            closeMenu();
-        }
-
-        button.addEventListener('click', function() {
-            var isOpen = menu.classList.contains('open');
-            if (isOpen) {
-                closeMenu();
-            } else {
-                menu.classList.add('open');
-                button.setAttribute('aria-expanded', 'true');
-            }
-        });
-
-        menu.querySelectorAll('.model-profile-option').forEach(function(optionEl) {
-            optionEl.addEventListener('click', function() {
-                selectOption(optionEl);
-            });
-        });
-
-        document.addEventListener('click', function(event) {
-            if (!menu.contains(event.target) && !button.contains(event.target)) {
-                closeMenu();
-            }
-        });
-    })();
-</script>
-{% endif %}
 {% endblock %}

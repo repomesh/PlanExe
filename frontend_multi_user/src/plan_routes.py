@@ -976,7 +976,7 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         allowed_filenames.add(value)
 
     # Template suffixes for filenames with {} placeholders
-    template_suffixes: list[str] = []
+    template_suffixes: list[tuple[str, str]] = []
     for member in FilenameEnum:
         value = member.value
         if "{}" in value:
@@ -1081,7 +1081,7 @@ def plan_resume_from_zip_upload():
             return jsonify({"error": f"Insufficient credits. At least {min_credits} credits required."}), 402
 
     zip_file = request.files.get("zip_file")
-    if zip_file is None or zip_file.filename == "":
+    if zip_file is None or not zip_file.filename:
         return jsonify({"error": "No file selected."}), 400
     if not zip_file.filename.endswith(".zip"):
         return jsonify({"error": "Please upload a .zip file."}), 400
@@ -1126,7 +1126,7 @@ def plan_resume_from_zip_upload():
             except (ValueError, TypeError):
                 pass  # Skip unparseable dates
 
-        plan = PlanItem(
+        plan = PlanItem(  # type: ignore[call-arg]
             prompt=prompt,
             state=PlanState.pending,
             user_id=user_id,

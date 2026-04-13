@@ -1057,6 +1057,7 @@ class MyFlaskApp:
                         # Step 1: Account created (always done if logged in)
                         onboarding_steps.append({
                             "title": "Create account",
+                            "description": "Sign up for PlanExe to get started.",
                             "done": True,
                             "detail": "Signed in",
                             "link": None,
@@ -1073,6 +1074,7 @@ class MyFlaskApp:
                             credit_detail = format_credit_display(user.credits_balance) if has_credits else "No credits yet"
                         onboarding_steps.append({
                             "title": "Deposit credits",
+                            "description": "Credits pay for the AI models that generate your plan. Go to Account to add credits.",
                             "done": has_credits,
                             "detail": credit_detail,
                             "link": url_for('account') if not has_credits else None,
@@ -1089,6 +1091,7 @@ class MyFlaskApp:
                             key_detail = f"{key_count} API keys"
                         onboarding_steps.append({
                             "title": "Create API key",
+                            "description": "Your AI assistant uses an API key to connect to PlanExe. Create one on the Account page.",
                             "done": has_key,
                             "detail": key_detail,
                             "link": url_for('account') if not has_key else None,
@@ -1114,6 +1117,7 @@ class MyFlaskApp:
                         used_mcp = total_llm_calls >= 1
                         onboarding_steps.append({
                             "title": "Connect via MCP",
+                            "description": "Add PlanExe to your AI tool (Claude, Cursor, Windsurf, etc.) using your API key. Your AI will then be able to create plans for you.",
                             "done": used_mcp,
                             "detail": f"{total_llm_calls} LLM calls" if used_mcp else "Not connected yet",
                             "link": "https://docs.planexe.org/mcp/mcp_welcome/" if not used_mcp else None,
@@ -1129,6 +1133,7 @@ class MyFlaskApp:
                         is_superuser = total_plans >= 5
                         onboarding_steps.append({
                             "title": "Superuser",
+                            "description": "Create 5 or more plans to earn the Superuser badge.",
                             "done": is_superuser,
                             "detail": f"{total_plans} plans created" if is_superuser else f"{total_plans}/5 plans",
                             "link": None,

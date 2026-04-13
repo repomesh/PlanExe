@@ -188,6 +188,12 @@
     .onboarding-step.pending .onboarding-step-title {
         color: var(--color-text-secondary);
     }
+    .onboarding-step-desc {
+        font-size: 0.78rem;
+        color: var(--color-text-secondary);
+        margin: 4px 0 0;
+        line-height: 1.5;
+    }
     .onboarding-step-detail {
         font-size: 0.75rem;
         color: var(--color-text-secondary);
@@ -296,6 +302,9 @@
                 <span class="superuser-badge">Superuser</span>
                 {% endif %}
             </p>
+            {% if not step.done and step.description %}
+            <p class="onboarding-step-desc">{{ step.description }}</p>
+            {% endif %}
             <p class="onboarding-step-detail">
                 {{ step.detail }}
                 {% if step.link %}

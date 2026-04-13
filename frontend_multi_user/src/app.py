@@ -1136,6 +1136,14 @@ class MyFlaskApp:
                 except Exception:
                     logger.debug("Could not load dashboard data", exc_info=True)
 
+            # Debug overrides: /?debug=1&step1=0&step2=1&step3=0&step4=1&step5=0
+            if request.args.get("debug") == "1" and onboarding_steps:
+                step_keys = ["step1", "step2", "step3", "step4", "step5"]
+                for i, key in enumerate(step_keys):
+                    val = request.args.get(key)
+                    if val is not None and i < len(onboarding_steps):
+                        onboarding_steps[i]["done"] = val == "1"
+
             return render_template(
                 'index.html',
                 user=user,

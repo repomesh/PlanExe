@@ -1038,6 +1038,7 @@ class MyFlaskApp:
         @self.app.route('/')
         def index():
             user = None
+            admin_account = None
             is_admin = False
             onboarding_steps: list[dict] = []
 
@@ -1054,7 +1055,7 @@ class MyFlaskApp:
                         user_id = str(user.id) if user else None
 
                     if user and user_id:
-                        account_id = admin_account.id if is_admin and admin_account else (user.id if hasattr(user, 'id') else None)
+                        account_id = getattr(admin_account, 'id', None) if is_admin else getattr(user, 'id', None)
 
                         # Step 1: Account created (always done if logged in)
                         onboarding_steps.append({

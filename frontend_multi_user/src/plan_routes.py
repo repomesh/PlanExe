@@ -1126,7 +1126,7 @@ def plan_resume_from_zip_upload():
             except (ValueError, TypeError):
                 pass  # Skip unparseable dates
 
-        plan = PlanItem(  # type: ignore[call-arg]
+        plan = PlanItem(  # pyright: ignore[reportCallIssue]
             prompt=prompt,
             state=PlanState.pending,
             user_id=user_id,

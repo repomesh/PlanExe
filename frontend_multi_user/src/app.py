@@ -1074,7 +1074,7 @@ class MyFlaskApp:
                             credit_detail = format_credit_display(user.credits_balance) if has_credits else "No credits yet"
                         onboarding_steps.append({
                             "title": "Deposit credits",
-                            "description": "Credits pay for the AI models that generate your plan. Go to Account to add credits.",
+                            "description": 'Credits pay for the AI models that generate your plan. Go to <a href="' + url_for('account') + '">Account</a> to add credits.',
                             "done": has_credits,
                             "detail": credit_detail,
                             "link": url_for('account') if not has_credits else None,
@@ -1091,7 +1091,7 @@ class MyFlaskApp:
                             key_detail = f"{key_count} API keys"
                         onboarding_steps.append({
                             "title": "Create API key",
-                            "description": "Your AI assistant uses an API key to connect to PlanExe. Create one on the Account page.",
+                            "description": 'Your AI assistant uses an API key to connect to PlanExe. Create one on the <a href="' + url_for('account') + '">Account</a> page.',
                             "done": has_key,
                             "detail": key_detail,
                             "link": url_for('account') if not has_key else None,

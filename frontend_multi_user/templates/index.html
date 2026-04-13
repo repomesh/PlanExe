@@ -304,7 +304,7 @@
                 {% endif %}
             </p>
             {% if not step.done and step.description %}
-            <p class="onboarding-step-desc">{{ step.description }}</p>
+            <p class="onboarding-step-desc">{{ step.description | safe }}</p>
             {% endif %}
             <p class="onboarding-step-detail">
                 {{ step.detail }}

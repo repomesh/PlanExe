@@ -974,7 +974,6 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
             # we'll match these by suffix below
             continue
         allowed_filenames.add(value)
-    allowed_filenames.add("pipeline_complete.txt")
 
     # Template suffixes for filenames with {} placeholders
     template_suffixes: list[str] = []

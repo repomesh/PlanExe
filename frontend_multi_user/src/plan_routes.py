@@ -755,8 +755,9 @@ def create_plan():
         user = db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
         if not user:
             return jsonify({"error": "User not found"}), 400
-        if to_credit_decimal(user.credits_balance) < Decimal("2"):
-            return jsonify({"error": "Insufficient credits (minimum 2 required)"}), 402
+        min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+        if to_credit_decimal(user.credits_balance) < min_credits:
+            return jsonify({"error": f"Insufficient credits (minimum {min_credits} required)"}), 402
         first_key = (
             UserApiKey.query
             .filter_by(user_id=user.id, revoked_at=None)
@@ -947,6 +948,202 @@ def plan():
         selected_model_profile=selected_model_profile,
         resume_error=resume_error,
     )
+
+
+def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
+    """Validate and clean an uploaded zip for plan import.
+
+    Returns dict with keys:
+        error: str or None — error message if invalid
+        cleaned_zip: bytes or None — cleaned zip data if valid
+        plan_raw: dict or None — parsed plan_raw.json if present
+        metadata: dict or None — parsed planexe_metadata.json if present
+    """
+    # Verify it's a valid zip
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(zip_data))
+    except (zipfile.BadZipFile, Exception) as exc:
+        return {"error": f"Invalid zip file: {exc}", "cleaned_zip": None, "plan_raw": None, "metadata": None}
+
+    # Build the set of allowed filenames from FilenameEnum
+    allowed_filenames: set[str] = set()
+    for member in FilenameEnum:
+        value = member.value
+        if "{}" in value:
+            # Template filenames like "expert_criticism_{}_raw.json" — skip exact match,
+            # we'll match these by suffix below
+            continue
+        allowed_filenames.add(value)
+
+    # Template suffixes for filenames with {} placeholders
+    template_suffixes: list[tuple[str, str]] = []
+    for member in FilenameEnum:
+        value = member.value
+        if "{}" in value:
+            # e.g. "expert_criticism_{}_raw.json" -> "_raw.json" after the placeholder
+            suffix = value.split("{}")[1]
+            prefix = value.split("{}")[0]
+            template_suffixes.append((prefix, suffix))
+
+    files_to_delete = {e.value for e in ExtraFilenameEnum}
+    unrecognized = []
+
+    for info in zf.infolist():
+        # Skip directories
+        if info.is_dir():
+            continue
+        name = info.filename
+        # Skip path traversal attempts
+        if ".." in name or name.startswith("/"):
+            continue
+        # Strip leading directory (e.g. "run_id/plan.txt" -> "plan.txt")
+        basename = name.split("/")[-1] if "/" in name else name
+        # Skip dotfiles (e.g. .DS_Store, ._resource_forks)
+        if basename.startswith("."):
+            continue
+
+        if basename in files_to_delete:
+            continue
+        if basename in allowed_filenames:
+            continue
+        # Check template patterns
+        matched = False
+        for prefix, suffix in template_suffixes:
+            if basename.startswith(prefix) and basename.endswith(suffix):
+                matched = True
+                break
+        if not matched:
+            unrecognized.append(basename)
+
+    # Rebuild the zip: keep only recognized FilenameEnum files, flatten paths to basenames
+    skip_files = files_to_delete | set(unrecognized)
+    out_buf = io.BytesIO()
+    kept_count = 0
+    with zipfile.ZipFile(out_buf, "w", compression=zipfile.ZIP_DEFLATED) as out_zf:
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            if info.external_attr >> 16 & 0o170000 == 0o120000:
+                continue
+            name = info.filename
+            if ".." in name or name.startswith("/"):
+                continue
+            basename = name.split("/")[-1] if "/" in name else name
+            if basename.startswith("."):
+                continue
+            if basename in skip_files:
+                continue
+            # Flatten: write with basename only so extractall puts files directly in run_id_dir
+            out_zf.writestr(basename, zf.read(info.filename))
+            kept_count += 1
+
+    if unrecognized:
+        logger.info("Plan import: skipped %d unrecognized files", len(unrecognized))
+
+    if kept_count == 0:
+        return {"error": "Zip contains no recognized PlanExe files.", "cleaned_zip": None, "plan_raw": None, "metadata": None}
+
+    # Extract plan_raw.json and planexe_metadata.json if present
+    plan_raw = None
+    metadata = None
+    for info in zf.infolist():
+        basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
+        if basename == FilenameEnum.INITIAL_PLAN_RAW.value:
+            try:
+                plan_raw = json.loads(zf.read(info.filename))
+            except (json.JSONDecodeError, Exception):
+                pass
+        elif basename == FilenameEnum.PLANEXE_METADATA.value:
+            try:
+                metadata = json.loads(zf.read(info.filename))
+            except (json.JSONDecodeError, Exception):
+                pass
+    zf.close()
+
+    return {"error": None, "cleaned_zip": out_buf.getvalue(), "plan_raw": plan_raw, "metadata": metadata}
+
+
+@plan_routes_bp.route("/plan/resume-from-zip", methods=["GET"])
+@login_required
+def plan_resume_from_zip():
+    from src.app import _model_profile_options
+    return render_template("plan_resume_from_zip.html", model_profile_options=_model_profile_options())
+
+
+@plan_routes_bp.route("/plan/resume-from-zip/upload", methods=["POST"])
+@login_required
+def plan_resume_from_zip_upload():
+    """JSON API for zip upload. Called via fetch() from the resume-from-zip page."""
+    if not current_user.is_admin:
+        user = _get_current_user_account()
+        min_credits = Decimal(os.environ.get("PLANEXE_MIN_CREDITS_TO_CREATE_PLAN", "2"))
+        if user and to_credit_decimal(user.credits_balance) < min_credits:
+            return jsonify({"error": f"Insufficient credits. At least {min_credits} credits required."}), 402
+
+    zip_file = request.files.get("zip_file")
+    if zip_file is None or not zip_file.filename:
+        return jsonify({"error": "No file selected."}), 400
+    if not zip_file.filename.endswith(".zip"):
+        return jsonify({"error": "Please upload a .zip file."}), 400
+
+    zip_data = zip_file.read()
+    zip_size = len(zip_data)
+    max_zip_size = 10 * 1024 * 1024  # 10 MB
+    if zip_size > max_zip_size:
+        return jsonify({"error": f"Zip file too large ({zip_size / 1024 / 1024:.1f} MB). Maximum is {max_zip_size // 1024 // 1024} MB."}), 400
+
+    result = _validate_and_clean_import_zip(zip_data)
+    if result["error"]:
+        return jsonify({"error": result["error"]}), 400
+
+    try:
+        user_id = str(current_user.id)
+        raw_profile = request.form.get("model_profile")
+        selected_model_profile = normalize_model_profile(raw_profile).value
+
+        # Use plan_raw.json prompt if available, otherwise fallback
+        plan_raw = result.get("plan_raw")
+        prompt = plan_raw.get("plan_prompt", "") if plan_raw else ""
+        if not prompt:
+            prompt = f"[Imported from {zip_file.filename}]"
+
+        # Use pipeline_version from planexe_metadata.json if available
+        metadata = result.get("metadata")
+        snapshot_version = metadata.get("pipeline_version") if metadata else None
+        effective_version = snapshot_version if snapshot_version is not None else PIPELINE_VERSION
+
+        parameters = {
+            "trigger_source": "frontend import",
+            "import_filename": zip_file.filename,
+            "pipeline_version": effective_version,
+            "model_profile": selected_model_profile,
+            "resume": True,
+        }
+        if plan_raw and plan_raw.get("pretty_date"):
+            try:
+                parsed = datetime.strptime(plan_raw["pretty_date"], "%Y-%b-%d")
+                parameters["start_date"] = parsed.strftime("%Y-%m-%d")
+            except (ValueError, TypeError):
+                pass  # Skip unparseable dates
+
+        plan = PlanItem(**{
+            "prompt": prompt,
+            "state": PlanState.pending,
+            "user_id": user_id,
+            "parameters": parameters,
+            "run_zip_snapshot": result["cleaned_zip"],
+        })
+        db.session.add(plan)
+        db.session.commit()
+        logger.info(
+            "Plan import: created plan %s from %r (%s bytes, cleaned %s bytes) for user %s",
+            plan.id, zip_file.filename, zip_size, len(result["cleaned_zip"]), user_id,
+        )
+        return jsonify({"plan_id": str(plan.id)}), 200
+    except Exception as exc:
+        db.session.rollback()
+        logger.error("Plan import failed for %r: %s", zip_file.filename, exc)
+        return jsonify({"error": "Import failed. Please try again."}), 500
 
 
 @plan_routes_bp.route("/plan/stop", methods=["POST"])

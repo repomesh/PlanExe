@@ -360,12 +360,13 @@ def ensure_stopped_state() -> None:
     the TaskState → PlanState Python rename (proposal 74).  Fresh databases
     created after that rename will have ``planstate``.  We try both names.
     """
-    with db.engine.begin() as conn:
-        for type_name in ("taskstate", "planstate"):
+    for type_name in ("taskstate", "planstate"):
+        for enum_value in ("stopped",):
             try:
-                conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS 'stopped'"))
+                with db.engine.begin() as conn:
+                    conn.execute(text(f"ALTER TYPE {type_name} ADD VALUE IF NOT EXISTS '{enum_value}'"))
             except Exception as exc:
-                logger.debug("ALTER TYPE %s: %s", type_name, exc)
+                logger.debug("ALTER TYPE %s ADD VALUE %s: %s", type_name, enum_value, exc)
 
 def worker_process_started() -> None:
     planexe_worker_id = os.environ.get("PLANEXE_WORKER_ID")

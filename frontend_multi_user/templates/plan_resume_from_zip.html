@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Resume from Zip - PlanExe{% endblock %}
+{% block head %}
+<style>
+    .import-title {
+        margin: 0 0 8px;
+        font-size: 1.2rem;
+        font-weight: 700;
+    }
+    .import-subtitle {
+        margin: 0 0 12px;
+        font-size: 0.82rem;
+        color: var(--color-text-secondary);
+        max-width: 560px;
+        line-height: 1.5;
+    }
+    .import-how-it-works {
+        max-width: 560px;
+        margin-bottom: 20px;
+        padding: 14px 16px;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-bg-soft);
+        font-size: 0.78rem;
+        line-height: 1.6;
+        color: var(--color-text-secondary);
+    }
+    .import-how-it-works summary {
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 0.82rem;
+        color: var(--color-text);
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+    .import-how-it-works summary::-webkit-details-marker { display: none; }
+    .import-how-it-works summary::before {
+        content: "\25B6";
+        font-size: 0.6rem;
+        transition: transform 0.15s;
+    }
+    .import-how-it-works[open] summary::before {
+        transform: rotate(90deg);
+    }
+    .import-how-it-works ol {
+        margin: 8px 0 0;
+        padding-left: 20px;
+    }
+    .import-how-it-works li {
+        margin-bottom: 4px;
+    }
+    .import-dropzone {
+        border: 2px dashed var(--color-border);
+        border-radius: var(--radius-lg);
+        background: var(--color-card-bg);
+        padding: 48px 24px;
+        max-width: 560px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+    }
+    .import-dropzone.drag-over {
+        border-color: var(--color-primary, #0066cc);
+        background: #e3f2fd;
+    }
+    .import-dropzone-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        color: var(--color-text-secondary);
+    }
+    .import-dropzone-text {
+        font-size: 0.9rem;
+        color: var(--color-text-secondary);
+        margin-bottom: 4px;
+    }
+    .import-dropzone-hint {
+        font-size: 0.75rem;
+        color: var(--color-text-secondary);
+        opacity: 0.7;
+    }
+    .import-dropzone-filename {
+        margin-top: 12px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: var(--color-text);
+        display: none;
+    }
+    .import-submit {
+        display: none;
+        margin-top: 16px;
+        padding: 8px 20px;
+        font-size: 0.82rem;
+        font-weight: 600;
+        color: #fff;
+        background: var(--color-primary, #0066cc);
+        border: none;
+        border-radius: var(--radius-lg);
+        cursor: pointer;
+        max-width: 560px;
+        width: 100%;
+    }
+    .import-submit:hover {
+        opacity: 0.9;
+    }
+    .import-submit:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .import-back {
+        display: inline-block;
+        margin-bottom: 16px;
+        font-size: 0.82rem;
+        color: var(--color-primary, #0066cc);
+        text-decoration: none;
+    }
+    .import-message {
+        margin-top: 16px;
+        padding: 10px 14px;
+        border-radius: var(--radius-lg);
+        font-size: 0.82rem;
+        max-width: 560px;
+    }
+    .import-message-success {
+        background: #e6f4ea;
+        color: #1a7f37;
+        border: 1px solid #a3d9a5;
+    }
+    .import-message-error {
+        background: #fdecea;
+        color: #c0392b;
+        border: 1px solid #e6b0aa;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width:560px; margin:0 auto;">
+<h1 class="import-title">Resume from Zip</h1>
+<p class="import-subtitle">
+    Upload a PlanExe zip to resume generation. Edit files inside the zip before uploading to steer the output &mdash; changes to early-stage files will propagate downstream.
+</p>
+
+<details class="import-how-it-works">
+    <summary>How it works</summary>
+    <ol>
+        <li><strong>Download</strong> a plan zip from an existing plan.</li>
+        <li><strong>Edit</strong> any files you want to change (e.g. rewrite assumptions, adjust the project plan).</li>
+        <li><strong>Upload</strong> the modified zip here. PlanExe will skip completed steps and regenerate everything downstream from your edits.</li>
+    </ol>
+    <p style="margin:8px 0 0;">
+        <strong>Topological order matters.</strong> The pipeline runs in stages &mdash; each stage reads from earlier stages. If you edit an early file (like the plan prompt or assumptions), all later stages that depend on it will be regenerated. If you only edit a late file (like the executive summary), only the final report is affected.
+    </p>
+    <p style="margin:8px 0 0;">
+        To force a stage to re-run, delete its output file from the zip. PlanExe will regenerate it using the files that remain.
+    </p>
+</details>
+
+<input type="file" id="zip-file" accept=".zip" style="display:none">
+
+<div class="import-dropzone" id="dropzone">
+    <div class="import-dropzone-icon">&#128230;</div>
+    <div class="import-dropzone-text">Drop a PlanExe zip here, or click to browse</div>
+    <div class="import-dropzone-hint">.zip only, max 10 MB</div>
+    <div class="import-dropzone-filename" id="filename-display"></div>
+</div>
+<div id="import-options" style="display:none; max-width:560px; margin-top:16px;">
+    <label style="font-size:0.82rem; font-weight:600; display:block; margin-bottom:6px;">Model profile for resumed stages</label>
+    <select id="model-profile-select" style="padding:6px 10px; font-size:0.82rem; border:1px solid var(--color-border); border-radius:var(--radius-lg); background:var(--color-card-bg); width:100%;">
+        {% for opt in model_profile_options %}
+        <option value="{{ opt.value }}" {% if opt.value == "baseline" %}selected{% endif %}>{{ opt.title }} &mdash; {{ opt.subtitle }}</option>
+        {% endfor %}
+    </select>
+</div>
+<button class="import-submit" id="submit-btn" type="button">Upload & Resume</button>
+<div id="message-area"></div>
+</div>
+
+<script>
+(function() {
+    var dropzone = document.getElementById('dropzone');
+    var fileInput = document.getElementById('zip-file');
+    var filenameDisplay = document.getElementById('filename-display');
+    var submitBtn = document.getElementById('submit-btn');
+    var messageArea = document.getElementById('message-area');
+    var importOptions = document.getElementById('import-options');
+    var selectedFile = null;
+
+    function showFile(file) {
+        selectedFile = file;
+        filenameDisplay.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+        filenameDisplay.style.display = 'block';
+        importOptions.style.display = 'block';
+        submitBtn.style.display = 'block';
+        messageArea.innerHTML = '';
+    }
+
+    function showMessage(text, type) {
+        messageArea.innerHTML = '<div class="import-message import-message-' + type + '">' + text + '</div>';
+    }
+
+    dropzone.addEventListener('click', function() { fileInput.click(); });
+
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) showFile(fileInput.files[0]);
+    });
+
+    document.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropzone.classList.add('drag-over');
+    });
+
+    document.addEventListener('dragleave', function(e) {
+        if (!e.relatedTarget && e.clientX === 0 && e.clientY === 0) {
+            dropzone.classList.remove('drag-over');
+        }
+    });
+
+    document.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropzone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) {
+            fileInput.files = e.dataTransfer.files;
+            showFile(e.dataTransfer.files[0]);
+        }
+    });
+
+    submitBtn.addEventListener('click', function() {
+        if (!selectedFile) return;
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Uploading...';
+        messageArea.innerHTML = '';
+
+        var formData = new FormData();
+        formData.append('zip_file', selectedFile);
+        formData.append('model_profile', document.getElementById('model-profile-select').value);
+        formData.append('csrf_token', '{{ csrf_token() }}');
+
+        fetch('/plan/resume-from-zip/upload', { method: 'POST', body: formData })
+        .then(function(r) { return r.json().then(function(d) { return {ok: r.ok, data: d}; }); })
+        .then(function(result) {
+            if (result.ok && result.data.plan_id) {
+                window.location.href = '/plan?id=' + result.data.plan_id;
+            } else {
+                showMessage(result.data.error || 'Upload failed.', 'error');
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Upload & Resume';
+            }
+        })
+        .catch(function(err) {
+            showMessage('Upload failed: ' + err.message, 'error');
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Upload & Resume';
+        });
+    });
+})();
+</script>
+{% endblock %}

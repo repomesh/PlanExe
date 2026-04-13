@@ -1054,6 +1054,8 @@ class MyFlaskApp:
                         user_id = str(user.id) if user else None
 
                     if user and user_id:
+                        account_id = admin_account.id if is_admin and admin_account else (user.id if hasattr(user, 'id') else None)
+
                         # Step 1: Account created (always done if logged in)
                         onboarding_steps.append({
                             "title": "Create account",
@@ -1081,7 +1083,7 @@ class MyFlaskApp:
                         })
 
                         # Step 3: Create API key
-                        key_count = UserApiKey.query.filter_by(user_id=user.id if not is_admin else admin_account.id, revoked_at=None).count() if not is_admin else UserApiKey.query.filter_by(user_id=admin_account.id, revoked_at=None).count()
+                        key_count = UserApiKey.query.filter_by(user_id=account_id, revoked_at=None).count() if account_id else 0
                         has_key = key_count >= 1
                         if key_count == 0:
                             key_detail = "No API keys yet"
@@ -1102,9 +1104,9 @@ class MyFlaskApp:
                         if has_key:
                             user_key_ids = [
                                 str(k.id) for k in UserApiKey.query
-                                .filter_by(user_id=user.id if not is_admin else admin_account.id, revoked_at=None)
+                                .filter_by(user_id=account_id, revoked_at=None)
                                 .all()
-                            ]
+                            ] if account_id else []
                             if user_key_ids:
                                 try:
                                     total_llm_calls = (

@@ -990,12 +990,20 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
     unrecognized = []
 
     for info in zf.infolist():
-        # Skip directories
+        # Skip directories, symlinks, and other non-regular files
         if info.is_dir():
             continue
+        if info.external_attr >> 16 & 0o170000 == 0o120000:  # symlink
+            continue
         name = info.filename
-        # Strip a single leading directory if present (e.g. "run_id/plan.txt" -> "plan.txt")
+        # Skip path traversal attempts
+        if ".." in name or name.startswith("/"):
+            continue
+        # Strip leading directory (e.g. "run_id/plan.txt" -> "plan.txt")
         basename = name.split("/")[-1] if "/" in name else name
+        # Skip dotfiles (e.g. .DS_Store, ._resource_forks)
+        if basename.startswith("."):
+            continue
 
         if basename in files_to_delete:
             continue
@@ -1018,7 +1026,14 @@ def _validate_and_clean_import_zip(zip_data: bytes) -> dict:
         for info in zf.infolist():
             if info.is_dir():
                 continue
-            basename = info.filename.split("/")[-1] if "/" in info.filename else info.filename
+            if info.external_attr >> 16 & 0o170000 == 0o120000:
+                continue
+            name = info.filename
+            if ".." in name or name.startswith("/"):
+                continue
+            basename = name.split("/")[-1] if "/" in name else name
+            if basename.startswith("."):
+                continue
             if basename in skip_files:
                 continue
             # Flatten: write with basename only so extractall puts files directly in run_id_dir

@@ -1141,6 +1141,7 @@ class MyFlaskApp:
                 user=user,
                 is_admin=is_admin,
                 onboarding_steps=onboarding_steps,
+                onboarding_debug=request.args.get("debug") == "1",
             )
 
         @self.app.route('/models')

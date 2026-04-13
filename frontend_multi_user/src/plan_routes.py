@@ -1126,13 +1126,13 @@ def plan_resume_from_zip_upload():
             except (ValueError, TypeError):
                 pass  # Skip unparseable dates
 
-        plan = PlanItem(  # pyright: ignore[reportCallIssue]
-            prompt=prompt,
-            state=PlanState.pending,
-            user_id=user_id,
-            parameters=parameters,
-            run_zip_snapshot=result["cleaned_zip"],
-        )
+        plan = PlanItem(**{
+            "prompt": prompt,
+            "state": PlanState.pending,
+            "user_id": user_id,
+            "parameters": parameters,
+            "run_zip_snapshot": result["cleaned_zip"],
+        })
         db.session.add(plan)
         db.session.commit()
         logger.info(

@@ -319,7 +319,11 @@
   done: {{ step.done }}
   detail: {{ step.detail }}
   link: {{ step.link or "—" }}
-{% endfor %}</pre>
+{% endfor %}
+Override steps with URL parameters (1=done, 0=pending):
+  /?debug=1&step1=1&step2=1&step3=1&step4=1&step5=1  — all done
+  /?debug=1&step1=1&step2=0&step3=0&step4=0&step5=0  — new user
+  /?debug=1&step5=1                                    — force superuser</pre>
 </details>
 {% endif %}
 

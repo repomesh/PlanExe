@@ -115,11 +115,11 @@ logger.info(f"----- PlanExe-server: {Path(__file__).name} SCRIPT IS BEING ACCESS
 
 # Configure specific loggers to send their output to stdout via the root logger.
 loggers_to_redirect_via_root = {
-    'luigi': logging.DEBUG,
-    'luigi-interface': logging.DEBUG,
-    'luigi.worker': logging.DEBUG,
-    'luigi.scheduler': logging.DEBUG,
-    'luigi.task': logging.DEBUG,
+    'luigi': logging.INFO,
+    'luigi-interface': logging.INFO,
+    'luigi.worker': logging.INFO,
+    'luigi.scheduler': logging.INFO,
+    'luigi.task': logging.INFO,
     'transformers': logging.INFO,
     'httpx': logging.WARNING,
 }

@@ -714,6 +714,12 @@ class MyFlaskApp:
         # Exempt external webhook endpoints from CSRF protection.
         self.csrf.exempt(billing_bp)
 
+        # Exempt /run from CSRF — it uses nonce-based replay protection instead.
+        # This allows cross-origin iframe POST from partners (e.g. mach-ai.com).
+        run_view = self.app.view_functions.get("plan_routes.run")
+        if run_view:
+            self.csrf.exempt(run_view)
+
         self._setup_routes()
 
         self._track_flask_app_started()

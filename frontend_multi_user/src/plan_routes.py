@@ -880,36 +880,36 @@ def get_progress():
 def viewplan():
     plan_id = request.args.get("plan_id", "")
     logger.info("ViewPlan endpoint requested for plan_id: %r", plan_id)
-    task = db.session.get(PlanItem, plan_id)
-    if task is None:
-        logger.error("Task not found for plan_id: %r", plan_id)
-        return jsonify({"error": "Task not found"}), 400
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        logger.error("Plan not found for plan_id: %r", plan_id)
+        return jsonify({"error": "Plan not found"}), 400
 
     from database_api.is_machai_user import is_machai_user
-    if is_machai_user(str(task.user_id)):
+    if is_machai_user(str(plan.user_id)):
         # MachAI iframe users can view their plan without login.
-        logger.info("ViewPlan: MachAI user, skipping auth for run_id=%s", run_id)
+        logger.info("ViewPlan: MachAI user, skipping auth for plan_id=%s", plan_id)
     elif not current_user.is_authenticated:
         # Non-MachAI plan requires login.
         return current_app.login_manager.unauthorized()
-    elif not current_user.is_admin and str(task.user_id) != str(current_user.id):
-        logger.warning("Unauthorized report access attempt. run_id=%s user_id=%s", run_id, current_user.id)
+    elif not current_user.is_admin and str(plan.user_id) != str(current_user.id):
+        logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
     if SHOW_DEMO_PLAN:
         planexe_run_dir = current_app.config["PLANEXE_RUN_DIR"]
-        run_id_val = "20250524_universal_manufacturing"
-        run_id_dir = (planexe_run_dir / run_id_val).absolute()
-        path_to_html_file = run_id_dir / FilenameEnum.REPORT.value
+        demo_plan_id = "20250524_universal_manufacturing"
+        demo_plan_dir = (planexe_run_dir / demo_plan_id).absolute()
+        path_to_html_file = demo_plan_dir / FilenameEnum.REPORT.value
         if not path_to_html_file.exists():
             return jsonify({"error": "Demo report not found"}), 404
         return send_file(str(path_to_html_file), mimetype="text/html")
 
-    if not task.generated_report_html:
-        logger.error("Report HTML not found for run_id=%s", run_id)
+    if not plan.generated_report_html:
+        logger.error("Report HTML not found for plan_id=%s", plan_id)
         return jsonify({"error": "Report not available"}), 404
 
-    response = make_response(task.generated_report_html)
+    response = make_response(plan.generated_report_html)
     response.headers["Content-Type"] = "text/html"
     return response
 

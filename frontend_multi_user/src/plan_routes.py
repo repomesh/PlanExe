@@ -854,6 +854,8 @@ def run_status():
 def get_progress():
     plan_id = request.args.get("plan_id", "")
     logger.debug("Progress endpoint received plan_id: %r", plan_id)
+    if not plan_id:
+        return jsonify({"error": "No plan_id provided"}), 400
     plan = db.session.get(PlanItem, plan_id)
     if plan is None:
         logger.error("Plan not found for plan_id: %r", plan_id)
@@ -880,6 +882,8 @@ def get_progress():
 def viewplan():
     plan_id = request.args.get("plan_id", "")
     logger.info("ViewPlan endpoint requested for plan_id: %r", plan_id)
+    if not plan_id:
+        return jsonify({"error": "No plan_id provided"}), 400
     plan = db.session.get(PlanItem, plan_id)
     if plan is None:
         logger.error("Plan not found for plan_id: %r", plan_id)

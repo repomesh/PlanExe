@@ -878,11 +878,11 @@ def get_progress():
 
 @plan_routes_bp.route("/viewplan")
 def viewplan():
-    run_id = request.args.get("run_id", "")
-    logger.info("ViewPlan endpoint requested for run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("plan_id") or request.args.get("run_id", "")
+    logger.info("ViewPlan endpoint requested for plan_id: %r", plan_id)
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
+        logger.error("Task not found for plan_id: %r", plan_id)
         return jsonify({"error": "Task not found"}), 400
 
     from database_api.is_machai_user import is_machai_user

@@ -143,7 +143,7 @@ class PlanItemView(AdminOnlyModelView):
         ),
         'prompt': lambda v, c, m, p: m.prompt[:100] + '...' if m.prompt and len(m.prompt) > 100 else m.prompt,
         'view_plan': lambda v, c, m, p: Markup(
-            f'<a href="/viewplan?run_id={m.id}" target="_blank">View</a>'
+            f'<a href="/viewplan?plan_id={m.id}" target="_blank">View</a>'
         ) if m.has_generated_report_html else '—',
         'generated_report_html': lambda v, c, m, p: Markup(
             f'<a href="{url_for("downloads.download_task_report", task_id=str(m.id))}">Download</a>'

@@ -181,7 +181,7 @@
                         // Clear the timers when completed
                         schedule_next_do_nothing = true;
                         // when the operation has completed redirect to the viewplan page
-                        window.location.href = `/viewplan?run_id={{ run_id }}`;
+                        window.location.href = `/viewplan?plan_id={{ run_id }}`;
                     }
                 })
                 .catch(error => {

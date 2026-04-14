@@ -724,7 +724,7 @@
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
-        src="{% if task.has_generated_report_html %}{{ url_for('plan_routes.viewplan') }}?plan_id={{ run_id }}{% else %}{{ url_for('plan_routes.run_status') }}?id={{ run_id }}{% endif %}"
+        src="{% if task.has_generated_report_html %}{{ url_for('plan_routes.viewplan') }}?plan_id={{ plan_id }}{% else %}{{ url_for('plan_routes.run_status') }}?id={{ plan_id }}{% endif %}"
         title="Plan report"
         loading="eager"
         referrerpolicy="no-referrer"

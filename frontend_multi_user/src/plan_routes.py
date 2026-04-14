@@ -699,7 +699,7 @@ def run():
     event = _new_model(EventItem, event_type=EventType.TASK_PENDING, message="Enqueued task via /run endpoint", context=event_context)
     db.session.add(event)
     db.session.commit()
-    return render_template("run_via_database.html", run_id=task_id)
+    return render_template("run_via_database.html", plan_id=task_id)
 
 
 @plan_routes_bp.route("/plan/create", methods=["GET"])
@@ -847,7 +847,7 @@ def run_status():
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    return render_template("run_via_database.html", run_id=run_id)
+    return render_template("run_via_database.html", plan_id=run_id)
 
 
 @plan_routes_bp.route("/progress")
@@ -982,7 +982,7 @@ def plan():
     resume_error = request.args.get("resume_error", "")
     return render_template(
         "plan_iframe.html",
-        run_id=run_id,
+        plan_id=run_id,
         task=task,
         telemetry=telemetry,
         failure_trace=failure_trace,

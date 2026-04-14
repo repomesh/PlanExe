@@ -63,16 +63,16 @@ def _sanitize_legacy_run_zip_for_download(run_zip_snapshot: bytes) -> Optional[i
 @login_required
 def plan_download_report():
     plan_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, plan_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    if not task.generated_report_html:
+    if not plan.generated_report_html:
         return jsonify({"error": "Report not available"}), 404
-    buffer = io.BytesIO(task.generated_report_html.encode("utf-8"))
+    buffer = io.BytesIO(plan.generated_report_html.encode("utf-8"))
     buffer.seek(0)
-    download_name = f"{task.id}-report.html"
+    download_name = f"{plan.id}-report.html"
     return send_file(buffer, mimetype="text/html", as_attachment=True, download_name=download_name)
 
 
@@ -80,25 +80,25 @@ def plan_download_report():
 @login_required
 def plan_download_zip():
     plan_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, plan_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    if not task.run_zip_snapshot:
+    if not plan.run_zip_snapshot:
         return jsonify({"error": "Run zip not available"}), 404
 
-    layout_version = safe_int(getattr(task, "run_artifact_layout_version", None)) or 0
+    layout_version = safe_int(getattr(plan, "run_artifact_layout_version", None)) or 0
     if layout_version >= 2:
-        buffer = io.BytesIO(task.run_zip_snapshot)
+        buffer = io.BytesIO(plan.run_zip_snapshot)
         buffer.seek(0)
     else:
-        buffer = _sanitize_legacy_run_zip_for_download(task.run_zip_snapshot)
+        buffer = _sanitize_legacy_run_zip_for_download(plan.run_zip_snapshot)
         if buffer is None:
             logger.error("Invalid legacy run zip snapshot for plan_id=%s", plan_id)
             return jsonify({"error": "Run zip is invalid"}), 500
 
-    download_name = f"{task.id}.zip"
+    download_name = f"{plan.id}.zip"
     return send_file(buffer, mimetype="application/zip", as_attachment=True, download_name=download_name)
 
 

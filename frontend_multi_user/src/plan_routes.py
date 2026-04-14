@@ -852,7 +852,7 @@ def run_status():
 
 @plan_routes_bp.route("/progress")
 def get_progress():
-    plan_id = request.args.get("plan_id") or request.args.get("run_id", "")
+    plan_id = request.args.get("plan_id", "")
     logger.debug("Progress endpoint received plan_id: %r", plan_id)
     task = db.session.get(PlanItem, plan_id)
     if task is None:
@@ -878,7 +878,7 @@ def get_progress():
 
 @plan_routes_bp.route("/viewplan")
 def viewplan():
-    plan_id = request.args.get("plan_id") or request.args.get("run_id", "")
+    plan_id = request.args.get("plan_id", "")
     logger.info("ViewPlan endpoint requested for plan_id: %r", plan_id)
     task = db.session.get(PlanItem, plan_id)
     if task is None:

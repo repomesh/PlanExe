@@ -626,6 +626,9 @@ def run():
 
     is_authenticated = current_user.is_authenticated
 
+    if not is_authenticated:
+        parameters["trigger_source"] = "mach-ai iframe"
+
     if is_authenticated:
         if current_user.is_admin:
             if not user_id_param:

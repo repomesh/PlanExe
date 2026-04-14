@@ -854,23 +854,23 @@ def run_status():
 def get_progress():
     plan_id = request.args.get("plan_id", "")
     logger.debug("Progress endpoint received plan_id: %r", plan_id)
-    task = db.session.get(PlanItem, plan_id)
-    if task is None:
-        logger.error("Task not found for plan_id: %r", plan_id)
-        return jsonify({"error": "Task not found"}), 400
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        logger.error("Plan not found for plan_id: %r", plan_id)
+        return jsonify({"error": "Plan not found"}), 400
 
-    progress_percentage = float(task.progress_percentage) if task.progress_percentage is not None else 0.0
-    progress_message = task.progress_message if task.progress_message is not None else ""
-    if isinstance(task.state, PlanState):
-        status = task.state.name
+    progress_percentage = float(plan.progress_percentage) if plan.progress_percentage is not None else 0.0
+    progress_message = plan.progress_message if plan.progress_message is not None else ""
+    if isinstance(plan.state, PlanState):
+        status = plan.state.name
     else:
-        status = f"unknown-{task.state}"
+        status = f"unknown-{plan.state}"
 
     try:
-        task.last_seen_timestamp = datetime.now(UTC)
+        plan.last_seen_timestamp = datetime.now(UTC)
         db.session.commit()
     except Exception as e:
-        logger.error("get_progress, error updating last_seen_timestamp for task %r: %s", plan_id, e, exc_info=True)
+        logger.error("get_progress, error updating last_seen_timestamp for plan %r: %s", plan_id, e, exc_info=True)
         db.session.rollback()
 
     return jsonify({"progress_percentage": progress_percentage, "progress_message": progress_message, "status": status}), 200

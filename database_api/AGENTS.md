@@ -35,6 +35,13 @@ extra_notes = db.Column(db.String(256), nullable=True, default=None)
 extra_notes = db.Column(db.String(256), nullable=False)
 ```
 
+## Shared helpers
+- `is_machai_user.py`: determines if a `user_id` belongs to a MachAI iframe
+  user (non-UUID, not in `UserAccount`, not the admin username). Used by both
+  `frontend_multi_user` and `worker_plan_database` — keep this as the single
+  source of truth for MachAI user detection. Must be called inside a Flask app
+  context.
+
 ## Testing
 - No package-level tests currently. If you change models or schema helpers,
   add a unit test under `database_api/tests` that exercises model import and

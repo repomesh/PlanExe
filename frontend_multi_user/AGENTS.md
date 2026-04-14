@@ -63,6 +63,15 @@ models. Keep interfaces stable across services.
 - Plan retry in the frontend (`/plan/retry`) archives old incremental billing
   entries (`usage_billing_progress` → `usage_billing_settled`) instead of
   deleting them, preserving the original key's credit history.
+- MachAI iframe embedding:
+  - `/run` is exempt from CSRF (nonce provides replay protection) and does not
+    require `@login_required`. Unauthenticated iframe users pass `user_id` via
+    the form; authenticated users get their ID from the session.
+  - `/viewplan` and `/progress` skip login for plans owned by MachAI users
+    (determined via `database_api.is_machai_user`). Regular users still require
+    authentication and ownership checks.
+  - URL parameters use `plan_id` (not `run_id`). Route handler local variables
+    use `plan` (not `task`) when referring to a `PlanItem` row.
 - Forbidden imports: `worker_plan_internal`, `worker_plan.app`,
   `frontend_single_user`, `open_dir_server`.
 

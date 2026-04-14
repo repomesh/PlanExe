@@ -46,6 +46,16 @@ PlanExe pipeline, and updates task state/progress.
   - Persist `activity_overview.json` into `PlanItem.run_activity_overview_json`.
   - Build `run_zip_snapshot` without `track_activity.jsonl` and set
     `run_artifact_layout_version` for new runs.
+- MachAI user detection: use `database_api.is_machai_user.is_machai_user()`
+  (shared with `frontend_multi_user`). The local `_should_send_to_machai()`
+  delegates to it. Do not duplicate the detection logic.
+- Connection pool recovery: `PGRES_TUPLES_OK` errors corrupt psycopg2
+  connections at the protocol level. After such errors, call
+  `db.engine.dispose()` to destroy the pool before `db.session.remove()`.
+  Without this, corrupted connections re-enter the pool and hang
+  `pool_pre_ping` checks, deadlocking all Luigi worker threads.
+- Luigi logging: loggers are set to INFO (not DEBUG) to suppress per-second
+  "Asking scheduler for work" / "pruning task graph" noise.
 - Forbidden imports: `worker_plan.app`, `frontend_*`, `open_dir_server`.
 
 ## Testing

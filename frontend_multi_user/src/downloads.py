@@ -86,7 +86,7 @@ def plan_download_zip():
     if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
     if not plan.run_zip_snapshot:
-        return jsonify({"error": "Run zip not available"}), 404
+        return jsonify({"error": "Plan zip not available"}), 404
 
     layout_version = safe_int(getattr(plan, "run_artifact_layout_version", None)) or 0
     if layout_version >= 2:
@@ -96,7 +96,7 @@ def plan_download_zip():
         buffer = _sanitize_legacy_run_zip_for_download(plan.run_zip_snapshot)
         if buffer is None:
             logger.error("Invalid legacy run zip snapshot for plan_id=%s", plan_id)
-            return jsonify({"error": "Run zip is invalid"}), 500
+            return jsonify({"error": "Plan zip is invalid"}), 500
 
     download_name = f"{plan.id}.zip"
     return send_file(buffer, mimetype="application/zip", as_attachment=True, download_name=download_name)

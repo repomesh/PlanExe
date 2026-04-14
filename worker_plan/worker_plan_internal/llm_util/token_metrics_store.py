@@ -126,9 +126,18 @@ class TokenMetricsStore:
                 self.db.session.rollback()
             except Exception:
                 pass
-            # Fully discard the scoped session to prevent a corrupted
-            # transaction state from poisoning subsequent DB operations
-            # (e.g. the _handle_task_completion callback that runs next).
+            # Dispose the connection pool BEFORE removing the session.
+            # Errors like PGRES_TUPLES_OK leave the connection in a
+            # corrupted protocol state.  If the connection is returned
+            # to the pool, pool_pre_ping (SELECT 1) can hang on it,
+            # blocking every Luigi worker thread that tries to check
+            # out a connection afterwards.  Disposing the pool ensures
+            # the corrupted connection is closed outright and all
+            # threads get fresh connections.
+            try:
+                self.db.engine.dispose()
+            except Exception:
+                pass
             try:
                 self.db.session.remove()
             except Exception:

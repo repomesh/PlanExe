@@ -590,6 +590,15 @@ class ServerExecutePipeline(ExecutePipeline):
                         "Assuming task is still active and continuing pipeline.",
                         max_attempts, self.task_id,
                     )
+                    # Dispose the connection pool — repeated failures
+                    # likely mean the pool is poisoned (e.g. a
+                    # PGRES_TUPLES_OK-corrupted connection that hangs
+                    # on pool_pre_ping).  Fresh connections will be
+                    # created on the next access.
+                    try:
+                        db.engine.dispose()
+                    except Exception:
+                        pass
                     return
         if task is None:
             logger.error(f"Task with ID {self.task_id!r} not found in database, while running the pipeline. This is an inconsistency.")

@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 DEFAULT_MCP_URL = "https://your-railway-app.up.railway.app/mcp"
-REPORT_FILENAME = "030-report.html"
+REPORT_FILENAME = "report.html"
 ZIP_FILENAME = "run.zip"
 ModelProfileInput = Literal[
     "baseline",

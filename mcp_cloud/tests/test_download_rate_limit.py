@@ -25,7 +25,7 @@ class TestDownloadRateLimit(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_download_path_is_rate_limited(self):
-        request = _fake_request("/download/abc-123/030-report.html")
+        request = _fake_request("/download/abc-123/report.html")
         for _ in range(http_server.DOWNLOAD_RATE_LIMIT_REQUESTS):
             result = asyncio.run(http_server._enforce_download_rate_limit(request))
             self.assertIsNone(result)
@@ -35,8 +35,8 @@ class TestDownloadRateLimit(unittest.TestCase):
         self.assertEqual(result.status_code, 429)
 
     def test_different_clients_have_separate_buckets(self):
-        req_a = _fake_request("/download/abc/030-report.html", client_host="10.0.0.1")
-        req_b = _fake_request("/download/abc/030-report.html", client_host="10.0.0.2")
+        req_a = _fake_request("/download/abc/report.html", client_host="10.0.0.1")
+        req_b = _fake_request("/download/abc/report.html", client_host="10.0.0.2")
         for _ in range(http_server.DOWNLOAD_RATE_LIMIT_REQUESTS):
             asyncio.run(http_server._enforce_download_rate_limit(req_a))
         # Client A is exhausted
@@ -47,7 +47,7 @@ class TestDownloadRateLimit(unittest.TestCase):
         self.assertIsNone(result_b)
 
     def test_disabled_when_limit_is_zero(self):
-        request = _fake_request("/download/abc/030-report.html")
+        request = _fake_request("/download/abc/report.html")
         original = server_boot.DOWNLOAD_RATE_LIMIT_REQUESTS
         try:
             server_boot.DOWNLOAD_RATE_LIMIT_REQUESTS = 0

@@ -586,7 +586,6 @@ def _set_plan_view_mode_preference(mode: str) -> None:
 
 
 @plan_routes_bp.route("/run", methods=["GET", "POST"])
-@login_required
 @_nocache
 def run():
     if request.method == "POST" and request.args:
@@ -625,12 +624,20 @@ def run():
         request.method, request_size_bytes, log_prompt_info, user_id_param, nonce_param, parameters,
     )
 
-    if current_user.is_admin:
-        if not user_id_param:
-            admin_account = _get_current_user_account()
-            user_id_param = str(admin_account.id) if admin_account else current_app.config["ADMIN_USERNAME"]
+    is_authenticated = current_user.is_authenticated
+
+    if is_authenticated:
+        if current_user.is_admin:
+            if not user_id_param:
+                admin_account = _get_current_user_account()
+                user_id_param = str(admin_account.id) if admin_account else current_app.config["ADMIN_USERNAME"]
+        else:
+            user_id_param = str(current_user.id)
     else:
-        user_id_param = str(current_user.id)
+        # Unauthenticated iframe user — use user_id from the form as-is.
+        if not user_id_param:
+            logger.error("endpoint /run. No user_id provided for unauthenticated request")
+            return jsonify({"error": "A user_id is required."}), 400
 
     if not nonce_param:
         logger.error("endpoint /run. No nonce provided")
@@ -651,7 +658,7 @@ def run():
         logger.error("endpoint /run. No prompt provided")
         return jsonify({"error": "No prompt provided"}), 400
 
-    if not current_user.is_admin:
+    if is_authenticated and not current_user.is_admin:
         user = db.session.get(UserAccount, uuid.UUID(str(current_user.id)))
         if not user:
             return jsonify({"error": "User not found"}), 400

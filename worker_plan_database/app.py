@@ -788,6 +788,36 @@ def _credits_for_usd(usd_amount: float) -> Decimal:
     return (usd_decimal / credit_price_usd).quantize(CREDIT_SCALE)
 
 
+def _should_send_to_machai(user_id: str) -> bool:
+    """Return True only for MachAI iframe users (not registered in the database).
+
+    Registered users (home.planexe.org sign-ups, docker admin) and admin
+    accounts should NOT have their plan data sent to MachAI.
+    MachAI iframe users use non-UUID identifiers and are not in the UserAccount table.
+
+    Must be called inside a Flask app context.
+    """
+    # Registered users and admins use UUIDs as their user_id.
+    try:
+        user_uuid = uuid.UUID(str(user_id))
+        user = db.session.get(UserAccount, user_uuid)
+        if user is not None:
+            logger.debug("_should_send_to_machai: user_id %r found in database, skipping MachAI.", user_id)
+            return False
+    except (ValueError, AttributeError):
+        pass
+
+    # Fallback admin username (non-UUID string like "admin").
+    admin_username = os.environ.get("PLANEXE_FRONTEND_MULTIUSER_ADMIN_USERNAME", "")
+    if admin_username and user_id == admin_username:
+        logger.debug("_should_send_to_machai: user_id %r matches admin username, skipping MachAI.", user_id)
+        return False
+
+    # Unknown user — likely a MachAI iframe user.
+    logger.debug("_should_send_to_machai: user_id %r is unknown, will send to MachAI.", user_id)
+    return True
+
+
 def _resolve_user_for_billing(task_user_id: str) -> Optional[UserAccount]:
     """Resolve the UserAccount for billing from a PlanItem.user_id.
 
@@ -1224,20 +1254,28 @@ def execute_pipeline_for_job(
             db.session.add(event)
             db.session.commit()
 
-    # Post confirmation to MachAI
-    machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
-    if pipeline_instance.has_report_file:
-        plan_name = 'Unnamed Plan'
-        title_path = run_id_dir / FilenameEnum.WBS_LEVEL1_PROJECT_TITLE.value
-        if title_path.is_file():
-            plan_name = title_path.read_text(encoding='utf-8').strip()
-            logger.debug(f"WBS_LEVEL1_PROJECT_TITLE file found at {title_path!r}. Using the plan_name: {plan_name!r}.")
+    # Post confirmation to MachAI — only for MachAI iframe users (not registered DB users or admins).
+    with app.app_context():
+        send_to_machai = _should_send_to_machai(user_id)
+    if send_to_machai:
+        machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
+        if pipeline_instance.has_report_file:
+            plan_name = 'Unnamed Plan'
+            title_path = run_id_dir / FilenameEnum.WBS_LEVEL1_PROJECT_TITLE.value
+            if title_path.is_file():
+                plan_name = title_path.read_text(encoding='utf-8').strip()
+                logger.debug(f"WBS_LEVEL1_PROJECT_TITLE file found at {title_path!r}. Using the plan_name: {plan_name!r}.")
+            else:
+                logger.warning(f"WBS_LEVEL1_PROJECT_TITLE file not found at {title_path!r}. Using the default plan_name: {plan_name!r}.")
+            machai_instance.post_confirmation_ok_with_file(session_id=user_id, path=run_id_dir / FilenameEnum.REPORT.value, plan_name=plan_name)
         else:
-            logger.warning(f"WBS_LEVEL1_PROJECT_TITLE file not found at {title_path!r}. Using the default plan_name: {plan_name!r}.")
-        machai_instance.post_confirmation_ok_with_file(session_id=user_id, path=run_id_dir / FilenameEnum.REPORT.value, plan_name=plan_name)
-        upload_report_to_worker_plan(run_id=str(task_id), report_path=run_id_dir / FilenameEnum.REPORT.value)
+            machai_instance.post_confirmation_error(session_id=user_id, message=str(machai_error_message))
     else:
-        machai_instance.post_confirmation_error(session_id=user_id, message=str(machai_error_message))
+        logger.info("Skipping MachAI confirmation for registered user %r.", user_id)
+
+    # Upload report to worker_plan service (internal, independent of MachAI).
+    if pipeline_instance.has_report_file:
+        upload_report_to_worker_plan(run_id=str(task_id), report_path=run_id_dir / FilenameEnum.REPORT.value)
 
 def process_pending_tasks() -> bool:
     """
@@ -1444,8 +1482,13 @@ def process_pending_tasks() -> bool:
             _update_failure_diagnostics(task_id, "worker_error", str(e)[:256], recoverable=True)
         billing_result = _charge_usage_credits_once(task_id=task_id, run_id_dir=run_id_dir, success=False)
         machai_error_message = 'Unknown error happened while processing.'
-        machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
-        machai_instance.post_confirmation_error(session_id=user_id, message=machai_error_message)
+        with app.app_context():
+            send_to_machai = _should_send_to_machai(user_id)
+        if send_to_machai:
+            machai_instance: MachAI = MachAI.create(use_machai_developer_endpoint=use_machai_developer_endpoint)
+            machai_instance.post_confirmation_error(session_id=user_id, message=machai_error_message)
+        else:
+            logger.info("Skipping MachAI error confirmation for registered user %r.", user_id)
         with app.app_context():
             event_context = {
                 "task_id": str(task_id), 

@@ -407,12 +407,23 @@ def update_task_state_with_retry(task_id: str, new_state: PlanState, max_retries
             return True
         except Exception as e:
             logger.error(f"Database error updating task state (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True)
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.remove()
+            except Exception:
+                pass
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
             else:
                 logger.error("Max retries reached for task state update")
+                try:
+                    db.engine.dispose()
+                except Exception:
+                    pass
                 return False
     return False
 
@@ -438,7 +449,14 @@ def _update_failure_diagnostics(
         db.session.commit()
     except Exception as exc:
         logger.error("Failed to write failure diagnostics for task %s: %s", task_id, exc, exc_info=True)
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        try:
+            db.session.remove()
+        except Exception:
+            pass
 
 def update_task_progress_with_retry(
     task_id: str,
@@ -483,12 +501,23 @@ def update_task_progress_with_retry(
             return True
         except Exception as e:
             logger.error(f"Database error updating task progress (attempt {attempt + 1}/{max_retries}): {e}", exc_info=True)
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.session.remove()
+            except Exception:
+                pass
             if attempt < max_retries - 1:
-                logger.info(f"Retrying in {retry_delay} seconds...")    
+                logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
             else:
                 logger.error("Max retries reached for task progress update")
+                try:
+                    db.engine.dispose()
+                except Exception:
+                    pass
                 return False
     return False
 

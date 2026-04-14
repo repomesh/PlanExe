@@ -120,7 +120,7 @@
         }
         
         function poll() {
-            fetch(`/progress?run_id={{ run_id }}`, { cache: 'no-cache' })
+            fetch(`/progress?plan_id={{ plan_id }}`, { cache: 'no-cache' })
                 .then(response => {
                     console.log('Response status:', response.status);
                     console.log("Response headers:");
@@ -181,7 +181,7 @@
                         // Clear the timers when completed
                         schedule_next_do_nothing = true;
                         // when the operation has completed redirect to the viewplan page
-                        window.location.href = `/viewplan?run_id={{ run_id }}`;
+                        window.location.href = `/viewplan?plan_id={{ plan_id }}`;
                     }
                 })
                 .catch(error => {

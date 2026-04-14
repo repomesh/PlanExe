@@ -699,7 +699,7 @@ def run():
     event = _new_model(EventItem, event_type=EventType.TASK_PENDING, message="Enqueued task via /run endpoint", context=event_context)
     db.session.add(event)
     db.session.commit()
-    return render_template("run_via_database.html", run_id=task_id)
+    return render_template("run_via_database.html", plan_id=task_id)
 
 
 @plan_routes_bp.route("/plan/create", methods=["GET"])
@@ -841,68 +841,79 @@ def create_plan():
 @login_required
 @_nocache
 def run_status():
-    run_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan_id = request.args.get("id", "")
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    return render_template("run_via_database.html", run_id=run_id)
+    return render_template("run_via_database.html", plan_id=plan_id)
 
 
 @plan_routes_bp.route("/progress")
 def get_progress():
-    run_id = request.args.get("run_id", "")
-    logger.debug("Progress endpoint received run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
-        return jsonify({"error": "Task not found"}), 400
+    plan_id = request.args.get("plan_id", "")
+    logger.debug("Progress endpoint received plan_id: %r", plan_id)
+    if not plan_id:
+        return jsonify({"error": "No plan_id provided"}), 400
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        logger.error("Plan not found for plan_id: %r", plan_id)
+        return jsonify({"error": "Plan not found"}), 400
 
-    progress_percentage = float(task.progress_percentage) if task.progress_percentage is not None else 0.0
-    progress_message = task.progress_message if task.progress_message is not None else ""
-    if isinstance(task.state, PlanState):
-        status = task.state.name
+    progress_percentage = float(plan.progress_percentage) if plan.progress_percentage is not None else 0.0
+    progress_message = plan.progress_message if plan.progress_message is not None else ""
+    if isinstance(plan.state, PlanState):
+        status = plan.state.name
     else:
-        status = f"unknown-{task.state}"
+        status = f"unknown-{plan.state}"
 
     try:
-        task.last_seen_timestamp = datetime.now(UTC)
+        plan.last_seen_timestamp = datetime.now(UTC)
         db.session.commit()
     except Exception as e:
-        logger.error("get_progress, error updating last_seen_timestamp for task %r: %s", run_id, e, exc_info=True)
+        logger.error("get_progress, error updating last_seen_timestamp for plan %r: %s", plan_id, e, exc_info=True)
         db.session.rollback()
 
     return jsonify({"progress_percentage": progress_percentage, "progress_message": progress_message, "status": status}), 200
 
 
 @plan_routes_bp.route("/viewplan")
-@login_required
 def viewplan():
-    run_id = request.args.get("run_id", "")
-    logger.info("ViewPlan endpoint requested for run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
-        logger.warning("Unauthorized report access attempt. run_id=%s user_id=%s", run_id, current_user.id)
+    plan_id = request.args.get("plan_id", "")
+    logger.info("ViewPlan endpoint requested for plan_id: %r", plan_id)
+    if not plan_id:
+        return jsonify({"error": "No plan_id provided"}), 400
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        logger.error("Plan not found for plan_id: %r", plan_id)
+        return jsonify({"error": "Plan not found"}), 400
+
+    from database_api.is_machai_user import is_machai_user
+    if is_machai_user(str(plan.user_id)):
+        # MachAI iframe users can view their plan without login.
+        logger.info("ViewPlan: MachAI user, skipping auth for plan_id=%s", plan_id)
+    elif not current_user.is_authenticated:
+        # Non-MachAI plan requires login.
+        return redirect(url_for("auth.login"))
+    elif not current_user.is_admin and str(plan.user_id) != str(current_user.id):
+        logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
     if SHOW_DEMO_PLAN:
         planexe_run_dir = current_app.config["PLANEXE_RUN_DIR"]
-        run_id_val = "20250524_universal_manufacturing"
-        run_id_dir = (planexe_run_dir / run_id_val).absolute()
-        path_to_html_file = run_id_dir / FilenameEnum.REPORT.value
+        demo_plan_id = "20250524_universal_manufacturing"
+        demo_plan_dir = (planexe_run_dir / demo_plan_id).absolute()
+        path_to_html_file = demo_plan_dir / FilenameEnum.REPORT.value
         if not path_to_html_file.exists():
             return jsonify({"error": "Demo report not found"}), 404
         return send_file(str(path_to_html_file), mimetype="text/html")
 
-    if not task.generated_report_html:
-        logger.error("Report HTML not found for run_id=%s", run_id)
+    if not plan.generated_report_html:
+        logger.error("Report HTML not found for plan_id=%s", plan_id)
         return jsonify({"error": "Report not available"}), 404
 
-    response = make_response(task.generated_report_html)
+    response = make_response(plan.generated_report_html)
     response.headers["Content-Type"] = "text/html"
     return response
 
@@ -911,9 +922,9 @@ def viewplan():
 @login_required
 def plan():
     from types import SimpleNamespace
-    run_id = request.args.get("id", "").strip()
+    plan_id = request.args.get("id", "").strip()
 
-    if not run_id:
+    if not plan_id:
         user_id = str(current_user.id)
         uid_filter = (
             PlanItem.user_id.in_(_admin_user_ids())
@@ -958,25 +969,25 @@ def plan():
             })
         return render_template("plan_list.html", plan_rows=rows)
 
-    logger.info("Plan iframe wrapper requested for run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
-        logger.warning("Unauthorized plan wrapper access attempt. run_id=%s user_id=%s", run_id, current_user.id)
+    logger.info("Plan iframe wrapper requested for plan_id: %r", plan_id)
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        logger.error("Plan not found for plan_id: %r", plan_id)
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
+        logger.warning("Unauthorized plan wrapper access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
-    telemetry = _build_plan_telemetry(task, include_raw=False)
-    failure_trace = _build_plan_failure_trace(task)
+    telemetry = _build_plan_telemetry(plan, include_raw=False)
+    failure_trace = _build_plan_failure_trace(plan)
     preferred_plan_view_mode = _get_plan_view_mode_preference()
-    parameters = task.parameters if isinstance(task.parameters, dict) else {}
+    parameters = plan.parameters if isinstance(plan.parameters, dict) else {}
     selected_model_profile = normalize_model_profile(parameters.get("model_profile")).value
     resume_error = request.args.get("resume_error", "")
     return render_template(
         "plan_iframe.html",
-        run_id=run_id,
-        task=task,
+        plan_id=plan_id,
+        plan=plan,
         telemetry=telemetry,
         failure_trace=failure_trace,
         preferred_plan_view_mode=preferred_plan_view_mode,
@@ -1184,151 +1195,151 @@ def plan_resume_from_zip_upload():
 @plan_routes_bp.route("/plan/stop", methods=["POST"])
 @login_required
 def plan_stop():
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan_id = request.form.get("id", "").strip()
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    if task.state == PlanState.completed or bool(task.has_generated_report_html):
-        logger.info("Ignoring stop request for already completed task %s", run_id)
-        return redirect(url_for("plan_routes.plan", id=run_id))
-    task.stop_requested = True
-    task.stop_requested_timestamp = datetime.now(UTC)
-    if task.state in (PlanState.pending, PlanState.processing):
-        task.state = PlanState.stopped
-        task.progress_message = "Stop requested by user."
+    if plan.state == PlanState.completed or bool(plan.has_generated_report_html):
+        logger.info("Ignoring stop request for already completed plan %s", plan_id)
+        return redirect(url_for("plan_routes.plan", id=plan_id))
+    plan.stop_requested = True
+    plan.stop_requested_timestamp = datetime.now(UTC)
+    if plan.state in (PlanState.pending, PlanState.processing):
+        plan.state = PlanState.stopped
+        plan.progress_message = "Stop requested by user."
     db.session.commit()
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/retry", methods=["POST"])
 @login_required
 def plan_retry():
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan_id = request.form.get("id", "").strip()
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    if task.state not in (PlanState.failed, PlanState.stopped) and not bool(task.stop_requested):
-        return jsonify({"error": "Task is not in a retryable state. Stop it first before retrying."}), 409
+    if plan.state not in (PlanState.failed, PlanState.stopped) and not bool(plan.stop_requested):
+        return jsonify({"error": "Plan is not in a retryable state. Stop it first before retrying."}), 409
 
     raw_profile = request.form.get("model_profile")
     selected_model_profile = normalize_model_profile(raw_profile).value
-    parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+    parameters = dict(plan.parameters) if isinstance(plan.parameters, dict) else {}
     parameters["model_profile"] = selected_model_profile
     parameters["pipeline_version"] = PIPELINE_VERSION
-    task.parameters = parameters
+    plan.parameters = parameters
 
-    task.state = PlanState.pending
-    task.stop_requested = False
-    task.stop_requested_timestamp = None
-    task.progress_percentage = 0.0
-    task.progress_message = "Retry requested by user."
-    task.generated_report_html = None
-    task.run_zip_snapshot = None
-    task.run_track_activity_jsonl = None
-    task.run_track_activity_bytes = None
-    task.run_activity_overview_json = None
-    task.run_artifact_layout_version = None
-    task.failure_reason = None
-    task.failed_step = None
-    task.error_message = None
-    task.recoverable = None
-    task.last_seen_timestamp = datetime.now(UTC)
+    plan.state = PlanState.pending
+    plan.stop_requested = False
+    plan.stop_requested_timestamp = None
+    plan.progress_percentage = 0.0
+    plan.progress_message = "Retry requested by user."
+    plan.generated_report_html = None
+    plan.run_zip_snapshot = None
+    plan.run_track_activity_jsonl = None
+    plan.run_track_activity_bytes = None
+    plan.run_activity_overview_json = None
+    plan.run_artifact_layout_version = None
+    plan.failure_reason = None
+    plan.failed_step = None
+    plan.error_message = None
+    plan.recoverable = None
+    plan.last_seen_timestamp = datetime.now(UTC)
 
     CreditHistory.query.filter_by(
         source="usage_billing_progress",
-        external_id=str(task.id),
+        external_id=str(plan.id),
     ).update({"source": "usage_billing_settled"})
 
     db.session.commit()
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/resume", methods=["POST"])
 @login_required
 def plan_resume():
     from flask import abort
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
+    plan_id = request.form.get("id", "").strip()
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
         abort(404)
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         abort(403)
-    if task.state not in (PlanState.failed, PlanState.stopped):
-        return redirect(url_for("plan_routes.plan", id=run_id))
+    if plan.state not in (PlanState.failed, PlanState.stopped):
+        return redirect(url_for("plan_routes.plan", id=plan_id))
 
-    stored_params = task.parameters if isinstance(task.parameters, dict) else {}
+    stored_params = plan.parameters if isinstance(plan.parameters, dict) else {}
     stored_version = stored_params.get("pipeline_version")
     if stored_version is not None and stored_version != PIPELINE_VERSION:
-        return redirect(url_for("plan_routes.plan", id=run_id, resume_error="version_mismatch"))
+        return redirect(url_for("plan_routes.plan", id=plan_id, resume_error="version_mismatch"))
 
     raw_profile = request.form.get("model_profile")
     selected_model_profile = normalize_model_profile(raw_profile).value
-    parameters = dict(task.parameters) if isinstance(task.parameters, dict) else {}
+    parameters = dict(plan.parameters) if isinstance(plan.parameters, dict) else {}
     parameters["model_profile"] = selected_model_profile
     parameters["trigger_source"] = "frontend resume"
     parameters["resume"] = True
     parameters["resume_count"] = parameters.get("resume_count", 0) + 1
-    task.parameters = parameters
+    plan.parameters = parameters
 
-    task.state = PlanState.pending
-    task.progress_message = "Resume requested by user."
-    task.stop_requested = False
-    task.stop_requested_timestamp = None
-    task.failure_reason = None
-    task.failed_step = None
-    task.error_message = None
-    task.recoverable = None
-    task.last_seen_timestamp = datetime.now(UTC)
+    plan.state = PlanState.pending
+    plan.progress_message = "Resume requested by user."
+    plan.stop_requested = False
+    plan.stop_requested_timestamp = None
+    plan.failure_reason = None
+    plan.failed_step = None
+    plan.error_message = None
+    plan.recoverable = None
+    plan.last_seen_timestamp = datetime.now(UTC)
 
     CreditHistory.query.filter_by(
         source="usage_billing_progress",
-        external_id=str(task.id),
+        external_id=str(plan.id),
     ).update({"source": "usage_billing_settled"})
 
     db.session.commit()
 
     event_context = {
-        "plan_id": str(task.id),
-        "task_handle": str(task.id),
-        "resume_of_plan_id": str(task.id),
+        "plan_id": str(plan.id),
+        "task_handle": str(plan.id),
+        "resume_of_plan_id": str(plan.id),
         "model_profile": selected_model_profile,
         "resume_count": parameters["resume_count"],
     }
     event = EventItem()
     event.event_type = EventType.TASK_PENDING
-    event.message = "Resumed failed task via frontend"
+    event.message = "Resumed failed plan via frontend"
     event.context = event_context
     db.session.add(event)
     db.session.commit()
 
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/meta")
 @login_required
 def plan_meta():
-    run_id = request.args.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan_id = request.args.get("id", "").strip()
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
 
-    state_name = task.state.name if isinstance(task.state, PlanState) else "pending"
-    telemetry = _build_plan_telemetry(task, include_raw=False)
-    failure_trace = _build_plan_failure_trace(task)
+    state_name = plan.state.name if isinstance(plan.state, PlanState) else "pending"
+    telemetry = _build_plan_telemetry(plan, include_raw=False)
+    failure_trace = _build_plan_failure_trace(plan)
     return jsonify({
-        "id": str(task.id),
+        "id": str(plan.id),
         "state": state_name,
-        "progress_percentage": float(task.progress_percentage) if task.progress_percentage is not None else 0.0,
-        "progress_message": task.progress_message or "",
-        "generated_report_html": bool(task.has_generated_report_html),
-        "run_zip_snapshot": bool(task.has_run_zip_snapshot),
-        "stop_requested": bool(task.stop_requested),
+        "progress_percentage": float(plan.progress_percentage) if plan.progress_percentage is not None else 0.0,
+        "progress_message": plan.progress_message or "",
+        "generated_report_html": bool(plan.has_generated_report_html),
+        "run_zip_snapshot": bool(plan.has_run_zip_snapshot),
+        "stop_requested": bool(plan.stop_requested),
         "telemetry": telemetry,
         "failure_trace": failure_trace,
     }), 200
@@ -1346,11 +1357,11 @@ def plan_view_mode():
 @plan_routes_bp.route("/plan/telemetry")
 @login_required
 def plan_telemetry():
-    run_id = request.args.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
-    if task is None:
-        return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+    plan_id = request.args.get("id", "").strip()
+    plan = db.session.get(PlanItem, plan_id)
+    if plan is None:
+        return jsonify({"error": "Plan not found"}), 400
+    if not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    telemetry = _build_plan_telemetry(task, include_raw=True, expose_raw_usage_data=True)
+    telemetry = _build_plan_telemetry(plan, include_raw=True, expose_raw_usage_data=True)
     return jsonify(telemetry), 200

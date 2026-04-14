@@ -539,15 +539,15 @@
     <div class="plan-meta-top">
         <div class="plan-meta-info">
             <p class="plan-meta-title">Plan</p>
-            <p class="plan-meta-sub">id: {{ task.id }}<button type="button" class="plan-id-copy-btn" id="copy-plan-id-btn" title="Copy plan ID" data-plan-id="{{ task.id }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>{% if task.timestamp_created %} · Created: {{ task.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
-            <p class="plan-state" id="plan-state" {% if task.state and task.state.name == 'completed' %}style="display:none"{% endif %}>
-                <span>Status:</span> <span id="plan-state-text">{% if task.state %}{{ task.state.name | lower }}{% else %}pending{% endif %}{% if task.progress_percentage is not none %} · {{ "%.0f"|format(task.progress_percentage) }}%{% endif %}{% if task.progress_message and not (task.state and task.state.name == 'stopped') %} · {{ task.progress_message }}{% endif %}</span>
+            <p class="plan-meta-sub">id: {{ plan.id }}<button type="button" class="plan-id-copy-btn" id="copy-plan-id-btn" title="Copy plan ID" data-plan-id="{{ plan.id }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>{% if plan.timestamp_created %} · Created: {{ plan.timestamp_created.strftime("%Y-%m-%d %H:%M:%S") }}{% endif %}</p>
+            <p class="plan-state" id="plan-state" {% if plan.state and plan.state.name == 'completed' %}style="display:none"{% endif %}>
+                <span>Status:</span> <span id="plan-state-text">{% if plan.state %}{{ plan.state.name | lower }}{% else %}pending{% endif %}{% if plan.progress_percentage is not none %} · {{ "%.0f"|format(plan.progress_percentage) }}%{% endif %}{% if plan.progress_message and not (plan.state and plan.state.name == 'stopped') %} · {{ plan.progress_message }}{% endif %}</span>
             </p>
         </div>
         <div class="plan-meta-actions">
-            <form method="POST" class="plan-action-form" id="retry-resume-form" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}style="display:none"{% endif %}>
+            <form method="POST" class="plan-action-form" id="retry-resume-form" {% if not (plan.state and plan.state.name in ('failed', 'stopped')) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="id" value="{{ task.id }}">
+                <input type="hidden" name="id" value="{{ plan.id }}">
                 <div class="plan-action-group">
                     <select name="model_profile" class="plan-action-model-profile" title="Choose model profile">
                         <option value="baseline" {% if selected_model_profile == 'baseline' %}selected{% endif %}>baseline</option>
@@ -556,27 +556,27 @@
                         <option value="custom" {% if selected_model_profile == 'custom' %}selected{% endif %}>custom</option>
                     </select>
                     <button type="submit" formaction="{{ url_for('plan_routes.plan_retry') }}" class="btn-plan-meta" title="Discard all progress and start over from scratch">Retry</button>
-                    <button type="submit" formaction="{{ url_for('plan_routes.plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (task.state and task.state.name in ('failed', 'stopped')) %}disabled{% endif %}>Resume</button>
+                    <button type="submit" formaction="{{ url_for('plan_routes.plan_resume') }}" class="btn-plan-meta" id="resume-btn" title="Continue from where it left off, skipping completed steps" {% if not (plan.state and plan.state.name in ('failed', 'stopped')) %}disabled{% endif %}>Resume</button>
                     {% if resume_error == "version_mismatch" %}
                     <span class="plan-resume-error" id="resume-error-banner">Resume unavailable — plan was created with a different PlanExe version. Use Retry.</span>
                     {% endif %}
                 </div>
             </form>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" title="Discard all progress and start over from scratch" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Retry</span>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="resume-disabled" title="Continue from where it left off, skipping completed steps" {% if task.state and task.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Resume</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="retry-disabled" title="Discard all progress and start over from scratch" {% if plan.state and plan.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Retry</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="resume-disabled" title="Continue from where it left off, skipping completed steps" {% if plan.state and plan.state.name in ('failed', 'stopped') %}style="display:none"{% endif %}>Resume</span>
 
-            <form method="POST" action="{{ url_for('plan_routes.plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (task.state and task.state.name in ('pending', 'processing')) %}style="display:none"{% endif %}>
+            <form method="POST" action="{{ url_for('plan_routes.plan_stop') }}" class="plan-action-form" id="stop-form" {% if not (plan.state and plan.state.name in ('pending', 'processing')) %}style="display:none"{% endif %}>
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <input type="hidden" name="id" value="{{ task.id }}">
+                <input type="hidden" name="id" value="{{ plan.id }}">
                 <button type="submit" class="btn-plan-meta">Stop</button>
             </form>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if task.state and task.state.name in ('pending', 'processing') %}style="display:none"{% endif %}>Stop</span>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="stop-disabled" {% if plan.state and plan.state.name in ('pending', 'processing') %}style="display:none"{% endif %}>Stop</span>
 
-            <a class="btn-plan-meta" id="report-link" href="{{ url_for('downloads.plan_download_report') }}?id={{ task.id }}" {% if not task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if task.has_generated_report_html %}style="display:none"{% endif %}>Download Report</span>
+            <a class="btn-plan-meta" id="report-link" href="{{ url_for('downloads.plan_download_report') }}?id={{ plan.id }}" {% if not plan.has_generated_report_html %}style="display:none"{% endif %}>Download Report</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="report-disabled" {% if plan.has_generated_report_html %}style="display:none"{% endif %}>Download Report</span>
 
-            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('downloads.plan_download_zip') }}?id={{ task.id }}" {% if not task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
-            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if task.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
+            <a class="btn-plan-meta" id="zip-link" href="{{ url_for('downloads.plan_download_zip') }}?id={{ plan.id }}" {% if not plan.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</a>
+            <span class="btn-plan-meta btn-plan-meta-disabled" id="zip-disabled" {% if plan.has_run_zip_snapshot %}style="display:none"{% endif %}>Download ZIP</span>
         </div>
     </div>
 
@@ -588,7 +588,7 @@
                 <button type="button" id="toggle-prompt-btn" class="btn-plan-prompt" style="display:none">Expand</button>
             </div>
         </div>
-        <pre id="plan-prompt-content" class="plan-prompt-content">{{ task.prompt or '' }}</pre>
+        <pre id="plan-prompt-content" class="plan-prompt-content">{{ plan.prompt or '' }}</pre>
     </div>
 </div>
 <div class="plan-telemetry-panel">
@@ -724,7 +724,7 @@
 <div class="plan-frame-wrap">
     <iframe
         class="plan-frame"
-        src="{% if task.has_generated_report_html %}{{ url_for('plan_routes.viewplan') }}?run_id={{ run_id }}{% else %}{{ url_for('plan_routes.run_status') }}?id={{ run_id }}{% endif %}"
+        src="{% if plan.has_generated_report_html %}{{ url_for('plan_routes.viewplan') }}?plan_id={{ plan_id }}{% else %}{{ url_for('plan_routes.run_status') }}?id={{ plan_id }}{% endif %}"
         title="Plan report"
         loading="eager"
         referrerpolicy="no-referrer"
@@ -733,8 +733,8 @@
 </div>
 <script>
     (function () {
-        const planId = "{{ task.id }}";
-        const promptText = {{ (task.prompt or '') | tojson }};
+        const planId = "{{ plan.id }}";
+        const promptText = {{ (plan.prompt or '') | tojson }};
         const metaUrl = "{{ url_for('plan_routes.plan_meta') }}?id=" + encodeURIComponent(planId);
         const telemetryUrl = "{{ url_for('plan_routes.plan_telemetry') }}?id=" + encodeURIComponent(planId);
         const stateEl = document.getElementById("plan-state");
@@ -746,7 +746,7 @@
         const telemetrySourceLinesEl = document.getElementById("telemetry-source-lines");
         const initialTelemetry = {{ telemetry | tojson }};
         const initialFailureTrace = {{ failure_trace | tojson }};
-        const initialState = "{{ task.state.name | lower if task.state else 'pending' }}";
+        const initialState = "{{ plan.state.name | lower if plan.state else 'pending' }}";
         const preferredPlanViewMode = {{ (preferred_plan_view_mode or "view") | tojson }};
         const csrfToken = {{ csrf_token() | tojson }};
         const infoViewEl = document.getElementById("plan-info-view");

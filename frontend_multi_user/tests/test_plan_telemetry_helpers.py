@@ -159,14 +159,14 @@ class TestPlanTelemetryHelpers(unittest.TestCase):
     def test_sanitize_legacy_run_zip_for_download_removes_track_activity(self) -> None:
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.writestr("030-report.html", "<html>ok</html>")
+            archive.writestr("report.html", "<html>ok</html>")
             archive.writestr("nested/track_activity.jsonl", "{\"event\":\"secret\"}\n")
         sanitized = self.app_obj._sanitize_legacy_run_zip_for_download(buffer.getvalue())
         self.assertIsNotNone(sanitized)
         assert sanitized is not None
         with zipfile.ZipFile(sanitized, "r") as archive:
             files = sorted(archive.namelist())
-        self.assertIn("030-report.html", files)
+        self.assertIn("report.html", files)
         self.assertNotIn("nested/track_activity.jsonl", files)
 
     def test_build_plan_telemetry_uses_activity_overview_fallback_without_metrics(self) -> None:

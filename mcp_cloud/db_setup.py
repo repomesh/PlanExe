@@ -252,7 +252,7 @@ BASE_DIR_RUN = Path(os.environ.get("PLANEXE_RUN_DIR", Path(__file__).parent.pare
 
 WORKER_PLAN_URL = os.environ.get("PLANEXE_WORKER_PLAN_URL", "http://worker_plan:8000")
 
-REPORT_FILENAME = "030-report.html"
+REPORT_FILENAME = "report.html"
 REPORT_CONTENT_TYPE = "text/html; charset=utf-8"
 ZIP_FILENAME = "run.zip"
 ZIP_CONTENT_TYPE = "application/zip"

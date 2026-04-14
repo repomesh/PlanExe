@@ -62,8 +62,8 @@ def _sanitize_legacy_run_zip_for_download(run_zip_snapshot: bytes) -> Optional[i
 @downloads_bp.route("/plan/download/report")
 @login_required
 def plan_download_report():
-    run_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("id", "")
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -79,8 +79,8 @@ def plan_download_report():
 @downloads_bp.route("/plan/download/zip")
 @login_required
 def plan_download_zip():
-    run_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("id", "")
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -95,7 +95,7 @@ def plan_download_zip():
     else:
         buffer = _sanitize_legacy_run_zip_for_download(task.run_zip_snapshot)
         if buffer is None:
-            logger.error("Invalid legacy run zip snapshot for run_id=%s", run_id)
+            logger.error("Invalid legacy run zip snapshot for plan_id=%s", plan_id)
             return jsonify({"error": "Run zip is invalid"}), 500
 
     download_name = f"{task.id}.zip"

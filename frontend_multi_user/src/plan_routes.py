@@ -841,13 +841,13 @@ def create_plan():
 @login_required
 @_nocache
 def run_status():
-    run_id = request.args.get("id", "")
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("id", "")
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
-    return render_template("run_via_database.html", plan_id=run_id)
+    return render_template("run_via_database.html", plan_id=plan_id)
 
 
 @plan_routes_bp.route("/progress")
@@ -918,9 +918,9 @@ def viewplan():
 @login_required
 def plan():
     from types import SimpleNamespace
-    run_id = request.args.get("id", "").strip()
+    plan_id = request.args.get("id", "").strip()
 
-    if not run_id:
+    if not plan_id:
         user_id = str(current_user.id)
         uid_filter = (
             PlanItem.user_id.in_(_admin_user_ids())
@@ -965,13 +965,13 @@ def plan():
             })
         return render_template("plan_list.html", plan_rows=rows)
 
-    logger.info("Plan iframe wrapper requested for run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
+    logger.info("Plan iframe wrapper requested for plan_id: %r", plan_id)
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
+        logger.error("Task not found for plan_id: %r", plan_id)
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
-        logger.warning("Unauthorized plan wrapper access attempt. run_id=%s user_id=%s", run_id, current_user.id)
+        logger.warning("Unauthorized plan wrapper access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
     telemetry = _build_plan_telemetry(task, include_raw=False)
@@ -982,7 +982,7 @@ def plan():
     resume_error = request.args.get("resume_error", "")
     return render_template(
         "plan_iframe.html",
-        plan_id=run_id,
+        plan_id=plan_id,
         task=task,
         telemetry=telemetry,
         failure_trace=failure_trace,
@@ -1191,29 +1191,29 @@ def plan_resume_from_zip_upload():
 @plan_routes_bp.route("/plan/stop", methods=["POST"])
 @login_required
 def plan_stop():
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.form.get("id", "").strip()
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
         return jsonify({"error": "Forbidden"}), 403
     if task.state == PlanState.completed or bool(task.has_generated_report_html):
-        logger.info("Ignoring stop request for already completed task %s", run_id)
-        return redirect(url_for("plan_routes.plan", id=run_id))
+        logger.info("Ignoring stop request for already completed plan %s", plan_id)
+        return redirect(url_for("plan_routes.plan", id=plan_id))
     task.stop_requested = True
     task.stop_requested_timestamp = datetime.now(UTC)
     if task.state in (PlanState.pending, PlanState.processing):
         task.state = PlanState.stopped
         task.progress_message = "Stop requested by user."
     db.session.commit()
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/retry", methods=["POST"])
 @login_required
 def plan_retry():
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.form.get("id", "").strip()
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -1251,26 +1251,26 @@ def plan_retry():
     ).update({"source": "usage_billing_settled"})
 
     db.session.commit()
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/resume", methods=["POST"])
 @login_required
 def plan_resume():
     from flask import abort
-    run_id = request.form.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.form.get("id", "").strip()
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         abort(404)
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
         abort(403)
     if task.state not in (PlanState.failed, PlanState.stopped):
-        return redirect(url_for("plan_routes.plan", id=run_id))
+        return redirect(url_for("plan_routes.plan", id=plan_id))
 
     stored_params = task.parameters if isinstance(task.parameters, dict) else {}
     stored_version = stored_params.get("pipeline_version")
     if stored_version is not None and stored_version != PIPELINE_VERSION:
-        return redirect(url_for("plan_routes.plan", id=run_id, resume_error="version_mismatch"))
+        return redirect(url_for("plan_routes.plan", id=plan_id, resume_error="version_mismatch"))
 
     raw_profile = request.form.get("model_profile")
     selected_model_profile = normalize_model_profile(raw_profile).value
@@ -1312,14 +1312,14 @@ def plan_resume():
     db.session.add(event)
     db.session.commit()
 
-    return redirect(url_for("plan_routes.plan", id=run_id))
+    return redirect(url_for("plan_routes.plan", id=plan_id))
 
 
 @plan_routes_bp.route("/plan/meta")
 @login_required
 def plan_meta():
-    run_id = request.args.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("id", "").strip()
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):
@@ -1353,8 +1353,8 @@ def plan_view_mode():
 @plan_routes_bp.route("/plan/telemetry")
 @login_required
 def plan_telemetry():
-    run_id = request.args.get("id", "").strip()
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("id", "").strip()
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
         return jsonify({"error": "Task not found"}), 400
     if not current_user.is_admin and str(task.user_id) != str(current_user.id):

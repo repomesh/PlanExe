@@ -120,7 +120,7 @@
         }
         
         function poll() {
-            fetch(`/progress?run_id={{ plan_id }}`, { cache: 'no-cache' })
+            fetch(`/progress?plan_id={{ plan_id }}`, { cache: 'no-cache' })
                 .then(response => {
                     console.log('Response status:', response.status);
                     console.log("Response headers:");

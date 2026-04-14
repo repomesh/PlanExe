@@ -852,11 +852,11 @@ def run_status():
 
 @plan_routes_bp.route("/progress")
 def get_progress():
-    run_id = request.args.get("run_id", "")
-    logger.debug("Progress endpoint received run_id: %r", run_id)
-    task = db.session.get(PlanItem, run_id)
+    plan_id = request.args.get("plan_id") or request.args.get("run_id", "")
+    logger.debug("Progress endpoint received plan_id: %r", plan_id)
+    task = db.session.get(PlanItem, plan_id)
     if task is None:
-        logger.error("Task not found for run_id: %r", run_id)
+        logger.error("Task not found for plan_id: %r", plan_id)
         return jsonify({"error": "Task not found"}), 400
 
     progress_percentage = float(task.progress_percentage) if task.progress_percentage is not None else 0.0
@@ -870,7 +870,7 @@ def get_progress():
         task.last_seen_timestamp = datetime.now(UTC)
         db.session.commit()
     except Exception as e:
-        logger.error("get_progress, error updating last_seen_timestamp for task %r: %s", run_id, e, exc_info=True)
+        logger.error("get_progress, error updating last_seen_timestamp for task %r: %s", plan_id, e, exc_info=True)
         db.session.rollback()
 
     return jsonify({"progress_percentage": progress_percentage, "progress_message": progress_message, "status": status}), 200

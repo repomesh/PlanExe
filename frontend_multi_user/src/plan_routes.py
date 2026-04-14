@@ -895,7 +895,7 @@ def viewplan():
         logger.info("ViewPlan: MachAI user, skipping auth for plan_id=%s", plan_id)
     elif not current_user.is_authenticated:
         # Non-MachAI plan requires login.
-        return current_app.login_manager.unauthorized()
+        return redirect(url_for("auth.login"))
     elif not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403

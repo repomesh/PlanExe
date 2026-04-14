@@ -829,31 +829,10 @@ def _credits_for_usd(usd_amount: float) -> Decimal:
 def _should_send_to_machai(user_id: str) -> bool:
     """Return True only for MachAI iframe users (not registered in the database).
 
-    Registered users (home.planexe.org sign-ups, docker admin) and admin
-    accounts should NOT have their plan data sent to MachAI.
-    MachAI iframe users use non-UUID identifiers and are not in the UserAccount table.
-
     Must be called inside a Flask app context.
     """
-    # Registered users and admins use UUIDs as their user_id.
-    try:
-        user_uuid = uuid.UUID(str(user_id))
-        user = db.session.get(UserAccount, user_uuid)
-        if user is not None:
-            logger.debug("_should_send_to_machai: user_id %r found in database, skipping MachAI.", user_id)
-            return False
-    except (ValueError, AttributeError):
-        pass
-
-    # Fallback admin username (non-UUID string like "admin").
-    admin_username = os.environ.get("PLANEXE_FRONTEND_MULTIUSER_ADMIN_USERNAME", "")
-    if admin_username and user_id == admin_username:
-        logger.debug("_should_send_to_machai: user_id %r matches admin username, skipping MachAI.", user_id)
-        return False
-
-    # Unknown user — likely a MachAI iframe user.
-    logger.debug("_should_send_to_machai: user_id %r is unknown, will send to MachAI.", user_id)
-    return True
+    from database_api.is_machai_user import is_machai_user
+    return is_machai_user(user_id)
 
 
 def _resolve_user_for_billing(task_user_id: str) -> Optional[UserAccount]:

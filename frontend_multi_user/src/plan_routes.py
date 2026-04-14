@@ -877,7 +877,6 @@ def get_progress():
 
 
 @plan_routes_bp.route("/viewplan")
-@login_required
 def viewplan():
     run_id = request.args.get("run_id", "")
     logger.info("ViewPlan endpoint requested for run_id: %r", run_id)
@@ -885,7 +884,15 @@ def viewplan():
     if task is None:
         logger.error("Task not found for run_id: %r", run_id)
         return jsonify({"error": "Task not found"}), 400
-    if not current_user.is_admin and str(task.user_id) != str(current_user.id):
+
+    from database_api.is_machai_user import is_machai_user
+    if is_machai_user(str(task.user_id)):
+        # MachAI iframe users can view their plan without login.
+        logger.info("ViewPlan: MachAI user, skipping auth for run_id=%s", run_id)
+    elif not current_user.is_authenticated:
+        # Non-MachAI plan requires login.
+        return current_app.login_manager.unauthorized()
+    elif not current_user.is_admin and str(task.user_id) != str(current_user.id):
         logger.warning("Unauthorized report access attempt. run_id=%s user_id=%s", run_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 

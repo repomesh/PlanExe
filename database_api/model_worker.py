@@ -59,4 +59,15 @@ class WorkerItem(db.Model):
             db.session.commit()
         except Exception as e:
             logger.error(f"Worker {worker_id}: Database error during heartbeat upsert: {e}", exc_info=True)
-            db.session.rollback()
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+            try:
+                db.session.remove()
+            except Exception:
+                pass

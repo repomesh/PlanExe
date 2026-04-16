@@ -17,11 +17,6 @@ The primary task with this checklist is to detect that there is something fundam
 Some of the checklist items overlaps with each other, and I don't care about things being mutually exclusive where things are not supposed to overlap.
 I care about what problems I observe in the generated reports.
 
-ISSUE: Violates Known Physics - false positive
-https://planexe.org/20260303_crate_recovery_campaign_report.html
-gemini-2.5-flash-lite-preview-09-2025, thought that the laws of physics were violated, because a plan mentioned "CSR driven logistics".
-corporate social responsibility (CSR), which has nothing to do with faster than light travel, but was flagged as "violates known physics".
-
 PROMPT> python -u -m worker_plan_internal.self_audit.self_audit | tee output.txt
 """
 import json
@@ -110,8 +105,8 @@ ALL_CHECKLIST_ITEMS = [
         "index": 1,
         "title": "Violates Known Physics",
         "subtitle": "Does the project require a major, unpredictable discovery in fundamental science to succeed?",
-        "instruction": "Scope: physics-only (e.g., perpetual motion, FTL, reactionless/anti-gravity, time travel). HIGH if success requires breaking physical laws; MEDIUM only if a physics-consistent but unproven physical effect at required scale is mandatory with no conventional fallback; otherwise LOW. Economics/crypto/tokenization/governance/AI/regulation/engineering-scale are out of scope—rate LOW. If you can’t name a specific law/limit, rate LOW. If LOW: Mitigation=None. If ≥ MEDIUM: ≤30-word justification + mitigation with Owner/Deliverable/Date.",
-        "comment": "If the initial prompt is vague/scifi/aggressive or asks for something that is physically impossible, then the generated plan usually end up with some fantasy parts, making the plan unrealistic."
+        "instruction": "Scope: fundamental physics ONLY (e.g., perpetual motion, faster-than-light travel, reactionless/anti-gravity propulsion, time travel). ‘Laws’ here means ONLY the laws of physics (thermodynamics, conservation of energy, relativity, etc.) — NOT legal statutes, treaty law, constitutional law, regulations, or policy. A plan involving legislation, treaties, currency adoption, governance reform, or any non-physics ‘laws’ does NOT violate physics — rate LOW. HIGH only if success literally requires breaking a named law of physics; MEDIUM only if a physics-consistent but unproven physical effect at required scale is mandatory with no conventional fallback; otherwise LOW. Economics/crypto/tokenization/governance/AI/regulation/policy/finance/engineering-scale are out of scope—rate LOW. If you cannot name a specific law of physics (e.g., second law of thermodynamics, speed of light) that is violated, rate LOW. If LOW: Mitigation=None. If ≥ MEDIUM: name the specific physical law violated, ≤30-word justification + mitigation with Owner/Deliverable/Date.",
+        "comment": "If the initial prompt is vague/scifi/aggressive or asks for something that is physically impossible, then the generated plan usually end up with some fantasy parts, making the plan unrealistic. Known false-positive: LLMs confuse ‘laws’ (legal/regulatory) with ‘laws of physics’ for plans about policy, currency adoption, governance, etc."
     },
     {
         "index": 2,

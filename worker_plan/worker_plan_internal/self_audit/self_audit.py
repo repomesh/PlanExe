@@ -17,17 +17,6 @@ The primary task with this checklist is to detect that there is something fundam
 Some of the checklist items overlaps with each other, and I don't care about things being mutually exclusive where things are not supposed to overlap.
 I care about what problems I observe in the generated reports.
 
-ISSUE: Violates Known Physics - false positive
-https://planexe.org/20260303_crate_recovery_campaign_report.html
-gemini-2.5-flash-lite-preview-09-2025, thought that the laws of physics were violated, because a plan mentioned "CSR driven logistics".
-corporate social responsibility (CSR), which has nothing to do with faster than light travel, but was flagged as "violates known physics".
-
-ISSUE: Violates Known Physics - false positive (Denmark euro adoption)
-A currency adoption plan (Denmark adopts the euro) was rated HIGH for "Violates Known Physics" with
-mentions of "FTL/reactionless propulsion" and "perpetual motion". The LLM confused legal/treaty "laws"
-(constitutional law, EU treaty law) with "laws of physics". Fix: instruction now explicitly distinguishes
-legal/regulatory "laws" from physics laws and requires naming a specific physical law that is violated.
-
 PROMPT> python -u -m worker_plan_internal.self_audit.self_audit | tee output.txt
 """
 import json

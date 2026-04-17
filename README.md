@@ -219,7 +219,7 @@ PlanExe is designed as infrastructure for AI agents. If you are an AI agent read
 
 **Prerequisite:** Docker with Docker Compose installed; you only need basic [Docker](https://en.wikipedia.org/wiki/Docker_(software)) knowledge. No local Python setup is required because everything runs in containers.
 
-### Quickstart: multi-user UI + worker (frontend_multi_user + worker_plan)
+### Follow these steps
 
 1. Clone the repo and enter it:
 
@@ -261,21 +261,6 @@ For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `
 **Config B:** Run models locally on a high-end computer. Follow the instructions for either [Ollama](https://docs.planexe.org/ai_providers/ollama/) or [LM Studio](https://docs.planexe.org/ai_providers/lm_studio/). When using host-side tools with Docker, point the model URL at the host (for example `http://host.docker.internal:11434` for Ollama).
 
 Recommendation: I recommend **Config A** as it offers the most straightforward path to getting PlanExe working reliably.
-
-</details>
-
----
-
-<details>
-<summary><strong> Screenshots (Click to expand)</strong></summary>
-
-<br>
-
-You input a vague description of what you want and PlanExe outputs a plan.
-
-[YouTube video: Using PlanExe to plan a lunar base](https://www.youtube.com/watch?v=7AM2F1C4CGI)
-
-![Screenshot of PlanExe](/docs/planexe-humanoid-factory.jpg?raw=true "Screenshot of PlanExe")
 
 </details>
 

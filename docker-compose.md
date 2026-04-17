@@ -11,7 +11,7 @@ TL;DR
 
 Quickstart (run from repo root)
 -------------------------------
-- Up (full stack): `docker compose up frontend_multi_user database_postgres worker_plan worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`.
+- Up (everything): `docker compose up frontend_multi_user database_postgres worker_plan worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`.
 - Up (MCP server): `docker compose up mcp_cloud` (requires `database_postgres` to be running).
 - Down: `docker compose down` (add `--remove-orphans` if stray containers linger).
 - Rebuild clean: `docker compose build --no-cache database_postgres worker_plan frontend_multi_user worker_plan_database worker_plan_database_1 worker_plan_database_2 worker_plan_database_3 mcp_cloud`.

@@ -215,7 +215,7 @@ self.app.register_blueprint(downloads_bp)
 ## Constraints preserved
 
 - Single `db` singleton from `database_api.planexe_db_singleton` (AGENTS.md rule)
-- No imports from `worker_plan_internal`, `worker_plan.app`, or `frontend_single_user`
+- No imports from `worker_plan_internal`, `worker_plan.app`
 - Admin identity via Flask-Login username string + deterministic UUID
 - Schema migration helpers stay in `app.py` (run once at startup)
 - Flask-Admin registration stays in `app.py`

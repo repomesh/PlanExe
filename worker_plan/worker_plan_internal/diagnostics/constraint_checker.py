@@ -57,7 +57,8 @@ class ConstraintCheckResult(BaseModel):
         )
     )
     summary: str = Field(
-        description="1-3 sentence summary of the constraint check results."
+        default="",
+        description="Optional 1-3 sentence summary of the constraint check results.",
     )
 
 

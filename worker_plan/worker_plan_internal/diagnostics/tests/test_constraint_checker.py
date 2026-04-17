@@ -140,6 +140,16 @@ class TestConstraintCheckResultModel(unittest.TestCase):
         self.assertIn("overall_status", d)
         self.assertIn("summary", d)
 
+    def test_summary_is_optional(self):
+        # Some models (e.g. openrouter-elephant-alpha) consistently omit
+        # `summary` when producing structured output. summary is not consumed
+        # downstream, so the field defaults to "" rather than raising.
+        obj = ConstraintCheckResult.model_validate_json(
+            '{"constraint_violations": [], "overall_status": "pass"}'
+        )
+        self.assertEqual(obj.summary, "")
+        self.assertEqual(obj.overall_status, "pass")
+
 
 class TestConstraintCheckerDataclass(unittest.TestCase):
     """Unit tests for the ConstraintChecker dataclass methods."""

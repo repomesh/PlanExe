@@ -478,11 +478,11 @@ class IdentifyPotentialLevers:
                         f"Call {call_index}: {len(rejected_levers)} lever(s) rejected by constraint check, "
                         f"{len(accepted_levers)} accepted."
                     )
-                    # Replace the response's levers with only the accepted ones
-                    response_doc = DocumentDetails(
-                        strategic_rationale=response_doc.strategic_rationale,
-                        levers=accepted_levers,
-                    )
+                    # Use model_copy to skip revalidation: DocumentDetails.levers has
+                    # min_length=5 to enforce LLM output quality, but our post-filter
+                    # set may legitimately be smaller — the adaptive loop will top up
+                    # via additional calls until min_levers is met.
+                    response_doc = response_doc.model_copy(update={"levers": accepted_levers})
 
             generated_lever_names.extend(lever.name for lever in response_doc.levers)
             responses.append(response_doc)

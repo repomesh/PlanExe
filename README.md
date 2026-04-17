@@ -1,6 +1,16 @@
 # PlanExe
 
 <p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+            srcset="docs/hero/planexe-hero-v1-grid-dark.svg">
+    <img src="docs/hero/planexe-hero-v1-grid-light.svg"
+         alt="The PlanExe icon is the P character and E character"
+         width="100%">
+  </picture>
+</p>
+
+<p align="center">
   <img src="docs/planexe-humanoid-factory.gif?raw=true" alt="PlanExe - Turn your idea into a comprehensive plan in minutes, not months." width="700">
 </p>
 

@@ -93,7 +93,7 @@ Follow these steps:
 
 ### Prerequisites
 
-I assume you are able to create plans on your computer via the `frontend_single_user` web interface, [http://localhost:7860/](http://localhost:7860/). It doesn't make sense proceeding if there is a problem with LLMs and no plans can be created.
+I assume you are able to create plans on your computer via the `frontend_multi_user` web interface, [http://localhost:5001/](http://localhost:5001/). It doesn't make sense proceeding if there is a problem with LLMs and no plans can be created.
 
 ### Start docker
 

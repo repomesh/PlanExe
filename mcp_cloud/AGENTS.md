@@ -96,8 +96,7 @@ http_server.py (re-export shim)
   - `progress_message` stays "Stop requested by user." (not "Stopped") because the
     worker is typically still busy processing and will stop after its current LLM call.
   - Return current public `state` (now `"failed"`) plus `stop_requested: true`.
-- Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
-  `open_dir_server`.
+- Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`.
 
 ## Async/sync boundary
 

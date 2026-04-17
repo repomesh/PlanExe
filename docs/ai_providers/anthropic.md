@@ -88,13 +88,13 @@ PLANEXE_LLM_CONFIG_CUSTOM_FILENAME=anthropic_claude.json
 ```
 4. Start PlanExe:
 ```
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
-5. Open http://localhost:7860 and submit a prompt.
+5. Open http://localhost:5001 and submit a prompt.
 
 To switch models, change `DEFAULT_LLM` in `.env` to any config ID from the table above, then restart:
 ```
-docker compose restart worker_plan frontend_single_user
+docker compose restart worker_plan frontend_multi_user
 ```
 
 ---

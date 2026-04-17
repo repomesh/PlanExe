@@ -56,7 +56,7 @@ PlanExe pipeline, and updates task state/progress.
   `pool_pre_ping` checks, deadlocking all Luigi worker threads.
 - Luigi logging: loggers are set to INFO (not DEBUG) to suppress per-second
   "Asking scheduler for work" / "pruning task graph" noise.
-- Forbidden imports: `worker_plan.app`, `frontend_*`, `open_dir_server`.
+- Forbidden imports: `worker_plan.app`, `frontend_*`.
 
 ## Testing
 - No automated tests currently. If you change worker behavior, add a unit test

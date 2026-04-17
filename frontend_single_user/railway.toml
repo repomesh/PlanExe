@@ -1,9 +1,0 @@
-[build]
-builder = "DOCKERFILE"
-dockerfilePath = "/frontend_single_user/Dockerfile"
-context = "."
-
-[deploy]
-restartPolicyType = "NEVER"
-restartPolicyMaxRetries = 3
-healthcheckInterval = 10

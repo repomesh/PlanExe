@@ -72,8 +72,7 @@ models. Keep interfaces stable across services.
     authentication and ownership checks.
   - URL parameters use `plan_id` (not `run_id`). Route handler local variables
     use `plan` (not `task`) when referring to a `PlanItem` row.
-- Forbidden imports: `worker_plan_internal`, `worker_plan.app`,
-  `frontend_single_user`, `open_dir_server`.
+- Forbidden imports: `worker_plan_internal`, `worker_plan.app`.
 
 ## Testing
 - No automated tests currently. If you change UI or DB flow, add a unit test

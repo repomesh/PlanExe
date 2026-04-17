@@ -8,9 +8,9 @@ logger = logging.getLogger(__name__)
 def _load_mcp_example_prompts() -> list[str]:
     """Load prompts from the catalog that are marked as MCP examples (mcp_example or mcp-example-prompt true).
 
-    Uses worker_plan_api.PromptCatalog the same way as frontend_single_user and frontend_multi_user
-    (no env var). Tries repo-root import first, then adds worker_plan to sys.path so worker_plan_api
-    is top-level (same as frontends). Falls back to built-in examples if the catalog is unavailable.
+    Uses worker_plan_api.PromptCatalog the same way as frontend_multi_user (no env var). Tries
+    repo-root import first, then adds worker_plan to sys.path so worker_plan_api is top-level
+    (same as the frontend). Falls back to built-in examples if the catalog is unavailable.
     """
     catalog = None
     try:

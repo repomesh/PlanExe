@@ -16,20 +16,10 @@ Create a `.env` file from the `.env.developer-example` file.
 
 Update `OPENROUTER_API_KEY` with your open router api key.
 
-### `open_dir_server`
-
-In a new terminal: 
-Follow the [open_dir_server](developer/open_dir_server.md) instructions.
-
 ### `worker_plan`
 
 In a new terminal: 
 Follow the [worker_plan](developer/worker_plan.md) instructions.
-
-### `frontend_single_user`
-
-In a new terminal: 
-Follow the [frontend_single_user](developer/frontend_single_user.md) instructions.
 
 ### `database_postgres`
 

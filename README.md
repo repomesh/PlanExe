@@ -176,7 +176,7 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 ## Running the Pipeline via CLI (no frontend)
 
 If you have a local Python environment set up and want to invoke the pipeline
-directly — without the Gradio or Flask UI — use the `planexe` CLI script at
+directly — without the Flask UI — use the `planexe` CLI script at
 the repo root.
 
 ```bash
@@ -219,7 +219,7 @@ PlanExe is designed as infrastructure for AI agents. If you are an AI agent read
 
 **Prerequisite:** Docker with Docker Compose installed; you only need basic [Docker](https://en.wikipedia.org/wiki/Docker_(software)) knowledge. No local Python setup is required because everything runs in containers.
 
-### Quickstart: single-user UI + worker (frontend_single_user + worker_plan)
+### Quickstart: multi-user UI + worker (frontend_multi_user + worker_plan)
 
 1. Clone the repo and enter it:
 
@@ -233,12 +233,12 @@ cd PlanExe
 3. Start the stack (first run builds the images):
 
 ```bash
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
 
-   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:7860 after the worker healthcheck passes.
+   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:5001 after the Postgres and worker healthchecks pass.
 
-4. Open http://localhost:7860 in your browser. Optional: set `PLANEXE_PASSWORD` in `.env` to require a password. Enter your idea, click the generate button, and watch progress with:
+4. Open http://localhost:5001 in your browser, create an account (or log in with the admin credentials from `.env`), enter your idea, and watch progress with:
 
 ```bash
 docker compose logs -f worker_plan
@@ -249,7 +249,7 @@ docker compose logs -f worker_plan
 5. Stop with `Ctrl+C` (or `docker compose down`). Rebuild after code/dependency changes:
 
 ```bash
-docker compose build --no-cache worker_plan frontend_single_user
+docker compose build --no-cache worker_plan frontend_multi_user
 ```
 
 For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `docker-compose.md`.

@@ -3,22 +3,21 @@ Docker Compose for PlanExe
 
 TL;DR
 -----
-- Services: `database_postgres` (DB on `${PLANEXE_POSTGRES_PORT:-5432}`), `frontend_single_user` (UI on 7860), `worker_plan` (API on 8000), `frontend_multi_user` (UI on `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`), plus DB workers (`worker_plan_database_1/2/3` by default; `worker_plan_database` in `manual` profile), and `mcp_cloud` (MCP interface, stdio); `frontend_single_user` waits for the worker to be healthy and `frontend_multi_user` waits for Postgres health.
+- Services: `database_postgres` (DB on `${PLANEXE_POSTGRES_PORT:-5432}`), `worker_plan` (API on 8000), `frontend_multi_user` (UI on `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`), plus DB workers (`worker_plan_database_1/2/3` by default; `worker_plan_database` in `manual` profile), and `mcp_cloud` (MCP interface, stdio); `frontend_multi_user` waits for Postgres and worker health.
 - Shared host files: `.env` and `./llm_config/` mounted read-only; `./run` bind-mounted so outputs persist; `.env` is also loaded via `env_file`.
 - Postgres defaults to user/db/password `planexe`; override via env or `.env`; data lives in the `database_postgres_data` volume.
-- Env defaults live in `docker-compose.yml` but can be overridden in `.env` or your shell (URLs, timeouts, run dirs, optional auth and opener URL).
-- `develop.watch` syncs code/config for `worker_plan` and `frontend_single_user`; rebuild with `--no-cache` after big moves or dependency changes; restart policy is `unless-stopped`.
+- Env defaults live in `docker-compose.yml` but can be overridden in `.env` or your shell (URLs, timeouts, run dirs, optional auth).
+- `develop.watch` syncs code/config for `worker_plan`; rebuild with `--no-cache` after big moves or dependency changes; restart policy is `unless-stopped`.
 
 Quickstart (run from repo root)
 -------------------------------
-- Up (single user): `docker compose up worker_plan frontend_single_user`.
-- Up (multi user): `docker compose up frontend_multi_user database_postgres worker_plan worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`.
+- Up (full stack): `docker compose up frontend_multi_user database_postgres worker_plan worker_plan_database_1 worker_plan_database_2 worker_plan_database_3`.
 - Up (MCP server): `docker compose up mcp_cloud` (requires `database_postgres` to be running).
 - Down: `docker compose down` (add `--remove-orphans` if stray containers linger).
-- Rebuild clean: `docker compose build --no-cache database_postgres worker_plan frontend_single_user frontend_multi_user worker_plan_database worker_plan_database_1 worker_plan_database_2 worker_plan_database_3 mcp_cloud`.
-- UI: single user -> http://localhost:7860; multi user -> http://localhost:5001 after the stack is up.
+- Rebuild clean: `docker compose build --no-cache database_postgres worker_plan frontend_multi_user worker_plan_database worker_plan_database_1 worker_plan_database_2 worker_plan_database_3 mcp_cloud`.
+- UI: http://localhost:5001 after the stack is up.
 - MCP: configure your MCP client to connect to the `mcp_cloud` container via stdio.
-- Logs: `docker compose logs -f worker_plan` or `... frontend_single_user` or `... mcp_cloud`.
+- Logs: `docker compose logs -f worker_plan` or `... frontend_multi_user` or `... mcp_cloud`.
 - One-off inside a container: `docker compose run --rm worker_plan python -m worker_plan_internal.fiction.fiction_writer` (use `exec` if already running).
 - Ensure `.env` and `llm_config/` exist; copy `.env.docker-example` to `.env` if you need a starter.
 
@@ -59,14 +58,6 @@ docker compose up
 ```
 
 **Important**: This only affects the HOST port mapping (how you access Postgres from your machine, e.g., via DBeaver or `psql`). Inside Docker, containers always communicate with each other on the internal port 5432—this is hardcoded and not affected by `PLANEXE_POSTGRES_PORT`.
-
-Service: `frontend_single_user` (single user UI)
-------------------------------------
-- Purpose: Single user Gradio UI; waits for a healthy worker and serves on port 7860. Does not use database.
-- Build: `frontend_single_user/Dockerfile`.
-- Env defaults: `PLANEXE_WORKER_PLAN_URL=http://worker_plan:8000`, timeout, server host/port, optional password, optional `PLANEXE_OPEN_DIR_SERVER_URL` for the host opener.
-- Volumes: mirrors the worker (`.env` ro, `llm_config/` ro, `run/` rw) so both share config and outputs.
-- Watch: sync frontend code, shared API code in `worker_plan/`, and config files; rebuild on `worker_plan/pyproject.toml`; restart on compose edits.
 
 Service: `frontend_multi_user` (multi user UI)
 ------------------------------------------
@@ -109,9 +100,8 @@ Service: `mcp_cloud` (MCP interface)
 
 Usage notes
 -----------
-- Ports: host `8000->worker_plan`, `7860->frontend_single_user`, `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}->frontend_multi_user`, `PLANEXE_POSTGRES_PORT (default 5432)->database_postgres`; change mappings in `docker-compose.yml` if needed.
+- Ports: host `8000->worker_plan`, `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}->frontend_multi_user`, `PLANEXE_POSTGRES_PORT (default 5432)->database_postgres`; change mappings in `docker-compose.yml` if needed.
 - `.env` must exist before `docker compose up`; it is both loaded and mounted read-only. Same for `llm_config/`. If missing, start from `.env.docker-example`.
-- Host opener: set `PLANEXE_OPEN_DIR_SERVER_URL` so the frontend can reach your host opener service (see `docs/docker.md` for OS-specific URLs and optional `extra_hosts` on Linux).
 - To relocate outputs, set `PLANEXE_HOST_RUN_DIR` (or edit the bind mount) to another host path.
 - Database: connect on `localhost:${PLANEXE_POSTGRES_PORT:-5432}` with `planexe/planexe` by default; data persists via the `database_postgres_data` volume.
 

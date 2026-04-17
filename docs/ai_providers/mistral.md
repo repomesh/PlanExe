@@ -30,13 +30,13 @@ MISTRAL_API_KEY='INSERT-YOUR-SECRET-KEY-HERE'
 4. Add (or keep) a Mistral entry in `llm_config/<profile>.json` (example below).
 5. Rebuild the images so the new dependencies are baked in:
 ```
-docker compose build --no-cache worker_plan frontend_single_user
+docker compose build --no-cache worker_plan frontend_multi_user
 ```
 6. Start PlanExe:
 ```
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
-7) Open http://localhost:7860, go to **Settings**, and pick your Mistral model (e.g., `mistral-paid-large`). If you later tweak only `llm_config/<profile>.json`, just restart the containers (`docker compose restart worker_plan frontend_single_user`); rebuilds are only needed when dependencies change.
+7) Open http://localhost:5001, go to **Settings**, and pick your Mistral model (e.g., `mistral-paid-large`). If you later tweak only `llm_config/<profile>.json`, just restart the containers (`docker compose restart worker_plan frontend_multi_user`); rebuilds are only needed when dependencies change.
 
 ## Why use Mistral?
 

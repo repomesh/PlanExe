@@ -7,7 +7,7 @@ This directory hosts the shared `worker_plan_internal` package that generates pl
 
 ## Run locally with a venv
 
-For a faster edit/run loop without Docker. Work from inside `worker_plan` so its dependencies stay isolated (they may be incompatible with `frontend_single_user`). Use Python 3.13 — several native wheels (pydantic-core, orjson, tiktoken, greenlet, jiter) do not yet publish for 3.14 and will fail to build.
+For a faster edit/run loop without Docker. Work from inside `worker_plan` so its dependencies stay isolated. Use Python 3.13 — several native wheels (pydantic-core, orjson, tiktoken, greenlet, jiter) do not yet publish for 3.14 and will fail to build.
 
 ```bash
 cd worker_plan

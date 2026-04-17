@@ -27,7 +27,6 @@ docker rm \
     worker_plan_database_1 \
     worker_plan_database_2 \
     worker_plan_database_3 \
-    frontend_single_user \
     frontend_multi_user \
     mcp_cloud \
     2>&1 | grep -v "No such container" || true

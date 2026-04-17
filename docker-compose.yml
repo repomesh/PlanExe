@@ -132,51 +132,6 @@ services:
       <<: *worker_plan_database_env
       PLANEXE_WORKER_ID: "3"
 
-  frontend_single_user:
-    build:
-      context: .
-      dockerfile: frontend_single_user/Dockerfile
-    container_name: frontend_single_user
-    depends_on:
-      worker_plan:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      PLANEXE_WORKER_PLAN_URL: ${PLANEXE_WORKER_PLAN_URL:-http://worker_plan:8000}
-      PLANEXE_WORKER_PLAN_TIMEOUT: ${PLANEXE_WORKER_PLAN_TIMEOUT:-30}
-      PLANEXE_GRADIO_SERVER_NAME: ${PLANEXE_GRADIO_SERVER_NAME:-0.0.0.0}
-      PLANEXE_GRADIO_SERVER_PORT: ${PLANEXE_GRADIO_SERVER_PORT:-7860}
-      PLANEXE_PASSWORD: ${PLANEXE_PASSWORD:-}
-      PLANEXE_OPEN_DIR_SERVER_URL: ${PLANEXE_OPEN_DIR_SERVER_URL:-}
-    ports:
-      - "7860:7860"
-    volumes:
-      - ./.env:/app/.env:ro
-      - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
-    restart: unless-stopped
-    develop:
-      watch:
-        - action: sync
-          path: ./frontend_single_user
-          target: /app/frontend_single_user
-        - action: restart
-          path: ./frontend_single_user
-        - action: sync
-          path: ./worker_plan
-          target: /app/worker_plan
-        - action: sync
-          path: ./llm_config
-          target: /app/llm_config
-        - action: sync
-          path: ./.env
-          target: /app/.env
-        - action: rebuild
-          path: ./worker_plan/pyproject.toml
-        - action: restart
-          path: ./docker-compose.yml
-
   frontend_multi_user:
     build:
       context: .

@@ -1,6 +1,6 @@
 # Worker Plan API
 
-Lightweight shared code used by `worker_plan_internal`, `worker_plan_database`, `frontend_multi_user`, and `frontend_single_user`.
+Lightweight shared code used by `worker_plan_internal`, `worker_plan_database`, and `frontend_multi_user`.
 
 ## Why keep this lightweight?
 

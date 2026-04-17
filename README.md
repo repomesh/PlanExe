@@ -176,7 +176,7 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 ## Running the Pipeline via CLI (no frontend)
 
 If you have a local Python environment set up and want to invoke the pipeline
-directly — without the Gradio or Flask UI — use the `planexe` CLI script at
+directly — without the Flask UI — use the `planexe` CLI script at
 the repo root.
 
 ```bash
@@ -219,7 +219,7 @@ PlanExe is designed as infrastructure for AI agents. If you are an AI agent read
 
 **Prerequisite:** Docker with Docker Compose installed; you only need basic [Docker](https://en.wikipedia.org/wiki/Docker_(software)) knowledge. No local Python setup is required because everything runs in containers.
 
-### Quickstart: single-user UI + worker (frontend_single_user + worker_plan)
+### Follow these steps
 
 1. Clone the repo and enter it:
 
@@ -233,12 +233,12 @@ cd PlanExe
 3. Start the stack (first run builds the images):
 
 ```bash
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
 
-   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:7860 after the worker healthcheck passes.
+   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:5001 after the Postgres and worker healthchecks pass.
 
-4. Open http://localhost:7860 in your browser. Optional: set `PLANEXE_PASSWORD` in `.env` to require a password. Enter your idea, click the generate button, and watch progress with:
+4. Open http://localhost:5001 in your browser, create an account (or log in with the admin credentials from `.env`), enter your idea, and watch progress with:
 
 ```bash
 docker compose logs -f worker_plan
@@ -249,7 +249,7 @@ docker compose logs -f worker_plan
 5. Stop with `Ctrl+C` (or `docker compose down`). Rebuild after code/dependency changes:
 
 ```bash
-docker compose build --no-cache worker_plan frontend_single_user
+docker compose build --no-cache worker_plan frontend_multi_user
 ```
 
 For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `docker-compose.md`.
@@ -261,21 +261,6 @@ For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `
 **Config B:** Run models locally on a high-end computer. Follow the instructions for either [Ollama](https://docs.planexe.org/ai_providers/ollama/) or [LM Studio](https://docs.planexe.org/ai_providers/lm_studio/). When using host-side tools with Docker, point the model URL at the host (for example `http://host.docker.internal:11434` for Ollama).
 
 Recommendation: I recommend **Config A** as it offers the most straightforward path to getting PlanExe working reliably.
-
-</details>
-
----
-
-<details>
-<summary><strong> Screenshots (Click to expand)</strong></summary>
-
-<br>
-
-You input a vague description of what you want and PlanExe outputs a plan.
-
-[YouTube video: Using PlanExe to plan a lunar base](https://www.youtube.com/watch?v=7AM2F1C4CGI)
-
-![Screenshot of PlanExe](/docs/planexe-humanoid-factory.jpg?raw=true "Screenshot of PlanExe")
 
 </details>
 

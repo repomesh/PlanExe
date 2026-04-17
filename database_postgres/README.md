@@ -2,9 +2,8 @@
 
 Database container for PlanExe. Used as a queue mechanism for planning tasks. The `worker_plan_database` listens for an incoming task, and runs PlanExe and then goes back to listen for more incoming tasks.
 
-In a **single user** environment, then this is overkill. The file system is sufficient.
-
-In a **multi user** environment, then there are many moving parts, and here a database is relevant.
+PlanExe started out as a **single user** environment, where the file system was sufficient, and it would be overkill with a database.
+PlanExe has evolved into a **multi user** environment, with many moving parts, that use a database.
 
 - Build/run via `docker compose up database_postgres` (or `docker compose build database_postgres`).
 - Defaults: `PLANEXE_POSTGRES_USER=planexe`, `PLANEXE_POSTGRES_PASSWORD=planexe`, `PLANEXE_POSTGRES_DB=planexe` (override with env or `.env`).

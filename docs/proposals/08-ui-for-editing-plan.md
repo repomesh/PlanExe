@@ -10,19 +10,20 @@ author: Simon Strandgaard
 ## Status
 In progress
 
-Implementation update (2026-02-18):
+Implementation update (2026-04-17):
 
-- `frontend_multi_user` (deployed at [home.planexe.org](https://home.planexe.org/)) now has a user-facing **Generate Plan** flow.
-- Users can now use `/plan` to:
+The `frontend_multi_user` is deployed at [home.planexe.org](https://home.planexe.org/)).
+Where users can:
   - list their plans
   - inspect an individual plan
   - download report/zip artifacts
-- End users no longer need to navigate Flask-Admin for normal plan creation and viewing.
+  - Stop the creation of a plan
+  - Retry, that generates the plan from scratch
+  - Resume a plan from where it left off
+  - Resume from zip, where the user can upload their own edited plan, and have it generated.
 
 ## Context
 The production site at [home.planexe.org](https://home.planexe.org/) now provides a user-facing UI for creating and viewing plans in the browser.
-
-Before this update, plan creation and inspection required either MCP usage or Flask-Admin. That limitation has been removed for the core create/view flow.
 
 ### MCP Interface
 The MCP interface can create plans and store them in the database. It also uses `example_prompts`, which helps users land on a reasonable starting prompt instead of a blank textarea.
@@ -32,19 +33,6 @@ Limitations:
 - It is an expert-user-facing interface, not a friendly beginner UI.
 
 - There is no editing workflow for existing plans.
-
-### Gradio UI (`frontend_single_user`)
-The `frontend_single_user` UI is a Gradio interface intended for local or developer use, not for end users.
-
-What works well:
-
-- It supports `Retry`, which re-runs the Luigi pipeline where it left off. This allows manual plan editing by deleting files and regenerating downstream content.
-
-Limitations:
-
-- It does not use the database, so created plans are not persisted and users cannot browse past plans.
-
-- It does not know credit balances. Creating a plan costs tokens, and if the user has insufficient funds, the UI should refuse creation.
 
 - The prompt input is a plain textarea. Users often omit critical constraints (for example, no location or unrealistic budgets). This leads to weak plans or incorrect assumptions, such as the system guessing locations when the user intended a specific geography.
 

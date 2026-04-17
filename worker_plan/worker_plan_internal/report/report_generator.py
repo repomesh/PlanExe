@@ -239,6 +239,7 @@ class ReportGenerator:
         <h2>Redline Gate</h2>
         {redline_gate_html}
         <h2>Premise Attack</h2>
+        <p>Why this fails.</p>
         {premise_attack_html}
         """
         self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))

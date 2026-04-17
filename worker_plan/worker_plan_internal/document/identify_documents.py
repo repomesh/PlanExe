@@ -126,8 +126,8 @@ Based *only* on the **project description provided by the user**, generate the f
 
 1.  **Documents to Create:** Clearly identify each document to be drafted during the *initial planning and strategy development phase*:
     *   Include documents explicitly mentioned or implied by the project description (e.g., charters, agreements, strategic plans).
-    *   Ensure a dedicated high-level document (e.g., a 'Plan', 'Strategy', or initial 'Framework') is created for each major intervention area identified in the user prompt (e.g., reversing declining fertility rates, reducing financial burden of children, improving housing affordability, streamlining education/job access, improving social well-being/mental health). Interpret potential user prompt ambiguities logically (e.g., treat 'Reduce housing affordability' as 'Improve housing affordability').
-    *   Suggest creating an initial baseline assessment or report relevant to the core problem (e.g., 'Current State Assessment of Fertility Trends').
+    *   Ensure a dedicated high-level document (e.g., a 'Plan', 'Strategy', or initial 'Framework') is created for each major intervention area identified in the user prompt. Interpret potential user prompt ambiguities logically (e.g., treat an inverted goal phrasing as its intended positive form).
+    *   Suggest creating an initial baseline assessment or report relevant to the core problem (e.g., 'Current State Assessment of [Core Problem]').
     *   Include standard project management documents typically required *at the outset* (e.g., Project Charter, Risk Register, Communication Plan, Stakeholder Engagement Plan, Change Management Plan, High-Level Budget/Funding Framework, Funding Agreement Structure/Template, Initial High-Level Schedule/Timeline, M&E Framework), explicitly tailored to the provided context.
     *   **SCOPE:** Ensure these documents represent high-level strategies, frameworks, or foundational plans needed *before* detailed operational planning. **Do NOT include detailed implementation plans.** Analysis of found data is part of creating these documents, not a separate document *to create* unless specifically a 'Baseline Assessment'.
     *   For every document identified, include all required fields: `document_name`, `description`, `responsible_role_type` (use specific functional roles where appropriate, mandatory), `document_template_primary` / `document_template_secondary`, `steps_to_create` (key initial steps), `approval_authorities`.
@@ -136,15 +136,15 @@ Based *only* on the **project description provided by the user**, generate the f
     *   Derive directly from the information needs implied by the 'Documents to Create'.
     *   **CRITICAL INSTRUCTION - FOCUS ON SOURCE MATERIAL:** You MUST list the **raw inputs** needed for analysis, NOT pre-existing reports that *contain* analysis (unless the report *is* the raw data source, like an official statistical publication).
         *   **Think: What raw data or official text does the team need to *look at* to write their strategy/plan?**
-        *   **EXAMPLE MAPPING:**
-            *   If creating a 'Housing Affordability Improvement Framework', you need to *find* things like: 'National Housing Price Index Data', 'Existing Zoning Regulations', 'Data on Housing Construction Rates', 'Current Government Housing Subsidy Policies'.
-            *   If creating a 'Reducing Child-Rearing Costs Strategic Plan', you need to *find* things like: 'Current National Childcare Subsidy Laws/Policies', 'Data on Average Childcare Costs', 'Tax Code Sections Related to Dependents'.
-        *   **Explicitly FORBIDDEN:** Do NOT list items like 'Housing Market Analysis Report', 'Childcare Policies Review Report'. The team will *perform* the analysis or review using the source material found; they are not *finding* a completed analysis report (unless it's an official, foundational statistical report from a national office).
-    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer names like:
-        *   `[Region/Scope] [Topic] Statistical Data` (e.g., 'Participating Nations Fertility Rate Data')
-        *   `Existing [Region/Scope] [Topic] Policies/Laws/Regulations` (e.g., 'Existing National Childcare Subsidy Policies')
-        *   `Official [Region/Scope] [Topic] Survey Results/Data` (e.g., 'Official National Mental Health Survey Data')
-        *   `[Region/Scope] Economic Indicators` (e.g., 'Participating Nations GDP Data', 'National Housing Price Indices')
+        *   **EXAMPLE MAPPING (illustrative patterns only — derive your actual topic from the user prompt, do NOT reuse these topics):**
+            *   If creating a '[Intervention Area] Improvement Framework', you need to *find* things like: '[Relevant Metric] Statistical Data', 'Existing [Topic] Regulations', 'Data on [Relevant Activity] Rates', 'Current Government [Topic] Policies'.
+            *   If creating a '[Core Problem] Strategic Plan', you need to *find* things like: 'Current National [Topic] Laws/Policies', 'Data on [Relevant Metric]', '[Applicable Legal Code] Sections Related to [Topic]'.
+        *   **Explicitly FORBIDDEN:** Do NOT list items like '[Topic] Market Analysis Report', '[Topic] Policies Review Report'. The team will *perform* the analysis or review using the source material found; they are not *finding* a completed analysis report (unless it's an official, foundational statistical report from a national office).
+    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer patterns like:
+        *   `[Region/Scope] [Topic] Statistical Data`
+        *   `Existing [Region/Scope] [Topic] Policies/Laws/Regulations`
+        *   `Official [Region/Scope] [Topic] Survey Results/Data`
+        *   `[Region/Scope] Economic Indicators`
     *   Consolidate similar source requirements where logical.
     *   For every source material identified, explicitly and always include **ALL** required fields:
         *   `document_name`: Clear title following the naming convention above (focus on data/policy type).
@@ -179,15 +179,15 @@ Based *only* on the **project description provided by the user**, generate the f
     *   Derive directly from the information needs implied by the 'Documents to Create'.
     *   **CRITICAL INSTRUCTION - FOCUS ON SOURCE MATERIAL:** You MUST list the **raw inputs** needed for analysis, NOT pre-existing summaries or reviews created by others (unless the summary *is* the raw data source, like an official requirements list).
         *   **Think: What information, guides, data, or requirements does the person need to *look at* to create their plan?**
-        *   **EXAMPLE MAPPING (Personal Projects):**
-            *   If creating a 'Marathon Training Plan', you need to *find* things like: 'Beginner Marathon Training Schedules', 'Information on Local Running Routes', 'Nutrition Guidelines for Runners', 'Reviews/Specs of Running Shoes'.
-            *   If creating a 'Language Learning Strategy', you need to *find* things like: 'List of Language Learning Apps/Platforms', 'Recommended Grammar Textbooks/Resources', 'Information on Local Language Exchange Meetups', 'Online Language Proficiency Tests'.
-        *   **Explicitly FORBIDDEN:** Do NOT list items like 'Best Marathon Training Plan Review', 'Language App Comparison Report'. The person will *perform* the comparison or review using the source material found; they are not *finding* a completed review.
-    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer names like:
-        *   `[Topic] [Resource Type] List/Data` (e.g., 'Language Learning App List', 'Local Gym Class Schedules')
-        *   `Existing [Personal Record Type]` (e.g., 'Existing Personal Budget Records')
-        *   `Official [Requirement/Guideline Type]` (e.g., 'Official Visa Application Requirements', 'Recommended Daily Nutrition Guidelines')
-        *   `[Location/Provider] [Information Type]` (e.g., 'Specific Airline Baggage Allowance Rules', 'Online Course Syllabus/Pricing')
+        *   **EXAMPLE MAPPING (Personal Projects — illustrative patterns only, derive your actual topic from the user prompt, do NOT reuse these topics):**
+            *   If creating a '[Personal Goal] Plan', you need to *find* things like: 'Beginner [Activity] Schedules', 'Information on Local [Relevant Resource]', '[Subject] Guidelines', 'Reviews/Specs of [Relevant Equipment]'.
+            *   If creating a '[Skill] Learning Strategy', you need to *find* things like: 'List of [Skill] Learning Apps/Platforms', 'Recommended [Topic] Textbooks/Resources', 'Information on Local [Skill] Exchange Meetups', 'Online [Skill] Proficiency Tests'.
+        *   **Explicitly FORBIDDEN:** Do NOT list items like 'Best [Activity] Plan Review', '[Tool] Comparison Report'. The person will *perform* the comparison or review using the source material found; they are not *finding* a completed review.
+    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer patterns like:
+        *   `[Topic] [Resource Type] List/Data`
+        *   `Existing [Personal Record Type]`
+        *   `Official [Requirement/Guideline Type]`
+        *   `[Location/Provider] [Information Type]`
     *   Consolidate similar source requirements where logical.
     *   For every source material identified, explicitly and always include **ALL** required fields:
         *   `document_name`: Clear title following the naming convention above (focus on data/resource type).
@@ -222,16 +222,16 @@ Based *only* on the **project description provided by the user**, generate the f
     *   Derive directly from the information needs implied by the 'Documents to Create'.
     *   **CRITICAL INSTRUCTION - FOCUS ON SOURCE MATERIAL:** You MUST list the **raw inputs** needed for analysis or development, NOT pre-existing summaries, analyses, or reports created by others (unless the report *is* the raw data source, like an official standard or a published dataset).
         *   **Think: What existing information, data, code, standards, or literature does the team/individual need to *examine* or *use* to create their plan, spec, or protocol?**
-        *   **EXAMPLE MAPPING ('Other' Projects):**
-            *   If creating 'Technical Specifications for Feature X', you need to *find* things like: 'Existing System Architecture Diagrams', 'Relevant API Documentation', 'User Requirement Documents for Feature X', 'Applicable Coding Standards'.
-            *   If creating a 'Research Methodology for Climate Change Crop Yield Impact Study', you need to *find* things like: 'Relevant Scientific Literature on Climate Models and Crop Science', 'Historical Regional Weather Datasets', 'Agricultural Crop Yield Statistical Data', 'Soil Type Maps/Data for Region'.
-        *   **Explicitly FORBIDDEN:** Do NOT list items like 'Competitor Feature Analysis Report', 'Comprehensive Literature Review on Climate Change Impacts'. The team will *perform* the analysis or review using the source material found; they are not *finding* a completed analysis report (unless it's a foundational source like a specific, widely cited review paper *as* literature).
-    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer names like:
-        *   `[Topic] Technical Standard/Documentation` (e.g., 'Python Coding Style Guide (PEP 8)', 'HTTP/3 Specification')
-        *   `Existing [Type] Datasets` (e.g., 'Global Ocean Temperature Datasets', 'Published Genomic Sequence Data')
+        *   **EXAMPLE MAPPING ('Other' Projects — illustrative patterns only, derive your actual topic from the user prompt, do NOT reuse these topics):**
+            *   If creating 'Technical Specifications for [Feature]', you need to *find* things like: 'Existing System Architecture Diagrams', 'Relevant API Documentation', 'User Requirement Documents for [Feature]', 'Applicable Coding Standards'.
+            *   If creating a 'Research Methodology for [Topic] Study', you need to *find* things like: 'Relevant Scientific Literature on [Field]', 'Historical [Domain] Datasets', '[Subject] Statistical Data', '[Relevant] Maps/Data for [Region]'.
+        *   **Explicitly FORBIDDEN:** Do NOT list items like '[Topic] Competitive Analysis Report', 'Comprehensive Literature Review on [Subject]'. The team will *perform* the analysis or review using the source material found; they are not *finding* a completed analysis report (unless it's a foundational source like a specific, widely cited review paper *as* literature).
+    *   **NAMING CONVENTION:** Use names that clearly reflect the raw source material type. Prefer patterns like:
+        *   `[Topic] Technical Standard/Documentation`
+        *   `Existing [Type] Datasets`
         *   `Relevant Scientific Literature on [Topic]`
         *   `[API/Library/Tool] Documentation`
-        *   `[Specific Regulation/Protocol Name]` (e.g., 'IRB Human Subjects Research Protocols')
+        *   `[Specific Regulation/Protocol Name]`
         *   `Existing [Project/System] Source Code/Reports`
     *   Consolidate similar source requirements where logical.
     *   For every source material identified, explicitly and always include **ALL** required fields:

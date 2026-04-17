@@ -39,8 +39,6 @@ You can now submit your prompt.
 
 The generated plans are written to `run/<timestamped-output-dir>`.
 
-![Screenshot of PlanExe](planexe-humanoid-factory.jpg?raw=true "Screenshot of PlanExe")
-
 ## Verification
 
 - You can open the UI at [http://localhost:5001](http://localhost:5001).

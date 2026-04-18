@@ -91,11 +91,12 @@ Service: `mcp_cloud` (MCP interface)
 --------------------------------------
 - Purpose: Model Context Protocol (MCP) server that provides a standardized interface for AI agents and developer tools to interact with PlanExe. Communicates with `worker_plan_database` via the shared Postgres database.
 - Build: `mcp_cloud/Dockerfile` (ships shared `database_api` models and the MCP server implementation).
-- Depends on: `database_postgres` health.
-- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_RUN_DIR=/app/run`; `PLANEXE_MCP_PUBLIC_BASE_URL=http://localhost:8001` for report download URLs.
-- Volumes: `run/` (rw for artifact access).
-- Entrypoint: `python -m mcp_cloud.app` (runs the MCP server over stdio).
-- Communication: the server communicates over stdio (standard input/output) following the MCP protocol. Configure your MCP client to connect to this container. The container runs with `stdin_open: true` and `tty: true` to enable stdio communication.
+- Depends on: `database_postgres` and `worker_plan` health.
+- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_RUN_DIR=/app/run`; `PLANEXE_MCP_HTTP_HOST=0.0.0.0`, `PLANEXE_MCP_HTTP_PORT=8001`; `PLANEXE_MCP_PUBLIC_BASE_URL=http://localhost:8001` for report download URLs; `PLANEXE_MCP_REQUIRE_AUTH=false` by default.
+- Ports: host `${PLANEXE_MCP_HTTP_PORT:-8001}` -> container `8001`.
+- Volumes: `llm_config/` (ro for provider configs).
+- Health: `http://localhost:8001/healthcheck` checked via the compose healthcheck.
+- Communication: Streamable HTTP (`/mcp`) plus helper endpoints (`/download/...`, `/sse/...`). Point your MCP client at `http://localhost:${PLANEXE_MCP_HTTP_PORT:-8001}/mcp`.
 - MCP tools: implements the specification in `docs/mcp/planexe_mcp_interface.md` including session management, artifact operations, and event streaming.
 
 Usage notes

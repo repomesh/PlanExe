@@ -321,9 +321,8 @@ The same `_get_download_base_url()` function is used to build both `download_url
 - FastMCP session lifecycle lines like `Terminating session: None` are expected informational logs; do not treat them as application failures solely based on Railway's log-level labeling.
 
 ## Download flow
-- `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
-- `plan_file_info` returns download metadata; callers fetch artifacts from
-  `/download/{plan_id}/...`.
+- `mcp_cloud` exposes `plan_file_info`, which returns download metadata;
+  callers fetch artifacts from `/download/{plan_id}/...`.
 
 ## Troubleshooting guidance (caller-facing text)
 - Keep guidance aligned across server instructions and tool descriptions:

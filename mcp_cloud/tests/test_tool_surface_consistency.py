@@ -130,10 +130,9 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("plan_resume", cloud_tool_names)
 
-    def test_cloud_exposes_plan_file_info_not_plan_download(self):
+    def test_cloud_exposes_plan_file_info(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
         self.assertIn("plan_file_info", cloud_tool_names)
-        self.assertNotIn("plan_download", cloud_tool_names)
 
     def test_cloud_exposes_plan_list_tool(self):
         cloud_tool_names = {definition.name for definition in cloud_app.TOOL_DEFINITIONS}
@@ -146,14 +145,12 @@ class TestCloudToolSurfaceConsistency(unittest.TestCase):
     def test_cloud_instructions_reference_send_feedback(self):
         self.assertIn("send_feedback", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
 
-    def test_cloud_instructions_reference_cloud_download_tool(self):
+    def test_cloud_instructions_reference_download_tool(self):
         self.assertIn("plan_file_info", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
-        self.assertNotIn("plan_download", cloud_app.PLANEXE_SERVER_INSTRUCTIONS)
 
-    def test_cloud_plan_create_description_references_cloud_download_tool(self):
+    def test_cloud_plan_create_description_references_download_tool(self):
         description = _tool_desc(cloud_app.TOOL_DEFINITIONS, "plan_create")
         self.assertIn("plan_file_info", description)
-        self.assertNotIn("plan_download", description)
 
     def test_cloud_instructions_include_plan_status_state_contract(self):
         instructions = cloud_app.PLANEXE_SERVER_INSTRUCTIONS

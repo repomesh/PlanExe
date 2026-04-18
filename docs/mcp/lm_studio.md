@@ -8,27 +8,6 @@ title: LM Studio - MCP integration
 
 You need a hefty computer for running models locally.
 
-## Prerequisites
-
-- LM Studio installed.
-- PlanExe MCP server reachable by LM Studio.
-
-## Quick setup
-
-1. Configure MCP in LM Studio.
-2. Ask for prompt examples.
-3. Create a plan task and download the report.
-
-## Sample prompt
-
-> Get example prompts for creating a plan.
-
-## Success criteria
-
-- You can fetch prompt examples.
-- You can create a plan task.
-- You can download the report.
-
 ## Interaction
 
 My interaction with LM Studio for creating a plan is like this:
@@ -48,59 +27,14 @@ LM Studio cannot autonomously check status, so it's up to the user to ask for it
 
 The created plan is here: [AI AgentNet](https://planexe.org/20260131_ai_agentnet_report.html)
 
-## Prerequisites
-
-Check that your LM Studio works with a model that support tools such as
-[glm-4.7-flash](https://lmstudio.ai/models/zai-org/glm-4.7-flash).
-
-A working installation of PlanExe.
-
-- The recommended way is to install PlanExe by following the [Getting Started](../getting_started.md) instructions.
-  Make sure that `docker compose up` is running, in order to connect to PlanExe.
-- Alternatively: Run PlanExe on another server and port.
-- Alternatively: If you are a developer run PlanExe inside a python virtual environment.
-
-Double check that PlanExe can take a prompt and create a plan. Since it doesn't make sense to start configuring LM Studio if the PlanExe installation is incomplete.
-
-
 ## Configuring LM Studio
 
-Follow step 1, 2, 3, 4. This should open LM Studio's `mcp.json` editor.
+Check that LM Studio works with a model that supports tools such as [glm-4.7-flash](https://lmstudio.ai/models/zai-org/glm-4.7-flash).
+
+See [MCP client config snippets](mcp_client_config.md) for prerequisites and the cloud / local-Docker JSON blocks.
+
+Open LM Studio's MCP settings to edit `mcp.json` and paste the `planexe` entry from the snippet page inside your `mcpServers` dictionary.
 
 ![image](lm_studio_settings.jpg)
 
-Insert the following `planexe` dictionary inside the `mcpServers` dictionary.
-
-**Cloud server:**
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "type": "http",
-      "url": "https://mcp.planexe.org/mcp",
-      "headers": {
-        "X-API-Key": "pex_YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-**Local Docker:**
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "type": "http",
-      "url": "http://localhost:8001/mcp"
-    }
-  }
-}
-```
-
-Adjust the URL if PlanExe is running on another port.
-
-Now LM Studio is connected with PlanExe.
 If it doesn't work then ask on the [PlanExe Discord](https://planexe.org/discord) for help.

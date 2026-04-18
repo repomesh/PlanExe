@@ -32,20 +32,9 @@ I had to manually ask about `check status` to get details how the plan creation 
 
 The created plan is here: [Heatwave Resilience](https://planexe.org/20260202_heatwave_resilience_report.html)
 
-## Prerequisites
-
-A working installation of PlanExe.
-
-- The recommended way is to install PlanExe by following the [Getting Started](../getting_started.md) instructions.
-  Make sure that `docker compose up` is running, in order to connect to PlanExe.
-- Alternatively: Run PlanExe on another server and port.
-- Alternatively: If you are a developer run PlanExe inside a python virtual environment.
-
-Double check that PlanExe can take a prompt and create a plan. Since it doesn't make sense to start configuring Windsurf if the PlanExe installation is incomplete.
-
 ## Configuring Windsurf
 
-To configure Windsurf to use PlanExe, you need to add the MCP server configuration.
+See [MCP client config snippets](mcp_client_config.md) for prerequisites and the cloud / local-Docker JSON blocks.
 
 ![Instructions for opening Windsurf's MCP config file](windsurf_mcp_config.jpg)
 
@@ -54,38 +43,7 @@ To configure Windsurf to use PlanExe, you need to add the MCP server configurati
 3. Click the "Open MCP Config File" icon at the bottom of the menu.
 4. This opens the `mcp_config.json` file.
 
-Add the following `planexe` dictionary to your `mcpServers` configuration:
-
-**Cloud server:**
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "type": "http",
-      "url": "https://mcp.planexe.org/mcp",
-      "headers": {
-        "X-API-Key": "pex_YOUR_API_KEY"
-      }
-    }
-  }
-}
-```
-
-**Local Docker:**
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "type": "http",
-      "url": "http://localhost:8001/mcp"
-    }
-  }
-}
-```
-
-Adjust the URL if PlanExe is running on another port.
+Paste the `planexe` entry from the snippet page inside your `mcpServers` dictionary.
 
 Once you have saved the `mcp_config.json`. Then go to the `Manage MCP Servers` and click the refresh icon.
 

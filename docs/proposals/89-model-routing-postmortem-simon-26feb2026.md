@@ -52,7 +52,6 @@ Rate each task 1–5 on four dimensions. Sum for model recommendation.
 
 | File | Lines |
 |------|-------|
-| mcp_local/planexe_mcp_local.py | 1,055 |
 | mcp_cloud/http_server.py | 1,089 |
 | mcp_cloud/handlers.py | 554 |
 | mcp_cloud/tool_models.py | 298 |
@@ -88,10 +87,10 @@ Rate each task 1–5 on four dimensions. Sum for model recommendation.
 
 | Dimension | Score | Notes |
 |-----------|-------|-------|
-| File size | 5 | Hits planexe_mcp_local.py (1,055 lines) and http_server.py (1,089 lines) |
+| File size | 5 | Hits http_server.py (1,089 lines) |
 | Semantic complexity | 3 | Rename is mechanical, but must not break backward compat aliases during transition |
 | Ambiguity | 2 | Clear goal — but alias removal timing was a design decision |
-| Context dependency | 5 | Full stack: MCP cloud, MCP local, tool_models, schemas, test files |
+| Context dependency | 5 | Full stack: MCP cloud, tool_models, schemas, test files |
 | **Total** | **15** | **→ Sonnet (planning pass), Haiku (execution)** |
 
 **Estimated tokens:** ~200K input (reading all affected files) + 20K output = 220K tokens  
@@ -220,7 +219,7 @@ Rate each task 1–5 on four dimensions. Sum for model recommendation.
 ## Key Findings
 
 **1. Opus was fully justified for planning the module split and external rename.**  
-Both involved 1,000+ line files and cross-codebase changes. Opus needed to read `http_server.py` (1,089 lines) and `planexe_mcp_local.py` (1,055 lines) top-to-bottom to produce surgical plans. This is exactly the Opus use case.
+Both involved 1,000+ line files and cross-codebase changes. Opus needed to read `http_server.py` (1,089 lines) top-to-bottom to produce surgical plans. This is exactly the Opus use case.
 
 **2. Execution of those plans could have shifted to Sonnet/Haiku in a fresh session.**  
 Once Opus produces a plan with exact file paths and line numbers, a cheaper model executes it without needing the full planning context. Fresh session = no context drag from prior planning work.

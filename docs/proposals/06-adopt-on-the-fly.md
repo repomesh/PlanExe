@@ -18,7 +18,7 @@ PlanExe already has multiple "early classification" concepts and quality gates t
 
   - Self-audit checklist includes "Lacks Technical Depth", "Legal Minefield", "External Dependencies", etc.: `worker_plan/worker_plan_internal/self_audit/self_audit.py`
 
-- **MCP interface is tools-only** and supports `task_create -> task_status -> task_file_info/task_download`: `mcp_cloud/app.py`, `mcp_local/planexe_mcp_local.py`, and `docs/planexe_mcp_interface.md`.
+- **MCP interface is tools-only** and supports `plan_create -> plan_status -> plan_file_info`: `mcp_cloud/app.py` and `docs/mcp/planexe_mcp_interface.md`.
 
 - **LLM configuration is externalized** (profiles in `llm_config/<profile>.json`, default via `DEFAULT_LLM` env var; keys from `.env`): `worker_plan/worker_plan_internal/llm_factory.py`, `worker_plan/worker_plan_internal/utils/planexe_llmconfig.py`, `worker_plan/worker_plan_api/planexe_dotenv.py`.
 
@@ -190,7 +190,7 @@ No MCP interface changes are required: the client still sends one prompt to `tas
 
 ## 7) MCP/Client UX ("Smart On The Fly" for Agents)
 
-### 7.1 mcp_cloud / mcp_local
+### 7.1 mcp_cloud
 Keep tools-only behavior. "Smartness" lives in PlanExe's pipeline and in how prompts are structured.
 
 ### 7.2 Prompt examples

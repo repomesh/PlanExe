@@ -8,7 +8,6 @@ This document lists the MCP tools exposed by PlanExe and example prompts for age
 ## Overview
 
 - The primary MCP server runs in the cloud (see `mcp_cloud`).
-- The local MCP proxy (`mcp_local`) forwards calls to the server and adds a local download helper.
 - Tool responses return JSON in both `content.text` and `structuredContent`.
 - Workflow note: drafting and user approval of the prompt is a non-tool step between setup tools and `plan_create`.
 
@@ -226,31 +225,6 @@ Download report:
 curl -H "X-API-Key: pex_0123456789abcdef" -O "https://mcp.planexe.org/download/2d57a448-1b09-45aa-ad37-e69891ff6ec7/report.html"
 ```
 
-## Tool Catalog, `mcp_local`
-
-The local proxy exposes the same tools as the server, and adds:
-
-### plan_download
-
-Download report or zip to a local path.
-
-Example prompt:
-```
-Download the report for plan 2d57a448-1b09-45aa-ad37-e69891ff6ec7.
-```
-
-Example call:
-```json
-{"plan_id": "2d57a448-1b09-45aa-ad37-e69891ff6ec7", "artifact": "report"}
-```
-
-`PLANEXE_PATH` behavior for `plan_download`:
-- Save directory is `PLANEXE_PATH`, or current working directory if unset.
-- Non-existing directories are created automatically.
-- If `PLANEXE_PATH` points to a file, download fails.
-- Filename is prefixed with plan id (for example `<plan_id>-report.html`).
-- Response includes `saved_path` with the exact local file location.
-
 ## Minimal error-handling contract
 
 Error payload shape:
@@ -268,10 +242,6 @@ Common cloud/core error codes:
 - `MODEL_PROFILES_UNAVAILABLE`
 - `generation_failed`
 - `content_unavailable`
-
-Common local proxy error codes:
-- `REMOTE_ERROR`
-- `DOWNLOAD_FAILED`
 
 Special case:
 - `plan_file_info` may return `{}` while the artifact is not ready yet (not an error).

@@ -30,7 +30,7 @@ PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sect
 - `/mcp` (Claude Code) or Settings > MCP (desktop) shows `planexe` as connected.
 - You can fetch prompt examples (`example_prompts`).
 - You can create a plan (`plan_create`) and poll it to completion (`plan_status`).
-- You can download the report (`plan_file_info` or `plan_download`).
+- You can download the report (`plan_file_info`).
 
 ---
 
@@ -66,7 +66,7 @@ In Claude Code, type `/mcp` to see the server status. In the Claude desktop app,
 
 ## Option B: Run Docker locally + connect directly via HTTP
 
-This connects Claude directly to the local MCP server over HTTP. No `mcp_local` proxy needed.
+This connects Claude directly to the local MCP server over HTTP.
 
 ### 1. Start PlanExe locally
 
@@ -92,56 +92,7 @@ Authentication is disabled by default for local Docker (`PLANEXE_MCP_REQUIRE_AUT
 
 In Claude Code, type `/mcp` to see the server status. In the Claude desktop app, check Settings > MCP.
 
-> **Note:** With this option, `plan_file_info` returns a `download_url`. Ask Claude to fetch it, or open the URL in your browser. For local disk saves, use Option C instead (adds the `plan_download` tool).
-
----
-
-## Option C: Run Docker locally + use the mcp_local proxy
-
-The `mcp_local` proxy runs as a stdio process and forwards calls to the Docker MCP server. It adds the `plan_download` tool which saves artifacts directly to disk.
-
-### 1. Start PlanExe locally
-
-Follow the [Getting Started](../getting_started.md) instructions, then:
-
-```bash
-docker compose up
-```
-
-### 2. Add the MCP server
-
-```bash
-claude mcp add --transport stdio \
-  --env PLANEXE_URL="http://localhost:8001/mcp" \
-  --env PLANEXE_PATH="/Users/your-name/Desktop" \
-  planexe \
-  -- uv run --with mcp /path/to/PlanExe/mcp_local/planexe_mcp_local.py
-```
-
-Make these adjustments:
-
-- Replace `/path/to/PlanExe` with the actual path to your PlanExe clone.
-- Replace `/Users/your-name/Desktop` with the directory where downloaded plans should be saved.
-- Optional: Adjust `http://localhost:8001/mcp` if PlanExe is running on a different port.
-
-### 3. Verify
-
-In Claude Code, type `/mcp` to see the server status. In the Claude desktop app, check Settings > MCP.
-
----
-
-## Using mcp_local with the cloud server
-
-You can also use the `mcp_local` proxy to connect to the cloud server. This gives you the `plan_download` tool while using the hosted service:
-
-```bash
-claude mcp add --transport stdio \
-  --env PLANEXE_URL="https://mcp.planexe.org/mcp" \
-  --env PLANEXE_MCP_API_KEY="pex_YOUR_API_KEY" \
-  --env PLANEXE_PATH="/Users/your-name/Desktop" \
-  planexe \
-  -- uv run --with mcp /path/to/PlanExe/mcp_local/planexe_mcp_local.py
-```
+> **Note:** With this option, `plan_file_info` returns a `download_url`. Ask Claude to fetch it, or open the URL in your browser.
 
 ---
 
@@ -178,28 +129,6 @@ Instead of using `claude mcp add`, you can create a `.mcp.json` file in your pro
 }
 ```
 
-**Local proxy (stdio):**
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "http://localhost:8001/mcp",
-        "PLANEXE_PATH": "/Users/your-name/Desktop"
-      }
-    }
-  }
-}
-```
-
 ---
 
 ## Managing the MCP server
@@ -228,7 +157,7 @@ A typical conversation for creating a plan looks like this:
 4. **Approve and create** — "Go ahead, create this plan."
    Claude calls `plan_create`, which returns a `plan_id`.
 5. **Wait** — Plan generation takes ~10-20 minutes. Claude polls `plan_status` automatically every few minutes. Alternatively, `plan_create` returns an `sse_url` — a GET endpoint (text/event-stream) that streams real-time progress events until the plan completes. Claude Code agents can run `curl -N <sse_url>` in a background shell to monitor progress instead of polling.
-6. **Download** — "Download the report." Claude fetches the HTML report via `plan_file_info` (cloud) or `plan_download` (local proxy).
+6. **Download** — "Download the report." Claude fetches the HTML report via `plan_file_info`.
 
 If a plan fails, Claude can retry it with `plan_retry`. If a `plan_id` is lost, `plan_list` recovers recent plans.
 

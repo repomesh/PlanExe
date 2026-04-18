@@ -47,10 +47,10 @@ From my vantage point as Haiku: a 1,000-line file is genuinely risky territory. 
 
 | Dimension | Score | Reasoning |
 |-----------|-------|-----------|
-| File size | **5** | Both planexe_mcp_local.py and http_server.py are 1,000+ lines. I'll miss occurrences in files this large. |
+| File size | **5** | http_server.py is 1,000+ lines. I'll miss occurrences in files this large. |
 | Semantic complexity | **3** | It's a rename, but the backward-compat alias timing adds risk. One wrong removal and external callers break. |
 | Ambiguity | **3** | The rename direction is clear. The alias removal timing is a real decision that could silently break things. |
-| Context dependency | **5** | Cloud, local, tests, docs — full stack. Miss one file and you ship a broken release. |
+| Context dependency | **5** | Cloud handlers, tests, docs — full stack. Miss one file and you ship a broken release. |
 | **Total** | **16** | **→ Opus for planning. Sonnet for execution with an explicit hit list.** |
 
 **Bubba's verdict:** I'd want Opus to produce a complete grep-style list of every occurrence across every file before a single character is changed. Sonnet then executes from that list. I shouldn't be doing the discovery phase on a 1,000+ line file — I'll miss things.

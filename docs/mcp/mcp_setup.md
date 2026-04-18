@@ -6,6 +6,8 @@ title: MCP setup
 
 This is the shortest path to a working PlanExe MCP integration.
 
+Recommended: point your MCP client at the hosted server `https://mcp.planexe.org/mcp` using a `pex_...` key from [home.planexe.org](https://home.planexe.org/). Only fall back to local Docker (`http://localhost:8001/mcp`) if you need to run the stack yourself. Grab the JSON/CLI snippet from [MCP client config snippets](mcp_client_config.md) or the per-client guide below.
+
 ---
 
 ## 1. Understand the flow
@@ -17,7 +19,7 @@ This is the shortest path to a working PlanExe MCP integration.
 4. Create the plan.
 5. Poll for status (about every 5 minutes).
 6. If status is `failed`, optionally call `plan_retry` (defaults to `model_profile=baseline`).
-7. Download artifacts via `plan_file_info` (cloud) or `plan_download` (mcp_local helper).
+7. Download artifacts via `plan_file_info`.
 
 ---
 
@@ -31,9 +33,6 @@ This is the shortest path to a working PlanExe MCP integration.
 6. `plan_retry` (optional, only for failed plans)
 7. `plan_file_info`
 
-Optional local helper:
-- `plan_download` (provided by `mcp_local`, not `mcp_cloud`)
-
 For `plan_create`:
 
 - Visible arguments: `prompt` (required), `model_profile` (optional).
@@ -45,7 +44,7 @@ For `plan_create`:
 
 - You can fetch example prompts.
 - You can create a plan.
-- You can fetch artifact metadata/URLs with `plan_file_info` (and optionally save locally via `plan_download` when using `mcp_local`).
+- You can fetch artifact metadata/URLs with `plan_file_info`.
 - Your client can parse `error.code` and `error.message` and handle `{}` from `plan_file_info` as "not ready yet".
 - If running parallel work, your client tracks multiple `plan_id`s explicitly (server-side global cap is not enforced).
 

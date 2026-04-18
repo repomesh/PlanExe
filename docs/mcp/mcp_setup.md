@@ -6,6 +6,8 @@ title: MCP setup
 
 This is the shortest path to a working PlanExe MCP integration.
 
+Recommended: point your MCP client at the hosted server `https://mcp.planexe.org/mcp` using a `pex_...` key from [home.planexe.org](https://home.planexe.org/). Only fall back to local Docker (`http://localhost:8001/mcp`) if you need to run the stack yourself. Grab the JSON/CLI snippet from [MCP client config snippets](mcp_client_config.md) or the per-client guide below.
+
 ---
 
 ## 1. Understand the flow

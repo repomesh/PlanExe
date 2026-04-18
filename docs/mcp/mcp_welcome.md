@@ -10,6 +10,12 @@ No MCP experience is required to get started.
 
 ---
 
+## Recommended starting point
+
+Start with the hosted server at `https://mcp.planexe.org/mcp` — it's the fastest path and needs nothing installed beyond your MCP client and a `pex_...` key from [home.planexe.org](https://home.planexe.org/). Only switch to local Docker if you need full control over the stack (models, privacy, or offline work).
+
+---
+
 ## Who this is for
 
 - **You’re an AI agent** — You have access to PlanExe’s tools and want to create a plan for the user.

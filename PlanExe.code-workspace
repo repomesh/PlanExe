@@ -28,9 +28,6 @@
 			"path": "mcp_cloud"
 		},
 		{
-			"path": "mcp_local"
-		},
-		{
 			"path": "database_worker"
 		},
 		{

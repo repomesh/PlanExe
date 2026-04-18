@@ -69,33 +69,38 @@ Follow step 1, 2, 3, 4. This should open LM Studio's `mcp.json` editor.
 
 ![image](lm_studio_settings.jpg)
 
-Insert the following `planexe` dictionary inside the `mcpServers` dictionary. 
+Insert the following `planexe` dictionary inside the `mcpServers` dictionary.
+
+**Cloud server:**
 
 ```json
 {
   "mcpServers": {
     "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "http://localhost:8001/mcp",
-        "PLANEXE_PATH": "/Users/your-name/Desktop"
+      "type": "http",
+      "url": "https://mcp.planexe.org/mcp",
+      "headers": {
+        "X-API-Key": "pex_YOUR_API_KEY"
       }
     }
   }
 }
 ```
 
-Make these adjustments to the `planexe` snippet.
+**Local Docker:**
 
-- Make adjustments to `/path/to/PlanExe` so it points to where PlanExe is located on your computer.
-- Make adjustments to `/Users/your-name/Desktop` so it points to the directory where PlanExe is allowed to write to, so the plan can be downloaded.
-- Optional: Make adjustments to `http://localhost:8001/mcp` if you have PlanExe running on another port.
+```json
+{
+  "mcpServers": {
+    "planexe": {
+      "type": "http",
+      "url": "http://localhost:8001/mcp"
+    }
+  }
+}
+```
+
+Adjust the URL if PlanExe is running on another port.
 
 Now LM Studio is connected with PlanExe.
 If it doesn't work then ask on the [PlanExe Discord](https://planexe.org/discord) for help.

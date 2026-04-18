@@ -68,22 +68,24 @@ Double check that PlanExe can take a prompt and create a plan. Since it doesn't 
 
 [OpenAI's MCP documentation](https://developers.openai.com/codex/mcp/)
 
-This is the command template. Make sure you tweak it, before running it.
+Point Codex at the PlanExe MCP server over HTTP (cloud or local Docker).
+
+**Cloud server:**
 
 ```bash
-codex mcp add planexe --env PLANEXE_URL="http://localhost:8001/mcp" --env PLANEXE_PATH="/Users/your-name/Desktop" -- uv run --with mcp /path/to/PlanExe/mcp_local/planexe_mcp_local.py
+codex mcp add planexe --url https://mcp.planexe.org/mcp --header "X-API-Key: pex_YOUR_API_KEY"
 ```
 
-Make these adjustments to the command line.
+**Local Docker:**
 
-- Make adjustments to `/path/to/PlanExe` so it points to where PlanExe is located on your computer.
-- Make adjustments to `/Users/your-name/Desktop` so it points to the directory where PlanExe is allowed to write to, so the plan can be downloaded.
-- Optional: Make adjustments to `http://localhost:8001/mcp` if you have PlanExe running on another port.
+```bash
+codex mcp add planexe --url http://localhost:8001/mcp
+```
+
+Adjust the URL if PlanExe is running on another port.
 
 Verify that it's working.
 
 ```bash
-codex mcp list  
-Name Command Args Env Cwd Status Auth       
-planexe  uv       run --with mcp /path/to/PlanExe/mcp_local/planexe_mcp_local.py  PLANEXE_PATH=*****, PLANEXE_URL=*****  -    enabled  Unsupported
+codex mcp list
 ```

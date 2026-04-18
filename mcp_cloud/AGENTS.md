@@ -320,16 +320,10 @@ The same `_get_download_base_url()` function is used to build both `download_url
 - Keep `GET /robots.txt` available (200) for crawler health checks and metadata discovery.
 - FastMCP session lifecycle lines like `Terminating session: None` are expected informational logs; do not treat them as application failures solely based on Railway's log-level labeling.
 
-## mcp_local integration
-- `mcp_local` runs on the user's machine and forwards tool calls to this server over HTTP.
-- It targets either:
-  - the HTTP wrapper endpoint (`/mcp/tools/call`), or
-  - the streamable MCP JSON-RPC endpoint (`/mcp`).
-- Tool-surface split must stay explicit:
-  - `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
-  - `mcp_local` exposes `plan_download` and implements it via cloud `plan_file_info`.
-- `plan_file_info` provides download metadata that `mcp_local` uses to download
-  artifacts via `/download/{plan_id}/...`.
+## Download flow
+- `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
+- `plan_file_info` returns download metadata; callers fetch artifacts from
+  `/download/{plan_id}/...`.
 
 ## Troubleshooting guidance (caller-facing text)
 - Keep guidance aligned across server instructions and tool descriptions:

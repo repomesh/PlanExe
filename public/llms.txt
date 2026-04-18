@@ -90,7 +90,6 @@ Key tool inputs/outputs:
 - plan_list output: recent plans for the authenticated user (plan_id, state, progress, created_at, prompt_excerpt).
 - send_feedback inputs: category (required: mcp | plan | code | docs | other), message (required), plan_id (optional), rating (optional: 1-5 sentiment).
 - send_feedback output: feedback_id, received_at. Fire-and-forget — never blocks workflow.
-- mcp_local plan_download output: includes local saved_path where artifact was written.
 
 plan_status caller contract:
 - pending: keep polling.
@@ -102,7 +101,6 @@ plan_status caller contract:
 Minimal error-handling contract:
 - Errors use `{"error":{"code","message","details?"}}`.
 - Common cloud/core codes: `PLAN_NOT_FOUND`, `PLAN_NOT_FAILED`, `PLAN_NOT_RESUMABLE`, `PIPELINE_VERSION_MISMATCH`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `MODEL_PROFILES_UNAVAILABLE`, `INVALID_FEEDBACK`, `generation_failed`, `content_unavailable`.
-- Common local-proxy codes: `REMOTE_ERROR`, `DOWNLOAD_FAILED`.
 - `plan_file_info` may return `{}` while artifact output is not ready yet.
 
 Recommended interaction order:
@@ -124,8 +122,6 @@ Concurrency semantics:
 - Client should track plan_ids and usually start with 1 active plan, then 2 if needed.
 
 Note:
-- plan_download is provided by mcp_local wrappers in some client setups, not by mcp_cloud directly.
-- In mcp_local, downloads save to PLANEXE_PATH (or current working directory if PLANEXE_PATH is unset).
 - In mcp_cloud, plan_file_info download_url is an absolute URL where the requested artifact can be downloaded.
 
 ## Authentication

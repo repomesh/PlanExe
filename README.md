@@ -66,7 +66,7 @@ The Tool workflow
 5. `plan_create`
 6. `plan_status` (poll every 5 minutes until done)
 7. optional if failed: `plan_retry`
-8. download the result via `plan_download` or via `plan_file_info`
+8. download the result via `plan_file_info`
 
 Concurrency note: each `plan_create` call returns a new `plan_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel plans.
 
@@ -93,32 +93,7 @@ Use this endpoint directly in your MCP client:
 }
 ```
 
-### Option B: Remote MCP + local downloads via proxy (`mcp_local`)
-
-If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "https://mcp.planexe.org/mcp",
-        "PLANEXE_MCP_API_KEY": "pex_your_api_key_here",
-        "PLANEXE_PATH": "/absolute/path/for/downloads"
-      }
-    }
-  }
-}
-```
-
-### Option C: Run MCP server locally with Docker
+### Option B: Run MCP server locally with Docker
 
 #### Prerequisites
 
@@ -139,30 +114,6 @@ Then connect your client to:
 - `http://localhost:8001/mcp`
 
 For local docker defaults, auth is disabled in `docker-compose.yml`.
-
-#### Local file downloads via proxy (`mcp_local`)
-
-If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "http://localhost:8001/mcp/",
-        "PLANEXE_PATH": "/absolute/path/for/downloads"
-      }
-    }
-  }
-}
-```
 
 ### MCP docs
 

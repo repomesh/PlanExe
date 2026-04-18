@@ -8,13 +8,12 @@ Locations: [Github](https://github.com/modelcontextprotocol/inspector), [Documen
 
 ## Overview of PlanExe's MCP servers
 
-PlanExe has multiple MCP servers that can be connected to.
+PlanExe has two MCP servers that can be connected to.
 
 |#|Difficulty|Description|
 |-|----------|-----------|
 | 1 | Beginner | MCP server at [mcp.planexe.org/](https://mcp.planexe.org/) and cost credits to use. Manage your credits via this page: [home.planexe.org](https://home.planexe.org) |
 | 2 | Medium | MCP server inside docker on your own computer. I recommend using OpenRouter for inference, which cost money. You can be lucky finding a free model on OpenRouter, but this requires developer skills and several attempts. You can also run models on your own computer. |
-| 3 | Expert | MCP server as a python program on your own computer. |
 
 ## Approach 1. MCP server at mcp.planexe.org
 

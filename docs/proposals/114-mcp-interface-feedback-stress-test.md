@@ -45,7 +45,7 @@ Option B is less disruptive and can be added to `plan_status` without changing s
 
 **Implemented approach:** Option A — a dedicated `PlanState.stopped` enum value (value 5). `plan_stop` now transitions plans to the `stopped` state instead of `failed`. The `stop_reason` field introduced in PR #244 (Option B) has been removed — the state itself communicates intent. `plan_retry` and `plan_resume` accept both `failed` and `stopped` states. DB migration adds `'stopped'` to the PostgreSQL enum type (both `taskstate` for pre-rename databases and `planstate` for fresh databases — the Python class was renamed from `TaskState` to `PlanState` in proposal 74 but the PostgreSQL type name was not changed). The worker's post-pipeline finalization also transitions to `stopped` (not `failed`) when `stop_requested` is true.
 
-**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_local/planexe_mcp_local.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/run_via_database.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/autonomous_agent_guide.md`, `docs/proposals/87-plan-resume-mcp-tool.md`, `docs/proposals/111-promising-directions.md`.
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `worker_plan_database/app.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/sse.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/plan_iframe.html`, `frontend_multi_user/templates/run_via_database.html`, `frontend_multi_user/templates/index.html`, `frontend_multi_user/templates/account.html`, `mcp_cloud/tests/test_plan_status_tool.py`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/autonomous_agent_guide.md`, `docs/proposals/87-plan-resume-mcp-tool.md`, `docs/proposals/111-promising-directions.md`.
 
 ---
 
@@ -86,7 +86,7 @@ The `recoverable` boolean lets the agent immediately suggest `plan_resume` (tran
 
 **Implementation:** Four dedicated nullable columns on `PlanItem`: `failure_reason`, `failed_step`, `error_message`, `recoverable`. The column was originally named `last_error` and renamed to `error_message` to match the consolidated `error.message` field in the MCP response. Migration functions in all three services (mcp_cloud, worker_plan_database, frontend_multi_user) check column existence via `sqlalchemy.inspect` before attempting the rename — this avoids noisy PostgreSQL ERROR logs on restarts where the rename already succeeded. The worker populates them via `_update_failure_diagnostics()` at three failure paths: normal pipeline failure, unhandled exception, and version mismatch on resume. The `plan_status` handler consolidates these into a single `error` dict (with keys `failure_reason`, `failed_step`, `message`, `recoverable`) only when `state == "failed"` — non-failed plans omit the `error` field entirely. Diagnostics are cleared on `plan_retry` and `plan_resume`. The frontend displays diagnostics in the failure trace panel and the admin bulk-fail form uses the renamed field.
 
-**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_cloud/tests/test_plan_status_tool.py`, `mcp_cloud/README.md`, `mcp_local/README.md`, `worker_plan_database/app.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/admin/bulk_change_to_failed.html`, `frontend_multi_user/templates/plan_iframe.html`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/mcp_details.md`, `docs/mcp/autonomous_agent_guide.md`.
+**Affected files:** `database_api/model_planitem.py`, `mcp_cloud/db_setup.py`, `mcp_cloud/db_queries.py`, `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_cloud/schemas.py`, `mcp_cloud/tests/test_plan_status_tool.py`, `mcp_cloud/README.md`, `worker_plan_database/app.py`, `frontend_multi_user/src/app.py`, `frontend_multi_user/src/planexe_modelviews.py`, `frontend_multi_user/templates/admin/bulk_change_to_failed.html`, `frontend_multi_user/templates/plan_iframe.html`, `docs/mcp/planexe_mcp_interface.md`, `docs/mcp/mcp_details.md`, `docs/mcp/autonomous_agent_guide.md`.
 
 ---
 
@@ -283,7 +283,7 @@ This matters because:
 }
 ```
 
-**Affected files:** `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`, `mcp_local/planexe_mcp_local.py`.
+**Affected files:** `mcp_cloud/handlers.py`, `mcp_cloud/tool_models.py`.
 
 ---
 

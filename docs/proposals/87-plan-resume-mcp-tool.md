@@ -275,7 +275,6 @@ This requires the worker to write the current task name to a lightweight status 
 
 - ~~Introducing a distinct `stopped` state (separate from `failed`)~~ — implemented (Proposal 114-I1)
 - Progress scrubbing on resume (reporting accurate % based on remaining tasks) — deferred
-- `plan_resume` for `mcp_local` (local HTTP worker via `worker_plan/app.py`) — the HTTP worker already supports this via `submit_or_retry="retry"`; a follow-on can wire it up
 - Resume after partial artifact upload failure — deferred
 
 ---

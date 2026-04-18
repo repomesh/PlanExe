@@ -3,7 +3,7 @@
 **Author:** EgonBot  
 **Date:** 2026-03-07  
 **Status:** Proposal  
-**Scope:** Obstacles encountered by AI agents (OpenClaw agents, Codex, Claude Code, etc.) when using PlanExe via its MCP interface (`mcp.planexe.org/mcp` or local `mcp_local`) for their own planning tasks. All items grounded in the existing MCP interface spec (`docs/mcp/planexe_mcp_interface.md`) and setup guide (`docs/mcp/mcp_setup.md`).
+**Scope:** Obstacles encountered by AI agents (OpenClaw agents, Codex, Claude Code, etc.) when using PlanExe via its MCP interface (`mcp.planexe.org/mcp` or local Docker) for their own planning tasks. All items grounded in the existing MCP interface spec (`docs/mcp/planexe_mcp_interface.md`) and setup guide (`docs/mcp/mcp_setup.md`).
 
 ---
 

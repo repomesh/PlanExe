@@ -31,10 +31,10 @@
 | File size | **5** | Original app.py was documented as 76KB — massive monolith |
 | Semantic complexity | **5** | Architectural: defining module boundaries, splitting responsibilities, fixing all import chains, ensuring no circular deps |
 | Ambiguity | **3** | Goal clear (split the monolith), but WHERE to draw module lines required genuine design judgment — e.g., does `download_tokens.py` own its rate limiter or does `http_server.py`? |
-| Context dependency | **5** | Every file that imports anything from app.py needed updating; changes ripple through mcp_local too |
+| Context dependency | **5** | Every file that imports anything from app.py needed updating; changes rippled across the whole mcp_cloud package |
 | **Total** | **18** | **→ Opus justified for planning AND likely for execution** |
 
-**Larry's verdict:** This is the clearest Opus use case in the whole day. A 76KB monolith with import chains across a cloud+local architecture — Sonnet would have made boundary errors on this one. Opus earns its rate here.
+**Larry's verdict:** This is the clearest Opus use case in the whole day. A 76KB monolith with import chains across the mcp_cloud package — Sonnet would have made boundary errors on this one. Opus earns its rate here.
 
 ---
 
@@ -43,13 +43,13 @@
 
 | Dimension | Score | Reasoning |
 |-----------|-------|-----------|
-| File size | **5** | Touches planexe_mcp_local.py (1,055 lines) and http_server.py (1,089 lines) — both 1,000+ line files |
+| File size | **5** | Touches http_server.py (1,089 lines) — a 1,000+ line file |
 | Semantic complexity | **3** | Mechanically a rename, but must maintain backward-compat aliases during transition, update error codes, update test fixtures, keep external API stable |
 | Ambiguity | **2** | The goal was crystal clear. The one design decision (alias removal timing) was small |
-| Context dependency | **5** | Full stack: mcp_cloud handlers, schemas, tool_models, mcp_local, test files, docs |
+| Context dependency | **5** | Full stack: mcp_cloud handlers, schemas, tool_models, test files, docs |
 | **Total** | **15** | **→ Sonnet for planning, Haiku for execution** |
 
-**Larry's verdict:** The file sizes push this toward Opus, but the actual work is mechanical once you understand the scope. The right play: Opus reads both 1,000-line files top-to-bottom, maps every occurrence, writes a hit list. Haiku or Sonnet executes from that hit list. The backward-compat alias timing decision was the only thing requiring real judgment.
+**Larry's verdict:** The file size pushes this toward Opus, but the actual work is mechanical once you understand the scope. The right play: Opus reads http_server.py top-to-bottom, maps every occurrence, writes a hit list. Haiku or Sonnet executes from that hit list. The backward-compat alias timing decision was the only thing requiring real judgment.
 
 ---
 

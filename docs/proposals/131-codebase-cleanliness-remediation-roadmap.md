@@ -37,12 +37,12 @@ This cleanup is feasible now because the repo already has several advantages:
 
 1. Service boundaries are documented in package-level `AGENTS.md` files.
 2. Shared contracts are called out explicitly for `worker_plan`, `database_api`, `worker_plan_api`, `mcp_cloud`, and the frontends.
-3. There is already a meaningful unit-test base across `worker_plan`, `mcp_cloud`, `mcp_local`, and shared utilities.
+3. There is already a meaningful unit-test base across `worker_plan`, `mcp_cloud`, and shared utilities.
 
 The main constraint is backward compatibility. We should not redesign public APIs while cleaning internals. The cleanup must preserve:
 
 1. `worker_plan` request and response shapes.
-2. `mcp_cloud` and `mcp_local` tool contracts.
+2. `mcp_cloud` tool contracts.
 3. Shared DB models and legacy compatibility behavior.
 
 ## Proposal

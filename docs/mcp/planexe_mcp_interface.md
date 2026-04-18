@@ -832,7 +832,7 @@ Clients must ignore unknown fields and unknown event types.
 
 ## 16. Future Extensions (MCP Resources)
 
-PlanExe is artifact-first, and MCP already has a native concept for that: resources. Today artifacts are exposed via download_url or via proxy download + saved_path. Future versions SHOULD expose artifacts as MCP resources so clients can fetch them via standard resource reads (and treat PlanExe as a first-class MCP server rather than a thin API wrapper).
+PlanExe is artifact-first, and MCP already has a native concept for that: resources. Today artifacts are exposed via `plan_file_info` and its `download_url`. Future versions SHOULD expose artifacts as MCP resources so clients can fetch them via standard resource reads (and treat PlanExe as a first-class MCP server rather than a thin API wrapper).
 
 **Proposed resource identifiers**
 

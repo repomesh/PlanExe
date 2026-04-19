@@ -94,7 +94,7 @@ dependencies = [
     "PyYAML==6.0.3",
     "regex==2026.4.4",
     "requests==2.33.1",
-    "rich==14.2.0",
+    "rich==15.0.0",
     "safehttpx==0.1.7",
     "safetensors==0.7.0",
     "semantic-version==2.10.0",

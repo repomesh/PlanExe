@@ -59,7 +59,7 @@ dependencies = [
     # "llama-index-multi-modal-llms-openai==0.4.2",
     "llama-index-readers-file==0.6.0",
     "llama-index-readers-llama-parse==0.6.1",
-    "llama-parse==0.6.88",
+    "llama-parse==0.6.94",
     "lockfile==0.12.2",
     "luigi==3.8.0",
     "Markdown==3.10",

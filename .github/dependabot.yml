@@ -26,12 +26,6 @@ updates:
     open-pull-requests-limit: 5
 
   - package-ecosystem: "pip"
-    directory: "/mcp_critic"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-
-  - package-ecosystem: "pip"
     directory: "/worker_plan_database"
     schedule:
       interval: "weekly"

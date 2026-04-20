@@ -157,11 +157,6 @@ def has_pipeline_complete_file(path_dir: Path) -> bool:
         return False
 
 
-def build_display_run_dir(run_dir: Path) -> str:
-    """Returns a user-facing path string for the run directory."""
-    return str(run_dir)
-
-
 def build_env(
     run_dir: Path,
     llm_model: str,
@@ -248,12 +243,10 @@ def start_run(request: StartRunRequest) -> StartRunResponse:
     with process_lock:
         process_store[run_id] = info
 
-    display_run_dir = build_display_run_dir(run_dir)
-
     return StartRunResponse(
         run_id=run_id,
         run_dir=str(run_dir),
-        display_run_dir=display_run_dir,
+        display_run_dir=str(run_dir),
         pid=process.pid,
         status="running",
     )
@@ -289,7 +282,6 @@ def run_status(run_id: str) -> RunStatusResponse:
     pipeline_complete = has_pipeline_complete_file(run_dir)
     last_update_seconds_ago = time_since_last_modification(run_dir)
     run_dir_exists = run_dir.exists()
-    display_run_dir = build_display_run_dir(run_dir)
 
     with process_lock:
         info = process_store.get(run_id)
@@ -308,7 +300,7 @@ def run_status(run_id: str) -> RunStatusResponse:
     return RunStatusResponse(
         run_id=run_id,
         run_dir=str(run_dir),
-        display_run_dir=display_run_dir,
+        display_run_dir=str(run_dir),
         run_dir_exists=run_dir_exists,
         pid=pid,
         running=running,

@@ -57,9 +57,6 @@ Always check the package-level `AGENTS.md` for file-specific rules
 ## Docker notes
 - `PLANEXE_POSTGRES_PORT` changes the host port mapping only; containers still
   connect to Postgres on 5432.
-- Services do not share a `/run` volume. Each container writes to its own
-  ephemeral `/app/run`; cross-service access goes through the DB or
-  `worker_plan` HTTP endpoints (`/runs/{id}/zip`, `/runs/{id}/files`).
 
 ## Documentation sync
 - When changing Docker services, env defaults, or port mappings, update

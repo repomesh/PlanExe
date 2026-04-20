@@ -180,8 +180,12 @@ async def fetch_file_list_from_worker_plan(run_id: str) -> Optional[list[tuple[s
 
 def list_files_from_local_run_dir(run_id: str) -> Optional[list[tuple[str, str]]]:
     """
-    List files from the local run directory if this service happens to be
-    co-located with a worker on the same filesystem.
+    List files from this service's own `run/` folder.
+
+    Only returns data when `mcp_cloud` happens to share a filesystem with a
+    worker (e.g. both processes running on the same host pointing at the same
+    `./run`). In the normal Docker / Railway split each service has its own
+    isolated filesystem and this returns None.
 
     Returns list of (filename, ISO-8601 UTC timestamp) tuples sorted by name,
     or None if the directory does not exist.

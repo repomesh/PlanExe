@@ -42,7 +42,7 @@ Currently it's up to humans to execute a plan. How can this be automated?
 Ideally take an entire plan and go with it.
 
 
-## OpenClaw
+## OpenClaw / Hermes
 
 If someone want to sponsor a MacMini for this, since I don't want to risk my own computer getting wrecked.
 
@@ -125,59 +125,28 @@ Populate a Cost-Breakdown-Structure.
 For a team with several people it's possible to do tasks in parallel.
 Obtain info about what resources the user has available, and if they are willing to do tasks in parallel.
 
+**Alternative simpler approaches:** There may be way simpler approaches that does the same, with fewer resources/money/time. What is the minimum viable version? "you've specified karyotyping, hormonal analysis, and endocrinologist exams, but an SRY gene test alone would achieve the stated goal of biological verification at roughly 1/100th of the cost and complexity. Currently PlanExe makes an overengineered plan, and it may be a simpler approach can do the same.
+
+**Alternative wilder approaches:** Take the idea to the next level, even wilder than the current plan. It may be that the plan has too low ambitions, and it would make better sense to scale it up. That may inspire the user to be more ambitious.
+
+**Simulate:** Generate python code for simulating the math/physics/finances. defining RACI matrices
+It specifies the math, but doesn't do the math: In the Financial Risk section.
+Where PlanExe FALLS SHORT of Humans (Sub-Human / <10th Percentile)
+Axis: Deterministic Math & Physics Simulation
+Human Baseline: An engineer can calculate the exact tensile strength of the steel required for a PC1 Ice Class hull, or build a working Monte Carlo simulation in Excel to calculate budget probability distributions.
+PlanExe’s Level: It is a linguistic engine, not a computational engine. It knows you need to do a Monte Carlo simulation (it recommends it in the Critical Issues review), but it cannot actually run the math. It knows you need hydrodynamic simulations, but it cannot calculate fluid dynamics.
+Verdict: Sub-Human. It provides the architecture for the math, but cannot execute it.
+
+**Self Audit:** Do more sanity checks. Find the worst issues in the report, eventual catch these issues earlier in the pipeline.
+`Fabricated evidence`, `False precision`, `Over confidence`.
+
+**Original insight:** did the LLM add anything beyond reframing the obvious.
+
+**Risk registers are blind to the plan-as-artifact:** Every plan enumerated risks about the execution (cost overruns, technical failure, ethical concerns about research, security breaches). None enumerated risks about the existence of the deliverable. "What if the plan itself or the plan output is dangerous?" never appears as a risk row.
+
 ---
 
 # Secondary issues
-
-## Negative constraints
-
-Prompts that have specifies `banned words: VR, crypto`, have a strong preference to pick related words.
-I have added a `extract_constraints.py` and `constraint_checker.py`, for addressing this.
-I will have to see several plans generated to assess if I have solved it or not.
-If I deem it solved, then inside `filenames.py` I can remove the files with suffix `_constraint.json` and remove the LLM call that does the constraint checking.
-
-
-## MCP - Polishing of MCP flow via planexe.org
-
-As of 2026-mar-27, I'm focusing on improving MCP. It is not as smooth as I would like.
-
-The user adds credits here. Start with 5 USD, so you can create around 3 plans.
-[https://home.planexe.org/](https://home.planexe.org/)
-
-The agents use the api here. When AI agents connect to the MCP interface, the credits are consumed. Between 1-2 USD per plan creation.
-[https://mcp.planexe.org/mcp](https://mcp.planexe.org/mcp)
-
-There are several ways already to connect to planexe via mcp. So I'm hesitant about adding another package to maintain. Deploy to pypi a planexe package, so the mcp config becomes like this.
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uvx",
-      "args": [
-        "planexe"
-      ]
-    }
-  }
-}
-```
-
-
-
-## MCP - BYOK
-
-Doing inference in the cloud cost money.
-Users can BYOK (Bring your own key), and choose what models they want to use.
-
----
-
-# Tertiary issues
-
-## Capture reasoning response
-
-Currently I only capture the final response, without any reasoning.
-I want to capture the reasoning, since it may be helpful for troubleshooting.
-Or for other AIs to assess the reasoning steps leading up to the response.
-
 
 ## Railway volume kludge
 
@@ -186,14 +155,103 @@ Currently the docker-compose.yml mounts the `/run` dir. Inside Railway it's ugly
 Get rid of the “/run” volume. And instead use the worker services file system.
 
 
+## AI's don't read the gantt
+
+Currently the gantt is in a js block, and gets stripped out, causing AI's to overlook the gantt, it happens in Claude, ChatGPT.
+Place the gantt data, inside a <div> that is hidden, so that the AIs processing the report gets to see the gantt data.
+
+
+## Use markdown instead of rendered html
+
+Currently the report is the rendered markdown, causing lots of xml tags. When an AI reads this, it waste lots of tokens on this.
+My idea is to put the markdown inside a <div> that is hidden. This way the AI sees the content without having to ignore the excessive html formatting.
+The problem is that the markdown to html happens on the client side, potentially being fragile.
+This allows for a `Copy as Markdown` button.
+
+
+## Standalone report that is for AI consumption
+
+The html report is for humans to read. When AIs read it, they strip out the gantt.
+Output the entire plan as markdown. 
+Take inspiration from email multi part with many markdown/json/csv pieces.
+Insert backtrace info about what luigi code outputted each piece of the data, that makes it easier to pin point the earliest luigi task that produces garbage output, poluting downstram tasks.
+
+
+## Back tracing
+
+In the report html, insert html comments that marks where an output file starts/stops. This way I can trace back, what luigi task created a piece of content, so when an AI critiques a plan, it can point to the luigi task that performs poorly.
+Currently I have to do the back tracing manually, and there is no structured way of pin pointing the earliest stage in the pipeline mistakes were introduced, that caused downstream tasks to output garbage.
+
+
+## How this plan was generated
+
+Include a section with info about what LLMs where used, the number of tokens, the cost.
+
+
+## Capture reasoning response
+
+Currently I only capture the final response, without any reasoning.
+I want to capture the reasoning, since it may be helpful for troubleshooting.
+Or for other AIs to assess the reasoning steps leading up to the response.
+
+
+## BYOK
+
+Doing inference in the cloud cost money.
+Users can BYOK (Bring your own key), and choose what models they want to use.
+
+
+## MCP tweaks
+
+**plan clone**, copy an existing plan and edit parts of it.
+
+**plan wait**, block until the plan creation have finished.
+
+**account_status**, check credit balance proactively before submitting a plan.
+
+**Prepare create**, create a PlanItem, and allow setting various attributes, BEFORE creating the plan.
+
+**upload zip and resume**, upload a zip with a plan and have PlanExe resume from it. Inside home.planexe.org, so users can do the same. This makes it possible to do edit the files, and resume from that data.
+
+
+## CLI
+
+**Resume from zip or dir**, already possible via the run_plan_pipeline.py
+
+## Deletion of plans
+
+- Automatic delete plans after 7 days from the server.
+- UI for deleting plans
+- MCP for deleting plans
+
+## Edit of plan
+
+**Approach A:** Don't trash an already generated plan
+First clone a plan, and delete the files downstream. Modify the file that caused problems, in light of what the problems were. Then resume the plan.
+Drawback, the plan gets a new uuid. This can be mitigated by having a `parent_plan_id` that references the original plan.
+I lean most toward this non-destructive approach. For steering this via MCP, I think creating a new uuid makes most sense, so the LLM doesn't get confused about an old uuid having its state changed.
+
+**Approach B:** Allow trashing an already generated plan
+Modify a file and delete all files downstream. Then resume the plan.
+Benefit, the plan keeps its uuid. Less wasted space on server.
+Drawback, the user will loose a generated plan and intermediary files, making it hard to troubleshoot what went wrong.
+Migitation, taking snapshots, but then it's closer to `Approach A`.
+
+--
+
+# Low priority issues
+
+## Nicer progressbar
+
+Currently some luigi tasks takes forever, doing several LLM calls internally, but not updating the progressbar.
+Heartbeat that gets incremented whenever a luigi task makes progress, as well as its llm calls.
+Callback inside the llm executor that does the heartbeat incrementing.
+
+
 ## Database gz -> zstd
 
 Replace gz with zstd in PlanExe, for wasting less space. So when I store stuff in the database, then zstd it is.
 
-
----
-
-# Low priority issues
 
 ## Table of content
 
@@ -209,21 +267,3 @@ I'm considering using mkdocs instead.
 Get rid of some of the many user prompt logging statements, so the log.txt is less noisy.
 These user prompts are saved to the `track_activity.jsonl` file already. So having them in the log.txt is redundant.
 
-
-## Not a priority - Debugging
-
-Get step-by-step debugging working again.
-Now that I have switched to Docker, I have multiple python projects in the same repo, that use different incompatible packages.
-With vibe-coding, I can't recall last time I have debugged anything.
-
-## MCP tweaks
-
-**plan clone**, copy an existing plan and edit parts of it.
-
-**plan wait**, block until the plan creation have finished.
-
-**account_status**, check credit balance proactively before submitting a plan.
-
-**Prepare create**, create a PlanItem, and allow setting various attributes, BEFORE creating the plan.
-
-**upload zip and resume**, upload a zip with a plan and have PlanExe resume from it. Inside home.planexe.org, so users can do the same. This makes it possible to do edit the files, and resume from that data.

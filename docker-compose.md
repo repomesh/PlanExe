@@ -103,7 +103,7 @@ Usage notes
 -----------
 - Ports: host `8000->worker_plan`, `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}->frontend_multi_user`, `PLANEXE_POSTGRES_PORT (default 5432)->database_postgres`; change mappings in `docker-compose.yml` if needed.
 - `.env` must exist before `docker compose up`; it is both loaded and mounted read-only. Same for `llm_config/`. If missing, start from `.env.docker-example`.
-- Run outputs are no longer bind-mounted to the host; to inspect them, use `docker compose exec worker_plan ls /app/run` or fetch via `/runs/{id}/zip`.
+- To inspect run outputs, use `docker compose exec worker_plan ls /app/run` or fetch via `/runs/{id}/zip`.
 - Database: connect on `localhost:${PLANEXE_POSTGRES_PORT:-5432}` with `planexe/planexe` by default; data persists via the `database_postgres_data` volume.
 
 Example: running stack

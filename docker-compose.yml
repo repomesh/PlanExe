@@ -25,7 +25,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   environment: &worker_plan_database_env
     PLANEXE_WORKER_ID: ${PLANEXE_WORKER_ID:-worker_plan_database}
     PLANEXE_CONFIG_PATH: /app
-    PLANEXE_RUN_DIR: /app/run
     # Internal container-to-container connection always uses port 5432.
     # This is NOT affected by PLANEXE_POSTGRES_PORT (which is for host mapping only).
     PLANEXE_POSTGRES_HOST: database_postgres
@@ -78,7 +77,6 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_RUN_DIR: /app/run
       PLANEXE_WORKER_RELAY_PROCESS_OUTPUT: "true"
     ports:
       - "8000:8000"
@@ -197,7 +195,6 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_RUN_DIR: /app/run
       # Internal container-to-container connection always uses port 5432.
       PLANEXE_POSTGRES_HOST: database_postgres
       PLANEXE_POSTGRES_PORT: "5432"

@@ -47,7 +47,7 @@ MODULE_PATH_PIPELINE = "worker_plan_internal.plan.run_plan_pipeline"
 # Default to repo root so runs land in PlanExe/run when env vars aren't set.
 DEFAULT_APP_ROOT = Path(__file__).parent.parent.resolve()
 APP_ROOT = Path(os.environ.get("PLANEXE_CONFIG_PATH", DEFAULT_APP_ROOT)).resolve()
-RUN_BASE_PATH = Path(os.environ.get("PLANEXE_RUN_DIR", APP_ROOT / "run")).resolve()
+RUN_BASE_PATH = (APP_ROOT / "run").resolve()
 RELAY_PROCESS_OUTPUT = os.environ.get("PLANEXE_WORKER_RELAY_PROCESS_OUTPUT", "false").lower() == "true"
 PURGE_ENABLED = os.environ.get("PLANEXE_PURGE_ENABLED", "false").lower() == "true"
 PURGE_MAX_AGE_HOURS = float(os.environ.get("PLANEXE_PURGE_MAX_AGE_HOURS", "1"))

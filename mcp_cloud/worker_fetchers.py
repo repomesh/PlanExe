@@ -180,8 +180,8 @@ async def fetch_file_list_from_worker_plan(run_id: str) -> Optional[list[tuple[s
 
 def list_files_from_local_run_dir(run_id: str) -> Optional[list[tuple[str, str]]]:
     """
-    List files from local run directory when this service shares PLANEXE_RUN_DIR
-    with the worker (e.g., Docker compose).
+    List files from the local run directory if this service happens to be
+    co-located with a worker on the same filesystem.
 
     Returns list of (filename, ISO-8601 UTC timestamp) tuples sorted by name,
     or None if the directory does not exist.

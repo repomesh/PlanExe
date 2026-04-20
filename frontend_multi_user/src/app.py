@@ -270,14 +270,8 @@ class MyFlaskApp:
         self.planexe_project_root = Path(__file__).parent.parent.parent.absolute()
         logger.info(f"MyFlaskApp.__init__. planexe_project_root: {self.planexe_project_root!r}")
 
-        override_planexe_run_dir = self.planexe_dotenv.get_absolute_path_to_dir(DotEnvKeyEnum.PLANEXE_RUN_DIR.value)
-        if isinstance(override_planexe_run_dir, Path):
-            debug_planexe_run_dir = 'override'
-            self.planexe_run_dir = override_planexe_run_dir
-        else:
-            debug_planexe_run_dir = 'default'
-            self.planexe_run_dir = self.planexe_project_root / RUN_DIR
-        logger.info(f"MyFlaskApp.__init__. planexe_run_dir ({debug_planexe_run_dir}): {self.planexe_run_dir!r}")
+        self.planexe_run_dir = self.planexe_project_root / RUN_DIR
+        logger.info(f"MyFlaskApp.__init__. planexe_run_dir: {self.planexe_run_dir!r}")
 
         self.worker_plan_url = (os.environ.get("PLANEXE_WORKER_PLAN_URL") or "http://worker_plan:8000").rstrip("/")
         logger.info(f"MyFlaskApp.__init__. worker_plan_url: {self.worker_plan_url}")

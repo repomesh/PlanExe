@@ -3,7 +3,6 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PLANEXE_CONFIG_PATH=/app \
-    PLANEXE_RUN_DIR=/app/run \
     PIP_NO_CACHE_DIR=1 \
     PIP_PREFER_BINARY=1 \
     PYTHONPATH=/app:/app/worker_plan_database:/app/database_api

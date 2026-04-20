@@ -60,8 +60,7 @@ except ImportError:
 
 # --- Global Paths ---
 BASE_DIR = Path(__file__).parent.parent.absolute()
-# Default to shared PLANEXE_RUN_DIR (mounted volume) so worker_plan can read outputs.
-BASE_DIR_RUN = Path(os.environ.get("PLANEXE_RUN_DIR", BASE_DIR / "run")).resolve()
+BASE_DIR_RUN = (BASE_DIR / "run").resolve()
 BASE_DIR_RUN.mkdir(exist_ok=True)
 
 PLANEXE_CONFIG_PATH_VAR = BASE_DIR

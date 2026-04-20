@@ -38,7 +38,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   volumes:
     - ./.env:/app/.env:ro
     - ./llm_config:/app/llm_config:ro
-    - ./run:/app/run
   restart: unless-stopped
 
 services:
@@ -79,7 +78,6 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_HOST_RUN_DIR: ${PLANEXE_HOST_RUN_DIR:-${PWD}/run}
       PLANEXE_RUN_DIR: /app/run
       PLANEXE_WORKER_RELAY_PROCESS_OUTPUT: "true"
     ports:
@@ -87,7 +85,6 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck').read()"]
       interval: 10s
@@ -159,7 +156,6 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthcheck').read()"]
       interval: 10s

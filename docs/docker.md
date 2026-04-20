@@ -75,7 +75,7 @@ psql -h localhost -p 5433 -U planexe -d planexe
 
 ## Environment notes
 - The worker exports logs to stdout when `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT=true` (set in `docker-compose.yml`).
-- Shared volumes: `./run` is mounted into both services; `.env` and `./llm_config/` are mounted read-only. Ensure they exist on the host before starting.***
+- Shared volumes: `.env` and `./llm_config/` are mounted read-only. Ensure they exist on the host before starting. Run outputs are not bind-mounted; each container writes to its own `/app/run`.
 - Database: Postgres runs in `database_postgres` and listens on host `${PLANEXE_POSTGRES_PORT:-5432}` mapped to container `5432`; data is persisted in the named volume `database_postgres_data`.
 - Multiuser UI: binds to container port `5000`, exposed on host `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`.
 - MCP server downloads: set `PLANEXE_MCP_PUBLIC_BASE_URL` so clients receive a reachable `/download/...` URL (defaults to `http://localhost:8001` in compose).

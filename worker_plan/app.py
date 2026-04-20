@@ -48,7 +48,6 @@ MODULE_PATH_PIPELINE = "worker_plan_internal.plan.run_plan_pipeline"
 DEFAULT_APP_ROOT = Path(__file__).parent.parent.resolve()
 APP_ROOT = Path(os.environ.get("PLANEXE_CONFIG_PATH", DEFAULT_APP_ROOT)).resolve()
 RUN_BASE_PATH = Path(os.environ.get("PLANEXE_RUN_DIR", APP_ROOT / "run")).resolve()
-HOST_RUN_DIR_BASE = os.environ.get("PLANEXE_HOST_RUN_DIR")
 RELAY_PROCESS_OUTPUT = os.environ.get("PLANEXE_WORKER_RELAY_PROCESS_OUTPUT", "false").lower() == "true"
 PURGE_ENABLED = os.environ.get("PLANEXE_PURGE_ENABLED", "false").lower() == "true"
 PURGE_MAX_AGE_HOURS = float(os.environ.get("PLANEXE_PURGE_MAX_AGE_HOURS", "1"))
@@ -159,15 +158,7 @@ def has_pipeline_complete_file(path_dir: Path) -> bool:
 
 
 def build_display_run_dir(run_dir: Path) -> str:
-    """
-    Returns a user-facing path string for the run directory.
-    If PLANEXE_HOST_RUN_DIR is set, map to that base to hint where to find the run on the host.
-    """
-    if HOST_RUN_DIR_BASE:
-        try:
-            return str(Path(HOST_RUN_DIR_BASE) / run_dir.name)
-        except Exception:
-            return str(run_dir)
+    """Returns a user-facing path string for the run directory."""
     return str(run_dir)
 
 

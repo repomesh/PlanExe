@@ -17,7 +17,7 @@ Subclass of the `worker_plan` service that runs the PlanExe pipeline with a Post
   - `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD`
   - falls back to the `database_postgres` service defaults (`planexe/planexe` on port 5432)
 - Logs stream to stdout with [12-factor style logging](https://12factor.net/logs). Configure with `PLANEXE_LOG_LEVEL` (defaults to `INFO`).
-- Volumes mounted in compose: `./run` (pipeline output), `.env`, `./llm_config/`
+- Volumes mounted in compose: `.env`, `./llm_config/` (read-only). Pipeline output stays inside the container's `/app/run`; durable artifacts are persisted via the DB.
 - Entrypoint: `python -m worker_plan_database.app`
 
 ## Run locally with a venv

@@ -50,7 +50,6 @@ from mcp_cloud.zip_utils import (
 from mcp_cloud.worker_fetchers import (
     fetch_artifact_from_worker_plan,
     fetch_file_list_from_worker_plan,
-    list_files_from_local_run_dir,
     fetch_user_downloadable_zip,
 )
 from mcp_cloud.model_profiles import _get_model_profiles_sync
@@ -305,8 +304,6 @@ async def handle_plan_status(arguments: dict[str, Any]) -> CallToolResult:
     files = []
     if plan_uuid:
         files_list = await asyncio.to_thread(list_files_from_zip_snapshot, plan_uuid)
-        if not files_list:
-            files_list = await asyncio.to_thread(list_files_from_local_run_dir, plan_uuid)
         if not files_list:
             try:
                 files_list = await asyncio.wait_for(

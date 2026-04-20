@@ -53,9 +53,6 @@ class TestPlanStatusTool(unittest.TestCase):
         ), patch(
             "mcp_cloud.handlers.list_files_from_zip_snapshot",
             return_value=[("001-2-plan.txt", "2026-03-08T23:49:53Z"), ("log.txt", "2026-03-08T23:50:00Z")],
-        ), patch(
-            "mcp_cloud.handlers.list_files_from_local_run_dir",
-            return_value=None,
         ):
             result = asyncio.run(handle_plan_status({"plan_id": plan_id}))
 

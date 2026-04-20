@@ -419,9 +419,9 @@ Client → FastAPI (http_server.py)
 
 When fetching plan files (reports, zips), `worker_fetchers.py` tries sources in priority order:
 
-1. **DB** (`PlanItem.generated_report_html` / `PlanItem.run_zip_snapshot`) — fastest, always available for completed plans
-2. **Zip snapshot extraction** — extracts individual files from the DB zip snapshot
-3. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — last-resort fallback (10s timeout, 3s connect)
+1. **DB** (`PlanItem.generated_report_html` / `PlanItem.run_zip_snapshot`) — served directly from Postgres; available once a plan has completed (or a snapshot has been persisted)
+2. **Zip snapshot extraction** — pulls an individual file out of the DB-stored zip snapshot
+3. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — the live source for in-flight plans and anything not yet persisted to the DB (10s timeout, 3s connect)
 
 This layered approach avoids blocking on the worker HTTP API when the data is already available locally or in the database.
 

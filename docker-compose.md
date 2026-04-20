@@ -4,7 +4,7 @@ Docker Compose for PlanExe
 TL;DR
 -----
 - Services: `database_postgres` (DB on `${PLANEXE_POSTGRES_PORT:-5432}`), `worker_plan` (API on 8000), `frontend_multi_user` (UI on `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`), plus DB workers (`worker_plan_database_1/2/3` by default; `worker_plan_database` in `manual` profile), and `mcp_cloud` (MCP interface, stdio); `frontend_multi_user` waits for Postgres and worker health.
-- Shared host files: `.env` and `./llm_config/` mounted read-only; `.env` is also loaded via `env_file`. Each container writes run outputs to its own ephemeral `/app/run`; use `worker_plan`'s HTTP endpoints (`/runs/{id}/zip`, `/runs/{id}/files`) or the database-backed report/zip snapshot to access artifacts.
+- Shared host files: `.env` and `./llm_config/` mounted read-only; `.env` is also loaded via `env_file`.
 - Postgres defaults to user/db/password `planexe`; override via env or `.env`; data lives in the `database_postgres_data` volume.
 - Env defaults live in `docker-compose.yml` but can be overridden in `.env` or your shell (URLs, timeouts, run dirs, optional auth).
 - `develop.watch` syncs code/config for `worker_plan`; rebuild with `--no-cache` after big moves or dependency changes; restart policy is `unless-stopped`.
@@ -32,7 +32,6 @@ Why compose (escaping dependency hell)
 What compose sets up
 --------------------
 - Reusable local stack with consistent env/paths under `/app` in each container.
-- Per-container run dir: `PLANEXE_RUN_DIR=/app/run` in the containers, not bind-mounted — each service writes to its own ephemeral filesystem (matches Railway). Durable artifacts live in Postgres (`PlanItem.generated_report_html`, `PlanItem.run_zip_snapshot`); live file listings come from `worker_plan` via HTTP.
 - Postgres data volume: `database_postgres_data` keeps the database files outside the repo tree.
 
 Service: `database_postgres` (Postgres DB)
@@ -70,9 +69,9 @@ Service: `worker_plan` (pipeline API)
 -------------------------------------
 - Purpose: runs the PlanExe pipeline and exposes the API on port 8000; the frontend depends on its health.
 - Build: `worker_plan/Dockerfile`.
-- Env: `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_RUN_DIR=/app/run`, `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT=true`.
+- Env: `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT=true`.
 - Health: `http://localhost:8000/healthcheck` checked via the compose healthcheck.
-- Volumes: `.env` (ro), `llm_config/` (ro). Run outputs stay inside the container; retrieve via `/runs/{id}/zip` or `docker compose exec worker_plan ls /app/run` when debugging.
+- Volumes: `.env` (ro), `llm_config/` (ro).
 - Watch: sync `worker_plan/` into `/app/worker_plan`, rebuild on `worker_plan/pyproject.toml`, restart on compose edits.
 
 Service: `worker_plan_database` (DB-backed worker)
@@ -80,7 +79,7 @@ Service: `worker_plan_database` (DB-backed worker)
 - Purpose: polls `PlanItem` rows in Postgres, marks them processing, runs the PlanExe pipeline, and writes progress/events back to the DB; no HTTP port exposed.
 - Build: `worker_plan_database/Dockerfile` (ships `worker_plan` code, shared `database_api` models, and this worker subclass).
 - Depends on: `database_postgres` health.
-- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_RUN_DIR=/app/run`; MachAI confirmation URLs default to `https://example.com/iframe_generator_confirmation` for both `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_PRODUCTION_URL` and `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL` (override with real endpoints).
+- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`; MachAI confirmation URLs default to `https://example.com/iframe_generator_confirmation` for both `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_PRODUCTION_URL` and `PLANEXE_IFRAME_GENERATOR_CONFIRMATION_DEVELOPMENT_URL` (override with real endpoints).
 - Volumes: `.env` (ro), `llm_config/` (ro). Pipeline output stays inside the container; the worker persists final artifacts via the DB.
 - Entrypoint: `python -m worker_plan_database.app` (runs the long-lived poller loop).
 - Multiple workers: compose defines `worker_plan_database_1/2/3` with `PLANEXE_WORKER_ID` set to `1/2/3`. Start the trio with:
@@ -92,7 +91,7 @@ Service: `mcp_cloud` (MCP interface)
 - Purpose: Model Context Protocol (MCP) server that provides a standardized interface for AI agents and developer tools to interact with PlanExe. Communicates with `worker_plan_database` via the shared Postgres database.
 - Build: `mcp_cloud/Dockerfile` (ships shared `database_api` models and the MCP server implementation).
 - Depends on: `database_postgres` and `worker_plan` health.
-- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`, `PLANEXE_RUN_DIR=/app/run`; `PLANEXE_MCP_HTTP_HOST=0.0.0.0`, `PLANEXE_MCP_HTTP_PORT=8001`; `PLANEXE_MCP_PUBLIC_BASE_URL=http://localhost:8001` for report download URLs; `PLANEXE_MCP_REQUIRE_AUTH=false` by default.
+- Env defaults: derives `SQLALCHEMY_DATABASE_URI` from `PLANEXE_POSTGRES_HOST|PORT|DB|USER|PASSWORD` (fallbacks to `database_postgres` + `planexe/planexe` on 5432); `PLANEXE_CONFIG_PATH=/app`; `PLANEXE_MCP_HTTP_HOST=0.0.0.0`, `PLANEXE_MCP_HTTP_PORT=8001`; `PLANEXE_MCP_PUBLIC_BASE_URL=http://localhost:8001` for report download URLs; `PLANEXE_MCP_REQUIRE_AUTH=false` by default.
 - Ports: host `${PLANEXE_MCP_HTTP_PORT:-8001}` -> container `8001`.
 - Volumes: `llm_config/` (ro for provider configs).
 - Health: `http://localhost:8001/healthcheck` checked via the compose healthcheck.
@@ -103,7 +102,6 @@ Usage notes
 -----------
 - Ports: host `8000->worker_plan`, `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}->frontend_multi_user`, `PLANEXE_POSTGRES_PORT (default 5432)->database_postgres`; change mappings in `docker-compose.yml` if needed.
 - `.env` must exist before `docker compose up`; it is both loaded and mounted read-only. Same for `llm_config/`. If missing, start from `.env.docker-example`.
-- To inspect run outputs, use `docker compose exec worker_plan ls /app/run` or fetch via `/runs/{id}/zip`.
 - Database: connect on `localhost:${PLANEXE_POSTGRES_PORT:-5432}` with `planexe/planexe` by default; data persists via the `database_postgres_data` volume.
 
 Example: running stack

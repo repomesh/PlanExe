@@ -148,11 +148,16 @@ Verdict: Sub-Human. It provides the architecture for the math, but cannot execut
 
 # Secondary issues
 
-## Railway volume kludge
+## Rename table name
 
-Currently the docker-compose.yml mounts the `/run` dir. Inside Railway it's ugly.
+rename PlanItem (task_items) to (plan_items)
 
-Get rid of the “/run” volume. And instead use the worker services file system.
+
+## Show commit id
+
+use the git commit + branch in the generated report, so I can troubleshoot what version of PlanExe was used.
+RAILWAY_GIT_BRANCH — branch that triggered the deploy
+RAILWAY_GIT_COMMIT_SHA — commit SHA that triggered the deploy
 
 
 ## AI's don't read the gantt

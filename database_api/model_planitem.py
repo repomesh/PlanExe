@@ -41,7 +41,7 @@ class PlanState(enum.Enum):
 
 
 class PlanItem(db.Model):
-    __tablename__ = "task_item"
+    __tablename__ = "plans"
 
     # A unique identifier for the task.
     id = db.Column(UUIDType(binary=False), default=uuid.uuid4, primary_key=True)

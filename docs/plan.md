@@ -148,11 +148,6 @@ Verdict: Sub-Human. It provides the architecture for the math, but cannot execut
 
 # Secondary issues
 
-## Rename table name
-
-rename PlanItem (task_items) to (plan_items)
-
-
 ## Show commit id
 
 use the git commit + branch in the generated report, so I can troubleshoot what version of PlanExe was used.

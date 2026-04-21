@@ -47,8 +47,7 @@ MODULE_PATH_PIPELINE = "worker_plan_internal.plan.run_plan_pipeline"
 # Default to repo root so runs land in PlanExe/run when env vars aren't set.
 DEFAULT_APP_ROOT = Path(__file__).parent.parent.resolve()
 APP_ROOT = Path(os.environ.get("PLANEXE_CONFIG_PATH", DEFAULT_APP_ROOT)).resolve()
-RUN_BASE_PATH = Path(os.environ.get("PLANEXE_RUN_DIR", APP_ROOT / "run")).resolve()
-HOST_RUN_DIR_BASE = os.environ.get("PLANEXE_HOST_RUN_DIR")
+RUN_BASE_PATH = (APP_ROOT / "run").resolve()
 RELAY_PROCESS_OUTPUT = os.environ.get("PLANEXE_WORKER_RELAY_PROCESS_OUTPUT", "false").lower() == "true"
 PURGE_ENABLED = os.environ.get("PLANEXE_PURGE_ENABLED", "false").lower() == "true"
 PURGE_MAX_AGE_HOURS = float(os.environ.get("PLANEXE_PURGE_MAX_AGE_HOURS", "1"))
@@ -158,19 +157,6 @@ def has_pipeline_complete_file(path_dir: Path) -> bool:
         return False
 
 
-def build_display_run_dir(run_dir: Path) -> str:
-    """
-    Returns a user-facing path string for the run directory.
-    If PLANEXE_HOST_RUN_DIR is set, map to that base to hint where to find the run on the host.
-    """
-    if HOST_RUN_DIR_BASE:
-        try:
-            return str(Path(HOST_RUN_DIR_BASE) / run_dir.name)
-        except Exception:
-            return str(run_dir)
-    return str(run_dir)
-
-
 def build_env(
     run_dir: Path,
     llm_model: str,
@@ -257,12 +243,10 @@ def start_run(request: StartRunRequest) -> StartRunResponse:
     with process_lock:
         process_store[run_id] = info
 
-    display_run_dir = build_display_run_dir(run_dir)
-
     return StartRunResponse(
         run_id=run_id,
         run_dir=str(run_dir),
-        display_run_dir=display_run_dir,
+        display_run_dir=str(run_dir),
         pid=process.pid,
         status="running",
     )
@@ -298,7 +282,6 @@ def run_status(run_id: str) -> RunStatusResponse:
     pipeline_complete = has_pipeline_complete_file(run_dir)
     last_update_seconds_ago = time_since_last_modification(run_dir)
     run_dir_exists = run_dir.exists()
-    display_run_dir = build_display_run_dir(run_dir)
 
     with process_lock:
         info = process_store.get(run_id)
@@ -317,7 +300,7 @@ def run_status(run_id: str) -> RunStatusResponse:
     return RunStatusResponse(
         run_id=run_id,
         run_dir=str(run_dir),
-        display_run_dir=display_run_dir,
+        display_run_dir=str(run_dir),
         run_dir_exists=run_dir_exists,
         pid=pid,
         running=running,

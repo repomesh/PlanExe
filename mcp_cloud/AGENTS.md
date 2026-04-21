@@ -364,10 +364,9 @@ The same `_get_download_base_url()` function is used to build both `download_url
   example: three isolated try/except blocks for HTTP, DB, and zip snapshot.
 
 ## Worker HTTP fallback ordering
-- When resolving file lists or artifacts, try fast local sources first:
-  1. DB (`fetch_report_from_db` / `list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
-  2. Local run directory (`list_files_from_local_run_dir`)
-  3. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`)
+- When resolving file lists or artifacts, check the DB first and fall back to the worker for anything not yet persisted:
+  1. DB (`fetch_report_from_db` / `list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`) — for completed/snapshotted plans
+  2. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`) — the live source for in-flight plans
 - The report fallback chain (`_fetch_report_with_fallbacks`) follows this same
   DB-first convention: DB → zip snapshot → HTTP.  This matches the zip path
   (`fetch_user_downloadable_zip`) which also tries the DB before HTTP.

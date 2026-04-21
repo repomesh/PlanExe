@@ -58,10 +58,6 @@ from worker_plan_api.llm_class_filter import (
 
 from src.utils import CREDIT_SCALE, to_credit_decimal, format_credit_display
 
-RUN_DIR = "run"
-
-SHOW_DEMO_PLAN = False
-
 DEMO_FORM_RUN_PROMPT_UUIDS = [
     "ab700769-c3ba-4f8a-913d-8589fea4624e",
     "00e1c738-a663-476a-b950-62785922f6f0",
@@ -269,15 +265,6 @@ class MyFlaskApp:
 
         self.planexe_project_root = Path(__file__).parent.parent.parent.absolute()
         logger.info(f"MyFlaskApp.__init__. planexe_project_root: {self.planexe_project_root!r}")
-
-        override_planexe_run_dir = self.planexe_dotenv.get_absolute_path_to_dir(DotEnvKeyEnum.PLANEXE_RUN_DIR.value)
-        if isinstance(override_planexe_run_dir, Path):
-            debug_planexe_run_dir = 'override'
-            self.planexe_run_dir = override_planexe_run_dir
-        else:
-            debug_planexe_run_dir = 'default'
-            self.planexe_run_dir = self.planexe_project_root / RUN_DIR
-        logger.info(f"MyFlaskApp.__init__. planexe_run_dir ({debug_planexe_run_dir}): {self.planexe_run_dir!r}")
 
         self.worker_plan_url = (os.environ.get("PLANEXE_WORKER_PLAN_URL") or "http://worker_plan:8000").rstrip("/")
         logger.info(f"MyFlaskApp.__init__. worker_plan_url: {self.worker_plan_url}")
@@ -688,7 +675,6 @@ class MyFlaskApp:
         self.app.config['PUBLIC_BASE_URL'] = self.public_base_url
         self.app.config['OAUTH_PROVIDERS'] = self.oauth_providers
         self.app.config['WORKER_PLAN_URL'] = self.worker_plan_url
-        self.app.config['PLANEXE_RUN_DIR'] = self.planexe_run_dir
         self.app.config['PLANEXE_PROJECT_ROOT'] = self.planexe_project_root
         self.app.config['PATH_TO_PYTHON'] = self.path_to_python
         self.app.config['PROMPT_CATALOG'] = self.prompt_catalog

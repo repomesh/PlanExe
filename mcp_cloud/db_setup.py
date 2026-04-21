@@ -247,9 +247,6 @@ PLANEXE_SERVER_INSTRUCTIONS = (
 
 mcp_cloud_server = Server("planexe-mcp-cloud", instructions=PLANEXE_SERVER_INSTRUCTIONS)
 
-# Base directory for run artifacts (not used directly, fetched via worker_plan HTTP API)
-BASE_DIR_RUN = Path(os.environ.get("PLANEXE_RUN_DIR", Path(__file__).parent.parent / "run")).resolve()
-
 WORKER_PLAN_URL = os.environ.get("PLANEXE_WORKER_PLAN_URL", "http://worker_plan:8000")
 
 REPORT_FILENAME = "report.html"

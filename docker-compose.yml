@@ -25,7 +25,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   environment: &worker_plan_database_env
     PLANEXE_WORKER_ID: ${PLANEXE_WORKER_ID:-worker_plan_database}
     PLANEXE_CONFIG_PATH: /app
-    PLANEXE_RUN_DIR: /app/run
     # Internal container-to-container connection always uses port 5432.
     # This is NOT affected by PLANEXE_POSTGRES_PORT (which is for host mapping only).
     PLANEXE_POSTGRES_HOST: database_postgres
@@ -38,7 +37,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   volumes:
     - ./.env:/app/.env:ro
     - ./llm_config:/app/llm_config:ro
-    - ./run:/app/run
   restart: unless-stopped
 
 services:
@@ -79,15 +77,12 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_HOST_RUN_DIR: ${PLANEXE_HOST_RUN_DIR:-${PWD}/run}
-      PLANEXE_RUN_DIR: /app/run
       PLANEXE_WORKER_RELAY_PROCESS_OUTPUT: "true"
     ports:
       - "8000:8000"
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck').read()"]
       interval: 10s
@@ -159,7 +154,6 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthcheck').read()"]
       interval: 10s
@@ -201,7 +195,6 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_RUN_DIR: /app/run
       # Internal container-to-container connection always uses port 5432.
       PLANEXE_POSTGRES_HOST: database_postgres
       PLANEXE_POSTGRES_PORT: "5432"

@@ -36,9 +36,7 @@ If you must stay on Python 3.14, expect source builds and potential failures; ex
 | --- | --- | --- |
 | `PLANEXE_WORKER_HOST` | `0.0.0.0` | Host address the worker binds to (only when running via `python -m worker_plan.app`). |
 | `PLANEXE_WORKER_PORT` | `8000` | Port the worker listens on (only when running via `python -m worker_plan.app`). |
-| `PLANEXE_RUN_DIR` | `run` | Directory under which run output folders are created. |
-| `PLANEXE_HOST_RUN_DIR` | *(unset)* | Optional host path base returned in `display_run_dir` to hint where runs live on the host. |
-| `PLANEXE_CONFIG_PATH` | `.` | Working directory for the pipeline; used as the `cwd` when spawning `worker_plan_internal.plan.run_plan_pipeline`. |
+| `PLANEXE_CONFIG_PATH` | `.` | Working directory for the pipeline; used as the `cwd` when spawning `worker_plan_internal.plan.run_plan_pipeline`. Run outputs are written to `{PLANEXE_CONFIG_PATH}/run/`. |
 | `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT` | `false` | When `true`, pipe pipeline stdout/stderr to the worker logs instead of suppressing them. |
 | `PLANEXE_PURGE_ENABLED` | `false` | Enable the background scheduler that purges old run directories. |
 | `PLANEXE_PURGE_MAX_AGE_HOURS` | `1` | Maximum age (hours) of runs to delete when purging (scheduler and manual default). |

@@ -9,7 +9,7 @@ from datetime import datetime, UTC
 from decimal import Decimal
 from typing import Any, Optional
 
-from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import DataError
@@ -44,8 +44,6 @@ from src.utils import (
 logger = logging.getLogger(__name__)
 
 plan_routes_bp = Blueprint("plan_routes", __name__)
-
-SHOW_DEMO_PLAN = False
 
 
 def _new_model(model_cls: Any, **kwargs: Any) -> Any:
@@ -902,15 +900,6 @@ def viewplan():
     elif not current_user.is_admin and str(plan.user_id) != str(current_user.id):
         logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
-
-    if SHOW_DEMO_PLAN:
-        planexe_run_dir = current_app.config["PLANEXE_RUN_DIR"]
-        demo_plan_id = "20250524_universal_manufacturing"
-        demo_plan_dir = (planexe_run_dir / demo_plan_id).absolute()
-        path_to_html_file = demo_plan_dir / FilenameEnum.REPORT.value
-        if not path_to_html_file.exists():
-            return jsonify({"error": "Demo report not found"}), 404
-        return send_file(str(path_to_html_file), mimetype="text/html")
 
     if not plan.generated_report_html:
         logger.error("Report HTML not found for plan_id=%s", plan_id)

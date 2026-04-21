@@ -57,8 +57,6 @@ Always check the package-level `AGENTS.md` for file-specific rules
 ## Docker notes
 - `PLANEXE_POSTGRES_PORT` changes the host port mapping only; containers still
   connect to Postgres on 5432.
-- Keep `PLANEXE_HOST_RUN_DIR` consistent with run dir mounts so outputs land in
-  the expected host folder.
 
 ## Documentation sync
 - When changing Docker services, env defaults, or port mappings, update

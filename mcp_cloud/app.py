@@ -17,7 +17,6 @@ from mcp_cloud.db_setup import (  # noqa: F401
     ensure_planitem_stop_columns,
     PLANEXE_SERVER_INSTRUCTIONS,
     mcp_cloud_server as mcp_cloud,
-    BASE_DIR_RUN,
     WORKER_PLAN_URL,
     REPORT_FILENAME,
     REPORT_CONTENT_TYPE,
@@ -88,7 +87,6 @@ from mcp_cloud.zip_utils import (  # noqa: F401
 from mcp_cloud.worker_fetchers import (  # noqa: F401
     fetch_artifact_from_worker_plan,
     fetch_file_list_from_worker_plan,
-    list_files_from_local_run_dir,
     fetch_zip_from_worker_plan,
     fetch_user_downloadable_zip,
 )

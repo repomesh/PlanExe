@@ -691,7 +691,7 @@ class MyFlaskApp:
         self.admin = Admin(self.app, name='PlanExe Admin', index_view=MyAdminIndexView())
 
         # Add database tables to admin panel
-        self.admin.add_view(PlanItemView(model=PlanItem, session=self.db.session, name="Task"))
+        self.admin.add_view(PlanItemView(model=PlanItem, session=self.db.session, name="Plan"))
         self.admin.add_view(AdminOnlyModelView(model=EventItem, session=self.db.session, name="Event"))
         self.admin.add_view(WorkerItemView(model=WorkerItem, session=self.db.session, name="Worker"))
         self.admin.add_view(NonceItemView(model=NonceItem, session=self.db.session, name="Nonce"))

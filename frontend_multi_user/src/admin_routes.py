@@ -115,7 +115,7 @@ def _get_purge_activity_info() -> dict[str, Any]:
                 "SELECT count(*), "
                 "count(run_track_activity_jsonl), "
                 "coalesce(sum(octet_length(run_track_activity_jsonl)), 0) "
-                "FROM task_item"
+                "FROM plans"
             )).fetchone()
             if row:
                 info["total_rows"] = row[0]
@@ -125,10 +125,10 @@ def _get_purge_activity_info() -> dict[str, Any]:
             for keep_n in [10, 25, 50, 100, 250, 500]:
                 result = conn.execute(text(
                     "SELECT coalesce(sum(octet_length(run_track_activity_jsonl)), 0), count(*) "
-                    "FROM task_item "
+                    "FROM plans "
                     "WHERE run_track_activity_jsonl IS NOT NULL "
                     "AND id NOT IN ("
-                    "  SELECT id FROM task_item "
+                    "  SELECT id FROM plans "
                     "  ORDER BY timestamp_created DESC "
                     "  LIMIT :keep_n"
                     ")"
@@ -151,11 +151,11 @@ def _purge_activity_data(keep_n: int) -> dict[str, Any]:
     try:
         with db.engine.connect() as conn:
             row = conn.execute(text(
-                "UPDATE task_item "
+                "UPDATE plans "
                 "SET run_track_activity_jsonl = NULL, run_track_activity_bytes = NULL "
                 "WHERE run_track_activity_jsonl IS NOT NULL "
                 "AND id NOT IN ("
-                "  SELECT id FROM task_item "
+                "  SELECT id FROM plans "
                 "  ORDER BY timestamp_created DESC "
                 "  LIMIT :keep_n"
                 ")"
@@ -168,15 +168,15 @@ def _purge_activity_data(keep_n: int) -> dict[str, Any]:
     return result
 
 
-def _vacuum_task_item() -> dict[str, Any]:
+def _vacuum_plans() -> dict[str, Any]:
     result: dict[str, Any] = {"error": None}
     try:
         with db.engine.connect() as conn:
             conn.execution_options(isolation_level="AUTOCOMMIT").execute(
-                text("VACUUM FULL task_item")
+                text("VACUUM FULL plans")
             )
     except Exception as e:
-        logger.exception("Failed to vacuum task_item")
+        logger.exception("Failed to vacuum plans")
         result["error"] = str(e)
     return result
 
@@ -329,7 +329,7 @@ def admin_database():
                 keep_n = 50
             purge_result = _purge_activity_data(keep_n)
         elif action == "vacuum":
-            vacuum_result = _vacuum_task_item()
+            vacuum_result = _vacuum_plans()
     size_info = _get_database_size_info()
     purge_info = _get_purge_activity_info()
     admin_ext = current_app.extensions.get("admin", [None])

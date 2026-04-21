@@ -113,7 +113,7 @@ def _load_prompt_preview_safe(task_id: Any, max_chars: int = 240) -> str:
     except DataError:
         db.session.rollback()
         logger.warning(
-            "Detected invalid UTF-8 in task_item.prompt for task_id=%s; using placeholder preview.",
+            "Detected invalid UTF-8 in plans.prompt for task_id=%s; using placeholder preview.",
             task_id,
             exc_info=True,
         )
@@ -935,7 +935,7 @@ def plan():
             )
         except DataError:
             db.session.rollback()
-            logger.warning("Detected invalid UTF-8 in task_item.prompt for user_id=%s; falling back.", user_id, exc_info=True)
+            logger.warning("Detected invalid UTF-8 in plans.prompt for user_id=%s; falling back.", user_id, exc_info=True)
             tasks = (
                 db.session.query(PlanItem.id, PlanItem.timestamp_created, PlanItem.state, PlanItem.stop_requested)
                 .filter(uid_filter)

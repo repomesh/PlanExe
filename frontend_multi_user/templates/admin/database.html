@@ -245,20 +245,20 @@
     {% if vacuum_result.error %}
     <div class="error-banner">Vacuum failed: {{ vacuum_result.error }}</div>
     {% else %}
-    <div class="success-banner">VACUUM FULL task_item completed. Disk space reclaimed.</div>
+    <div class="success-banner">VACUUM FULL plans completed. Disk space reclaimed.</div>
     {% endif %}
   {% endif %}
 
   <div class="purge-section">
     <h3>Vacuum</h3>
     <p class="purge-stats">
-      Run <code>VACUUM FULL task_item</code> to rewrite the table and reclaim disk space.
+      Run <code>VACUUM FULL plans</code> to rewrite the table and reclaim disk space.
       This locks the table briefly.
     </p>
-    <form method="POST" onsubmit="return confirm('This will lock the task_item table while it rewrites it. Continue?');">
+    <form method="POST" onsubmit="return confirm('This will lock the plans table while it rewrites it. Continue?');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="action" value="vacuum">
-      <button type="submit" class="btn-purge" style="background: #2980b9;">Vacuum task_item</button>
+      <button type="submit" class="btn-purge" style="background: #2980b9;">Vacuum plans</button>
     </form>
   </div>
 

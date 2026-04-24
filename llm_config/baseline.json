@@ -177,6 +177,28 @@
         },
         "pricing_kind": "paid"
     },
+    "openrouter-inception-mercury-2": {
+        "comment": "Released Mar 4, 2026. Inception Mercury 2: fast reasoning LLM (>1000 tokens/sec). 128,000 context. $0.25/M input tokens. $0.75/M output tokens.",
+        "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/inception/mercury-2",
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "inception/mercury-2",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 128000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.25,
+            "output_per_million_tokens": 0.75
+        },
+        "pricing_kind": "paid"
+    },
     "alibabacloud-qwen-flash-2025-07-28": {
         "comment": "This is slow. Requires a DASHSCOPE_API_KEY created on the Alibaba Cloud website. Snapshot from 2025-07-28. 1,000,000 context. $0.05/M input tokens. $0.40/M output tokens.",
         "luigi_workers": 4,

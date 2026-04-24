@@ -42,27 +42,31 @@ def _utc_iso_now() -> str:
 
 def bootstrap_run_dir(output_dir: Path, plan_text: str) -> None:
     """
-    Create the output directory and write the bootstrap files that the Gradio
-    frontend normally produces before Luigi is invoked.
+    Create the output directory and write the bootstrap files that the pipeline
+    expects before Luigi is invoked.
+
+    Filenames match ``worker_plan.worker_plan_api.filenames.FilenameEnum`` —
+    kept as string literals here so this script stays importable without
+    touching worker_plan.
 
     Files written
     -------------
-    001-1-start_time.json
+    start_time.json
         ``{"server_iso_utc": "<current UTC ISO timestamp>"}``
 
-    001-2-plan.txt
+    plan.txt
         The plain-text plan prompt supplied by the caller.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    start_time_path = output_dir / "001-1-start_time.json"
+    start_time_path = output_dir / "start_time.json"
     start_time_path.write_text(
         json.dumps({"server_iso_utc": _utc_iso_now()}, indent=2),
         encoding="utf-8",
     )
     print(f"  ✓ {start_time_path}")
 
-    plan_path = output_dir / "001-2-plan.txt"
+    plan_path = output_dir / "plan.txt"
     plan_path.write_text(plan_text, encoding="utf-8")
     print(f"  ✓ {plan_path}")
 

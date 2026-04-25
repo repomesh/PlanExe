@@ -136,18 +136,6 @@ Model fitness for this task
   Groq/Cerebras) and cheap, but unreliable at means-vs-ends and
   can lock onto verbs. Use for smoke tests, not for production
   classification.
-
-Smoke runner notes
-------------------
-- Use one LLM per worker thread (threading.local). llama_index LLM
-  clients are not guaranteed thread-safe; sharing one across the
-  ThreadPoolExecutor caused intermittent failures.
-- Read max_workers from the model's luigi_workers config so the
-  smoke harness mirrors pipeline parallelism.
-- Always include a few synthetic vague prompts in the smoke set
-  (e.g. "Help me make a plan for my project.") to verify Unclear
-  handling end-to-end. Catalog prompts are too well-formed to
-  exercise that path.
 """
 
 
@@ -378,6 +366,16 @@ class ClassifyDomain:
 
 
 if __name__ == "__main__":
+    # Smoke runner notes:
+    # - One LLM per worker thread (threading.local). llama_index LLM clients
+    #   are not guaranteed thread-safe; sharing one across the
+    #   ThreadPoolExecutor caused intermittent failures.
+    # - max_workers is read from the model's luigi_workers config so the
+    #   smoke harness mirrors pipeline parallelism.
+    # - Always include a few synthetic vague prompts in the smoke set
+    #   (e.g. "Help me make a plan for my project.") to verify Unclear
+    #   handling end-to-end. Catalog prompts are too well-formed to
+    #   exercise that path.
     import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from dataclasses import dataclass

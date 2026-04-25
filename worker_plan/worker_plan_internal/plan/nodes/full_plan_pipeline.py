@@ -11,6 +11,7 @@ from worker_plan_internal.plan.nodes.screen_planning_prompt import ScreenPlannin
 from worker_plan_internal.plan.nodes.extract_constraints import ExtractConstraintsTask
 from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
 from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
+from worker_plan_internal.plan.nodes.classify_domain import ClassifyDomainTask
 
 # Phase 3
 from worker_plan_internal.plan.nodes.potential_levers import PotentialLeversTask
@@ -103,6 +104,7 @@ class FullPlanPipeline(PlanTask):
             'premise_attack': self.clone(PremiseAttackTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),
             'plan_type': self.clone(PlanTypeTask),
+            'classify_domain': self.clone(ClassifyDomainTask),
             'potential_levers': self.clone(PotentialLeversTask),
             'triage_levers': self.clone(TriageLeversTask),
             'enriched_levers': self.clone(EnrichLeversTask),

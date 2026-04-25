@@ -17,6 +17,8 @@ class FilenameEnum(str, Enum):
     IDENTIFY_PURPOSE_MARKDOWN = "identify_purpose.md"
     PLAN_TYPE_RAW = "plan_type_raw.json"
     PLAN_TYPE_MARKDOWN = "plan_type.md"
+    CLASSIFY_DOMAIN_RAW = "classify_domain_raw.json"
+    CLASSIFY_DOMAIN_MARKDOWN = "classify_domain.md"
     POTENTIAL_LEVERS_RAW = "potential_levers_raw.json"
     POTENTIAL_LEVERS_CLEAN = "potential_levers.json"
     POTENTIAL_LEVERS_CONSTRAINT = "potential_levers_constraint.json"

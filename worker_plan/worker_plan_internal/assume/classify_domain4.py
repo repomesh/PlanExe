@@ -627,7 +627,7 @@ if __name__ == "__main__":
 
     PlanExeDotEnv.load().update_os_environ()
 
-    LLM_NAME = "openrouter-llama-3.1-8b-instruct-nitro"
+    LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
 
     try:
         cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(LLM_NAME, {})

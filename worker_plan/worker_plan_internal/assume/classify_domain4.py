@@ -198,14 +198,21 @@ class DomainFit(BaseModel):
             "most specific real discipline."
         )
     )
-    fit: Literal["medium", "high"] = Field(
+    # Accept "low" too — the system prompt asks for medium/high only,
+    # but small models will sometimes ignore that and emit "low".
+    # Rejecting at the pydantic boundary loses the entire response;
+    # accepting and dropping in code with a warning is more robust.
+    fit: Literal["low", "medium", "high"] = Field(
         description=(
             "How strongly the project belongs to this domain. "
             "high = central to the outcome, the project's success "
             "depends on this expertise; "
             "medium = materially affects planning (real tasks, risks, "
             "regulators, stakeholders) without being the project's "
-            "central identity."
+            "central identity. "
+            "low = incidental, weakly relevant; entries with fit='low' "
+            "are dropped during cleanup and never appear in the final "
+            "result."
         )
     )
     role: Literal[
@@ -245,15 +252,18 @@ class DomainFitAssessment(BaseModel):
     in this module). Letting the model produce both the fit list and the
     final classification was the v3 failure mode that v4 fixes.
     """
+    # No max_length here on purpose — small models occasionally
+    # over-emit and we'd rather truncate in code with a warning than
+    # lose the entire response to a pydantic validation error.
     domain_fits: list[DomainFit] = Field(
         default_factory=list,
         description=(
             "1 to 4 substantive candidate domains for THIS project. "
             "Empty list when the prompt names no concrete project "
             "(use confidence='low' in that case). Single-domain "
-            "projects can have just one entry."
+            "projects can have just one entry. The pipeline truncates "
+            "to the top 4 in document order if more are emitted."
         ),
-        max_length=4,
     )
     confidence: Literal["low", "medium", "high"] = Field(
         description=(
@@ -337,6 +347,7 @@ Right-answer worked examples
 - preserving / digitizing / archiving data → Archiving
 - single wedding / conference / festival / state funeral → Event Planning
 - bridge / tunnel / dam / generic warehouse handed over to someone else to operate → Construction. Useful secondaries for an infrastructure project: Transportation (what the asset enables), Maritime (when in or over water).
+- lunar / Mars / orbital / space station / interplanetary mission → Aerospace. Aerospace already includes the structural, propulsion, materials, electronics, and life-support engineering for a space facility. Useful secondaries for a space project: Research (when science is the operational purpose), International Relations (when multinational), Energy (when nuclear reactors or large-scale power systems are core), Robotics (when autonomous construction or surface ops are central).
 - a casino, hotel, restaurant, cafe, shop, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
 - personal household / life / hobby / preference about one's own body → Personal
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
@@ -454,7 +465,7 @@ class ClassifyDomain:
 
         warnings: list[str] = []
 
-        # Normalize and dedupe fits.
+        # Normalize, dedupe, drop low-fit entries, cap at 4.
         cleaned_fits: list[DomainFit] = []
         seen_fits: set[str] = set()
         for f in assessment.domain_fits:
@@ -465,6 +476,12 @@ class ClassifyDomain:
             key = label_key(domain)
             if key in seen_fits:
                 warnings.append(f"Dropped duplicate fit domain: {domain}")
+                continue
+            if f.fit == "low":
+                warnings.append(f"Dropped low-fit candidate: {domain}")
+                continue
+            if len(cleaned_fits) >= 4:
+                warnings.append(f"Truncated extra fit beyond cap of 4: {domain}")
                 continue
             seen_fits.add(key)
             cleaned_fits.append(

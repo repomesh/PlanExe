@@ -36,129 +36,70 @@ class DomainClassificationResult(BaseModel):
     """
     primary_domain: str = Field(
         description=(
-            "The single most representative domain for this project. "
-            "A short, human-readable label such as 'Research', 'Education', "
-            "'Manufacturing', 'Event Planning', 'Personal', 'Software', "
-            "'Healthcare', 'Construction', 'Agriculture', 'Logistics'. "
-            "Pick the one domain whose expertise, constraints, and planning "
-            "templates the rest of the pipeline should default to."
+            "The single most representative domain for this project. A short, "
+            "human-readable Title Case label (1-3 words) such as 'Research', "
+            "'Education', 'Manufacturing', 'Event Planning', 'Personal', "
+            "'Software', 'Healthcare', 'Construction', 'Agriculture', "
+            "'Hospitality', 'Public Policy'. "
+            "Use 'Unclear' (with confidence='low') when the prompt is too "
+            "vague to identify a domain — better than guessing."
         )
     )
     secondary_domains: list[str] = Field(
         default_factory=list,
         description=(
-            "Zero or more additional domains that are clearly relevant but "
-            "secondary to the primary. Use the same human-readable label "
-            "style as primary_domain. Return an empty list if the project "
-            "is purely single-domain. Do not include the primary domain here. "
-            "Do not pad with weakly-relevant domains — only include a "
-            "domain if downstream planning would actually benefit from "
-            "applying that domain's lens."
+            "Up to 3 additional domain labels in priority order. Empty list "
+            "is the right answer for most single-domain projects. Must not "
+            "include the primary_domain. Always empty when primary_domain "
+            "is 'Unclear'."
         )
     )
     confidence: Literal["low", "medium", "high"] = Field(
         description=(
-            "How confident are you in the primary_domain choice? "
             "'high' when the prompt clearly belongs to one domain. "
-            "'medium' when there are concrete details but the domain is "
-            "an interpretation. "
+            "'medium' when there are concrete details but the domain is an "
+            "interpretation. "
             "'low' when the prompt is too vague or spans many domains "
-            "without a clear lead."
+            "without a clear lead — pair with primary_domain='Unclear'."
         )
     )
     rationale: str = Field(
         description=(
-            "A 1-2 sentence explanation of why this primary_domain was "
-            "chosen and why each secondary_domain is relevant."
+            "1-2 sentences explaining the choice. When primary_domain is "
+            "'Unclear', state what specific information is missing."
         )
     )
 
 
 CLASSIFY_DOMAIN_SYSTEM_PROMPT = """
-You are a domain classifier for a project planning system called PlanExe.
+You classify a project prompt for a planning pipeline.
 
-Decide what KIND of project the user's prompt is, so downstream planning stages can apply the right expertise, risks, and templates. You are NOT drafting the plan.
+Return JSON with:
+- primary_domain: one short domain label, Title Case, 1-3 words.
+- secondary_domains: up to 3 additional domain labels.
+- confidence: low, medium, or high.
+- rationale: 1-2 sentences.
 
-OUTPUT:
-- primary_domain: ONE short Title Case label (1-3 words).
-- secondary_domains: list of additional domain labels, in priority order. **Default is an EMPTY list.** Only add a domain if it survives both tests below.
-- confidence: low / medium / high.
-- rationale: 1-2 sentences referencing concrete signals in the prompt.
+Pick the primary domain by the project deliverable, not by incidental means.
+Ask: when the project succeeds, what exists or happens?
 
-# RULES — apply in this order
+Examples:
+- app/library/script/system -> Software
+- school/curriculum/learner outcomes -> Education
+- scientific study/paper/experiment -> Research
+- wedding/conference/festival/state funeral -> Event Planning
+- bridge/tunnel/dam/building handed over to operate -> Construction
+- shop/hotel/casino/cafe as an operating business -> Hospitality or Retail
+- personal household/life/hobby issue -> Personal
+- policy/regulation/government reorganization -> Public Policy
 
-## Rule 1 — Default to fewer
-Most projects are single-domain. Returning `secondary_domains: []` is a respectable answer and often correct. Hard cap: at most 3 secondaries, only when the project genuinely spans that many distinct expert lenses.
+Secondary domains should be rare. Include one only if:
+1. A distinct expert/team would be needed, and
+2. Removing that lens would miss a concrete planning risk, stakeholder, regulator, or template.
 
-## Rule 2 — The two tests for every candidate secondary
-Before you put a label in secondary_domains, both of these must be TRUE. If either fails, drop the candidate.
+Avoid generic labels like Engineering, Technology, Business, Operations, Management unless they are truly the core domain.
 
-(a) **Different-expert test.** Would the team need to hire someone whose expertise is THIS domain, separate from the primary-domain experts? If the same primary-domain firm or staff would naturally handle that work, the candidate FAILS — drop it.
-   - Yacht primary "Maritime" → DROP "Construction" (shipyards already employ welders, fitters, finishers).
-   - Yacht primary "Maritime" → DROP "Real Estate" (a yacht is not real estate even if someone lives on it).
-   - Tunnel primary "Construction" → DROP "Logistics" (the marine civil-works contractor lowers and joins the segments — that's their job).
-   - Tunnel primary "Construction" → DROP "Engineering" (civil engineers ARE Construction).
-   - Factory primary "Manufacturing" → DROP "Engineering" (industrial engineers ARE Manufacturing).
-   - Software primary "Software" → DROP "Engineering" / "Computer Science" / "Mathematics" (unless the project is mathematical research distinct from coding).
-   - Archiving primary "Archiving" → DROP "Engineering" (retrofitting equipment is part of operations, not a separate engineering R&D effort). Use a concrete domain like "Software" only if a separate software engineering team is needed.
-
-(b) **Specific-gap test.** If you removed this domain, would the downstream plan miss a CONCRETE question, regulator, risk, stakeholder, or template that the primary domain wouldn't have surfaced? If you can't name the gap in one sentence, drop the candidate.
-
-## Rule 3 — Banned-by-default labels
-Do not use these unless the project's core matches them. They are commonly added for shallow reasons.
-- "Engineering" — too generic. Use a specific domain (Construction / Manufacturing / Software / Aerospace) instead.
-- "Technology" — too generic. Use Software, Robotics, Cybersecurity, AI, or whichever specific domain fits.
-- "Finance" — only if the project's core is finance (banking, investment, insurance, fundraising) or involves non-trivial financial-instrument structuring. A budget or tax line does not qualify.
-- "Construction" — only if a generic civil/buildings contractor is needed. Buildouts handled by Maritime, Aerospace, Manufacturing, etc., do NOT count.
-- "Logistics" — only if logistics is a hard, planning-critical concern (cross-border, hostile geography, perishables, large-scale supply chain). Things-moving-around does NOT count.
-- "Real Estate" — only if property acquisition / leasing / asset management is a real planning workstream.
-- "Defense" / "Security" — only if actual military, national-security, or armed-protection expertise is required. "Needs discretion" or "has risks" does NOT count.
-- "Government" / "Regulatory" — never alongside "Public Policy" or "Public Safety" (synonyms).
-- "Medical" / "Clinical" — never alongside "Healthcare" (synonyms).
-
-## Rule 3b — When secondaries ARE warranted
-Default-empty does NOT mean always-empty. If the project genuinely depends on a second expert lens, include it. Some recurring positive cases:
-- Heads-of-state events (state funerals, summits, royal weddings) → `Event Planning` primary + `Public Policy` and/or `Security` as secondaries. Diplomatic protocol and protective-detail expertise are distinct from event ops.
-- Research stations / scientific facilities → whichever operating domain is primary (Aerospace, Maritime, Polar Operations) + `Research` as secondary. Knowledge-generation expertise is distinct from station ops.
-- Multi-country / multi-jurisdiction healthcare or services → primary domain + `Public Policy` if cross-border regulatory navigation is genuinely required.
-- Robotics / AI in regulated public-facing roles (police robots, autonomous vehicles in cities) → operating domain + `Public Policy` and possibly `Law` if legal authority and use-of-force frameworks are central.
-
-## Rule 4 — Vocabulary
-Open-ended Title Case English labels, 1-3 words. Examples (NOT exhaustive): Research, Education, Manufacturing, Event Planning, Personal, Software, Construction, Healthcare, Agriculture, Logistics, Energy, Hospitality, Public Policy, Finance, Defense, Media Production, Transportation, Real Estate, Non-profit, Retail, Maritime, Aerospace, Robotics, Linguistics, Environmental, Archiving. Be specific enough to be useful but not so narrow that no expert fits ("Pediatric Cardiology" is too narrow; "Stuff" is too broad).
-
-## Rule 5 — Picking the primary: PURPOSE, not MEANS
-
-The primary domain is the project's CENTER OF GRAVITY — the domain whose **deliverable** the project produces. The *means* used to produce it (software, construction, manufacturing) is usually a secondary or absent.
-
-Ask: "When this project succeeds, what does the world have that it didn't before?"
-- A preserved archive of recovered data → primary is **Archiving**, even if AI / robotics / software / containers are how it's built.
-- An operating casino → primary is **Hospitality**, even if the casino requires major construction.
-- A coffee shop → primary is **Hospitality** or **Retail**, not Construction.
-- A secured public-bus fleet → primary is **Transportation** (or **Cybersecurity** if the project is purely about security policy with no transport-ops deliverable), not Software.
-- A new English variant → primary is **Linguistics** or **Education** (depending on whether the deliverable is the language standard or the curriculum), not Research-as-method or Software-because-there's-a-tool.
-- A lunar research station → primary is **Aerospace** (the operating domain that owns the station) with Research as a secondary.
-- A submerged road/rail tunnel → primary is **Construction** because the deliverable IS the infrastructure; Transportation is what it enables (secondary if at all).
-
-Software / Construction / Manufacturing as PRIMARY:
-- "Software" is primary only when the deliverable IS software (an app, library, automation script, system) and there is no larger operating domain the software exists to serve.
-- "Construction" is primary only when the deliverable IS a piece of infrastructure or a building handed over for someone else to operate (tunnels, bridges, dams, generic warehouses). If the same team that built it will operate a hotel / casino / lab / factory there, the operating domain is primary.
-- "Manufacturing" is primary only when the deliverable is mass-produced physical goods.
-
-Common edge cases:
-- Individual's life, hobby, health, household, relationships → **Personal**. A homeowner sorting/disposing trash is "Personal", not "Environmental" — there is no environmental project, just a chore.
-- Academic study / scientific experiment whose deliverable is knowledge / a paper → **Research**.
-- One-time gathering (concert, conference, wedding, festival, state funeral) → **Event Planning**.
-- Teaching / curricula / schools / learner outcomes → **Education**.
-- Animal / livestock / veterinary projects → **Agriculture** (or **Veterinary** if more specific). NOT "Healthcare" — Healthcare implies human medicine.
-- Government / state-led initiatives whose POINT is policy change, regulation, or reorganization → **Public Policy**, even if the implementation involves manufacturing, IT, or construction. The instrument is secondary; the policy intent is primary.
-- Public-health crises driven by funding cuts or political shocks → **Healthcare** primary, with **Public Policy** as a secondary when the political dimension creates planning gaps the medical team won't see (e.g., USAID halt, sanctions, regulatory shocks).
-
-## Confidence
-- "high": prompt clearly fits one well-defined primary.
-- "medium": concrete details, but primary is an interpretation, OR the project genuinely spans 2-3 domains without a single lead.
-- "low": too vague to classify, or plausibly many different things.
-
-Respond ONLY with valid JSON: primary_domain, secondary_domains, confidence, rationale.
+If the prompt is too vague, use primary_domain = "Unclear", confidence = "low", and explain what is missing.
 """
 
 
@@ -212,21 +153,25 @@ class ClassifyDomain:
         if pydantic_instance is None:
             raise ValueError("LLM returned empty structured response (chat_response.raw is None).")
 
-        # Defensive cleanup: drop the primary from secondary if the model put it there.
+        # Defensive cleanup: drop the primary from secondary if the model put it there,
+        # and force empty secondaries when primary is "Unclear".
         primary = pydantic_instance.primary_domain.strip()
-        cleaned_secondary = [
-            d.strip() for d in pydantic_instance.secondary_domains
-            if d.strip() and d.strip().lower() != primary.lower()
-        ]
-        # Deduplicate while preserving order.
-        seen: set[str] = set()
-        deduped_secondary: list[str] = []
-        for d in cleaned_secondary:
-            key = d.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            deduped_secondary.append(d)
+        if primary.lower() == "unclear":
+            deduped_secondary: list[str] = []
+        else:
+            cleaned_secondary = [
+                d.strip() for d in pydantic_instance.secondary_domains
+                if d.strip() and d.strip().lower() != primary.lower()
+            ]
+            # Deduplicate while preserving order.
+            seen: set[str] = set()
+            deduped_secondary = []
+            for d in cleaned_secondary:
+                key = d.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                deduped_secondary.append(d)
         pydantic_instance = DomainClassificationResult(
             primary_domain=primary,
             secondary_domains=deduped_secondary,
@@ -297,7 +242,9 @@ class ClassifyDomain:
 
 
 if __name__ == "__main__":
+    import threading
     from concurrent.futures import ThreadPoolExecutor, as_completed
+    from dataclasses import dataclass
     from worker_plan_internal.llm_factory import get_llm
     from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
     from worker_plan_api.prompt_catalog import PromptCatalog
@@ -315,7 +262,22 @@ if __name__ == "__main__":
     except Exception:
         max_workers = 1
 
-    llm = get_llm(LLM_NAME)
+    # One LLM per worker thread. llama_index LLM clients are not guaranteed
+    # to be thread-safe, so each worker lazily builds its own instance on
+    # first use and reuses it across the prompts it handles.
+    _thread_local = threading.local()
+
+    def get_thread_llm():
+        llm = getattr(_thread_local, "llm", None)
+        if llm is None:
+            llm = get_llm(LLM_NAME)
+            _thread_local.llm = llm
+        return llm
+
+    @dataclass
+    class TestPrompt:
+        id: str
+        prompt: str
 
     prompt_catalog = PromptCatalog()
     prompt_catalog.load_simple_plan_prompts()
@@ -324,18 +286,28 @@ if __name__ == "__main__":
     sample_size = min(20, len(sorted_items))
     if sample_size < len(sorted_items):
         step = len(sorted_items) / sample_size
-        sample_items = [sorted_items[int(i * step)] for i in range(sample_size)]
+        catalog_sample = [sorted_items[int(i * step)] for i in range(sample_size)]
     else:
-        sample_items = sorted_items
+        catalog_sample = sorted_items
+
+    # Synthetic vague prompts to verify "Unclear" handling.
+    vague_prompts = [
+        TestPrompt("vague-help", "Help me make a plan for my project."),
+        TestPrompt("vague-thing", "I want to do a thing."),
+        TestPrompt("vague-improve", "Improve things."),
+    ]
+
+    sample_items = list(catalog_sample) + vague_prompts
 
     print(
-        f"=== Domain classification on {len(sample_items)} catalog prompts "
+        f"=== Domain classification on {len(sample_items)} prompts "
+        f"({len(catalog_sample)} catalog + {len(vague_prompts)} vague) "
         f"using {LLM_NAME} (max_workers={max_workers}) ==="
     )
 
     def classify_one(idx: int, item) -> tuple[int, str, str, dict | None, Exception | None]:
         try:
-            result = ClassifyDomain.execute(llm, item.prompt)
+            result = ClassifyDomain.execute(get_thread_llm(), item.prompt)
             return idx, item.id, item.prompt, result.to_dict(
                 include_system_prompt=False,
                 include_user_prompt=False,

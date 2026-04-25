@@ -252,7 +252,7 @@ if __name__ == "__main__":
 
     PlanExeDotEnv.load().update_os_environ()
 
-    LLM_NAME = "openrouter-qwen3-30b-a3b"
+    LLM_NAME = "openrouter-llama-3.1-8b-instruct-nitro"
 
     # Read luigi_workers from the profile config so we run the same level of
     # parallelism the pipeline would use.

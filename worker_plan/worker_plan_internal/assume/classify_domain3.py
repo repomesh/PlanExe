@@ -367,7 +367,9 @@ Right-answer examples for the primary:
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
 - a private company changing its OWN internal rules (HR policy, code of conduct, return-to-office, internal restructuring) → the company's own line of business, or Human Resources / Corporate Governance.
 - global aid / poverty reduction / refugee support / cross-border humanitarian work → International Development (or Public Policy if the lever is government-led).
-- access to clean water / sanitation / basic-needs delivery → International Development (with Healthcare or Public Policy as secondary if relevant).
+- water treatment, drinking-water safety, sewer or septic systems, environmental contamination of water, chemical pollutants in a watershed → Environmental (with Public Health as secondary when there is a human-health hazard, or Public Policy as secondary when it is a regulatory or government remediation effort). The deliverable selects the primary; the country setting goes in the rationale.
+- providing access to basic services in low-income countries where the project is funded by donors / international agencies → International Development.
+- a domestic municipal utility upgrade or environmental remediation in a wealthy country → Environmental, Public Health, or Public Works (depending on whose expertise drives the plan).
 
 Vague-prompt handling (apply FIRST):
 If the user message is short (≤30 characters) and made up mostly of generic verbs and pronouns — phrasings like "improve things", "do a thing", "help me plan", "make it better", "fix this", "optimize stuff" — emit:

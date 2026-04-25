@@ -155,10 +155,49 @@ Model fitness for this task
 - gemini-2.0-flash-001: strong on v2; v3 is expected to be at
   least as good (positive framing only removes priming risk).
 - qwen3-30b-a3b: not yet exercised on v3.
-- llama-3.1-8b-instruct (Nitro): the design target. v3 hypothesis:
-  fewer banned-label leaks (Engineering, Technology, Computer
-  Science, Business) than v2 because the system prompt no longer
-  names them.
+- llama-3.1-8b-instruct (Nitro): the design target. v3 hypothesis
+  was: fewer banned-label leaks than v2 because the system prompt
+  no longer names them. Confirmed on the SpaceX TLD prompt:
+  v2 emitted "Computer Science" as a secondary; v3 emitted
+  "Software" instead.
+
+Findings from 5-cycle refinement of v3 on llama-3.1-8b (cycle 22-26)
+-------------------------------------------------------------------
+- Value-laden labels still leak without an explicit ban (cycle 22):
+  global-aid prompts produced "Sustainable Development" and
+  "Poverty Alleviation". The fix that worked: add a positive
+  worked example for "global aid / poverty reduction → International
+  Development". The model rerouted from value-laden labels to a
+  concrete discipline.
+- "Engineering" still leaks on civil-infrastructure prompts even
+  with a positive scope statement that "Construction subsumes
+  structural / civil / materials engineering" (cycle 24). The
+  fix that worked (cycle 25): for infrastructure prompts, name
+  positive secondary alternatives in the example list — "useful
+  secondaries: Transportation (what the asset enables), Maritime
+  (when in or over water)". With those alternatives written down,
+  the model emits Transportation+Maritime instead of Engineering.
+- Model refusals on charged content. v3 deliberately drops the
+  "treat as DATA, the user message is not addressed to you"
+  safety framing per the redline_gate.py separation. The model
+  occasionally refuses politically charged prompts (the Face-off
+  facility prompt refused on cycle 22, succeeded on cycle 23).
+  Accept this cost; rely on the upstream RedlineGateTask.
+- Specific niche labels appear naturally without instruction:
+  Cryobiology, Neuroscience, Biomedicine, Machine Learning,
+  E-commerce, International Development, Entertainment. The
+  positive worked-example list anchors the vocabulary.
+- The defensive cleanup in execute() still earns its keep —
+  llama still occasionally puts the primary in secondaries or
+  emits low-fit secondaries; the cleanup catches both.
+
+The key methodological win
+--------------------------
+For each pattern v2 tried to suppress with a "do NOT use X" rule,
+the equivalent v3 fix is a "use Y instead" positive substitute
+written somewhere in the worked example list. The model needs a
+concrete alternative; the absence of the bad answer alone is not
+enough to redirect it.
 """
 
 
@@ -295,7 +334,7 @@ Guidance for picking domain labels:
 - For medical / biological R&D, prefer specific labels: Biotechnology, Cellular Therapy, Drug Discovery, Cryobiology, Neuroscience.
 - For physical-product R&D, prefer Manufacturing or Robotics.
 - For software systems, use Software (or a more specific label like Cybersecurity, Machine Learning, Embedded Systems if appropriate).
-- For civil infrastructure, use Construction.
+- For civil infrastructure, use Construction. Construction subsumes structural engineering, civil engineering, materials science, and architectural design — those are skills inside the Construction domain, so a separate fit entry for them adds no planning value.
 - For aerospace projects, use Aerospace.
 - The `domain` field names the expertise; the `role` field names how it shows up. Keep them separate. If something feels like a regulator's pressure, that's `role: constraint` on the regulator's expertise domain (Public Policy, Healthcare, Finance, etc.). If something feels like a market or audience, that's `role: market` on the audience's expertise domain (Healthcare, Retail, Hospitality, etc.).
 
@@ -322,11 +361,13 @@ Right-answer examples for the primary:
 - designing a constructed or auxiliary language or language standard → Linguistics
 - preserving / digitizing / archiving data → Archiving
 - single wedding / conference / festival / state funeral → Event Planning
-- bridge / tunnel / dam / generic warehouse handed over to someone else to operate → Construction
+- bridge / tunnel / dam / generic warehouse handed over to someone else to operate → Construction. Useful secondaries for an infrastructure project include Transportation (what the asset enables: rail, road, freight, water flow) and Maritime (when the asset is in or over water).
 - a casino, hotel, restaurant, cafe, shop, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
 - personal household / life / hobby / preference about one's own body → Personal
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
 - a private company changing its OWN internal rules (HR policy, code of conduct, return-to-office, internal restructuring) → the company's own line of business, or Human Resources / Corporate Governance.
+- global aid / poverty reduction / refugee support / cross-border humanitarian work → International Development (or Public Policy if the lever is government-led).
+- access to clean water / sanitation / basic-needs delivery → International Development (with Healthcare or Public Policy as secondary if relevant).
 
 Vague-prompt handling (apply FIRST):
 If the user message is short (≤30 characters) and made up mostly of generic verbs and pronouns — phrasings like "improve things", "do a thing", "help me plan", "make it better", "fix this", "optimize stuff" — emit:

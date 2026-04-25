@@ -348,7 +348,11 @@ Right-answer worked examples
 - single wedding / conference / festival / state funeral → Event Planning
 - bridge / tunnel / dam / generic warehouse handed over to someone else to operate → Construction. Useful secondaries for an infrastructure project: Transportation (what the asset enables), Maritime (when in or over water).
 - lunar / Mars / orbital / space station / interplanetary mission → Aerospace. Aerospace already includes the structural, propulsion, materials, electronics, and life-support engineering for a space facility. Useful secondaries for a space project: Research (when science is the operational purpose), International Relations (when multinational), Energy (when nuclear reactors or large-scale power systems are core), Robotics (when autonomous construction or surface ops are central).
-- a casino, hotel, restaurant, cafe, shop, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
+- a casino, hotel, capsule hotel, restaurant, cafe, shop, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
+- an immersive theme park, narrative entertainment venue, escape room, or experiential attraction — even when humanoid robots, animatronics, AI, or LLMs drive the experience → Hospitality (or Entertainment). The robots / AI / software are method; the deliverable is paid entertainment for visitors.
+- a personal trip / vacation / hobby outing / household task / individual life decision → Personal. A vacation to Paris is Personal, not Tourism. The Tourism domain is for businesses serving travellers.
+- a regularly-staffed weekly class, recurring workshop, ongoing course series, or community education program → Education. The venue / community / building is method.
+- a historical / period-accurate / replica build using ancient or pre-modern materials and methods (medieval castle, Stonehenge replica, log cabin in 1850s techniques, mead hall) → Construction. Useful secondaries: History, Archaeology, Heritage Conservation. Construction subsumes the structural / materials know-how.
 - personal household / life / hobby / preference about one's own body → Personal
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
 - a private company changing its OWN internal rules (HR policy, code of conduct, return-to-office, internal restructuring) → the company's own line of business, or Human Resources / Corporate Governance.
@@ -627,22 +631,11 @@ if __name__ == "__main__":
 
     PlanExeDotEnv.load().update_os_environ()
 
-    LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
-
-    try:
-        cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(LLM_NAME, {})
-        max_workers = max(1, int(cfg_dict.get("luigi_workers", 1)))
-    except Exception:
-        max_workers = 1
-
-    _thread_local = threading.local()
-
-    def get_thread_llm():
-        llm = getattr(_thread_local, "llm", None)
-        if llm is None:
-            llm = get_llm(LLM_NAME)
-            _thread_local.llm = llm
-        return llm
+    # Two models tested side by side. Each runs the full sample.
+    LLM_NAMES = [
+        "openrouter-llama-3.1-8b-instruct-nitro",
+        "openrouter-gpt-oss-safeguard-20b-nitro",
+    ]
 
     @dataclass
     class TestPrompt:
@@ -653,11 +646,22 @@ if __name__ == "__main__":
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
     sorted_items = sorted(all_items, key=lambda x: x.id)
-    sample_size = min(20, len(sorted_items))
-    SAMPLE_SEED = 8
+
+    # Compute the IDs already used by SAMPLE_SEED 7 and 8 so we exclude them
+    # and pick a 40-prompt set the model has not previously been tested on.
     import random
+    used_ids: set[str] = set()
+    for prior_seed in (7, 8):
+        prior_shuffled = list(sorted_items)
+        random.Random(prior_seed).shuffle(prior_shuffled)
+        for item in prior_shuffled[:20]:
+            used_ids.add(item.id)
+    fresh_pool = [item for item in sorted_items if item.id not in used_ids]
+
+    SAMPLE_SEED = 100
+    sample_size = min(40, len(fresh_pool))
     rng = random.Random(SAMPLE_SEED)
-    shuffled = list(sorted_items)
+    shuffled = list(fresh_pool)
     rng.shuffle(shuffled)
     catalog_sample = shuffled[:sample_size]
 
@@ -669,43 +673,77 @@ if __name__ == "__main__":
 
     sample_items = list(catalog_sample) + vague_prompts
 
+    def run_model(llm_name: str) -> dict:
+        try:
+            cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(llm_name, {})
+            max_workers = max(1, int(cfg_dict.get("luigi_workers", 1)))
+        except Exception:
+            max_workers = 1
+
+        thread_local = threading.local()
+
+        def get_thread_llm():
+            llm = getattr(thread_local, "llm", None)
+            if llm is None:
+                llm = get_llm(llm_name)
+                thread_local.llm = llm
+            return llm
+
+        def classify_one(idx, item):
+            try:
+                result = ClassifyDomain.execute(get_thread_llm(), item.prompt)
+                return idx, item.id, item.prompt, result.to_dict(
+                    include_system_prompt=False,
+                    include_user_prompt=False,
+                    include_metadata=False,
+                ), None
+            except Exception as exc:
+                return idx, item.id, item.prompt, None, exc
+
+        print(
+            f"\n========== {llm_name} "
+            f"({len(sample_items)} prompts, max_workers={max_workers}) =========="
+        )
+        results: dict = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [
+                pool.submit(classify_one, idx, item)
+                for idx, item in enumerate(sample_items, start=1)
+            ]
+            for future in as_completed(futures):
+                idx, prompt_id, prompt_text, json_response, exc = future.result()
+                results[idx] = (prompt_id, prompt_text, json_response, exc)
+                if exc is None:
+                    print(f"  ✓ [{idx}/{len(sample_items)}] {prompt_id}", flush=True)
+                else:
+                    print(f"  ✗ [{idx}/{len(sample_items)}] {prompt_id}: {exc}", flush=True)
+        return results
+
     print(
-        f"=== Domain classification (fit-derivation) on {len(sample_items)} prompts "
-        f"({len(catalog_sample)} catalog + {len(vague_prompts)} vague) "
-        f"using {LLM_NAME} (max_workers={max_workers}) ==="
+        f"=== Domain classification (fit-derivation) — fresh sample of "
+        f"{len(catalog_sample)} catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, "
+        f"excluded {len(used_ids)} prior IDs) + {len(vague_prompts)} vague — "
+        f"across {len(LLM_NAMES)} models ==="
     )
 
-    def classify_one(idx, item):
-        try:
-            result = ClassifyDomain.execute(get_thread_llm(), item.prompt)
-            return idx, item.id, item.prompt, result.to_dict(
-                include_system_prompt=False,
-                include_user_prompt=False,
-                include_metadata=False,
-            ), None
-        except Exception as exc:
-            return idx, item.id, item.prompt, None, exc
-
-    results: dict = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = [
-            pool.submit(classify_one, idx, item)
-            for idx, item in enumerate(sample_items, start=1)
-        ]
-        for future in as_completed(futures):
-            idx, prompt_id, prompt_text, json_response, exc = future.result()
-            results[idx] = (prompt_id, prompt_text, json_response, exc)
-            if exc is None:
-                print(f"  ✓ [{idx}/{len(sample_items)}] {prompt_id}", flush=True)
-            else:
-                print(f"  ✗ [{idx}/{len(sample_items)}] {prompt_id}: {exc}", flush=True)
+    all_results: dict[str, dict] = {}
+    for llm_name in LLM_NAMES:
+        all_results[llm_name] = run_model(llm_name)
 
     print()
-    for idx in sorted(results):
-        prompt_id, prompt_text, json_response, exc = results[idx]
+    for idx in sorted(all_results[LLM_NAMES[0]]):
+        prompt_id = all_results[LLM_NAMES[0]][idx][0]
+        prompt_text = all_results[LLM_NAMES[0]][idx][1]
         print(f"\n[{idx}/{len(sample_items)}] Prompt ID: {prompt_id} (length: {len(prompt_text)} chars)")
         print(f"Preview: {prompt_text[:160].replace(chr(10), ' ')}...")
-        if exc is not None:
-            print(f"Error: {exc}")
-        else:
-            print(f"Result: {json.dumps(json_response, indent=2)}")
+        for llm_name in LLM_NAMES:
+            json_response = all_results[llm_name][idx][2]
+            exc = all_results[llm_name][idx][3]
+            short = llm_name.replace("openrouter-", "")
+            if exc is not None:
+                print(f"  [{short}] Error: {exc}")
+            elif json_response is not None:
+                primary = json_response.get("primary_domain")
+                secondary = json_response.get("secondary_domains") or []
+                conf = json_response.get("confidence")
+                print(f"  [{short}] primary={primary}, secondary={secondary}, conf={conf}")

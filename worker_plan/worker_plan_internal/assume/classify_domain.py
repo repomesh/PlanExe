@@ -246,7 +246,8 @@ Examples:
 - bridge/tunnel/dam/generic warehouse handed over to someone else to operate -> Construction
 - a casino, hotel, restaurant, cafe, shop, factory, healthcare clinic the same project will operate -> Hospitality / Retail / Manufacturing / Healthcare (NOT Construction; the build-out is incidental)
 - personal household/life/hobby issue -> Personal
-- government-led initiative whose POINT is debt reduction, regulatory change, welfare reform, etc. -> Public Policy (even when implementation builds a facility or manufactures goods)
+- government / state-level initiative whose POINT is debt reduction, regulatory change, welfare reform, etc. -> Public Policy (even when implementation builds a facility or manufactures goods)
+- a private company changing ITS OWN internal policy (HR rules, code of conduct, vacation policy, return-to-office, internal restructuring, etc.) -> NOT Public Policy. Pick the operating domain (the company's own line of business) or a corporate-governance label like "Human Resources" / "Corporate Governance".
 
 Disambiguators that matter for this classifier:
 - Event Planning is for ONE-TIME or annual single gatherings. Operating a venue every week is not event planning.

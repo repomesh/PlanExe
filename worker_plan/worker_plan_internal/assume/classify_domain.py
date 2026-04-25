@@ -107,25 +107,51 @@ Before you put a label in secondary_domains, both of these must be TRUE. If eith
 ## Rule 3 — Banned-by-default labels
 Do not use these unless the project's core matches them. They are commonly added for shallow reasons.
 - "Engineering" — too generic. Use a specific domain (Construction / Manufacturing / Software / Aerospace) instead.
+- "Technology" — too generic. Use Software, Robotics, Cybersecurity, AI, or whichever specific domain fits.
 - "Finance" — only if the project's core is finance (banking, investment, insurance, fundraising) or involves non-trivial financial-instrument structuring. A budget or tax line does not qualify.
 - "Construction" — only if a generic civil/buildings contractor is needed. Buildouts handled by Maritime, Aerospace, Manufacturing, etc., do NOT count.
 - "Logistics" — only if logistics is a hard, planning-critical concern (cross-border, hostile geography, perishables, large-scale supply chain). Things-moving-around does NOT count.
 - "Real Estate" — only if property acquisition / leasing / asset management is a real planning workstream.
 - "Defense" / "Security" — only if actual military, national-security, or armed-protection expertise is required. "Needs discretion" or "has risks" does NOT count.
-- "Government" / "Regulatory" — never alongside "Public Policy" (synonyms).
+- "Government" / "Regulatory" — never alongside "Public Policy" or "Public Safety" (synonyms).
 - "Medical" / "Clinical" — never alongside "Healthcare" (synonyms).
+
+## Rule 3b — When secondaries ARE warranted
+Default-empty does NOT mean always-empty. If the project genuinely depends on a second expert lens, include it. Some recurring positive cases:
+- Heads-of-state events (state funerals, summits, royal weddings) → `Event Planning` primary + `Public Policy` and/or `Security` as secondaries. Diplomatic protocol and protective-detail expertise are distinct from event ops.
+- Research stations / scientific facilities → whichever operating domain is primary (Aerospace, Maritime, Polar Operations) + `Research` as secondary. Knowledge-generation expertise is distinct from station ops.
+- Multi-country / multi-jurisdiction healthcare or services → primary domain + `Public Policy` if cross-border regulatory navigation is genuinely required.
+- Robotics / AI in regulated public-facing roles (police robots, autonomous vehicles in cities) → operating domain + `Public Policy` and possibly `Law` if legal authority and use-of-force frameworks are central.
 
 ## Rule 4 — Vocabulary
 Open-ended Title Case English labels, 1-3 words. Examples (NOT exhaustive): Research, Education, Manufacturing, Event Planning, Personal, Software, Construction, Healthcare, Agriculture, Logistics, Energy, Hospitality, Public Policy, Finance, Defense, Media Production, Transportation, Real Estate, Non-profit, Retail, Maritime, Aerospace, Robotics, Linguistics, Environmental, Archiving. Be specific enough to be useful but not so narrow that no expert fits ("Pediatric Cardiology" is too narrow; "Stuff" is too broad).
 
-## Rule 5 — Picking the primary
-The primary is the project's CENTER OF GRAVITY — the domain whose expertise will drive most of the planning. Common edge cases:
-- Individual's life, hobby, health, household, relationships → "Personal".
-- Academic study / scientific experiment → "Research".
-- One-time gathering (concert, conference, wedding, festival) → "Event Planning".
-- Producing physical goods at scale → "Manufacturing".
-- Teaching / curricula / schools → "Education".
-- Project that uses a building/yacht/rocket/etc — pick the operating domain (Hospitality / Maritime / Aerospace), not Construction.
+## Rule 5 — Picking the primary: PURPOSE, not MEANS
+
+The primary domain is the project's CENTER OF GRAVITY — the domain whose **deliverable** the project produces. The *means* used to produce it (software, construction, manufacturing) is usually a secondary or absent.
+
+Ask: "When this project succeeds, what does the world have that it didn't before?"
+- A preserved archive of recovered data → primary is **Archiving**, even if AI / robotics / software / containers are how it's built.
+- An operating casino → primary is **Hospitality**, even if the casino requires major construction.
+- A coffee shop → primary is **Hospitality** or **Retail**, not Construction.
+- A secured public-bus fleet → primary is **Transportation** (or **Cybersecurity** if the project is purely about security policy with no transport-ops deliverable), not Software.
+- A new English variant → primary is **Linguistics** or **Education** (depending on whether the deliverable is the language standard or the curriculum), not Research-as-method or Software-because-there's-a-tool.
+- A lunar research station → primary is **Aerospace** (the operating domain that owns the station) with Research as a secondary.
+- A submerged road/rail tunnel → primary is **Construction** because the deliverable IS the infrastructure; Transportation is what it enables (secondary if at all).
+
+Software / Construction / Manufacturing as PRIMARY:
+- "Software" is primary only when the deliverable IS software (an app, library, automation script, system) and there is no larger operating domain the software exists to serve.
+- "Construction" is primary only when the deliverable IS a piece of infrastructure or a building handed over for someone else to operate (tunnels, bridges, dams, generic warehouses). If the same team that built it will operate a hotel / casino / lab / factory there, the operating domain is primary.
+- "Manufacturing" is primary only when the deliverable is mass-produced physical goods.
+
+Common edge cases:
+- Individual's life, hobby, health, household, relationships → **Personal**. A homeowner sorting/disposing trash is "Personal", not "Environmental" — there is no environmental project, just a chore.
+- Academic study / scientific experiment whose deliverable is knowledge / a paper → **Research**.
+- One-time gathering (concert, conference, wedding, festival, state funeral) → **Event Planning**.
+- Teaching / curricula / schools / learner outcomes → **Education**.
+- Animal / livestock / veterinary projects → **Agriculture** (or **Veterinary** if more specific). NOT "Healthcare" — Healthcare implies human medicine.
+- Government / state-led initiatives whose POINT is policy change, regulation, or reorganization → **Public Policy**, even if the implementation involves manufacturing, IT, or construction. The instrument is secondary; the policy intent is primary.
+- Public-health crises driven by funding cuts or political shocks → **Healthcare** primary, with **Public Policy** as a secondary when the political dimension creates planning gaps the medical team won't see (e.g., USAID halt, sanctions, regulatory shocks).
 
 ## Confidence
 - "high": prompt clearly fits one well-defined primary.
@@ -271,18 +297,29 @@ class ClassifyDomain:
 
 
 if __name__ == "__main__":
+    from concurrent.futures import ThreadPoolExecutor, as_completed
     from worker_plan_internal.llm_factory import get_llm
+    from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
     from worker_plan_api.prompt_catalog import PromptCatalog
     from worker_plan_api.planexe_dotenv import PlanExeDotEnv
 
     PlanExeDotEnv.load().update_os_environ()
 
-    llm = get_llm("openrouter-gemini-2.0-flash-001")
+    LLM_NAME = "openrouter-qwen3-30b-a3b"
+
+    # Read luigi_workers from the profile config so we run the same level of
+    # parallelism the pipeline would use.
+    try:
+        cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(LLM_NAME, {})
+        max_workers = max(1, int(cfg_dict.get("luigi_workers", 1)))
+    except Exception:
+        max_workers = 1
+
+    llm = get_llm(LLM_NAME)
 
     prompt_catalog = PromptCatalog()
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
-    # Diverse sample: mix lengths so we exercise short, medium, and long prompts.
     sorted_items = sorted(all_items, key=lambda x: len(x.prompt), reverse=True)
     sample_size = min(20, len(sorted_items))
     if sample_size < len(sorted_items):
@@ -291,17 +328,42 @@ if __name__ == "__main__":
     else:
         sample_items = sorted_items
 
-    print(f"=== Domain classification on {len(sample_items)} catalog prompts ===")
-    for idx, item in enumerate(sample_items, start=1):
-        print(f"\n[{idx}/{len(sample_items)}] Prompt ID: {item.id} (length: {len(item.prompt)} chars)")
-        print(f"Preview: {item.prompt[:160].replace(chr(10), ' ')}...")
+    print(
+        f"=== Domain classification on {len(sample_items)} catalog prompts "
+        f"using {LLM_NAME} (max_workers={max_workers}) ==="
+    )
+
+    def classify_one(idx: int, item) -> tuple[int, str, str, dict | None, Exception | None]:
         try:
             result = ClassifyDomain.execute(llm, item.prompt)
-            json_response = result.to_dict(
+            return idx, item.id, item.prompt, result.to_dict(
                 include_system_prompt=False,
                 include_user_prompt=False,
                 include_metadata=False,
-            )
+            ), None
+        except Exception as exc:
+            return idx, item.id, item.prompt, None, exc
+
+    results: dict[int, tuple[str, str, dict | None, Exception | None]] = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            pool.submit(classify_one, idx, item)
+            for idx, item in enumerate(sample_items, start=1)
+        ]
+        for future in as_completed(futures):
+            idx, prompt_id, prompt_text, json_response, exc = future.result()
+            results[idx] = (prompt_id, prompt_text, json_response, exc)
+            if exc is None:
+                print(f"  ✓ [{idx}/{len(sample_items)}] {prompt_id}", flush=True)
+            else:
+                print(f"  ✗ [{idx}/{len(sample_items)}] {prompt_id}: {exc}", flush=True)
+
+    print()
+    for idx in sorted(results):
+        prompt_id, prompt_text, json_response, exc = results[idx]
+        print(f"\n[{idx}/{len(sample_items)}] Prompt ID: {prompt_id} (length: {len(prompt_text)} chars)")
+        print(f"Preview: {prompt_text[:160].replace(chr(10), ' ')}...")
+        if exc is not None:
+            print(f"Error: {exc}")
+        else:
             print(f"Result: {json.dumps(json_response, indent=2)}")
-        except Exception as e:
-            print(f"Error: {e}")

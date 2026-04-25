@@ -77,49 +77,62 @@ class DomainClassificationResult(BaseModel):
 CLASSIFY_DOMAIN_SYSTEM_PROMPT = """
 You are a domain classifier for a project planning system called PlanExe.
 
-Your job is to read a user's project prompt and decide what KIND of project it is, so that downstream planning stages can apply the right expertise, assumptions, risk lenses, compliance checks, expert reviewers, and planning templates.
+Decide what KIND of project the user's prompt is, so downstream planning stages can apply the right expertise, risks, and templates. You are NOT drafting the plan.
 
-You are NOT drafting the plan. You are answering only:
-    "What kind of project is this, and what kinds of expertise, constraints, and planning logic does it require?"
+OUTPUT:
+- primary_domain: ONE short Title Case label (1-3 words).
+- secondary_domains: list of additional domain labels, in priority order. **Default is an EMPTY list.** Only add a domain if it survives both tests below.
+- confidence: low / medium / high.
+- rationale: 1-2 sentences referencing concrete signals in the prompt.
 
-Output two things:
-1. ONE primary_domain — the single most representative domain.
-2. A list of secondary_domains — zero or more additional domains that downstream planning would clearly benefit from.
+# RULES — apply in this order
 
-DOMAIN VOCABULARY:
-- Domains are short, human-readable English labels. There is NO fixed list — pick whatever label best describes the project.
-- Examples (illustrative, not exhaustive): "Research", "Education", "Manufacturing", "Event Planning", "Personal", "Software", "Construction", "Healthcare", "Agriculture", "Logistics", "Energy", "Hospitality", "Public Policy", "Finance", "Defense", "Media Production", "Transportation", "Real Estate", "Non-profit", "Retail".
-- Use Title Case ("Event Planning", not "event planning" or "event-planning").
-- Keep labels concise — 1 to 3 words. No sentences, no parentheses.
-- Be specific enough to be useful, but not so narrow that no expert lens fits. "Healthcare" is good. "Pediatric Cardiology" is too narrow. "Stuff" is too broad.
+## Rule 1 — Default to fewer
+Most projects are single-domain. Returning `secondary_domains: []` is a respectable answer and often correct. Hard cap: at most 3 secondaries, only when the project genuinely spans that many distinct expert lenses.
 
-PRIMARY VS SECONDARY:
-- primary_domain is what the project IS — its center of gravity. If the project is "Open a coffee shop in Copenhagen", the primary is "Hospitality" or "Retail" (whichever frame fits better), not "Construction" — even if the project involves a buildout.
-- secondary_domains are domains that are clearly relevant but supportive. For the coffee shop, "Construction" might be a secondary (because of the fit-out), and "Marketing" might be another.
-- Do NOT pad secondary_domains. Empty list is the right answer for a single-domain project. Only include a secondary if a real planning stage would benefit from applying that lens.
-- Do NOT repeat the primary_domain in secondary_domains.
+## Rule 2 — The two tests for every candidate secondary
+Before you put a label in secondary_domains, both of these must be TRUE. If either fails, drop the candidate.
 
-CONFIDENCE:
-- "high": the prompt clearly belongs to one well-defined domain.
-- "medium": the prompt has concrete details but the domain is an interpretation, OR the project genuinely spans 2-3 domains without a single dominant one.
-- "low": the prompt is too vague to classify reliably, or could plausibly be many different things.
+(a) **Different-expert test.** Would the team need to hire someone whose expertise is THIS domain, separate from the primary-domain experts? If the same primary-domain firm or staff would naturally handle that work, the candidate FAILS — drop it.
+   - Yacht primary "Maritime" → DROP "Construction" (shipyards already employ welders, fitters, finishers).
+   - Yacht primary "Maritime" → DROP "Real Estate" (a yacht is not real estate even if someone lives on it).
+   - Tunnel primary "Construction" → DROP "Logistics" (the marine civil-works contractor lowers and joins the segments — that's their job).
+   - Tunnel primary "Construction" → DROP "Engineering" (civil engineers ARE Construction).
+   - Factory primary "Manufacturing" → DROP "Engineering" (industrial engineers ARE Manufacturing).
+   - Software primary "Software" → DROP "Engineering" / "Computer Science" / "Mathematics" (unless the project is mathematical research distinct from coding).
+   - Archiving primary "Archiving" → DROP "Engineering" (retrofitting equipment is part of operations, not a separate engineering R&D effort). Use a concrete domain like "Software" only if a separate software engineering team is needed.
 
-RATIONALE:
-- 1-2 sentences. Explain why the primary was chosen and (briefly) why each secondary is relevant. Reference the specific signals in the prompt.
+(b) **Specific-gap test.** If you removed this domain, would the downstream plan miss a CONCRETE question, regulator, risk, stakeholder, or template that the primary domain wouldn't have surfaced? If you can't name the gap in one sentence, drop the candidate.
 
-EDGE CASES:
-- Prompts about an individual's life, hobby, health, household, or relationships → primary "Personal" (with secondaries like "Health" or "Education" if relevant).
-- Prompts about an academic study, scientific experiment, or knowledge-generation goal → primary "Research".
-- Prompts about a one-time gathering (concert, conference, wedding, festival) → primary "Event Planning".
-- Prompts about producing physical goods at scale → primary "Manufacturing".
-- Prompts about teaching, curricula, schools, or learner outcomes → primary "Education".
-- Mixed projects (e.g. a research lab that also runs an annual conference) — use the primary that drives most of the planning effort and expertise; put the others in secondary_domains.
+## Rule 3 — Banned-by-default labels
+Do not use these unless the project's core matches them. They are commonly added for shallow reasons.
+- "Engineering" — too generic. Use a specific domain (Construction / Manufacturing / Software / Aerospace) instead.
+- "Finance" — only if the project's core is finance (banking, investment, insurance, fundraising) or involves non-trivial financial-instrument structuring. A budget or tax line does not qualify.
+- "Construction" — only if a generic civil/buildings contractor is needed. Buildouts handled by Maritime, Aerospace, Manufacturing, etc., do NOT count.
+- "Logistics" — only if logistics is a hard, planning-critical concern (cross-border, hostile geography, perishables, large-scale supply chain). Things-moving-around does NOT count.
+- "Real Estate" — only if property acquisition / leasing / asset management is a real planning workstream.
+- "Defense" / "Security" — only if actual military, national-security, or armed-protection expertise is required. "Needs discretion" or "has risks" does NOT count.
+- "Government" / "Regulatory" — never alongside "Public Policy" (synonyms).
+- "Medical" / "Clinical" — never alongside "Healthcare" (synonyms).
 
-Respond ONLY with a valid JSON object containing:
-- "primary_domain": a single short Title Case label.
-- "secondary_domains": a list of zero or more short Title Case labels (must not include the primary).
-- "confidence": "low", "medium", or "high".
-- "rationale": a 1-2 sentence explanation.
+## Rule 4 — Vocabulary
+Open-ended Title Case English labels, 1-3 words. Examples (NOT exhaustive): Research, Education, Manufacturing, Event Planning, Personal, Software, Construction, Healthcare, Agriculture, Logistics, Energy, Hospitality, Public Policy, Finance, Defense, Media Production, Transportation, Real Estate, Non-profit, Retail, Maritime, Aerospace, Robotics, Linguistics, Environmental, Archiving. Be specific enough to be useful but not so narrow that no expert fits ("Pediatric Cardiology" is too narrow; "Stuff" is too broad).
+
+## Rule 5 — Picking the primary
+The primary is the project's CENTER OF GRAVITY — the domain whose expertise will drive most of the planning. Common edge cases:
+- Individual's life, hobby, health, household, relationships → "Personal".
+- Academic study / scientific experiment → "Research".
+- One-time gathering (concert, conference, wedding, festival) → "Event Planning".
+- Producing physical goods at scale → "Manufacturing".
+- Teaching / curricula / schools → "Education".
+- Project that uses a building/yacht/rocket/etc — pick the operating domain (Hospitality / Maritime / Aerospace), not Construction.
+
+## Confidence
+- "high": prompt clearly fits one well-defined primary.
+- "medium": concrete details, but primary is an interpretation, OR the project genuinely spans 2-3 domains without a single lead.
+- "low": too vague to classify, or plausibly many different things.
+
+Respond ONLY with valid JSON: primary_domain, secondary_domains, confidence, rationale.
 """
 
 
@@ -260,18 +273,28 @@ class ClassifyDomain:
 if __name__ == "__main__":
     from worker_plan_internal.llm_factory import get_llm
     from worker_plan_api.prompt_catalog import PromptCatalog
+    from worker_plan_api.planexe_dotenv import PlanExeDotEnv
 
-    llm = get_llm("ollama-llama3.1")
+    PlanExeDotEnv.load().update_os_environ()
+
+    llm = get_llm("openrouter-gemini-2.0-flash-001")
 
     prompt_catalog = PromptCatalog()
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
+    # Diverse sample: mix lengths so we exercise short, medium, and long prompts.
     sorted_items = sorted(all_items, key=lambda x: len(x.prompt), reverse=True)
+    sample_size = min(20, len(sorted_items))
+    if sample_size < len(sorted_items):
+        step = len(sorted_items) / sample_size
+        sample_items = [sorted_items[int(i * step)] for i in range(sample_size)]
+    else:
+        sample_items = sorted_items
 
-    print("=== Domain classification on the longest catalog prompts ===")
-    for item in sorted_items[:5]:
-        print(f"\nPrompt ID: {item.id} (length: {len(item.prompt)} chars)")
-        print(f"Preview: {item.prompt[:120]}...")
+    print(f"=== Domain classification on {len(sample_items)} catalog prompts ===")
+    for idx, item in enumerate(sample_items, start=1):
+        print(f"\n[{idx}/{len(sample_items)}] Prompt ID: {item.id} (length: {len(item.prompt)} chars)")
+        print(f"Preview: {item.prompt[:160].replace(chr(10), ' ')}...")
         try:
             result = ClassifyDomain.execute(llm, item.prompt)
             json_response = result.to_dict(
@@ -279,6 +302,6 @@ if __name__ == "__main__":
                 include_user_prompt=False,
                 include_metadata=False,
             )
-            print(f"Response: {json.dumps(json_response, indent=2)}")
+            print(f"Result: {json.dumps(json_response, indent=2)}")
         except Exception as e:
             print(f"Error: {e}")

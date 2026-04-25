@@ -622,18 +622,15 @@ if __name__ == "__main__":
     prompt_catalog = PromptCatalog()
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
-    sorted_items = sorted(all_items, key=lambda x: len(x.prompt), reverse=True)
+    sorted_items = sorted(all_items, key=lambda x: x.id)
     sample_size = min(20, len(sorted_items))
-    SAMPLE_OFFSET = 1
-    if sample_size < len(sorted_items):
-        step = len(sorted_items) / sample_size
-        offset_steps = step * (SAMPLE_OFFSET / 2.0)
-        catalog_sample = [
-            sorted_items[int(i * step + offset_steps) % len(sorted_items)]
-            for i in range(sample_size)
-        ]
-    else:
-        catalog_sample = sorted_items
+    # Bump SAMPLE_SEED to draw a fresh non-overlapping 20-prompt set.
+    SAMPLE_SEED = 7
+    import random
+    rng = random.Random(SAMPLE_SEED)
+    shuffled = list(sorted_items)
+    rng.shuffle(shuffled)
+    catalog_sample = shuffled[:sample_size]
 
     vague_prompts = [
         TestPrompt("vague-help", "Help me make a plan for my project."),

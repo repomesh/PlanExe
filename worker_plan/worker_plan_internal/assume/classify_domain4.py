@@ -130,12 +130,11 @@ Findings carried forward (from v3 cycles 22-26 + 28-29)
 - Government/state-level initiatives whose POINT is policy change
   classify with Public Policy as the outcome, even when implementation
   involves a factory or a building.
-- Operating-venue projects (the same team will run the casino /
-  hotel / clinic) classify with the operating domain, not Construction.
+- Operating-venue projects (the same team will run the
+  restaurant / shop / clinic) classify with the operating
+  domain, not Construction.
 - Built-asset-handoff projects (bridge, tunnel, dam, generic
   warehouse) classify as Construction.
-- ICANN / gTLD / DNS-namespace proposals → Public Policy
-  (Telecommunications + Software as common secondaries).
 
 Findings unique to v4
 ---------------------
@@ -345,25 +344,23 @@ Right-answer worked examples
 - app / library / script / system / OS / kernel / compiler / framework → Software (with Cybersecurity as secondary when security is core, Embedded Systems if hardware-bound)
 - school / curriculum / learner outcomes / recurring weekly workshop → Education
 - scientific study / paper / experiment → Research
-- theme park / immersive attraction / experiential venue → Hospitality
 - legalizing or banning an activity, enacting a regulation, restructuring a state → Public Policy
 - designing a constructed or auxiliary language or language standard → Linguistics
 - preserving / digitizing / archiving data → Archiving
 - single wedding / conference / festival / state funeral → Event Planning
 - bridge / tunnel / dam / generic warehouse handed over to someone else to operate → Construction. Useful secondaries for an infrastructure project: Transportation (what the asset enables), Maritime (when in or over water).
 - lunar / Mars / orbital / space station / interplanetary mission → Aerospace. Aerospace already includes the structural, propulsion, materials, electronics, and life-support engineering for a space facility. Useful secondaries for a space project: Research (when science is the operational purpose), International Relations (when multinational), Energy (when nuclear reactors or large-scale power systems are core), Robotics (when autonomous construction or surface ops are central).
-- a casino, hotel, capsule hotel, restaurant, cafe, shop, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
-- an immersive theme park, narrative entertainment venue, escape room, or experiential attraction — even when humanoid robots, animatronics, AI, or LLMs drive the experience → Hospitality (or Entertainment). The robots / AI / software are method; the deliverable is paid entertainment for visitors.
+- a restaurant, cafe, shop, salon, gym, factory, or healthcare clinic the same project will operate → the operating domain (Hospitality, Retail, Manufacturing, Healthcare). The build-out is method.
+- a paid-entertainment venue with embedded technology — even when humanoid robots, animatronics, AI, or LLMs drive the experience → Hospitality (or Entertainment). The robots / AI / software are method; the deliverable is paid entertainment for visitors.
 - a personal trip / vacation / hobby outing / household task / individual life decision → Personal. A vacation to Paris is Personal, not Tourism. The Tourism domain is for businesses serving travellers.
 - a regularly-staffed weekly class, recurring workshop, ongoing course series, or community education program → Education. The venue / community / building is method.
-- a historical / period-accurate / replica build using ancient or pre-modern materials and methods (medieval castle, Stonehenge replica, log cabin in 1850s techniques, mead hall) → Construction. Useful secondaries: History, Archaeology, Heritage Conservation. Construction subsumes the structural / materials know-how.
+- a historical / period-accurate / replica build using ancient or pre-modern materials and methods → Construction. Useful secondaries: History, Archaeology, Heritage Conservation. Construction subsumes the structural / materials know-how.
 - personal household / life / hobby / preference about one's own body → Personal
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
 - a private company changing its OWN internal rules (HR policy, code of conduct, return-to-office, internal restructuring) → the company's own line of business, or Human Resources / Corporate Governance.
 - global aid / poverty reduction / refugee support / cross-border humanitarian work → International Development.
 - water treatment, drinking-water safety, sewer or septic systems, environmental contamination of water, chemical pollutants in a watershed → Environmental.
 - a domestic municipal utility upgrade or environmental remediation in a wealthy country → Environmental, Public Health, or Public Works (depending on whose expertise drives the plan).
-- ICANN / gTLD application / DNS namespace creation / internet-governance proposal → Public Policy (with Telecommunications and Software as common secondaries). The deliverable is the right to operate the namespace.
 
 Vague-prompt handling
 ---------------------

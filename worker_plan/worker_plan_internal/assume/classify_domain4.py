@@ -249,8 +249,7 @@ class DomainFitAssessment(BaseModel):
 
     primary_domain and secondary_domains are NOT in this schema. They are
     derived in code from the fit list (see derive_primary / derive_secondaries
-    in this module). Letting the model produce both the fit list and the
-    final classification was the v3 failure mode that v4 fixes.
+    in this module).
     """
     # No max_length here on purpose — small models occasionally
     # over-emit and we'd rather truncate in code with a warning than

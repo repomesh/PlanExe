@@ -119,9 +119,9 @@ Findings carried forward (from v3 cycles 22-26 + 28-29)
 - Specific labels beat generic ones: encourage the model toward
   Construction, Manufacturing, Software, Aerospace, Linguistics,
   Healthcare, etc.
-- Niche labels (Cryobiology, Neuroscience, Biomedicine, Machine
-  Learning, Cultural Preservation, Marine Biology, Entomology,
-  Labor Relations) emerge naturally on detailed prompts when the
+- Niche labels (Neuroscience, Biomedicine, Machine Learning,
+  Cultural Preservation, Marine Biology, Entomology, Labor
+  Relations) emerge naturally on detailed prompts when the
   schema lets them.
 - Vague prompts naming no concrete deliverable should produce an
   empty fit list (and therefore primary_domain="Unclear" via the
@@ -335,7 +335,7 @@ Role definitions
 Guidance for picking domain labels
 ----------------------------------
 - Pick a real discipline that has its own experts, conferences, regulators, and templates. The label should answer "who would you hire to lead this?".
-- For medical / biological R&D, prefer specific labels: Biotechnology, Cellular Therapy, Drug Discovery, Cryobiology, Neuroscience.
+- For medical / biological R&D, prefer specific labels: Biotechnology, Cellular Therapy, Drug Discovery, Neuroscience, Immunology, Genetics.
 - For physical-product R&D, prefer Manufacturing or Robotics.
 - For software systems, use Software (or a more specific label like Cybersecurity, Machine Learning, Embedded Systems if appropriate).
 - For civil infrastructure, use Construction. Construction subsumes structural engineering, civil engineering, materials science, and architectural design — those are skills inside Construction.

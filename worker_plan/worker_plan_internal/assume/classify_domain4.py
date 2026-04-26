@@ -245,11 +245,10 @@ class DomainFit(BaseModel):
 
 
 class DomainFitAssessment(BaseModel):
-    """The LLM's output: candidate fits, confidence, rationale.
-
-    primary_domain and secondary_domains are NOT in this schema. They are
-    derived in code from the fit list (see derive_primary / derive_secondaries
-    in this module).
+    """A list of candidate domain fits for the project, plus an overall
+    confidence and a short rationale. Emit only these three fields; the
+    primary domain and secondary domains are computed downstream from
+    the fit list and must not appear here.
     """
     # No max_length here on purpose — small models occasionally
     # over-emit and we'd rather truncate in code with a warning than

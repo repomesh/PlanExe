@@ -80,24 +80,31 @@ I'm terrible at SKILL.md, so I'm not at a place where I can easily automate this
 
 ## Directions to go
 
-**Ask for expert help:** Establish contact between people, for reviewing a plan, for executing the plan, for getting funding.
-The “Ask for expert help” section, serve the content from planexe.org. Either as an iframe or as javascript or be generated dynamic?
-
 **Boost initial prompt:** The `initial prompt` has the biggest impact on the generated plan, if it's bad then the final plan is bad.
 If it's well written, concise, there is a higher chance for a realistic/feasible plan.
+I'm pondering about making a chat interface talking with planexe MCP interface, that assists the user in writing a plan.
 Using the current PlanExe MCP interface, and the initial prompts are of high quality, where the LLM looks at some reference prompts of what does a well formatted plan look like, and asks the user follow up questions to gather sufficient details.
-However when using the UI and users entering the prompt manually, the initial prompts are of low quality.
+Alternatively a reject mechanism that immediately responds with suggestions for how to improve the prompt.
+Alas most users are using the UI and types in the prompt manually, the initial prompts are of low quality.
 Before MCP, I use AIs to write the initial prompt for me by first having a long conversation about the topic,
 and showing examples of other initial prompts that have worked well in the past.
 It may by a small tweak to the initial prompt and it yields a better plan.
 It may be an entire rewrite of the initial prompt.
 The user may have specified a vague prompt, or the user may not be domain expert, the prompt may be non-sense,
 or the prompt may be overly specific so PlanExe attends to the wrong things.
+Make a detector for under-specified prompts, where important parts are missing, eg. the product to be sold is unspecified, but where the other the other parts are somewhat doable, this results in a crappy sales plan that doesn't match what the user had in mind.
 Suggest changes to the initial prompt. This can be by picking a bigger budget, a different technology,
 a different set of levers, fixing typos.
 
 - User specifies a budget of 0..100 USD. Which is unrealistic, when the plan is to hire a team, and work on it for months.
 - User leaves out physical location(s). So PlanExe picks a random location in a different part of the world.
+- Confusing prompt. `Less than 100 employees`, that can be a solopreneur or a company with 99 employees. Better with a range 80..120 employees, and a number of people available to the project.
+
+**Classify domain:** A step before identifying levers. Determine the `primary domain` and `secondary domains` and hints for what to attend to downstream.
+Currently levers gets created from the initial prompt, there is no assumptions being made before the levers, causing a poor choice of levers.
+
+**Ask for expert help:** Establish contact between people, for reviewing a plan, for executing the plan, for getting funding.
+The “Ask for expert help” section, serve the content from planexe.org. Either as an iframe or as javascript or be generated dynamic?
 
 **Dynamic plugins:** Have AI's rewrite PlanExe as they see fit, depending on what the user have prompted it with. So if it's a software project, it writes PlanExe plugins that are going to be needed. And then proceeds to creating the plan. In the middle of the plan creation, it may be necessary to create more PlanExe plugins as issues shows up.
 

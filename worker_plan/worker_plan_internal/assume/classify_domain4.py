@@ -1,35 +1,12 @@
 """
-Classify the project domain — fit-derivation variant.
+Classify the project domain into a primary domain (and 0-3 secondary
+domains) so downstream stages can apply domain-appropriate expertise,
+risks, and templates.
 
-Sibling of `classify_domain3.py`. Same fit-based intermediate representation
-(domain_fits with role + reason), but the architectural mismatch in v3 is
-fixed: the LLM produces ONLY the fit list (plus confidence and rationale);
-primary_domain and secondary_domains are derived in code from the fits.
-This eliminates the failure mode where the model emitted a primary that
-contradicted its own fit list.
-
-Key differences vs v3:
-- LLM-output schema is DomainFitAssessment (fits + confidence + rationale).
-  primary_domain and secondary_domains do not appear in the LLM call.
-- Primary is derived as: highest-fit domain whose role is 'outcome'.
-  ('outcome' is broader than v3's 'deliverable' — it covers policy
-  changes, research findings, service operations, personal outcomes, and
-  built artifacts under one umbrella.)
-- Secondary list is derived as: medium/high-fit domains other than primary,
-  capped at 3.
-- The fit schema accepts only "medium" or "high". Low-fit candidates are
-  not requested — they were noise downstream and the model spent tokens
-  inventing them.
-- Cardinality is 1 to 4 fits (or 0 when the prompt is too vague). v3 forced
-  3-4 which encouraged filler.
-- Defensive cleanup is now explicit: every silent mutation produces a
-  warning that ends up in the result so downstream stages can see what
-  was rewritten.
-
-Honest framing: this file is "mostly positive" rather than strictly
-positive-only. Output-format constraints ("emit a single JSON object",
-"primary stays out of secondaries") are stated negatively where doing so
-is clearer than the positive paraphrase.
+The LLM emits only a fit list (each entry: domain + role + reason +
+fit level), plus an overall confidence and a short rationale. The
+primary domain and secondaries are derived in code from the fits, so
+the model cannot emit a primary that contradicts its own fit list.
 
 PROMPT> python -m worker_plan_internal.assume.classify_domain4
 """
@@ -51,11 +28,10 @@ Goal: classify each plan prompt into a useful primary_domain (and 0-3
 secondary_domains) so downstream stages can apply domain-appropriate
 expertise, risks, and templates.
 
-This variant (v4) makes the fit list the source of truth: the LLM emits
-only candidate fits with role + reason; primary and secondaries are
-derived deterministically in code. v3's failure mode (model returns a
-primary that contradicts its own fit list) is structurally impossible
-in v4.
+The LLM emits only candidate fits (with role + reason); primary and
+secondaries are derived deterministically in code. This makes it
+structurally impossible for the model to return a primary that
+contradicts its own fit list.
 
 Pipeline context
 ----------------
@@ -68,8 +44,7 @@ Schema and roles
 The LLM emits 1-4 DomainFit entries (or 0 when vague). Each entry:
 - domain — Title Case noun phrase, an expertise area a specialist
   would call themselves.
-- fit — "medium" or "high". Low-fit candidates were noise; they are
-  no longer accepted.
+- fit — "medium" or "high". Low-fit candidates are not accepted.
 - role — "outcome" / "constraint" / "market" / "method" /
   "stakeholder" / "tool" / "unclear".
 - reason — one short sentence (≤15 words).
@@ -85,12 +60,9 @@ Role meanings:
 - tool — the domain is a generic instrument.
 - unclear — present but role is genuinely ambiguous.
 
-Why "outcome" instead of "deliverable" (the v3 word)
-----------------------------------------------------
-"deliverable" framed everything as a built artifact, which forced the
-model into awkward labels for projects that change a law, run a
-campaign, or shift a regulation. "outcome" naturally covers all of
-those plus the artifact case.
+"outcome" is deliberately broader than "deliverable": it covers
+projects that change a law, run a campaign, or shift a regulation,
+not just built artifacts.
 
 Code-side derivation
 --------------------
@@ -114,8 +86,8 @@ duplicate fits dropped, empty primary normalized, confidence
 overridden, etc. Downstream consumers can use these to track
 quality regressions without re-running the model.
 
-Findings carried forward (from v3 cycles 22-26 + 28-29)
--------------------------------------------------------
+Classification heuristics
+-------------------------
 - Specific labels beat generic ones: encourage the model toward
   Construction, Manufacturing, Software, Aerospace, Linguistics,
   Healthcare, etc.
@@ -136,15 +108,14 @@ Findings carried forward (from v3 cycles 22-26 + 28-29)
 - Built-asset-handoff projects (bridge, tunnel, dam, generic
   warehouse) classify as Construction.
 
-Findings unique to v4
----------------------
-- Architectural: the model can no longer emit a primary that
-  contradicts the fit list because it never emits a primary. The
-  cost is that the prompt's role definition for "outcome" must be
-  carefully written — if the model misuses outcome (e.g. tags
-  Healthcare as outcome on a SaaS-app-for-clinics prompt), the
-  derived primary will be wrong even though the fit list looks
-  reasonable.
+Architectural notes
+-------------------
+- The model cannot emit a primary that contradicts the fit list
+  because it never emits a primary. The cost is that the role
+  definition for "outcome" must be carefully written — if the
+  model misuses outcome (e.g. tags Healthcare as outcome on a
+  SaaS-app-for-clinics prompt), the derived primary will be wrong
+  even though the fit list looks reasonable.
 - Dropping low-fit candidates from the schema reduces token spend
   and removes a source of leak (Engineering, Computer Science,
   Business often appeared at low fit on llama-8B).
@@ -156,20 +127,17 @@ Model fitness
 - gemini-2.0-flash-001: expected to be the cleanest target; the
   derivation logic adds no friction and the role distinctions are
   honored well.
-- qwen3-30b-a3b: not yet exercised on v4.
-- llama-3.1-8b-instruct (Nitro): the small-model design target;
-  the architectural shift removes the "primary disagrees with fit
-  list" failure entirely. The remaining limit is llama's safety
-  reflex on charged content (which v3 inherited from its design
-  decision to defer that work to the upstream RedlineGateTask).
+- qwen3-30b-a3b: not yet exercised.
+- llama-3.1-8b-instruct (Nitro): the small-model design target.
+  The remaining limit is llama's safety reflex on charged content,
+  which is deferred to the upstream RedlineGateTask.
 
 The methodological discipline (still load-bearing)
 --------------------------------------------------
-For each pattern earlier versions tried to suppress with a "do NOT
-use X" rule, the equivalent v4 fix is a "use Y instead" positive
-substitute written into the worked example list. The model needs a
-concrete alternative; the absence of the bad answer alone is not
-enough to redirect it.
+For each pattern we want to suppress, the fix is a "use Y instead"
+positive substitute written into the worked example list — not a
+"do NOT use X" rule. The model needs a concrete alternative; the
+absence of the bad answer alone is not enough to redirect it.
 """
 
 

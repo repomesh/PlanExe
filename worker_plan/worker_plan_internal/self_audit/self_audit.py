@@ -9,10 +9,10 @@ The Secondary Reader (The Project Manager/Lead): This is the person tasked with 
 
     Value: It serves as a prioritized "fix-it" list. It tells the project manager which fires are the biggest. They don't need to worry about the team size (a ⚠️ Medium risk) if the entire project is a 🛑 High "Legal Minefield." It focuses their attention on the foundational, existential threats to the project's success.
 
-
 The "violates known physics" detection is often gets triggered, freaking out about "faster than light travel" on documents that have nothing to do with FTL.
 The "elephant-alpha" model especially struggle with detecting that, when it otherwise does an ok job at everything else.
 I'm considering making a dedicated system prompt only for VIOLATES_KNOWN_PHYSICS, that is have lower rate of false positives.
+After switching from "Gemini-2.0-flash" to "Gemini-2.5-flash", the "Violates Known Physics" gets fired nearly always.
 
 Adding a new checklist item:
 Find fabricated evidence. Where things aren't true.

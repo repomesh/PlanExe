@@ -1,37 +1,24 @@
 # ============================================================================
-# POSTGRES PORT CONFLICT NOTE
+# PUBLISHED PORTS / BIND HOST NOTE
 # ============================================================================
-# The default PostgreSQL port is 5432. On developer machines, this port is
-# often already occupied by a local PostgreSQL installation (e.g., Postgres.app
-# on macOS, or a system PostgreSQL on Linux).
+# Several services have permissive defaults that are fine for localhost-only
+# development but would be a foot-gun on a shared network: admin/admin on the
+# frontend, PLANEXE_MCP_REQUIRE_AUTH=false with empty API key on mcp_cloud,
+# default postgres password, no auth at all on worker_plan.
 #
-# If port 5432 is in use, set PLANEXE_POSTGRES_PORT to a different value:
-#   export PLANEXE_POSTGRES_PORT=5433
-#   docker compose up
-#
-# This only affects the HOST port mapping (how you access Postgres from your
-# machine). Inside Docker, containers always connect to each other on port 5432.
-# ============================================================================
-#
-# ============================================================================
-# BIND HOST NOTE
-# ============================================================================
-# All published ports below bind to 127.0.0.1 by default so the stack is not
-# exposed to the LAN out of the box — several services have permissive
-# defaults (admin/admin on the frontend, no auth on mcp_cloud, default
-# postgres password) that are fine for localhost-only use but would be a
-# foot-gun on a shared network.
-#
-# database_postgres and worker_plan are pinned to 127.0.0.1 because nothing
-# outside the host should call them directly.
-#
-# frontend_multi_user and mcp_cloud honor PLANEXE_BIND_HOST. To expose them
-# to the LAN (e.g. testing from your phone, Claude Desktop on another
-# machine), set:
-#   export PLANEXE_BIND_HOST=0.0.0.0
-#   docker compose up
-# Make sure you have set strong PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD,
-# PLANEXE_MCP_API_KEY, and PLANEXE_MCP_REQUIRE_AUTH=true before doing so.
+# Ports policy:
+#  - database_postgres and worker_plan have NO host port mapping. They are
+#    reached by other containers via the docker network at
+#    database_postgres:5432 and worker_plan:8000. To inspect them from the
+#    host use `docker compose exec` or a one-off override file. Side effect:
+#    no host port to collide with a local Postgres on 5432.
+#  - frontend_multi_user and mcp_cloud are published, bound to PLANEXE_BIND_HOST
+#    (default 127.0.0.1). To expose them to the LAN (testing from your phone,
+#    Claude Desktop on another machine), set:
+#      export PLANEXE_BIND_HOST=0.0.0.0
+#      docker compose up
+#    First set strong PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD,
+#    PLANEXE_MCP_API_KEY, and PLANEXE_MCP_REQUIRE_AUTH=true.
 # ============================================================================
 
 x-worker_plan_database-base: &worker_plan_database_base
@@ -73,14 +60,10 @@ services:
       POSTGRES_USER: ${PLANEXE_POSTGRES_USER:-planexe}
       POSTGRES_PASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
       POSTGRES_DB: ${PLANEXE_POSTGRES_DB:-planexe}
-    ports:
-      # PLANEXE_POSTGRES_PORT sets the HOST port (left side). The container always
-      # listens on 5432 internally (right side). If your machine already has a
-      # Postgres running on 5432 (e.g., Postgres.app on macOS), set a different
-      # host port: export PLANEXE_POSTGRES_PORT=5433
-      # Bound to 127.0.0.1 — postgres has a default password and should not be
-      # reachable from the LAN.
-      - "127.0.0.1:${PLANEXE_POSTGRES_PORT:-5432}:5432"
+    # No host port mapping by default. Other containers reach this DB via the
+    # docker network as database_postgres:5432. If you want to inspect the
+    # database from your host (DBeaver, psql) use a one-off override file or
+    # `docker compose exec database_postgres psql -U planexe`.
     volumes:
       - database_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -101,10 +84,9 @@ services:
     environment:
       PLANEXE_CONFIG_PATH: /app
       PLANEXE_WORKER_RELAY_PROCESS_OUTPUT: "true"
-    ports:
-      # 127.0.0.1 only — worker_plan has no auth and is meant to be called by
-      # frontend_multi_user over the docker network, not from the LAN.
-      - "127.0.0.1:8000:8000"
+    # No host port mapping by default. frontend_multi_user reaches this API
+    # via the docker network as worker_plan:8000. To curl it from the host
+    # use a one-off override file or `docker compose exec worker_plan ...`.
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro

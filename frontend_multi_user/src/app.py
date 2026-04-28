@@ -925,15 +925,25 @@ class MyFlaskApp:
         from src.billing import _record_event, _finalize_stripe_checkout_session
         from src.plan_routes import _get_current_user_account, _admin_user_ids
 
+        # /healthcheck fires every 10s from the docker healthcheck and
+        # produces a gunicorn access-log line on its own; skip it here so the
+        # console isn't flooded. If healthchecks ever hang, the absence of the
+        # gunicorn access-log line + a WORKER TIMEOUT is still diagnostic.
+        _trace_skip_paths = frozenset({"/healthcheck"})
+
         @self.app.before_request
         def _trace_request_arrival():
             """Log every request entry so a hung worker's URL is visible even
             if the handler never returns. Pairs with _trace_request_completion."""
+            if request.path in _trace_skip_paths:
+                return
             g._planexe_req_started = time.monotonic()
             logger.info("→ %s %s", request.method, request.full_path.rstrip("?"))
 
         @self.app.after_request
         def _trace_request_completion(response):
+            if request.path in _trace_skip_paths:
+                return response
             started = g.pop("_planexe_req_started", None)
             duration_ms = (time.monotonic() - started) * 1000 if started is not None else -1
             logger.info(

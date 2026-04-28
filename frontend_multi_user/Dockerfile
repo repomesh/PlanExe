@@ -26,6 +26,11 @@ RUN set -eux; \
 # Default location for generated plans
 RUN mkdir -p /app/run && chown -R appuser:appuser /app/run
 
+# Gunicorn 25.x writes control-server state into <cwd>/.gunicorn at startup,
+# resolved before --chdir is applied, so it lands in /app. Pre-create with
+# correct ownership to avoid PermissionError from the master process.
+RUN mkdir -p /app/.gunicorn && chown appuser:appuser /app/.gunicorn
+
 USER appuser
 
 WORKDIR /app/frontend_multi_user

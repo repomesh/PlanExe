@@ -39,9 +39,42 @@ EXPOSE 5000
 
 ENV PLANEXE_FRONTEND_MULTIUSER_WORKERS=4
 
+# --keep-alive 0 — workaround for sync-worker timeouts after large responses.
+#
+# Symptom: gunicorn master kills a worker with "WORKER TIMEOUT (pid:N)" exactly
+# 120s after a successful big response (e.g. /plan/download/zip returning ~4MB,
+# /viewplan returning ~600KB). Traceback always points at recv() / "no URI
+# read" — misleading, that's just where SIGABRT interrupts the worker. The
+# actual cause is the worker sitting idle in recv() on a kept-alive TCP
+# connection that the upstream peer (Cloudflare edge in our deploy) holds open
+# without sending another request. The sync worker counts that idle wait
+# against --timeout, so the master eventually kills it.
+#
+# Worked in the past: this only became a regular issue recently. Likely cause
+# is gunicorn 25.x sync-worker keep-alive handling combined with our move
+# behind Cloudflare; previous gunicorn versions / direct connections did not
+# trigger it.
+#
+# Fix: --keep-alive 0 forces gunicorn to close the connection right after each
+# response. The worker returns to accept() instead of waiting in recv(), so it
+# can never sit idle past --timeout. Tiny perf cost (one TCP handshake per
+# request) — irrelevant for our traffic volume.
+#
+# Alternatives considered, not taken:
+#  1. --worker-class gthread --threads N — threaded workers tolerate idle
+#     connections without blocking. Bigger change; revisit if we ever want
+#     real keep-alive for performance.
+#  2. Pin gunicorn <25 — would also work if this is a 25.x regression, but
+#     locks us out of upstream fixes and the 25.x control-server feature.
+#  3. Lower --timeout — masks symptom at the cost of killing legitimately
+#     slow handlers. Rejected.
+#
+# Revisit if we switch worker class, drop Cloudflare in front of this service,
+# or upgrade gunicorn past a release that fixes sync keep-alive idle handling.
 CMD gunicorn wsgi:app \
     --bind 0.0.0.0:${PLANEXE_FRONTEND_MULTIUSER_PORT:-5000} \
     --workers ${PLANEXE_FRONTEND_MULTIUSER_WORKERS} \
     --timeout 120 \
+    --keep-alive 0 \
     --access-logfile - \
     --chdir /app/frontend_multi_user/src

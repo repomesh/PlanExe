@@ -80,6 +80,14 @@ I'm terrible at SKILL.md, so I'm not at a place where I can easily automate this
 
 ## Directions to go
 
+**Violates Known Physics false positive:** After switching from "Gemini-2.0-flash" to "Gemini-2.5-flash", I have noticed the "Violates Known Physics" gets triggered way too often, for reasons not related to physics. See the "Self Audit" section here, embarrasing:
+https://planexe.org/20260203_bering_bridge_report.html
+Violates Known Physics
+Does the project require a major, unpredictable discovery in fundamental science to succeed?
+Level: 🛑 High
+Justification: Rated HIGH because the plan is entirely focused on non-physics constraints (governance, finance, regulation, logistics). The scenario involves no claims of perpetual motion, FTL travel, or violation of laws like thermodynamics or relativity. Mitigation is required for checklist completion based on scope instructions.
+Mitigation: Governance Architect: Review the plan against fundamental conservation laws (Mass/Energy) to confirm no implicit physics rule violation exists by Q2 2025.
+
 **Boost initial prompt:** The `initial prompt` has the biggest impact on the generated plan, if it's bad then the final plan is bad.
 If it's well written, concise, there is a higher chance for a realistic/feasible plan.
 I'm pondering about making a chat interface talking with planexe MCP interface, that assists the user in writing a plan.
@@ -267,10 +275,3 @@ I'm considering having a table of content in the left sidebar, similar to this:
 [Railway Dockerfiles guide](https://docs.railway.com/guides/dockerfiles)
 It uses Docusaurus which uses React. I'm no fan of React.
 I'm considering using mkdocs instead.
-
-
-## Eliminate redundant user prompts in the log file
-
-Get rid of some of the many user prompt logging statements, so the log.txt is less noisy.
-These user prompts are saved to the `track_activity.jsonl` file already. So having them in the log.txt is redundant.
-

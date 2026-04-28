@@ -17,7 +17,7 @@ from urllib.parse import quote_plus, urlparse
 from typing import Dict, Optional, Tuple, Any, cast
 from types import SimpleNamespace
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, abort
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, abort, g
 from flask_admin import Admin, AdminIndexView, expose
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
@@ -924,6 +924,23 @@ class MyFlaskApp:
         from src.auth import get_or_create_api_key, _auth_provider_label
         from src.billing import _record_event, _finalize_stripe_checkout_session
         from src.plan_routes import _get_current_user_account, _admin_user_ids
+
+        @self.app.before_request
+        def _trace_request_arrival():
+            """Log every request entry so a hung worker's URL is visible even
+            if the handler never returns. Pairs with _trace_request_completion."""
+            g._planexe_req_started = time.monotonic()
+            logger.info("→ %s %s", request.method, request.full_path.rstrip("?"))
+
+        @self.app.after_request
+        def _trace_request_completion(response):
+            started = g.pop("_planexe_req_started", None)
+            duration_ms = (time.monotonic() - started) * 1000 if started is not None else -1
+            logger.info(
+                "← %s %s %s %.0fms",
+                response.status_code, request.method, request.full_path.rstrip("?"), duration_ms,
+            )
+            return response
 
         @self.app.before_request
         def _auto_login_open_access():

@@ -1,7 +1,7 @@
 """
 Classify the project domain — fit-based variant, positive-examples only.
 
-Sibling of `classify_domain2.py`. Same fit-based schema (3-5 candidate
+Sibling of `classify_domain_v2.py`. Same fit-based schema (3-5 candidate
 domains scored low / medium / high with a `role`, primary/secondary
 derived from the fits), but the system prompt is rewritten to use ONLY
 positive examples and POSITIVE definitions. There are no "do not", "do
@@ -15,7 +15,7 @@ documented in identify_potential_levers.py (see OPTIMIZE_INSTRUCTIONS:
 only positive shape definitions and concrete right-answer examples
 avoids the priming.
 
-PROMPT> python -m worker_plan_internal.assume.classify_domain3
+PROMPT> python -m worker_plan_internal.assume.classify_domain_v3
 """
 import time
 from math import ceil

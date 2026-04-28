@@ -1,7 +1,7 @@
 """
 Classify the project domain — fit-based variant.
 
-Sibling of `classify_domain.py`. Same goal (label the project for downstream
+Sibling of `classify_domain_v1.py`. Same goal (label the project for downstream
 pipeline stages), but uses a richer intermediate representation:
 
   1. The LLM scores 3-7 candidate domains as low / medium / high fit, each
@@ -14,7 +14,7 @@ This avoids the failure mode where a single-label classifier compresses
 genuinely cross-domain projects too early. The fit list is the
 load-bearing part — primary/secondary are derived from it.
 
-PROMPT> python -m worker_plan_internal.assume.classify_domain2
+PROMPT> python -m worker_plan_internal.assume.classify_domain_v2
 """
 import time
 from math import ceil

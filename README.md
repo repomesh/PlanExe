@@ -13,10 +13,6 @@
 </p>
 
 <p align="center">
-  <strong>PlanExe is the premier planning tool for AI agents.</strong>
-</p>
-
-<p align="center">
   <a href="https://app.mach-ai.com/planexe_early_access">
     <img src="https://img.shields.io/badge/%F0%9F%9A%80%20Try%20PlanExe%20in%20your%20browser-Generate%20a%20free%20plan-2ea44f?style=for-the-badge" alt="Try PlanExe in your browser — generate a free plan" height="48">
   </a>

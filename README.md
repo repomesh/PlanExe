@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  No install. Describe your idea in the form, hit submit, and PlanExe returns a ~40-page plan in about 15 minutes.
+  Describe your idea in the form, hit submit, and PlanExe returns a ~40-page plan in about 15 minutes.
 </p>
 
 <p align="center">

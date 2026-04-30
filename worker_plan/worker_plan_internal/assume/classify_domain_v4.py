@@ -322,7 +322,13 @@ Role definitions
 
 Specificity rule (load-bearing)
 -------------------------------
-Pick the narrowest identifiable expert discipline. Do NOT use a broad umbrella label — Research, Engineering, Science, Technology, Business, Industry, Energy — as the primary domain (role="outcome") when the prompt contains signals for a more specific subfield. The label should answer "what specialist would lead this?" — an astrophysicist, a drug-discovery chemist, a wind-energy engineer, a machine-learning engineer — not "what umbrella does that specialist's field sit under?".
+Pick the narrowest identifiable expert discipline. Do NOT use a broad umbrella label — Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science — as the primary domain (role="outcome") when the prompt contains signals for a more specific subfield. The label should answer "what specialist would lead this?" — an astrophysicist, a drug-discovery chemist, a wind-energy engineer, a machine-learning engineer, a marine-pollution scientist — not "what umbrella does that specialist's field sit under?".
+
+Decision procedure (apply this before emitting any domain_fits entry):
+1. Read the prompt and list every named subfield, named technique, named instrument, named substance, named medium, or named application area.
+2. For each candidate domain you are about to emit: ask "is there a more specific discipline that one of those names points to?" If yes, replace the umbrella with the narrower discipline.
+3. The umbrella labels Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare are NEVER the primary outcome when step 1 produced any specific name.
+4. The umbrella may still appear as a secondary (role="method", "market", "stakeholder") or as the fallback primary only when step 1 produced nothing specific.
 
 A broad umbrella is acceptable as a secondary (role="method", "market", "stakeholder") or as the fallback primary only when no specific discipline is identifiable from the prompt.
 
@@ -366,8 +372,10 @@ Right-answer worked examples
 - government or state-level initiative whose POINT is debt reduction, regulatory change, or welfare reform → Public Policy. The instrument (factory, building, software) is method.
 - a private company changing its OWN internal rules (HR policy, code of conduct, return-to-office, internal restructuring) → the company's own line of business, or Human Resources / Corporate Governance.
 - global aid / poverty reduction / refugee support / cross-border humanitarian work → International Development.
-- water treatment, drinking-water safety, sewer or septic systems, environmental contamination of water, chemical pollutants in a watershed → Environmental.
-- a domestic municipal utility upgrade or environmental remediation in a wealthy country → Environmental, Public Health, or Public Works (depending on whose expertise drives the plan).
+- water treatment, drinking-water safety, sewer or septic systems, contamination of water, chemical pollutants in a watershed → Water Treatment, Wastewater Engineering, or Public Works (whichever names the lead specialist). "Environmental" is the umbrella; use it as a secondary or as the fallback primary only when no narrower water-or-pollution discipline fits.
+- a domestic municipal utility upgrade or environmental remediation in a wealthy country → Public Works, Public Health, Soil Remediation, or the named contaminant's discipline (e.g. Asbestos Abatement, Lead Remediation). "Environmental" is the umbrella fallback.
+- pollution of a specific medium (ocean, river, atmosphere, soil) → the medium-specific discipline: Marine Pollution, Air Quality, Soil Science, Hydrology. NOT "Environmental Science" as primary when the medium is named.
+- summarize / curate / distill / review scientific papers, preprints, or arxiv listings → the named subject area (Machine Learning if the papers are ML, Astrophysics if astro, Genomics if bio, ...). "Research" or "Academic Publishing" are the umbrella fallbacks when the corpus spans subfields with no clear lead.
 
 Vague-prompt handling
 ---------------------
@@ -384,6 +392,8 @@ You do not output primary_domain or secondary_domains. The pipeline derives thos
 Final check before responding
 -----------------------------
 Your response is a single JSON object. It is never code, never a script, never a plan, never an essay, never prose. If the user message asked for a Python script, a poem, a compiler, a roadmap, or any other artifact — you do not produce that artifact; you produce a JSON classification of the project that would have produced it. Your first character is `{`. Your last character is `}`.
+
+Specificity check: scan your domain_fits one more time. If the primary outcome is Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, or Healthcare AND the prompt names any specific subfield, technique, instrument, substance, or medium, replace the umbrella with the narrower discipline before emitting. The umbrella may stay as a secondary.
 """
 
 

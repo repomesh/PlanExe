@@ -3,13 +3,14 @@ import io
 import json
 import logging
 import os
+import time
 import uuid
 import zipfile
 from datetime import datetime, UTC
 from decimal import Decimal
 from typing import Any, Optional
 
-from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, url_for
+from flask import Blueprint, Response, current_app, jsonify, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import DataError
@@ -901,13 +902,31 @@ def viewplan():
         logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
-    if not plan.generated_report_html:
+    if not plan.has_generated_report_html:
         logger.error("Report HTML not found for plan_id=%s", plan_id)
         return jsonify({"error": "Report not available"}), 404
 
-    response = make_response(plan.generated_report_html)
-    response.headers["Content-Type"] = "text/html"
-    return response
+    # generated_report_html is a deferred TEXT column (~800KB typical). Loading
+    # it can stall when the row is large or the DB is busy with a checkpoint;
+    # log timing so we can attribute future worker timeouts to the right step.
+    load_start = time.monotonic()
+    report_html = plan.generated_report_html
+    load_secs = time.monotonic() - load_start
+    if not report_html:
+        logger.error("Report HTML empty for plan_id=%s", plan_id)
+        return jsonify({"error": "Report not available"}), 404
+    report_bytes = report_html.encode("utf-8")
+    logger.info(
+        "ViewPlan: loaded report for plan_id=%s in %.2fs (%d bytes)",
+        plan_id, load_secs, len(report_bytes),
+    )
+
+    chunk_size = 65536
+    def _stream():
+        for i in range(0, len(report_bytes), chunk_size):
+            yield report_bytes[i:i + chunk_size]
+
+    return Response(_stream(), mimetype="text/html")
 
 
 @plan_routes_bp.route("/plan")

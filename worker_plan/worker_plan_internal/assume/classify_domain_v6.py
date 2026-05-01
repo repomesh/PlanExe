@@ -403,6 +403,84 @@ Honest caveats:
   those, (4 / Fix 2) is likely the biggest impact on downstream
   planning quality if no other stage produces those project-level
   warnings.
+
+Field-quality probe (gpt-oss-safeguard-20b, augmented condition,
+10 prompts: 7 concrete + 3 vague)
+---------------------------------------------------------------
+Sampled the same SAMPLE_SEED=300 catalog as the smoke harness and
+ran the full pipeline (IdentifyPurpose pre-pass + ExtractConstraints
+pre-pass + ClassifyDomain on the augmented user message). The 10
+prompts spanned all three purpose buckets and three concreteness
+shapes (vague, single-discipline concrete, multi-discipline
+concrete).
+
+Per-field findings:
+
+- domain (DomainFit): All 28 emitted values are real Title Case
+  noun phrases naming actual expert disciplines. No empty strings,
+  no fabricated labels. The narrowness principle is honored:
+  Arachnology (not Entomology), Water Treatment Engineering (not
+  Environmental), Industrial Automation (not Engineering),
+  Climate Geoengineering (not Environmental Science).
+
+- fit (DomainFit): All values are "high" or "medium" (no "low"
+  leaks reaching the cleanup pipeline). High is reserved for
+  disciplines whose specialists could plausibly own the plan;
+  medium for materially-affecting but not-central disciplines.
+  Software Engineering=high/method on the paperclip factory is a
+  thoughtful call — software is critical to the automation but
+  isn't the outcome.
+
+- role (DomainFit): Roles observed across the sample: outcome,
+  method, constraint. The other four literals (market,
+  stakeholder, tool, unclear) were not triggered because none of
+  the sampled prompts had a clear B2B-customer, named-actor, or
+  generic-tool shape. ONE PRECISION CONCERN: on the most complex
+  prompt in the sample, the model emitted three simultaneous
+  role="outcome" entries (Aerospace Engineering + Climate
+  Geoengineering + International Law). The role spec reads "this
+  domain owns the project's main success criterion," which implies
+  one outcome. The model is using "outcome" to mean "important
+  deliverable," which is looser than the spec. derive_primary
+  still produces a sensible primary (it picks the first
+  high+outcome) but the role distinction is being weakened on
+  multi-faceted prompts. Worth a future principle-clarification
+  pass — "exactly one fit may carry role=outcome; equally
+  load-bearing peers go to method, constraint, or stakeholder"
+  — but this is not a regression and the pipeline absorbs it.
+
+- reason (DomainFit): Every reason is within the ≤15-word
+  constraint and factually grounded in the prompt or its extracted
+  constraints. The model successfully synthesises across the
+  augmented user message — for example, naming "Friday events with
+  VIP ticket sales" on a public-events prompt where that detail
+  came from the ExtractConstraints pre-pass, not the original
+  prompt.
+
+- domain_fits (DomainFitAssessment): Cardinality is correct (1-4
+  for concrete prompts; 0 for vague). No duplicates. The 4-cap
+  was reached on prompts that genuinely span four disciplines.
+
+- confidence (DomainFitAssessment): Every concrete prompt got
+  "high"; every vague prompt got "low". No false-confidence cases
+  on the vague side; no underconfidence on the concrete side. For
+  this sample the calibration is right.
+
+- rationale (DomainFitAssessment): All within ≤40 words and all
+  coherent. They reference the discipline picks and explain why
+  each role applies, not just restate the prompt.
+
+- warnings (code-side): Empty across all 10. The cleanup pipeline
+  (drop low-fit, dedupe, force-confidence-on-Unclear, clear-fits-
+  on-Unclear, truncate beyond cap) is dormant — the model is
+  emitting schema-compliant output without needing post-process
+  mutation. The empty-list rationale text on vague prompts comes
+  from the LLM directly, not from a "forced primary to Unclear"
+  mutation.
+
+Net: across this 10-prompt sample, every required field is filled
+with meaningful, prompt-grounded data; the only quality issue is
+the multi-outcome role usage on complex prompts (noted above).
 """
 
 

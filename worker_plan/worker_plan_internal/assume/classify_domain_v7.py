@@ -302,6 +302,69 @@ content (the lack of grounding is visible in the language).
 Downstream consumers compute "is this resolved?" from
 `bool(domain_fits)` and read the rationale for nuance.
 
+v7 smoke-run findings: test-leak scrub + llama-only run (2026-05-02)
+-------------------------------------------------------------------
+After scrubbing all test-relevant discipline names from the LLM-
+facing prompts (see "Test prompts MUST NOT be referenced inside
+the system prompt" above), re-ran the smoke harness with only
+llama-3.1-8b enabled (gpt-oss disabled in LLM_NAMES; pre-pass
+models still use gpt-oss for speed). The objective was to
+re-measure llama's behaviour on cleanly principle-only prompts
+and confirm the job-title-as-discipline drift observed in earlier
+runs (e.g. "Environmental Engineer", "Escape Room Designer") was
+addressed by the morphological field-vs-practitioner hints rather
+than by named-discipline examples.
+
+Findings:
+
+- Job-title drift is GONE. Across all 23 prompts × 2 conditions
+  (46 cells) on llama, no primary domain was emitted as a
+  practitioner noun ending in -er / -ist / -or. The morphological
+  hint in the schema description ("field nouns typically end in
+  -y, -ics, -ing, -ure; practitioner nouns end in -er, -ist,
+  -or") and the abstract "field of practice, not the
+  practitioner" framing landed without needing example pairs.
+- Solar Sunshade [4] still picks Climate Engineering on both
+  conditions. The multi-outcome motivating case is still being
+  handled correctly under the principle-only prompts.
+- Houseplants [10] shifted: previously Horticulture (with the
+  enumerated personal-purpose examples in the prompt); now
+  Botany. Both are defensible answers; "Horticulture" was the
+  applied-discipline framing and "Botany" is the academic-field
+  framing. The shift is the expected side-effect of removing
+  test-fit anchoring — the model now picks from its own
+  knowledge rather than the prompt's examples. Combined with
+  `purpose: personal` on the result, the output remains
+  informative either way.
+- Vague-improve [23] llama still confabulates (Urban Planning
+  baseline with rationale "improve the city's infrastructure" —
+  the prompt is 15 chars and says nothing about cities; Research
+  augmented with rationale at least matching the prompt's actual
+  word "improve"). Same architectural limit as prior runs:
+  same-model first-and-second-pass cannot catch its own
+  hallucination. Not a leakage-cleanup regression.
+- Stability improved: llama flips dropped to 9/23 (was 14/23 in
+  v7d and v7e). The cleaner prompts produced more stable
+  baseline-vs-augmented answers.
+
+Other notable shifts vs. prior runs (mostly defensible
+alternatives, not regressions): [1] Squid Game Criminal Justice
+-> Psychology, [9] Statue of Liberty Conservation Engineering ->
+Civil Engineering, [11] Pasteurellosis Epidemiology ->
+Veterinary Epidemiology, [15] Education-poverty Development
+Economics -> Education Policy, [16] Reverse aging Gerontology ->
+Regenerative Medicine. One sub-optimal pick: [17] Minecraft
+escape room augmented picked Interior Design as primary with
+Theme Park Design as secondary; either of those would be a
+better primary, but neither is unreasonable.
+
+Net: the leakage cleanup is a clear win. Job-title drift
+disappeared without re-introducing test-mirror examples.
+Stability improved on llama. The marquee multi-outcome win
+(Solar Sunshade) holds. The remaining failure modes
+(vague-improve confabulation, occasional sub-optimal narrow
+picks) are model-quality issues, not prompt issues.
+
 v6 routing design (carried over)
 --------------------------------
 v6 keeps v5's principle-only base prompt and routes to one of

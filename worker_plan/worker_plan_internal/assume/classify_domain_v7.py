@@ -375,6 +375,55 @@ that the prompt has never been tuned against. Otherwise apparent
 improvement is unmeasurable and the team risks the same overfit
 loop that produced v2/v3/v4.
 
+Test prompts MUST NOT be referenced inside the system prompt
+-------------------------------------------------------------
+The system prompts (the `_SYSTEM_PROMPT_HEADER`, the three
+purpose-routed `_*_GUIDANCE` blocks, the `_SYSTEM_PROMPT_FOOTER`,
+and the `PRIMARY_SELECT_SYSTEM_PROMPT`) MUST NOT contain any
+content that mirrors the smoke harness's test prompts. Specifically:
+
+- No discipline names that are the expected primary or secondary
+  for any test prompt (e.g. naming "Horticulture", "Marine
+  Biology", or "Game Design" as positive examples in the prompt
+  invalidates the houseplants, GEOMAR, and Minecraft-escape-room
+  test cases).
+- No worked examples whose left-hand-side paraphrases a test
+  prompt (e.g. "for a watering routine, Plant Care or
+  Horticulture" mirrors the houseplants test prompt).
+- No keywords or phrases lifted from any test prompt's text.
+- No deliverable-type or activity-type enumerations that map
+  one-to-one onto specific test prompts (e.g. listing
+  "manufacturing project, software product, construction project"
+  mirrors the paperclip factory, Reddit-for-AI, and Statue of
+  Liberty test cases).
+
+Why this rule is load-bearing: any test-prompt-mirroring content
+in the system prompt is a form of training-on-the-test-set. The
+classifier appears to improve on the smoke harness while not
+learning the underlying principle. The improvement is a
+tautology — the prompt now answers correctly on the test only
+because it was told the answer. This pattern produced the
+overfit cycle that motivated v5's principle-only rewrite.
+
+Positive substitutes:
+
+- State the principle abstractly. "Use the field of practice, not
+  the practitioner" is principle-shaped; listing
+  "Engineering not Engineer, Architecture not Architect" is
+  example-shaped and risks test-leak when those happen to be
+  test answers.
+- When examples genuinely help comprehension, use morphological
+  hints ("field nouns typically end in -y, -ics, -ing, -ure")
+  rather than enumerated discipline names.
+- Use abstract category descriptions ("the broad umbrella
+  categories that subsume many subfields under one banner")
+  instead of enumerated lists of test-relevant labels.
+
+Operational check before any commit that touches an LLM-facing
+prompt: run a string-search against the smoke harness's expected
+discipline answers across the catalog sample. Any hit is a leak;
+revise the prompt until the prompt is principle-only.
+
 Augmentation pre-passes (purpose + constraints)
 -----------------------------------------------
 The smoke harness in this module runs two pre-passes per prompt
@@ -722,9 +771,11 @@ class DomainFit(BaseModel):
     domain: str = Field(
         description=(
             "A short Title Case noun phrase (1-3 words) naming an "
-            "expert discipline — what a specialist who would lead "
-            "this project calls themselves. Pick the narrowest "
-            "discipline the prompt's signals support."
+            "expert discipline as a FIELD of practice — the area of "
+            "expertise itself, not the practitioner. Use the field-"
+            "of-practice noun, not the noun for the person who "
+            "practises it. Pick the narrowest field the prompt's "
+            "signals support."
         )
     )
     # Accept "low" too — the system prompt asks for medium/high only,
@@ -860,9 +911,9 @@ The candidate list is fixed. Pick from it.
 
 When a `## Project purpose` section is present, use it as additional context for the pick:
 
-- **personal** — the project is a private life matter (an individual's task, hobby, vacation, household activity, or a family- or friend-scale event). Among the candidates, prefer the discipline that best names the activity itself, even when the discipline could be applied at a professional scale (Horticulture for plant care, Cooking for meal prep, Travel Planning for vacation logistics). Avoid promoting a candidate whose role makes it a generic instrument or supporting service rather than the activity itself.
+- **personal** — the project is a private life matter (an individual's task, hobby, vacation, household activity, or a family- or friend-scale event). Among the candidates, prefer the discipline that best names the activity itself, even when the discipline could be applied at a professional scale. Avoid promoting a candidate whose role makes it a generic instrument or supporting service rather than the activity itself.
 - **business** — the project is commercial, professional, governmental, or large-scale societal. Apply the standard preferences: outcome over non-outcome, narrowest specialist over umbrella.
-- **other** — the project is academic, hypothetical, non-profit / NGO / community-led, or could not be confidently placed in business or personal upstream. Among the candidates, prefer the discipline that best names the project's actual subject — a specific scientific field for an academic study, the discipline a real version would belong to for a hypothetical scenario, or the relevant policy / non-profit specialty for a public-welfare initiative.
+- **other** — the project is academic, hypothetical, non-profit / NGO / community-led, or could not be confidently placed in business or personal upstream. Among the candidates, prefer the discipline that best names the project's actual subject — the field of inquiry for an academic study, the discipline a real version would belong to for a hypothetical scenario, or the policy or non-profit specialty for a public-welfare initiative.
 
 # When there is exactly one candidate
 
@@ -904,7 +955,9 @@ Each entry has four fields:
 
 ## domain
 
-A 1-3 word Title Case noun phrase naming an expert discipline. The right test is: who would I hire to lead this project? Answer with the specialist's discipline name — what that specialist calls themselves.
+A 1-3 word Title Case noun phrase naming an expert discipline as a FIELD of practice — the area of expertise itself, not the practitioner. Use the field-of-practice noun (the abstract activity or domain), not the practitioner noun (the person who does it). Field nouns typically end in `-y`, `-ics`, `-ing`, `-ure`, or name an abstract activity; practitioner nouns typically end in `-er`, `-ist`, or `-or` and refer to the person.
+
+The right test is: who would I hire to lead this project? Answer with the specialist's field name (the discipline they practise), not the job title for that role.
 """
 
 _SYSTEM_PROMPT_FOOTER = """
@@ -947,7 +1000,7 @@ This project is commercial, professional, infrastructure, public-welfare, govern
 
 Choose the narrowest discipline the prompt's signals support. Read the user message for named subfields, named techniques, named instruments, named substances, named media, named application areas, named regulators, named populations, named geographies. Each named thing pulls the answer toward a specific discipline; use the discipline name a practitioner of that thing would call themselves.
 
-Umbrella labels — Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare — are appropriate when the prompt produces no named subfield, technique, instrument, substance, or medium. When specific names are present, use the specialist discipline; the umbrella, if relevant at all, becomes a secondary entry.
+Broad umbrella labels — the catch-all categories that subsume many subfields under one banner — are appropriate only when the prompt produces no named subfield, technique, instrument, substance, or medium. When specific names are present, use the specialist discipline; the umbrella, if relevant at all, becomes a secondary entry rather than the primary.
 
 When two specialist disciplines fit equally well, pick the one that owns the project's main success criterion as the primary outcome and put the others in method, constraint, market, stakeholder, or tool roles.
 """
@@ -958,15 +1011,15 @@ _PERSONAL_GUIDANCE = """
 This project is a private life matter. The defining trait is that the project is private life rather than commercial, governmental, or organisational; participation by multiple people (a couple, a family, a household, a friend group) is fine and does not promote it to business. Personal therefore covers two shapes:
 
 - one individual's own task, hobby, vacation, household activity, life decision, self-care, or self-improvement
-- family- or friend-scale shared events and matters such as a wedding, a funeral, a family reunion, a birthday, an anniversary, a parenting decision, an eldercare arrangement, or a household move
+- family- or friend-scale shared events and matters that are private rather than commercial
 
 The participants act on their own behalf (or on behalf of their family, household, or friend group), not on behalf of an employer, a customer base, or a public or governmental remit.
 
-The candidate disciplines for a personal project should describe the hobby, domestic technique, professional service, or specific activity central to the project. The label `"Personal"` is the project's purpose category, not an expert discipline — the purpose context is already carried separately, so the candidate list focuses on what the project actually involves. Useful candidate disciplines for personal projects: Horticulture for plant care, Cooking for meal preparation, Travel Planning for vacation logistics, Healthcare for a clinical procedure, Construction for a permitted home build, Event Planning for organising a private event, Pet Care for animal-companion tasks, Carpentry or Home Improvement for DIY work.
+The candidate disciplines for a personal project should describe the hobby, domestic technique, professional service, or specific activity central to the project. The label `"Personal"` is the project's purpose category, not an expert discipline — the purpose context is already carried separately, so the candidate list focuses on what the project actually involves.
 
-Roles still distinguish the project's outcome from its means: assign `role="outcome"` to the discipline that names what the project is fundamentally about (for a wedding, Event Planning; for a meal-prep project, Cooking; for a planted-garden project, Horticulture; for a watering-routine, Plant Care or Horticulture). Assign `role="method"` to disciplines that describe instruments or techniques applied within that outcome, `role="constraint"` to regulators (Building Codes, Health Regulations), and `role="tool"` to off-the-shelf apps, websites, AI assistants, or consumer products used in the project — those never become the primary outcome.
+Roles still distinguish the project's outcome from its means: assign `role="outcome"` to the discipline that names what the project is fundamentally about. Assign `role="method"` to disciplines that describe instruments or techniques applied within that outcome, `role="constraint"` to regulators governing the project, and `role="tool"` to off-the-shelf apps, websites, AI assistants, or consumer products used in the project — those never become the primary outcome.
 
-For very small everyday tasks (watering 5 houseplants, doing laundry, a simple weekly chore), the discipline that best describes the activity is the right primary even when the activity is small-scale.
+For small-scale everyday activities, the discipline that best describes the activity is the right primary even when the activity is performed at hobby or routine scale.
 """
 
 _OTHER_GUIDANCE = """
@@ -980,10 +1033,10 @@ Money flow is not a purpose signal. Most projects involving multiple people or l
 
 Before identifying any discipline, identify whether the prompt describes a concrete project. A concrete project names at least one of:
 
-- a deliverable (a paper, a study, a system, a model, a corpus, a built artifact, a software product, a fundraising campaign, a regulation, a program)
-- a question to investigate (a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables)
-- an outcome the project aims to produce (a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named metric, a sum of money raised for a named cause, a service running, a regulation enacted)
-- an entity to study or act on (a named species, place, population, substance, historical event, text, artifact, beneficiary group, market segment)
+- a tangible or intangible deliverable (something the project will produce or hand off)
+- a specific question to investigate (a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables)
+- a measurable outcome the project aims to produce (a finding, a proof, an answer, an improvement in a named metric, an operational state to reach)
+- a named entity to study or act on (a named species, place, population, substance, historical event, text, artifact, beneficiary group, or market segment)
 
 If none of those is named in the prompt, the prompt has not yet described a project. The correct output is `domain_fits = []`. The downstream pipeline supplies the human-readable explanation in that case; you do not need to.
 
@@ -995,11 +1048,11 @@ When step 1 yields a concrete project, pick the narrowest specialist expert disc
 
 For specific project shapes:
 
-- **Academic study** → the named scientific field (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar). Use `"Research"` as fallback only when the study names no identifiable field.
-- **Hypothetical scenario** → the discipline a real version would belong to (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics).
-- **Government, public-sector, NGO, charity, foundation, or community-led initiative** serving a population, community, or beneficiary group → the named policy area or non-profit specialty (Public Health, Public Policy, Education Policy, International Development, Humanitarian Aid, Nonprofit Management, and similar); pick the narrowest that fits.
-- **Philosophical argument, ethical question, or conceptual framework** → Philosophy. Apply this only when the prompt names a specific philosophical question, not as a default for unspecific prompts.
-- **Other shapes** (a manufacturing project, a software product, a construction project, a healthcare service, a transportation system, and so on) → the narrowest specialist discipline the prompt's signals support, just as the business prompt would. Umbrella labels (Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare) are reserved as fallback only when no specific subfield is named.
+- **Academic study** → the field of inquiry whose journals would publish the resulting work. Use `"Research"` as fallback only when the study names no identifiable field.
+- **Hypothetical scenario** → the discipline a real version would belong to.
+- **Government, public-sector, NGO, charity, foundation, or community-led initiative** serving a population, community, or beneficiary group → the policy area or non-profit specialty whose practitioners would lead it; pick the narrowest that fits the prompt's signals.
+- **Philosophical argument, ethical question, or conceptual framework** → the relevant philosophical sub-discipline. Apply this only when the prompt names a specific philosophical question, not as a default for unspecific prompts.
+- **Other shapes** that landed in "other" because the upstream pre-pass was uncertain → the narrowest specialist discipline the prompt's signals support, just as the business prompt would. Broad umbrella labels (the catch-all categories that subsume many subfields under one banner) are reserved as fallback only when no specific subfield is named.
 
 ## Final check
 
@@ -1517,9 +1570,12 @@ if __name__ == "__main__":
     # (named substances, named regulators, named geographies). v5 trusts
     # both signals to push role assignments toward Personal where
     # appropriate and toward narrow specialist disciplines elsewhere.
+    # Focused experiment: only llama is enabled. The job-title-as-domain
+    # drift was llama-specific; gpt-oss already emits field names. To
+    # iterate on prompt wording we run only the small model.
     LLM_NAMES = [
         "openrouter-llama-3.1-8b-instruct-nitro",
-        "openrouter-gpt-oss-safeguard-20b-nitro",
+        # "openrouter-gpt-oss-safeguard-20b-nitro",
     ]
     # Single model used for both pre-passes (purpose identification and
     # constraint extraction). Picked for speed + reliability on JSON

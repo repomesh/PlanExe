@@ -131,6 +131,64 @@ The smoke harness must be evaluated against a held-out test set
 that the prompt has never been tuned against. Otherwise apparent
 improvement is unmeasurable and the team risks the same overfit
 loop that produced v2/v3/v4.
+
+Augmentation pre-passes (purpose + constraints)
+-----------------------------------------------
+The smoke harness in this module runs two pre-passes per prompt
+before classification:
+  - IdentifyPurpose — emits a personal/business/other tag plus a
+    one-line topic summary.
+  - ExtractConstraints — surfaces named substances, named
+    regulators, named geographies, etc.
+Both markdown blocks are concatenated after the original prompt
+under labelled headings (## Plan purpose / ## Extracted
+constraints) and fed to the classifier as a single user message.
+
+Observed effects on the small model (llama-3.1-8b-instruct):
+  - Vague-prompt handling is decisively fixed under the augmented
+    condition. Without augmentation, llama would happily emit
+    Software Engineering / Environmental Science with high
+    confidence on a prompt of "Improve things." Under augmentation
+    it correctly emits Unclear with low confidence, matching the
+    larger model.
+  - "One individual's own household task" is partially helped: the
+    "purpose: personal" signal nudges llama toward home-flavoured
+    labels (Housekeeping, Domestic Maintenance) rather than
+    specialist disciplines (Horticulture). Neither model promotes
+    Personal to primary, however, because v5 dropped the worked
+    example that named Personal as a valid discipline. Recovering
+    that case fully would mean stating the principle "Personal is
+    a valid primary discipline when the project is one
+    individual's own task, hobby, or household activity" — that
+    is a role definition, not test-fit content.
+  - On already-narrow cases, augmentation occasionally introduces
+    label noise: Machine Learning -> Data Science on an ML-paper
+    distillation prompt, Regenerative Medicine -> Biomedical
+    Engineering on an aging-research prompt. Both alternatives
+    are still narrow; the choice between them shifts under
+    augmentation but neither is wrong.
+
+Observed effects on the larger model (gpt-oss-safeguard-20b):
+  - Vague prompts are already handled correctly without
+    augmentation; the pre-passes are not required.
+  - The Horticulture-vs-Personal distinction for the houseplants
+    case is unchanged by augmentation. The "purpose: personal"
+    signal alone is not enough to override the model's instinct
+    to find a specialist discipline; v5's prompt would need to
+    define Personal as itself a valid discipline.
+  - Other cases are stable across conditions, with the same
+    narrow-label noise pattern as the small model.
+
+Cost notes
+----------
+Adding both pre-passes ~doubles the LLM call count of the
+augmented condition (one purpose call + one constraint call per
+prompt, before the two classify calls per condition). On
+production traffic this is meaningful — the pre-passes only earn
+their cost on small models and on prompts where the role
+distinction matters. Larger models that already honor the
+specificity principle do not benefit and would be better served
+by skipping augmentation.
 """
 
 
@@ -590,6 +648,7 @@ if __name__ == "__main__":
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from worker_plan_internal.llm_factory import get_llm
     from worker_plan_internal.utils.planexe_llmconfig import PlanExeLLMConfig
+    from worker_plan_internal.assume.identify_purpose import IdentifyPurpose
     from worker_plan_internal.diagnostics.extract_constraints import ExtractConstraints
     from worker_plan_api.prompt_catalog import PromptCatalog
     from worker_plan_api.planexe_dotenv import PlanExeDotEnv
@@ -597,14 +656,24 @@ if __name__ == "__main__":
     PlanExeDotEnv.load().update_os_environ()
 
     # Two classify models tested side by side, each in two conditions:
-    # baseline (raw prompt) and augmented (prompt + extracted constraints).
+    # baseline (raw prompt) and augmented (prompt + identified plan
+    # purpose + extracted constraints). The purpose pre-pass tells the
+    # classifier whether the project is personal, business, or other —
+    # which (per IdentifyPurpose's rubric) separates "water my
+    # houseplants" (personal) from a commercial water-treatment program
+    # (business). The constraint pre-pass surfaces explicit signals
+    # (named substances, named regulators, named geographies). v5 trusts
+    # both signals to push role assignments toward Personal where
+    # appropriate and toward narrow specialist disciplines elsewhere.
     LLM_NAMES = [
         "openrouter-llama-3.1-8b-instruct-nitro",
         "openrouter-gpt-oss-safeguard-20b-nitro",
     ]
-    # Single model used for the constraint-extraction pre-pass. Picked for
-    # speed + reliability on JSON output. We extract once per prompt and
-    # reuse the result for both classify models.
+    # Single model used for both pre-passes (purpose identification and
+    # constraint extraction). Picked for speed + reliability on JSON
+    # output. We run each pre-pass once per prompt and reuse the
+    # result across both classify models.
+    PURPOSE_LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
     EXTRACT_LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
 
     @dataclass
@@ -651,22 +720,86 @@ if __name__ == "__main__":
 
     sample_items = list(catalog_sample) + vague_prompts
 
-    def augment_with_constraints(prompt: str, constraints_md: str) -> str:
-        """Format the constraint-extraction markdown after the original prompt.
+    def augment_with_context(
+        prompt: str, purpose_md: str, constraints_md: str
+    ) -> str:
+        """Format the original prompt followed by purpose and constraint
+        markdown sections.
 
-        The classifier sees the original prompt followed by a delimited
-        section labelled "Extracted constraints". The classifier system
-        prompt does not need to know about this section — it just gives
-        the model a structured summary of explicit signals to consider.
+        The classifier sees the original prompt, then (when available) a
+        "Plan purpose" section with a personal/business/other tag, then
+        (when available) an "Extracted constraints" section with named
+        substances, regulators, geographies, etc. The classifier system
+        prompt does not know about these sections; they are just extra
+        signal embedded in the user message.
+
+        Observed effects on the smoke harness (see OPTIMIZE_INSTRUCTIONS
+        for the full notes): augmentation reliably fixes the small-model
+        vague-prompt regression (llama no longer emits Software
+        Engineering for "Improve things.") and partially nudges
+        individual-household-task prompts toward home-flavoured labels.
+        It does not promote Personal to primary on either model — that
+        gap is in the system prompt's role definitions, not in the
+        augmentation signal itself.
         """
-        if not constraints_md.strip():
+        sections: list[str] = [prompt]
+        if purpose_md.strip():
+            sections.append(
+                "## Plan purpose (auto-derived; for context only)\n"
+                f"{purpose_md.strip()}"
+            )
+        if constraints_md.strip():
+            sections.append(
+                "## Extracted constraints (auto-derived; for context only)\n"
+                f"{constraints_md.strip()}"
+            )
+        if len(sections) == 1:
             return prompt
-        return (
-            f"{prompt}\n\n"
-            f"---\n\n"
-            f"## Extracted constraints (auto-derived; for context only)\n"
-            f"{constraints_md.strip()}\n"
+        return "\n\n---\n\n".join(sections) + "\n"
+
+    def run_purpose_phase() -> dict[int, str]:
+        """Run IdentifyPurpose once per prompt; return {idx: purpose_md}."""
+        try:
+            cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(PURPOSE_LLM_NAME, {})
+            max_workers = max(1, int(cfg_dict.get("luigi_workers", 1)))
+        except Exception:
+            max_workers = 1
+
+        thread_local = threading.local()
+
+        def get_thread_llm():
+            llm = getattr(thread_local, "llm", None)
+            if llm is None:
+                llm = get_llm(PURPOSE_LLM_NAME)
+                thread_local.llm = llm
+            return llm
+
+        def purpose_one(idx, item):
+            try:
+                result = IdentifyPurpose.execute(get_thread_llm(), item.prompt)
+                return idx, item.id, result.markdown, None
+            except Exception as exc:
+                return idx, item.id, "", exc
+
+        print(
+            f"\n========== PURPOSE phase ({PURPOSE_LLM_NAME}, "
+            f"max_workers={max_workers}) =========="
         )
+        out: dict[int, str] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [
+                pool.submit(purpose_one, idx, item)
+                for idx, item in enumerate(sample_items, start=1)
+            ]
+            for future in as_completed(futures):
+                idx, prompt_id, md, exc = future.result()
+                if exc is None:
+                    out[idx] = md
+                    print(f"  ✓ [{idx}/{len(sample_items)}] {prompt_id} ({len(md)} chars)", flush=True)
+                else:
+                    out[idx] = ""
+                    print(f"  ✗ [{idx}/{len(sample_items)}] {prompt_id}: {exc}", flush=True)
+        return out
 
     def run_extract_phase() -> dict[int, str]:
         """Run ExtractConstraints once per prompt; return {idx: constraints_md}."""
@@ -712,11 +845,16 @@ if __name__ == "__main__":
                     print(f"  ✗ [{idx}/{len(sample_items)}] {prompt_id}: {exc}", flush=True)
         return out
 
-    def run_model(llm_name: str, constraints_by_idx: dict[int, str] | None) -> dict:
+    def run_model(
+        llm_name: str,
+        purpose_by_idx: dict[int, str] | None,
+        constraints_by_idx: dict[int, str] | None,
+    ) -> dict:
         """Run classify_domain on every sample item.
 
-        constraints_by_idx=None  -> baseline (raw prompt only)
-        constraints_by_idx=dict  -> augmented (prompt + extracted constraints)
+        Both pre-pass dicts None  -> baseline (raw prompt only).
+        Either pre-pass dict set  -> augmented (prompt + whichever
+        sections have content).
         """
         try:
             cfg_dict = PlanExeLLMConfig.load().llm_config_dict.get(llm_name, {})
@@ -733,11 +871,21 @@ if __name__ == "__main__":
                 thread_local.llm = llm
             return llm
 
+        is_augmented = purpose_by_idx is not None or constraints_by_idx is not None
+
         def classify_one(idx, item):
             try:
-                if constraints_by_idx is not None:
-                    classifier_input = augment_with_constraints(
-                        item.prompt, constraints_by_idx.get(idx, "")
+                if is_augmented:
+                    purpose_md = (
+                        purpose_by_idx.get(idx, "") if purpose_by_idx is not None else ""
+                    )
+                    constraints_md = (
+                        constraints_by_idx.get(idx, "")
+                        if constraints_by_idx is not None
+                        else ""
+                    )
+                    classifier_input = augment_with_context(
+                        item.prompt, purpose_md, constraints_md
                     )
                 else:
                     classifier_input = item.prompt
@@ -750,7 +898,7 @@ if __name__ == "__main__":
             except Exception as exc:
                 return idx, item.id, item.prompt, None, exc
 
-        condition = "augmented" if constraints_by_idx is not None else "baseline"
+        condition = "augmented" if is_augmented else "baseline"
         print(
             f"\n========== {llm_name} [{condition}] "
             f"({len(sample_items)} prompts, max_workers={max_workers}) =========="
@@ -777,15 +925,20 @@ if __name__ == "__main__":
         f"across {len(LLM_NAMES)} models × 2 conditions (baseline vs augmented) ==="
     )
 
-    # Phase 1: extract constraints once per prompt — reused for both classifiers.
+    # Phase 1a: identify purpose once per prompt — reused for both classifiers.
+    purpose_by_idx = run_purpose_phase()
+
+    # Phase 1b: extract constraints once per prompt — reused for both classifiers.
     constraints_by_idx = run_extract_phase()
 
     # Phase 2: classify each prompt under both conditions for each model.
     CONDITIONS = ("baseline", "augmented")
     all_results: dict[tuple[str, str], dict] = {}
     for llm_name in LLM_NAMES:
-        all_results[(llm_name, "baseline")] = run_model(llm_name, None)
-        all_results[(llm_name, "augmented")] = run_model(llm_name, constraints_by_idx)
+        all_results[(llm_name, "baseline")] = run_model(llm_name, None, None)
+        all_results[(llm_name, "augmented")] = run_model(
+            llm_name, purpose_by_idx, constraints_by_idx
+        )
 
     # Per-prompt side-by-side comparison.
     print()

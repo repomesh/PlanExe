@@ -1656,7 +1656,7 @@ class ClassifyDomain:
         ]
         if fits:
             lines.append("")
-            lines.append("**Domain fits:**")
+            lines.append("**Disciplines this project involves:**")
             lines.append("")
             lines.append("| Domain | Fit | Role | Reason |")
             lines.append("|---|---|---|---|")

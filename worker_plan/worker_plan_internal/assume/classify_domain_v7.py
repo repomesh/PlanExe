@@ -30,14 +30,17 @@ all three are surfaced in the result. derive_primary is kept as a
 fallback when the selection call fails or when there is only one
 candidate.
 
-v7 also moves the `confidence` field off DomainFitAssessment and
-onto PrimarySelection. The first-pass classifier no longer emits
-confidence; the second-pass selector does, since it has the
-candidate list and the prompt in front of it and is making the
-actual primary pick. Confidence in the result is sourced from the
-second-pass call when 2+ candidates are present, from the lone
-candidate's `fit` level when there is exactly one candidate, and
-is forced to "low" when zero candidates are emitted (Unclear case).
+v7 also moves both `confidence` and `rationale` off
+DomainFitAssessment and onto PrimarySelection. The first-pass
+classifier emits only the fit list; the second-pass selector emits
+the chosen primary's index, the confidence in that choice, and the
+human-readable rationale that justifies the pick. The two values
+are surfaced on the result as `confidence` and `rationale`
+respectively. For the 0-candidate (Unclear) and 1-candidate paths
+where no second pass runs, both fields are derived deterministically
+(low confidence + a hardcoded rationale for Unclear; the lone
+candidate's `fit` level + a "single candidate" note for the
+1-candidate path).
 
 PROMPT> python -m worker_plan_internal.assume.classify_domain_v7
 """
@@ -108,22 +111,33 @@ enumerated candidate menu and returns:
   - confidence — high / medium / low confidence in the chosen primary
   - rationale — one or two sentences justifying the pick
 
-Confidence has been moved off DomainFitAssessment (the first-pass
-output) and onto PrimarySelection (the second-pass output). The
-first-pass classifier no longer emits a confidence field; the
-second-pass selector does, since it is the call making the actual
-primary choice. The result's `confidence` is sourced as follows:
-  - 0 candidates: forced to "low" deterministically (Unclear).
-  - 1 candidate: derived from that candidate's own `fit` level
-    (high-fit -> "high", medium-fit -> "medium").
-  - 2+ candidates: the second-pass LLM emits it.
-  - Fallback (LLM call fails): forced to "medium" as a no-signal
-    default; a warning records the failure.
+Both `confidence` and `rationale` have been moved off
+DomainFitAssessment (the first-pass output) and onto
+PrimarySelection (the second-pass output). The first-pass
+classifier now emits only the fit list — `domain_fits` is its sole
+field. The second-pass selector is the right place for both fields
+because it has the candidate list and the prompt in front of it
+and is making the actual primary choice; rating confidence in that
+choice and explaining it in plain language are tasks for the same
+call.
+
+The result's `confidence` and `rationale` are sourced as follows:
+  - 0 candidates: confidence forced to "low" deterministically
+    (Unclear); rationale is a hardcoded "no candidates emitted"
+    string. No second pass runs.
+  - 1 candidate: confidence derived from that candidate's own
+    `fit` level (high-fit -> "high", medium-fit -> "medium");
+    rationale is a hardcoded "single candidate available" string.
+    No second pass runs.
+  - 2+ candidates: the second-pass LLM emits both.
+  - Fallback (LLM call fails): confidence forced to "medium" as a
+    no-signal default; rationale describes the fallback path. A
+    warning records the failure.
 
 derive_primary is kept as the deterministic fallback when the
 second-pass call fails. Otherwise the second-pass LLM is the
-authority over both the primary domain and the confidence in
-that pick.
+authority over the primary domain, the confidence, and the
+rationale.
 
 v6 routing design (carried over)
 --------------------------------
@@ -603,11 +617,11 @@ class DomainFit(BaseModel):
 
 
 class DomainFitAssessment(BaseModel):
-    """A list of candidate domain fits for the project, plus a short
-    rationale. Emit only these two fields; the primary domain,
-    secondary domains, and overall confidence are computed downstream
-    (in v7, confidence comes from the second-pass primary-selection
-    LLM call rather than from this assessment).
+    """A list of candidate domain fits for the project. The first-pass
+    classifier emits only this field; the primary domain, secondary
+    domains, overall confidence, and the human-readable rationale are
+    all computed by the second-pass primary-selection LLM call (or by
+    deterministic fallbacks when the second pass does not run).
     """
     # No max_length here on purpose — small models occasionally
     # over-emit and we'd rather truncate in code with a warning than
@@ -621,13 +635,6 @@ class DomainFitAssessment(BaseModel):
             "pipeline truncates to the top 4 in document order if "
             "more are emitted."
         ),
-    )
-    rationale: str = Field(
-        description=(
-            "1-2 sentences explaining the fit choices, the role "
-            "assignments, and (when applicable) what makes the prompt "
-            "vague. ≤40 words."
-        )
     )
 
 
@@ -724,9 +731,7 @@ A single JSON object with this exact shape:
   "domain_fits": [
     {"domain": "...", "fit": "...", "role": "...", "reason": "..."},
     ...
-  ],
-  "confidence": "low" | "medium" | "high",
-  "rationale": "..."
+  ]
 }
 ```
 
@@ -734,7 +739,7 @@ The first character of your response is `{`. The last character is `}`. The resp
 
 # How to fill domain_fits
 
-Identify 1 to 4 expert disciplines the project depends on. A single-discipline project gets one entry. A prompt that names no concrete project gets an empty list paired with `confidence="low"`.
+Identify 1 to 4 expert disciplines the project depends on. A single-discipline project gets one entry. A prompt that names no concrete project gets an empty list.
 
 Each entry has four fields:
 
@@ -765,23 +770,13 @@ Use exactly one of these seven literals; pick the closest fit, or `"unclear"` wh
 
 One sentence ≤15 words explaining why this discipline shows up.
 
-# confidence
-
-- `"high"`: the project's expert disciplines are clearly identifiable and their roles are unambiguous.
-- `"medium"`: the fits are an interpretation of an ambiguous prompt, or the project genuinely spans many disciplines without a single lead.
-- `"low"`: the prompt is too vague to identify a concrete project; pair with `domain_fits=[]`.
-
-# rationale
-
-One or two sentences ≤40 words explaining the discipline choices, the role assignments, and what makes the prompt vague when applicable.
-
 # Empty-list case
 
-When the prompt is too short or too generic to name a concrete project — when the prompt names no deliverable, no outcome, no audience, no operation, no substance, no medium — emit `domain_fits=[]`, `confidence="low"`, and a one-sentence rationale identifying what specific information is missing.
+When the prompt is too short or too generic to name a concrete project — when the prompt names no deliverable, no outcome, no audience, no operation, no substance, no medium — emit `domain_fits=[]`. The downstream pipeline supplies the human-readable explanation and confidence in that case; you do not need to.
 
 # Pipeline reminder
 
-The pipeline derives `primary_domain` and `secondary_domains` from your `domain_fits` — you do not emit them. Focus on getting the fit list right.
+The pipeline picks `primary_domain` from your `domain_fits` via a second LLM call, and derives `secondary_domains`, `confidence`, and the human-readable rationale from there — you emit only the fit list. Focus on getting the fit list right.
 """
 
 # --- Purpose-specific guidance blocks ---------------------------------
@@ -831,11 +826,7 @@ Before identifying any discipline, identify whether the prompt describes a concr
 - an outcome the project aims to produce (a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named metric, a sum of money raised for a named cause, a service running, a regulation enacted)
 - an entity to study or act on (a named species, place, population, substance, historical event, text, artifact, beneficiary group, market segment)
 
-If none of those is named in the prompt, the prompt has not yet described a project. The correct output is:
-
-- `domain_fits = []`
-- `confidence = "low"`
-- `rationale =` a one-sentence statement naming which kind of concrete element is missing.
+If none of those is named in the prompt, the prompt has not yet described a project. The correct output is `domain_fits = []`. The downstream pipeline supplies the human-readable explanation and confidence in that case; you do not need to.
 
 In that case, the empty-list answer is the final answer; step 2 only applies when step 1 yields a concrete project. A project description must name what is being delivered, investigated, produced, or studied or acted on. Prompts that pair generic imperative verbs with abstract or pronominal objects fall short of this requirement, and the right output is the empty-list answer.
 
@@ -853,7 +844,7 @@ For specific project shapes:
 
 ## Final check
 
-Before emitting your JSON, re-read the prompt one more time and locate the specific named deliverable, question, outcome, or entity. When you can point to one, step 2 applies and you pick the discipline accordingly. When you cannot, the answer is `domain_fits = []` with `confidence = "low"`.
+Before emitting your JSON, re-read the prompt one more time and locate the specific named deliverable, question, outcome, or entity. When you can point to one, step 2 applies and you pick the discipline accordingly. When you cannot, the answer is `domain_fits = []`.
 """
 
 # --- Per-purpose system prompt assembly + dispatch --------------------
@@ -1090,15 +1081,15 @@ class ClassifyDomain:
         # v7: pick primary via a second LLM pass when there are 2+
         # candidates. With 0 candidates, primary is "Unclear". With 1
         # candidate, the only candidate is the primary (no LLM call
-        # needed). The selection LLM returns a rationale and a
-        # confidence level for the chosen primary; for the 0/1
-        # candidate paths confidence is derived deterministically.
-        primary_selection_rationale = ""
+        # needed). The selection LLM also produces the human-readable
+        # rationale and the confidence level for the chosen primary;
+        # for the 0/1 candidate paths both are derived deterministically.
+        rationale = ""
         primary_select_duration = 0.0
         if not cleaned_fits:
             primary = "Unclear"
             confidence = "low"
-            primary_selection_rationale = (
+            rationale = (
                 "No candidates emitted; the prompt is too vague to identify a project."
             )
         elif len(cleaned_fits) == 1:
@@ -1108,7 +1099,7 @@ class ClassifyDomain:
             # high-fit candidate is high confidence; a lone medium-fit
             # candidate signals a weak classification.
             confidence = sole.fit if sole.fit in ("low", "medium", "high") else "medium"
-            primary_selection_rationale = (
+            rationale = (
                 "Only one candidate available; no second-pass selection performed."
             )
         else:
@@ -1119,7 +1110,7 @@ class ClassifyDomain:
                 )
                 primary = normalize_label(cleaned_fits[idx].domain)
                 confidence = sel_confidence
-                primary_selection_rationale = sel_rationale
+                rationale = sel_rationale
             except Exception as exc:
                 fallback_primary = derive_primary(cleaned_fits)
                 warnings.append(
@@ -1133,7 +1124,7 @@ class ClassifyDomain:
                 # produced and a deterministic primary was chosen, but
                 # the LLM-judged confidence is unknown.
                 confidence = "medium"
-                primary_selection_rationale = (
+                rationale = (
                     "Second-pass selection failed; primary derived from the "
                     "priority-chain fallback (high+outcome > medium+outcome > "
                     "high any role > Unclear). Confidence set to 'medium' as a "
@@ -1145,15 +1136,12 @@ class ClassifyDomain:
 
         secondaries = derive_secondaries(cleaned_fits, primary)
 
-        rationale = assessment.rationale.strip()
-
         json_response: dict = {
             "primary_domain": primary,
             "secondary_domains": secondaries,
             "confidence": confidence,
             "domain_fits": [f.model_dump() for f in cleaned_fits],
             "rationale": rationale,
-            "primary_selection_rationale": primary_selection_rationale,
             "warnings": warnings,
         }
 
@@ -1171,7 +1159,6 @@ class ClassifyDomain:
             rationale=rationale,
             fits=cleaned_fits,
             warnings=warnings,
-            primary_selection_rationale=primary_selection_rationale,
         )
 
         return cls(
@@ -1211,7 +1198,6 @@ class ClassifyDomain:
         rationale: str,
         fits: list[DomainFit],
         warnings: list[str],
-        primary_selection_rationale: str = "",
     ) -> str:
         secondary_display = ", ".join(secondaries) if secondaries else "_(none)_"
         lines = [
@@ -1223,11 +1209,6 @@ class ClassifyDomain:
             "",
             f"**Rationale:** {rationale}",
         ]
-        if primary_selection_rationale:
-            lines.append("")
-            lines.append(
-                f"**Primary-selection rationale:** {primary_selection_rationale}"
-            )
         if fits:
             lines.append("")
             lines.append("**Domain fits:**")
@@ -1626,14 +1607,14 @@ if __name__ == "__main__":
                     primary = json_response.get("primary_domain")
                     secondary = json_response.get("secondary_domains") or []
                     conf = json_response.get("confidence")
-                    sel_rat = json_response.get("primary_selection_rationale") or ""
+                    rat = json_response.get("rationale") or ""
                     primaries[condition] = primary or "<none>"
                     print(
                         f"  [{tag}] primary={primary}, "
                         f"secondary={secondary}, conf={conf}"
                     )
-                    if sel_rat:
-                        print(f"    primary-selection rationale: {sel_rat}")
+                    if rat:
+                        print(f"    rationale: {rat}")
             base = primaries.get("baseline")
             aug = primaries.get("augmented")
             if base is not None and aug is not None and base != aug:

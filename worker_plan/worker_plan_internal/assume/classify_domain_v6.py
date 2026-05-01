@@ -310,6 +310,99 @@ when discipline guidance applies at all. That preserves the
 model's ability to use Philosophy when the prompt actually
 warrants it (a named ethical question, a named conceptual
 framework) while removing the bait for vague prompts.
+
+Status against the original 10-issue review
+-------------------------------------------
+The original review (received before v4) listed 10 issues with
+the v3 output and recommended two 80/20 fixes. Status of each
+after the v4 -> v5 -> v6 progression:
+
+(1) Primary domain too generic.
+    PARTIALLY ADDRESSED. v5's "narrowest expert discipline"
+    principle is load-bearing in v6. On the held-in synthetic
+    test set, gpt-oss reliably picks narrow labels; llama is
+    partial — drifts to umbrellas (Research, Environmental
+    Science) on a minority of prompts. The original failing
+    production case has not been re-run.
+
+(2) Secondary domains wrong.
+    PARTIALLY ADDRESSED, same caveat as (1). Same principle
+    drives both primary and secondaries.
+
+(3) Overly influenced by organization sector.
+    NOT ADDRESSED. The system prompts do not explicitly tell
+    the classifier to base the answer on the project's goal
+    rather than the organization's self-description. Real gap.
+
+(4) No project-level warnings produced.
+    EXPLICITLY DEFERRED. The current `warnings` list is for
+    code-side mutations (dropped duplicate fits, forced
+    confidence override on Unclear, truncations) only. The
+    review's project-level red flags
+    (organization_project_domain_mismatch, radioactive_material_likely,
+    budget_unknown, location_unknown, first_time_project_lead,
+    specialized_facility_likely, high_complexity_project) belong
+    to downstream stages (risk analysis, premortem, assumptions,
+    RedlineGate), not the domain classifier. The classifier's
+    scope is intentionally narrow.
+
+(5) Ontology too broad.
+    ADDRESSED. v5 introduced the specificity principle, v6
+    preserves it. Smoke runs confirm narrow labels on the larger
+    model; small-model drift is the residual.
+
+(6) "Research" treated as a domain instead of a project type.
+    NOT ADDRESSED. The schema still emits a single
+    primary_domain plus a flat secondary_domains list. The
+    review's suggested split (project_type="research_and_development"
+    + primary_domain="Nuclear Physics") would require schema
+    changes downstream consumers depend on.
+
+(7) Lacks domain-specific signal extraction.
+    ADDRESSED INDIRECTLY. The smoke harness now runs
+    ExtractConstraints as a pre-pass that surfaces named
+    substances, regulators, geographies, and beneficiary groups
+    into the classifier's user message under the augmented
+    condition. The actual production case has not been re-run
+    to verify whether this fixes its specific failure.
+
+(8) No outcome / method / constraint distinction in derived output.
+    NOT ADDRESSED. Each fit carries a `role` field that the model
+    populates, but `derive_primary` and `derive_secondaries`
+    collapse the structure into a flat list. The review's
+    suggested expansion (outcome_domain, method_domains,
+    constraint_domains as separate output fields) was not done.
+
+(9) Classifier too confident.
+    NOT ADDRESSED. The `confidence` field is still high / medium
+    / low, sourced from the model. The review suggested splitting
+    "this is technical/scientific" confidence from "this exact
+    domain label is right" confidence; not implemented.
+
+(10) Wrapper too thin / no rule-based guardrail.
+    EXPLICITLY DECLINED by the user. Code-side guardrails were
+    rejected on two grounds: fragility, and PlanExe's
+    multi-language usage (regex-style trigger lists do not
+    generalise across languages). All fixes therefore live in
+    the system prompt.
+
+Original 80/20 fixes:
+- Fix 1 (broad-label penalty + narrowest-discipline rule):
+  ADDRESSED in v5/v6. The primary intended outcome of the v4 ->
+  v5 -> v6 progression.
+- Fix 2 (mandatory warning flags as required output):
+  NOT ADDRESSED; out of scope per the deferral on issue (4).
+
+Honest caveats:
+- The original failing production case was never re-run against
+  v6. Specific terms from that case were deliberately excluded
+  from any shipped artifact, which means we have no direct
+  measurement of whether v6 corrects that specific failure. The
+  principle is in place; the specific verification is not.
+- Issues (3), (6), (8), (9), and (4 / Fix 2) are real gaps. Of
+  those, (4 / Fix 2) is likely the biggest impact on downstream
+  planning quality if no other stage produces those project-level
+  warnings.
 """
 
 

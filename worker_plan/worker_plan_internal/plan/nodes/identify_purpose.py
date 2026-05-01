@@ -4,7 +4,6 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.assume.identify_purpose import IdentifyPurpose
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.plan.nodes.setup import SetupTask
-from worker_plan_internal.plan.nodes.classify_domain import ClassifyDomainTask
 
 
 class IdentifyPurposeTask(PlanTask):
@@ -12,7 +11,6 @@ class IdentifyPurposeTask(PlanTask):
     def requires(self):
         return {
             'setup': self.clone(SetupTask),
-            'classify_domain': self.clone(ClassifyDomainTask),
         }
 
     def output(self):
@@ -25,15 +23,8 @@ class IdentifyPurposeTask(PlanTask):
         # Read inputs from required tasks.
         with self.input()['setup'].open("r") as f:
             plan_prompt = f.read()
-        with self.input()['classify_domain']['markdown'].open("r") as f:
-            classify_domain_markdown = f.read()
 
-        query = (
-            f"File 'plan.txt':\n{plan_prompt}\n\n"
-            f"File 'classify_domain.md':\n{classify_domain_markdown}"
-        )
-
-        identify_purpose = IdentifyPurpose.execute(llm, query)
+        identify_purpose = IdentifyPurpose.execute(llm, plan_prompt)
 
         # Write the result to disk.
         output_raw_path = self.output()['raw'].path

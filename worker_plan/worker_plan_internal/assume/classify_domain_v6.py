@@ -500,11 +500,23 @@ Specialist disciplines that describe a hobby or domestic technique (Horticulture
 _OTHER_GUIDANCE = """
 Purpose-specific guidance: other projects
 =========================================
-This project is academic, hypothetical, philosophical, a small-scale technical inquiry, or otherwise does not clearly fit business or personal categories.
+This project is academic, hypothetical, a technical inquiry, or otherwise does not clearly fit business or personal categories.
 
-Choose the discipline the prompt is actually about. An academic study uses the named scientific field as primary (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar) with "Research" as a fallback when no field is identifiable. A hypothetical scenario uses the discipline a real version would belong to (a hypothetical Mars colony is Aerospace, a thought experiment about consciousness is Philosophy or Cognitive Science). A philosophical inquiry is Philosophy.
+Apply the following two steps in order. Step 1 must be answered first; step 2 applies only if step 1 yields a concrete project.
 
-If the prompt names no concrete project — no deliverable, no outcome, no question to investigate — emit domain_fits=[], confidence="low" with a one-sentence rationale identifying what is missing.
+Step 1 — concreteness check
+---------------------------
+Decide whether the prompt names a concrete project. A concrete project names at least one of these:
+  - a deliverable: a paper, a report, a study, a system, a model, a corpus, a documented analysis.
+  - a question to investigate: a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables.
+  - an outcome the project aims to produce: a finding, a proof, a working prototype, an answer to a stated question.
+  - an entity to study: a named species, a named place, a named population, a named substance, a named historical event, a named text or artifact.
+
+If the prompt names none of those, the user message has not yet described a project. The right output is domain_fits=[] paired with confidence="low" and a one-sentence rationale identifying which kind of concrete element is missing (deliverable, question, outcome, or entity). Step 2 does not apply in that case.
+
+Step 2 — discipline pick
+------------------------
+When step 1 yields a concrete project, choose the discipline the prompt is actually about. Use the named scientific field for an academic study (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar) with "Research" as the fallback when the study names no identifiable field. Use the discipline a real version would belong to for a hypothetical scenario (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics). Use Philosophy only when the prompt names a specific philosophical argument, ethical question, or conceptual framework — not as a default when the prompt is unspecific.
 """
 
 # --- Per-purpose system prompt assembly + dispatch --------------------

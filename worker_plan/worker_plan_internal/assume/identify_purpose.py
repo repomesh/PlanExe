@@ -1,8 +1,64 @@
 """
-Determine what kind of plan is to be conducted.
-- **Business:** Profit-Driven, aimed at generating profit.
-- **Personal:** Personal stuff, not aimed at generating profit.
-- **Other:** Doesn't fit into the above categories.
+Identify the purpose of a project plan: business / personal / other.
+
+The classifier picks one of three labels based on the user's prompt.
+The labels are designed to optimise for precision in business and
+personal — when the prompt has clear commercial or individual
+signals — and to fall back to "other" whenever the assignment is
+uncertain. As a result, "other" is a confidence-handling catch-all
+rather than a residual third category.
+
+What each label means
+---------------------
+- **business** — the project's outcome is profit-seeking, professional,
+  or large-scale societal/governmental. Use this when the prompt names
+  a commercial activity, a paying customer base, a profit motive, an
+  infrastructure build with a public ROI, or a governmental initiative
+  with population-scale impact.
+
+- **personal** — the project is a private life matter. The defining
+  trait is that the project is private life rather than commercial,
+  governmental, or organisational; participation by multiple people
+  (a couple, a family, a household, a friend group) is fine and does
+  not promote it to business. Personal therefore covers two shapes:
+    * one individual's own task, hobby, vacation, household activity,
+      life decision, self-care, or self-improvement
+    * family- or friend-scale shared events and matters: a wedding,
+      a funeral, a family reunion, a birthday, an anniversary, a
+      parenting decision, an eldercare arrangement, a household move,
+      and similar private gatherings or shared life events
+  The participants act on their own behalf (or on behalf of their
+  family / household / friend group), not on behalf of an employer,
+  a customer base, or a public/governmental remit.
+
+- **other** — anything that does not clearly fit business or personal,
+  AND any prompt where the right bucket is uncertain. The "other"
+  bucket therefore covers a wide range:
+    * academic studies, hypothetical scenarios, technical inquiries
+    * non-profit organisations, NGOs, charities, foundations,
+      community-led initiatives operating without a profit motive
+    * philosophical arguments and ethical questions
+    * projects that probably belong in business or personal but
+      lacked clear identifying signals (when in doubt, the
+      classifier picks "other")
+
+  Downstream stages should treat "other" as both a category and a
+  confidence signal — the project may be any shape, and may still
+  involve real money (budgets, grants, donations, fundraising,
+  volunteer-time-as-cost). The presence of money flow does not by
+  itself mean the project is business; what matters is whether the
+  outcome is profit-seeking.
+
+Trade-off
+---------
+Defaulting to "other" when in doubt keeps the false-positive rate
+low for business and personal classifications, at the cost of
+pushing disambiguation onto downstream stages. A project that is
+actually a business may end up in "other" if the prompt did not
+make its commercial framing obvious; downstream consumers (e.g.
+classify_domain_v6's purpose-routed system prompts) need to handle
+this by treating the "other" prompt as a catch-all rather than as
+"definitely not business or personal".
 
 PROMPT> python -m worker_plan_internal.assume.identify_purpose
 """
@@ -57,7 +113,15 @@ Respond ONLY with a valid JSON object containing:
 @dataclass
 class IdentifyPurpose:
     """
-    Take a look at the vague description of an idea and determine its purpose.
+    Classify a project description as business, personal, or other.
+
+    See the module docstring for the rubric and the trade-off behind
+    "other" as a confidence-handling catch-all. Briefly: business and
+    personal are precision-oriented; "other" absorbs both genuinely
+    non-fitting cases (academic, non-profit, philosophical, hypothetical)
+    AND uncertain assignments where neither business nor personal is
+    a confident match. Downstream consumers should treat "other"
+    accordingly.
     """
     system_prompt: str
     user_prompt: str

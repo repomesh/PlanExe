@@ -266,6 +266,50 @@ Recommended next step:
     measure the personal-routed prompt under realistic load,
     seed the smoke harness with more individual-task prompts
     and re-run.
+
+v6 "other"-prompt tightening — smoke-run delta (2026-05-01)
+-----------------------------------------------------------
+The "other" guidance was restructured into two ordered steps:
+step 1 is a concreteness check that gates on a named deliverable,
+question, outcome, or entity to study; step 2 is the discipline
+pick that only applies when step 1 yields a concrete project.
+Philosophy is now explicitly gated on "the prompt names a
+specific philosophical argument, ethical question, or conceptual
+framework" rather than offered as an open default.
+
+Both prior "other"-bucket regressions are fixed:
+  - "Improve things." on llama: was Software Engineering /
+    Philosophy(conf=medium); now Software Engineering / Unclear
+    under augmented. The augmented run correctly bottoms out at
+    domain_fits=[]; the baseline still drifts because the model
+    has no purpose context in the user message and reaches for
+    a discipline anyway.
+  - "Help me make a plan for my project." on gpt-oss: was
+    Unclear / Project Management under augmented; now Unclear /
+    Unclear on both conditions.
+
+No regressions introduced:
+  - Concrete "other"-bucket prompts (Statue of Liberty
+    relocation, Arxiv ML paper distillation) still classify
+    normally. The Statue of Liberty prompt routes to Civil /
+    Structural Engineering on both models because it names a
+    concrete deliverable (a relocated artifact). The Arxiv
+    prompt is in the "other" bucket because IdentifyPurpose
+    tagged it that way; gpt-oss emits Machine Learning Research,
+    llama emits Research Methodology / Computer Science. Llama
+    not picking Machine Learning here is a separate
+    narrow-discipline-sensitivity issue, not an artifact of the
+    tightening.
+  - Houseplants stays Personal on both models, both conditions.
+  - Personal and business buckets are unaffected (their guidance
+    blocks are byte-identical to the prior v6).
+
+Methodological observation: the fix is not a "do not emit
+Philosophy" negative constraint but a positive precondition on
+when discipline guidance applies at all. That preserves the
+model's ability to use Philosophy when the prompt actually
+warrants it (a named ethical question, a named conceptual
+framework) while removing the bait for vague prompts.
 """
 
 

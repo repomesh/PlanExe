@@ -712,7 +712,7 @@ class PrimarySelection(BaseModel):
 PRIMARY_SELECT_SYSTEM_PROMPT = """
 You are selecting the primary domain for a project from a list of expert-discipline candidates that have already been judged relevant. Your task: pick the ONE candidate whose discipline owns the project's main success criterion — what a specialist who would lead the entire project as a whole calls themselves.
 
-The user message contains the original project description followed by the enumerated candidate list. Each candidate has an index, a domain, a fit ("medium" or "high"), a role ("outcome" / "constraint" / "market" / "method" / "stakeholder" / "tool" / "unclear"), and a reason.
+The user message contains the original project description, an optional `## Project purpose` section identifying the project as `personal`, `business`, or `other`, and the enumerated candidate list. Each candidate has an index, a domain, a fit ("medium" or "high"), a role ("outcome" / "constraint" / "market" / "method" / "stakeholder" / "tool" / "unclear"), and a reason. The candidate list does not include the purpose category itself as a candidate — the purpose is carried separately so the candidate list always names actual expert disciplines.
 
 # Output format
 
@@ -748,6 +748,14 @@ Apply these preferences in order:
 4. When two candidates are otherwise equal, prefer `fit="high"` over `fit="medium"`.
 
 The candidate list is fixed. Pick from it.
+
+# Project purpose context
+
+When a `## Project purpose` section is present, use it as additional context for the pick:
+
+- **personal** — the project is a private life matter (an individual's task, hobby, vacation, household activity, or a family- or friend-scale event). Among the candidates, prefer the discipline that best names the activity itself, even when the discipline could be applied at a professional scale (Horticulture for plant care, Cooking for meal prep, Travel Planning for vacation logistics). Avoid promoting a candidate whose role makes it a generic instrument or supporting service rather than the activity itself.
+- **business** — the project is commercial, professional, governmental, or large-scale societal. Apply the standard preferences: outcome over non-outcome, narrowest specialist over umbrella.
+- **other** — the project is academic, hypothetical, non-profit / NGO / community-led, or could not be confidently placed in business or personal upstream. Among the candidates, prefer the discipline that best names the project's actual subject — a specific scientific field for an academic study, the discipline a real version would belong to for a hypothetical scenario, or the relevant policy / non-profit specialty for a public-welfare initiative.
 
 # When there is exactly one candidate
 
@@ -847,11 +855,11 @@ This project is a private life matter. The defining trait is that the project is
 
 The participants act on their own behalf (or on behalf of their family, household, or friend group), not on behalf of an employer, a customer base, or a public or governmental remit.
 
-For personal projects, `"Personal"` is itself a valid expert discipline name and is usually the right primary domain. Use `"Personal"` as the primary outcome whenever the project fits either of the two shapes above — regardless of which off-the-shelf tools, apps, hobby techniques, or consumer products are involved.
+The candidate disciplines for a personal project should describe the hobby, domestic technique, professional service, or specific activity central to the project. The label `"Personal"` is the project's purpose category, not an expert discipline — the purpose context is already carried separately, so the candidate list focuses on what the project actually involves. Useful candidate disciplines for personal projects: Horticulture for plant care, Cooking for meal preparation, Travel Planning for vacation logistics, Healthcare for a clinical procedure, Construction for a permitted home build, Event Planning for organising a private event, Pet Care for animal-companion tasks, Carpentry or Home Improvement for DIY work.
 
-Use a more specific discipline as the primary outcome only when the prompt names a professional service the participants are hiring (Healthcare for a clinical procedure, Construction for a permitted build, Event Planning for a paid wedding planner running the event), a regulator the project must satisfy, or expertise that the participants cannot reasonably supply on their own.
+Roles still distinguish the project's outcome from its means: assign `role="outcome"` to the discipline that names what the project is fundamentally about (for a wedding, Event Planning; for a meal-prep project, Cooking; for a planted-garden project, Horticulture; for a watering-routine, Plant Care or Horticulture). Assign `role="method"` to disciplines that describe instruments or techniques applied within that outcome, `role="constraint"` to regulators (Building Codes, Health Regulations), and `role="tool"` to off-the-shelf apps, websites, AI assistants, or consumer products used in the project — those never become the primary outcome.
 
-Specialist disciplines that describe a hobby, domestic technique, or private-event organisation (Horticulture, Cooking, Gardening, Travel Planning, Event Planning, Carpentry, and similar) typically appear with `role="method"` while `"Personal"` carries `role="outcome"`. Off-the-shelf apps, websites, AI assistants, and consumer products used in the project carry `role="tool"` and never become the primary outcome.
+For very small everyday tasks (watering 5 houseplants, doing laundry, a simple weekly chore), the discipline that best describes the activity is the right primary even when the activity is small-scale.
 """
 
 _OTHER_GUIDANCE = """
@@ -903,6 +911,17 @@ _SYSTEM_PROMPTS: dict[str, str] = {
 # general (covers commercial, governmental, public-welfare, infrastructure)
 # and is the safest fallback.
 _DEFAULT_PURPOSE = "business"
+
+# Domain labels matching the purpose categories themselves are dropped
+# from the candidate list at cleanup time: the purpose category is
+# carried separately on the result, so a candidate domain of
+# "Personal" / "Business" / "Other" would just duplicate the
+# purpose tag without naming an actual expert discipline.
+_PURPOSE_LABEL_KEYS: frozenset[str] = frozenset({
+    "personal",
+    "business",
+    "other",
+})
 
 
 def system_prompt_for_purpose(purpose: str | None) -> str:
@@ -957,6 +976,7 @@ def select_primary_via_llm(
     llm,
     user_prompt: str,
     fits: list[DomainFit],
+    purpose: str | None = None,
 ) -> tuple[int, str, str]:
     """Run the v7 second-pass LLM call to pick the primary domain.
 
@@ -965,6 +985,12 @@ def select_primary_via_llm(
     / "high" reflecting the LLM's confidence in the chosen primary.
     Raises ValueError on empty `fits`, on an empty structured response,
     or on an out-of-range index.
+
+    `purpose` (optional) is the project purpose category from the
+    upstream IdentifyPurpose pre-pass — one of "personal" / "business"
+    / "other". When supplied, it is included in the user message as
+    a "## Project purpose" section so the second-pass selector can
+    use the purpose context as a tie-breaker.
     """
     if not fits:
         raise ValueError("Cannot select primary from empty fit list.")
@@ -972,9 +998,15 @@ def select_primary_via_llm(
         raise ValueError("llm must provide as_structured_llm().")
 
     candidate_block = _format_candidate_list(fits)
+    purpose_key = (purpose or "").strip().lower()
+    if purpose_key in _PURPOSE_LABEL_KEYS:
+        purpose_section = f"## Project purpose\n\n{purpose_key}\n\n---\n\n"
+    else:
+        purpose_section = ""
     user_msg = (
         f"{user_prompt}\n\n"
         f"---\n\n"
+        f"{purpose_section}"
         f"## Candidate domains\n"
         f"{candidate_block}\n"
     )
@@ -1146,6 +1178,15 @@ class ClassifyDomain:
                     warnings.append("Dropped fit with empty domain label.")
                     continue
                 key = label_key(domain)
+                if key in _PURPOSE_LABEL_KEYS:
+                    # The purpose category (personal / business / other)
+                    # is carried separately on the result; including it
+                    # as a candidate domain would duplicate that signal.
+                    warnings.append(
+                        f"Dropped purpose-tag fit (purpose belongs in the "
+                        f"purpose field, not the candidate list): {domain}"
+                    )
+                    continue
                 if key in seen_fits:
                     warnings.append(f"Dropped duplicate fit domain: {domain}")
                     continue
@@ -1225,7 +1266,7 @@ class ClassifyDomain:
             select_start = time.perf_counter()
             try:
                 idx, sel_confidence, sel_rationale = select_primary_via_llm(
-                    primary_llm, user_prompt, cleaned_fits
+                    primary_llm, user_prompt, cleaned_fits, purpose=purpose
                 )
                 primary = normalize_label(cleaned_fits[idx].domain)
                 confidence = sel_confidence

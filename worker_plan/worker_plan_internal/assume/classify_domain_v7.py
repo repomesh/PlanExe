@@ -174,6 +174,74 @@ second-pass call fails. Otherwise the second-pass LLM is the
 authority over the primary domain, the confidence, and the
 rationale.
 
+v7 purpose-tag filter and purpose-aware second pass
+---------------------------------------------------
+Two coordinated changes that work together:
+
+(1) Candidate domains whose normalized label matches the purpose
+    category itself ("Personal" / "Business" / "Other") are
+    filtered out at cleanup time and a warning is emitted. The
+    purpose category is carried separately on the result, so
+    including it as a candidate domain would duplicate that signal
+    without naming an actual expert discipline.
+
+(2) The second-pass primary-selection LLM receives the purpose tag
+    in its user message under a "## Project purpose" heading, and
+    PRIMARY_SELECT_SYSTEM_PROMPT has a "# Project purpose context"
+    section with purpose-aware tie-breakers:
+      - personal: prefer the discipline that names the activity
+        itself (Horticulture for plant care, Cooking for meal
+        prep, Travel Planning for vacation logistics).
+      - business: standard outcome-over-non-outcome and
+        narrowness-over-umbrella rules.
+      - other: prefer the discipline that names the project's
+        actual subject (academic field, real-version-of-
+        hypothetical, policy / non-profit specialty).
+
+The personal-purpose first-pass guidance was rewritten alongside
+these changes to drop the "'Personal' is itself a valid expert
+discipline" framing the cleanup filter would otherwise contradict.
+The first-pass model is now told to emit specialist disciplines
+(Horticulture, Cooking, Travel Planning, Healthcare, Construction,
+Event Planning, Pet Care, Carpentry, Home Improvement) as
+candidates for personal projects.
+
+v7 smoke-run findings (2026-05-02)
+----------------------------------
+Houseplants [10] correctly handled across all four cells (both
+models, both conditions): primary = Horticulture with Plant Care /
+Indoor Gardening / Household Maintenance as secondaries. Combined
+with `purpose: personal` on the result, downstream consumers see
+"a personal Horticulture-flavored project." This is the design
+intent landing — the purpose-tag filter removed the meta-label
+that previously won by default, and the purpose-aware tie-breakers
+told the second pass to prefer the activity discipline.
+
+Solar Sunshade [4] (the multi-outcome motivating case): three of
+four cells still pick a climate-or-deliverable-related primary
+(Climate Engineering, Aerospace Engineering, International
+Relations on the governance angle). One cell shifts to Aerospace
+Engineering with the clean rationale "designing, building, and
+launching the L1 sunshade is the core deliverable; Climate Science
+is a broader outcome." Defensible reading; multi-outcome problem
+still being addressed.
+
+Vague-improve [23] llama still fails (Ecology baseline, Philosophy
+augmented, both high-confidence). Same model running both first
+and second pass cannot catch its own confabulation — the second-
+pass selector receives a hallucinated candidate menu in pass 1 and
+defends it in pass 2. The architectural fix remains: use a sharper
+model for the second pass via the `primary_llm` parameter on
+ClassifyDomain.execute (already wired). The smoke harness does
+not currently exercise this — left for a future change.
+
+Stability shifts: gpt-oss flips 12 -> 7 with the purpose-aware
+tie-breakers (more stable). llama flips 8 -> 15 (more variable —
+the longer second-pass prompt and richer candidate menu give the
+small model more degrees of freedom). Confidence distribution
+unchanged at 82 high / 10 low / 0 medium; models still don't use
+medium even on close-call rationales.
+
 v6 routing design (carried over)
 --------------------------------
 v6 keeps v5's principle-only base prompt and routes to one of

@@ -532,35 +532,45 @@ When two specialist disciplines fit equally well, pick the one that owns the pro
 _PERSONAL_GUIDANCE = """
 Purpose-specific guidance: personal projects
 ============================================
-This project is undertaken by a single individual for their own well-being, hobby, household, vacation, relationship, or self-improvement, and is not for profit.
+This project is a private life matter. The defining trait is that the project is private life rather than commercial, governmental, or organisational; participation by multiple people (a couple, a family, a household, a friend group) is fine and does not promote it to business. Personal therefore covers two shapes: one individual's own task, hobby, vacation, household activity, life decision, self-care, or self-improvement; AND family- or friend-scale shared events and matters such as a wedding, a funeral, a family reunion, a birthday, an anniversary, a parenting decision, an eldercare arrangement, or a household move. The participants act on their own behalf (or on behalf of their family, household, or friend group), not on behalf of an employer, a customer base, or a public or governmental remit.
 
-For personal projects, "Personal" is itself a valid expert discipline name and is usually the right primary domain. Use "Personal" as the primary outcome whenever the project is one individual's own task, hobby, vacation, household activity, life decision, or self-care — regardless of which off-the-shelf tools, apps, hobby techniques, or consumer products are involved.
+For personal projects, "Personal" is itself a valid expert discipline name and is usually the right primary domain. Use "Personal" as the primary outcome whenever the project fits either of the two shapes above — regardless of which off-the-shelf tools, apps, hobby techniques, or consumer products are involved.
 
-Use a more specific discipline as the primary outcome only when the prompt names a professional service the individual is hiring (Healthcare for a clinical procedure, Construction for a permitted build), a regulator the individual must satisfy, or expertise the individual cannot reasonably supply on their own.
+Use a more specific discipline as the primary outcome only when the prompt names a professional service the participants are hiring (Healthcare for a clinical procedure, Construction for a permitted build, Event Planning for a paid wedding planner running the event), a regulator the project must satisfy, or expertise that the participants cannot reasonably supply on their own.
 
-Specialist disciplines that describe a hobby or domestic technique (Horticulture, Cooking, Gardening, Travel Planning, Carpentry, and similar) typically appear with role="method" while "Personal" carries role="outcome". Off-the-shelf apps, websites, AI assistants, and consumer products used in the project carry role="tool" and never become the primary outcome.
+Specialist disciplines that describe a hobby, domestic technique, or private-event organisation (Horticulture, Cooking, Gardening, Travel Planning, Event Planning, Carpentry, and similar) typically appear with role="method" while "Personal" carries role="outcome". Off-the-shelf apps, websites, AI assistants, and consumer products used in the project carry role="tool" and never become the primary outcome.
 """
 
 _OTHER_GUIDANCE = """
 Purpose-specific guidance: other projects
 =========================================
-This project is academic, hypothetical, a technical inquiry, or otherwise does not clearly fit business or personal categories.
+This project is in the "other" bucket. "Other" is broader than its name suggests: it covers academic studies, hypothetical scenarios, technical inquiries, government and public-sector initiatives, non-profit organizations, NGOs, charities, foundations, community-led initiatives, AND any project that the upstream purpose pre-pass could not confidently place in business or personal. The pre-pass picks "other" when in doubt, so the bucket sometimes contains projects that would naturally belong in business or personal but did not show clear enough signals upstream. Treat "other" as a catch-all and apply the same discipline-picking principle regardless of why the project landed here.
+
+Many "other" projects involve real money — budgets, grants, donations, sponsorship, fundraising, volunteer-time-as-cost. That money flow is normal for non-profit, public-sector, and academic work. The presence of money signals in the prompt does not by itself promote the project into the business bucket; what matters is whether the project's outcome is profit-seeking (business) or population-/community-/knowledge-serving / undetermined (other).
 
 Apply the following two steps in order. Step 1 must be answered first; step 2 applies only if step 1 yields a concrete project.
 
 Step 1 — concreteness check
 ---------------------------
 Decide whether the prompt names a concrete project. A concrete project names at least one of these:
-  - a deliverable: a paper, a report, a study, a system, a model, a corpus, a documented analysis.
+  - a deliverable: a paper, a report, a study, a system, a model, a corpus, a documented analysis, a program, a regulation, a built artifact, a software product, a fundraising campaign.
   - a question to investigate: a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables.
-  - an outcome the project aims to produce: a finding, a proof, a working prototype, an answer to a stated question.
-  - an entity to study: a named species, a named place, a named population, a named substance, a named historical event, a named text or artifact.
+  - an outcome the project aims to produce: a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named population metric, a sum of money raised for a named cause, a service running, a regulation enacted.
+  - an entity to study or act on: a named species, a named place, a named population, a named substance, a named historical event, a named text or artifact, a named beneficiary group, a named market segment.
 
 If the prompt names none of those, the user message has not yet described a project. The right output is domain_fits=[] paired with confidence="low" and a one-sentence rationale identifying which kind of concrete element is missing (deliverable, question, outcome, or entity). Step 2 does not apply in that case.
 
 Step 2 — discipline pick
 ------------------------
-When step 1 yields a concrete project, choose the discipline the prompt is actually about. Use the named scientific field for an academic study (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar) with "Research" as the fallback when the study names no identifiable field. Use the discipline a real version would belong to for a hypothetical scenario (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics). Use Philosophy only when the prompt names a specific philosophical argument, ethical question, or conceptual framework — not as a default when the prompt is unspecific.
+When step 1 yields a concrete project, pick the narrowest specialist expert discipline the prompt's signals support — what a specialist who would lead the project calls themselves. This is the same load-bearing principle as the business prompt: a project that landed in "other" because of an upstream confidence call still gets classified by what it actually is, not by the bucket it arrived through.
+
+Specific project shapes that have natural narrow disciplines:
+  - Academic study: the named scientific field (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar). Use "Research" as fallback when the study names no identifiable field.
+  - Hypothetical scenario: the discipline a real version would belong to (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics).
+  - Government, public-sector, NGO, charity, foundation, or community-led initiative serving a population, community, or beneficiary group: Public Health, Public Policy, Education Policy, Social Welfare, International Development, Humanitarian Aid, Philanthropy, Nonprofit Management, or another named policy or non-profit area; pick the narrowest that the prompt's signals support.
+  - Philosophical argument, ethical question, or conceptual framework: Philosophy. Apply this only when the prompt names a specific philosophical question — not as a default when the prompt is unspecific.
+
+For project shapes that do not match any of the above (a manufacturing project, a software product, a construction project, a healthcare service, a transportation system, and so on, that landed in "other" because the upstream pre-pass was uncertain), pick the narrowest specialist expert discipline the prompt's signals support, just as the business prompt would. Umbrella labels (Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare) are reserved as fallback only when no specific subfield, technique, instrument, substance, medium, or application area is named.
 """
 
 # --- Per-purpose system prompt assembly + dispatch --------------------

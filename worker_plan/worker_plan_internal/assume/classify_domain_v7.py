@@ -38,24 +38,28 @@ fits and the prompt in front of it should produce better primaries
 on multi-discipline prompts, particularly the multi-outcome
 pattern observed in the v6 field probe (Solar Sunshade
 emitting three role="outcome" entries). The primary-selection
-call returns a primary_index, a confidence level, and a rationale;
-all three are surfaced in the result. derive_primary is kept as a
-fallback when the selection call fails or when there is only one
-candidate.
+call returns a primary_index and a rationale; both are surfaced
+in the result. derive_primary is kept as a fallback when the
+selection call fails or when there is only one candidate.
 
-v7 also moves both `confidence` and `rationale` off
-DomainFitAssessment and onto PrimarySelection. The first-pass
-classifier emits only the fit list; the second-pass selector emits
-the chosen primary's index, the confidence in that choice, and the
-human-readable rationale that justifies the pick. The two values
-are surfaced on the result as `confidence` and `rationale`
-respectively. For the 0-candidate (Unclear) path where no second
-pass runs, confidence is forced to "low" deterministically and the
-rationale is a hardcoded "no candidates emitted" string. The
-1-candidate case is routed through the second pass (the LLM still
-picks index 0 by construction, but its judgment of confidence and
-rationale catches small-model hallucinations that produce a single
-fabricated fit on a vague prompt).
+v7 moves the `rationale` field off DomainFitAssessment and onto
+PrimarySelection. The first-pass classifier emits only the fit
+list; the second-pass selector emits the chosen primary's index
+and the human-readable rationale. For the 0-candidate (Unclear)
+path where no second pass runs, the rationale is a hardcoded "no
+candidates emitted" string. The 1-candidate case is routed
+through the second pass (the LLM still picks index 0 by
+construction, but its rationale catches small-model
+hallucinations that produce a single fabricated fit on a vague
+prompt).
+
+The earlier v7 design also included a `confidence` field on
+PrimarySelection. Smoke-run measurement showed it was binary in
+practice (almost all "high" or "low", with "low" coming entirely
+from the deterministic 0-candidate path), so it was removed —
+the rationale carries the qualitative judgment, and downstream
+consumers can compute "is this resolved?" from
+`bool(domain_fits)`.
 
 PROMPT> python -m worker_plan_internal.assume.classify_domain_v7
 """
@@ -141,33 +145,39 @@ v7 replaces the deterministic priority-chain primary picker with
 a second LLM invocation that sees the cleaned fit list as an
 enumerated candidate menu and returns:
   - primary_index — the index of the chosen candidate
-  - confidence — high / medium / low confidence in the chosen primary
   - rationale — one or two sentences justifying the pick
 
-Both `confidence` and `rationale` have been moved off
-DomainFitAssessment (the first-pass output) and onto
-PrimarySelection (the second-pass output). The first-pass
-classifier now emits only the fit list — `domain_fits` is its sole
-field. The second-pass selector is the right place for both fields
-because it has the candidate list and the prompt in front of it
-and is making the actual primary choice; rating confidence in that
-choice and explaining it in plain language are tasks for the same
-call.
+The `rationale` field has been moved off DomainFitAssessment (the
+first-pass output) and onto PrimarySelection (the second-pass
+output). The first-pass classifier now emits only the fit list —
+`domain_fits` is its sole field. The second-pass selector is the
+right place for the rationale because it has the candidate list
+and the prompt in front of it and is making the actual primary
+choice; explaining that choice in plain language is a task for
+the same call.
 
-The result's `confidence` and `rationale` are sourced as follows:
-  - 0 candidates: confidence forced to "low" deterministically
-    (Unclear); rationale is a hardcoded "no candidates emitted"
-    string. No second pass runs.
-  - 1+ candidates: the second-pass LLM emits both. Routing the
-    1-candidate case through the LLM pays one extra call for a
-    safety net — small models occasionally hallucinate a single
-    high-fit candidate on a vague prompt, and the second pass can
-    catch that (rate it confidence="low" with a rationale that
-    flags the weak grounding) instead of mechanically promoting
-    it.
-  - Fallback (LLM call fails): confidence forced to "medium" as a
-    no-signal default; rationale describes the fallback path. A
-    warning records the failure.
+An earlier v7 iteration also placed a `confidence` field on
+PrimarySelection. Smoke-run measurement (10 cases × multiple
+runs) showed it was binary in practice — almost all "high" or
+"low" with no "medium" emissions even on close-call rationales,
+and the "low" cases came entirely from the deterministic
+0-candidate path (forced confidence="low" when fits is empty).
+The field's signal was effectively `bool(domain_fits)`, so it was
+removed. Downstream consumers compute "is this resolved?" from
+the fit list directly and read the rationale for nuance.
+
+The result's `rationale` is sourced as follows:
+  - 0 candidates: hardcoded "no candidates emitted" string;
+    primary_domain is "Unclear". No second pass runs.
+  - 1+ candidates: the second-pass LLM emits the rationale.
+    Routing the 1-candidate case through the LLM pays one extra
+    call for a safety net — small models occasionally hallucinate
+    a single fit on a vague prompt, and the second pass can flag
+    weak grounding in its rationale instead of mechanically
+    promoting it.
+  - Fallback (LLM call fails): hardcoded fallback rationale
+    describing the priority-chain fallback path. A warning
+    records the failure.
 
 derive_primary is kept as the deterministic fallback when the
 second-pass call fails. Otherwise the second-pass LLM is the
@@ -241,6 +251,56 @@ the longer second-pass prompt and richer candidate menu give the
 small model more degrees of freedom). Confidence distribution
 unchanged at 82 high / 10 low / 0 medium; models still don't use
 medium even on close-call rationales.
+
+v7 smoke-run findings: confidence-field removal (2026-05-02)
+------------------------------------------------------------
+Re-ran the smoke harness after dropping the confidence field
+entirely from PrimarySelection and from the result schema. Output
+schema is now: `primary_domain`, `secondary_domains`,
+`domain_fits`, `rationale`, `warnings`. Verified zero `confidence`
+or `conf=` references in the smoke log.
+
+Behaviour with the removal:
+
+  - Houseplants [10] stable on both models, both conditions:
+    primary = Horticulture, secondaries = {Plant Care, Gardening,
+    Household Maintenance, Time Management} variants. The
+    purpose-aware second-pass design holds without the confidence
+    field.
+  - Solar Sunshade [4] improved: 4/4 cells pick a
+    climate-or-deliverable-related primary this run (Environmental
+    Engineering on llama baseline, Climate Engineering on the
+    other three). The previous v7d run had Aerospace Engineering
+    on gpt-oss augmented; this run gets Climate Engineering. The
+    improvement is incidental LLM variance, but the multi-outcome
+    case is still being handled correctly.
+  - Vague-improve [23] llama still confabulates (Social Work this
+    run; Ecology / Philosophy / Public Health / Plant Care across
+    earlier runs). Different fabrication each run, same failure
+    mode: same-model first-and-second-pass cannot catch its own
+    hallucination. The rationale text now reveals the
+    confabulation by claiming a focus that is not in the prompt
+    ("a focus on improving unspecified aspects ... social welfare
+    and community development") — useful signal for downstream
+    consumers even without a confidence field. gpt-oss handles the
+    case correctly via the empty-fits path.
+  - Stability: llama flips 14/23, gpt-oss flips 9/23. Comparable
+    to v7d. The confidence field had no measurable effect on the
+    flip count.
+  - Minor quality watch-out (not a regression): a couple of llama
+    outputs use job titles instead of discipline names
+    ("Environmental Engineer", "Escape Room Designer"). The
+    existing first-pass guidance asks for "the discipline a
+    specialist calls themselves" — small models occasionally
+    drift to person-titles. Worth watching but not blocking.
+
+Net: removing the confidence field is clean. The rationale now
+carries the entire qualitative signal in the structured output;
+on real prompts the rationales are coherent and prompt-grounded;
+on confabulation cases the rationale itself reveals the made-up
+content (the lack of grounding is visible in the language).
+Downstream consumers compute "is this resolved?" from
+`bool(domain_fits)` and read the rationale for nuance.
 
 v6 routing design (carried over)
 --------------------------------
@@ -722,8 +782,8 @@ class DomainFit(BaseModel):
 class DomainFitAssessment(BaseModel):
     """A list of candidate domain fits for the project. The first-pass
     classifier emits only this field; the primary domain, secondary
-    domains, overall confidence, and the human-readable rationale are
-    all computed by the second-pass primary-selection LLM call (or by
+    domains, and the human-readable rationale are all computed by
+    the second-pass primary-selection LLM call (or by
     deterministic fallbacks when the second pass does not run).
     """
     # No max_length here on purpose — small models occasionally
@@ -745,27 +805,13 @@ class DomainFitAssessment(BaseModel):
 # --- Second-pass primary-selection schema (v7) ------------------------
 
 class PrimarySelection(BaseModel):
-    """LLM-returned choice of primary domain from a candidate list,
-    along with the LLM's confidence in the chosen primary.
-    """
+    """LLM-returned choice of primary domain from a candidate list."""
     primary_index: int = Field(
         description=(
             "Zero-based index into the candidate list. Pick exactly "
             "one candidate whose discipline owns the project's main "
             "success criterion. The index must be in the range "
             "[0, number_of_candidates - 1]."
-        )
-    )
-    confidence: Literal["low", "medium", "high"] = Field(
-        description=(
-            "Confidence in the chosen primary. "
-            "'high' when one candidate is clearly the best primary "
-            "given the project's main success criterion; "
-            "'medium' when two or more candidates were plausible and "
-            "the choice required a tie-breaker; "
-            "'low' when no candidate is a strong fit and the chosen "
-            "one is the least bad — downstream consumers should treat "
-            "the primary as tentative."
         )
     )
     rationale: str = Field(
@@ -784,12 +830,11 @@ The user message contains the original project description, an optional `## Proj
 
 # Output format
 
-A single JSON object with three fields:
+A single JSON object with two fields:
 
 ```json
 {
   "primary_index": 0,
-  "confidence": "low" | "medium" | "high",
   "rationale": "..."
 }
 ```
@@ -797,12 +842,6 @@ A single JSON object with three fields:
 The first character of your response is `{`. The last character is `}`.
 
 `primary_index` is the zero-based integer index of the candidate you select. It must be in the range [0, number_of_candidates - 1].
-
-`confidence` is your confidence in the chosen primary:
-
-- `"high"` when one candidate is clearly the best primary given the project's main success criterion.
-- `"medium"` when two or more candidates were plausible and the choice required a tie-breaker.
-- `"low"` when no candidate is a strong fit and the chosen one is the least bad — downstream consumers should treat the primary as tentative.
 
 `rationale` is one or two sentences, ≤40 words, that explain why the chosen candidate is the project's primary discipline and (briefly) why each rejected candidate is not.
 
@@ -827,11 +866,11 @@ When a `## Project purpose` section is present, use it as additional context for
 
 # When there is exactly one candidate
 
-When the candidate list has only one entry, `primary_index` is `0` by construction. Use the call as a sanity check on the lone candidate: judge whether it is a strong fit for the project's main success criterion. If the project description names a concrete deliverable, question, outcome, or entity that the candidate clearly serves, set `confidence="high"`. If the candidate is plausible but the project is described loosely or the candidate is a generic umbrella, set `confidence="medium"`. If the project description does not name a concrete project at all (a generic verb with an abstract object, no deliverable, no entity) and the lone candidate looks fabricated rather than grounded in the prompt, set `confidence="low"` and say so in the rationale.
+When the candidate list has only one entry, `primary_index` is `0` by construction. Use the call as a sanity check on the lone candidate: judge whether it is a strong fit for the project's main success criterion and say so in the rationale. If the project description names a concrete deliverable, question, outcome, or entity that the candidate clearly serves, the rationale should affirm the pick. If the project description is loosely worded, generic, or the lone candidate looks fabricated rather than grounded in the prompt, the rationale should flag that — downstream consumers read the rationale to judge how seriously to take the primary.
 
 # Rationale guidance
 
-The rationale should briefly justify the selection. With multiple candidates, also briefly note the relegation of the strongest alternative. With one candidate, explain how strongly the candidate is grounded in the project description and whether the confidence reflects that.
+The rationale should briefly justify the selection. With multiple candidates, also briefly note the relegation of the strongest alternative. With one candidate, explain how strongly the candidate is grounded in the project description.
 """
 
 
@@ -892,11 +931,11 @@ One sentence ≤15 words explaining why this discipline shows up.
 
 # Empty-list case
 
-When the prompt is too short or too generic to name a concrete project — when the prompt names no deliverable, no outcome, no audience, no operation, no substance, no medium — emit `domain_fits=[]`. The downstream pipeline supplies the human-readable explanation and confidence in that case; you do not need to.
+When the prompt is too short or too generic to name a concrete project — when the prompt names no deliverable, no outcome, no audience, no operation, no substance, no medium — emit `domain_fits=[]`. The downstream pipeline supplies the human-readable explanation in that case; you do not need to.
 
 # Pipeline reminder
 
-The pipeline picks `primary_domain` from your `domain_fits` via a second LLM call, and derives `secondary_domains`, `confidence`, and the human-readable rationale from there — you emit only the fit list. Focus on getting the fit list right.
+The pipeline picks `primary_domain` from your `domain_fits` via a second LLM call, and derives `secondary_domains` and the human-readable rationale from there — you emit only the fit list. Focus on getting the fit list right.
 """
 
 # --- Purpose-specific guidance blocks ---------------------------------
@@ -946,7 +985,7 @@ Before identifying any discipline, identify whether the prompt describes a concr
 - an outcome the project aims to produce (a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named metric, a sum of money raised for a named cause, a service running, a regulation enacted)
 - an entity to study or act on (a named species, place, population, substance, historical event, text, artifact, beneficiary group, market segment)
 
-If none of those is named in the prompt, the prompt has not yet described a project. The correct output is `domain_fits = []`. The downstream pipeline supplies the human-readable explanation and confidence in that case; you do not need to.
+If none of those is named in the prompt, the prompt has not yet described a project. The correct output is `domain_fits = []`. The downstream pipeline supplies the human-readable explanation in that case; you do not need to.
 
 In that case, the empty-list answer is the final answer; step 2 only applies when step 1 yields a concrete project. A project description must name what is being delivered, investigated, produced, or studied or acted on. Prompts that pair generic imperative verbs with abstract or pronominal objects fall short of this requirement, and the right output is the empty-list answer.
 
@@ -1045,14 +1084,12 @@ def select_primary_via_llm(
     user_prompt: str,
     fits: list[DomainFit],
     purpose: str | None = None,
-) -> tuple[int, str, str]:
+) -> tuple[int, str]:
     """Run the v7 second-pass LLM call to pick the primary domain.
 
-    Returns (primary_index, confidence, rationale). primary_index is a
-    zero-based index into `fits`; confidence is one of "low" / "medium"
-    / "high" reflecting the LLM's confidence in the chosen primary.
-    Raises ValueError on empty `fits`, on an empty structured response,
-    or on an out-of-range index.
+    Returns (primary_index, rationale). primary_index is a zero-based
+    index into `fits`. Raises ValueError on empty `fits`, on an empty
+    structured response, or on an out-of-range index.
 
     `purpose` (optional) is the project purpose category from the
     upstream IdentifyPurpose pre-pass — one of "personal" / "business"
@@ -1098,7 +1135,7 @@ def select_primary_via_llm(
         raise IndexError(
             f"Primary-selection index {idx} out of range [0, {len(fits)})."
         )
-    return idx, selection.confidence, normalize_label(selection.rationale)
+    return idx, normalize_label(selection.rationale)
 
 
 def derive_secondaries(fits: list[DomainFit], primary: str, cap: int = 3) -> list[str]:
@@ -1326,18 +1363,16 @@ class ClassifyDomain:
         primary_select_duration = 0.0
         if not cleaned_fits:
             primary = "Unclear"
-            confidence = "low"
             rationale = (
                 "No candidates emitted; the prompt is too vague to identify a project."
             )
         else:
             select_start = time.perf_counter()
             try:
-                idx, sel_confidence, sel_rationale = select_primary_via_llm(
+                idx, sel_rationale = select_primary_via_llm(
                     primary_llm, user_prompt, cleaned_fits, purpose=purpose
                 )
                 primary = normalize_label(cleaned_fits[idx].domain)
-                confidence = sel_confidence
                 rationale = sel_rationale
             except Exception as exc:
                 fallback_primary = derive_primary(cleaned_fits)
@@ -1347,16 +1382,10 @@ class ClassifyDomain:
                     f"derive_primary -> {fallback_primary!r}."
                 )
                 primary = fallback_primary
-                # On fallback, no second-pass confidence is available.
-                # "medium" reflects the partial signal: candidates were
-                # produced and a deterministic primary was chosen, but
-                # the LLM-judged confidence is unknown.
-                confidence = "medium"
                 rationale = (
                     "Second-pass selection failed; primary derived from the "
                     "priority-chain fallback (high+outcome > medium+outcome > "
-                    "high any role > Unclear). Confidence set to 'medium' as a "
-                    "no-signal default."
+                    "high any role > Unclear)."
                 )
             primary_select_duration = round(
                 time.perf_counter() - select_start, 3
@@ -1367,7 +1396,6 @@ class ClassifyDomain:
         json_response: dict = {
             "primary_domain": primary,
             "secondary_domains": secondaries,
-            "confidence": confidence,
             "domain_fits": [f.model_dump() for f in cleaned_fits],
             "rationale": rationale,
             "warnings": warnings,
@@ -1385,7 +1413,6 @@ class ClassifyDomain:
         markdown = cls._convert_to_markdown(
             primary=primary,
             secondaries=secondaries,
-            confidence=confidence,
             rationale=rationale,
             fits=cleaned_fits,
             warnings=warnings,
@@ -1424,7 +1451,6 @@ class ClassifyDomain:
         *,
         primary: str,
         secondaries: list[str],
-        confidence: str,
         rationale: str,
         fits: list[DomainFit],
         warnings: list[str],
@@ -1434,8 +1460,6 @@ class ClassifyDomain:
             f"**Primary domain:** {primary}",
             "",
             f"**Secondary domains:** {secondary_display}",
-            "",
-            f"**Confidence:** {confidence.title()}",
             "",
             f"**Rationale:** {rationale}",
         ]
@@ -1836,12 +1860,11 @@ if __name__ == "__main__":
                 elif json_response is not None:
                     primary = json_response.get("primary_domain")
                     secondary = json_response.get("secondary_domains") or []
-                    conf = json_response.get("confidence")
                     rat = json_response.get("rationale") or ""
                     primaries[condition] = primary or "<none>"
                     print(
                         f"  [{tag}] primary={primary}, "
-                        f"secondary={secondary}, conf={conf}"
+                        f"secondary={secondary}"
                     )
                     if rat:
                         print(f"    rationale: {rat}")

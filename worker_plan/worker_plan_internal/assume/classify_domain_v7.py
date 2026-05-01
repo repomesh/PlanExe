@@ -365,6 +365,81 @@ Stability improved on llama. The marquee multi-outcome win
 (vague-improve confabulation, occasional sub-optimal narrow
 picks) are model-quality issues, not prompt issues.
 
+v7 smoke-run findings: held-out 10-prompt run (2026-05-02)
+----------------------------------------------------------
+First true validation of the v6/v7 prompts on prompts they have
+never been tuned against. The smoke harness was switched to
+SAMPLE_SEED=400, with seeds 7/8/100/300 added to the excluded-
+IDs sequence so the new sample has zero overlap with anything
+the prompts have been iteratively shaped against. Both llama and
+gpt-oss were enabled. No vague prompts in this sample — the
+goal was to evaluate prompts on unseen content, not to re-verify
+the empty-fits path.
+
+Held-out 10 catalog prompts:
+  [1] covert intelligence operation
+  [2] containerised dark-data ingestor fleet (long, ~11k chars)
+  [3] neural-connectome research pilot
+  [4] extreme-poverty sustainability solution
+  [5] clean-water access strategy
+  [6] police-robots deployment
+  [7] small Python script (a bouncing-ball algorithm)
+  [8] Pope-funeral planning
+  [9] short metro-construction prompt (~70 chars)
+  [10] reversible-suspended-metabolism research program (~7k chars)
+
+Findings:
+
+- Strong consistency on concrete prompts. 4 of 10 prompts had
+  unanimous primary across all 4 cells (llama×{baseline,augmented}
+  + gpt-oss×{baseline,augmented}): [2] Digital Preservation,
+  [3] Neuroscience, [6] Robotics, [10] Cryobiology. These are
+  textbook narrow-specialist picks, exactly what the principle-
+  only design was supposed to produce.
+- Reasonable variance on multi-discipline prompts. [1] Undercover
+  / Clandestine / Intelligence Operations; [4] Humanitarian Aid /
+  Development Economics / International Development; [5] Civil /
+  Water Supply / Environmental Engineering; [8] Ceremonial
+  Protocol / Funeral Planning / Event Management; [9] Urban
+  Planning / Civil / Railway Engineering. All flips are between
+  equally-narrow defensible alternatives — no umbrella drift, no
+  job-title drift. Augmented condition often converges to the
+  same answer across models.
+- One real failure: [7] the Python bouncing-ball script. llama on
+  baseline emitted Python code instead of JSON; the existing
+  safeguard ("the user message describes a project; your output
+  remains a JSON classification") was not enough for llama on a
+  small-software-algorithm prompt. llama recovered under
+  augmentation (purpose pre-pass markdown grounded it). gpt-oss
+  handled both conditions correctly (Computer Graphics ->
+  Animation). Same small-model imperative-as-instruction weakness
+  observed in earlier runs; not introduced by the leakage
+  cleanup.
+- Stability: llama 5/10 flips on successful runs (6/10 counting
+  [7]'s error->recovery); gpt-oss 4/10 flips. Slightly higher
+  than in-sample (in-sample llama was 9/23 = 39% post-cleanup),
+  but the absolute count is small and the flips are between
+  equally-narrow alternatives.
+- Rationales remain coherent and prompt-grounded. They quote
+  prompt-specific details (e.g. "500 humanoid police robots",
+  "vitrification protocols", "at-risk analog media") and
+  explicitly demote the strongest alternatives.
+- Confidence-removal verified: the result schema has no
+  confidence field anywhere in this run; rationales carry the
+  qualitative signal.
+- Job-title drift: still gone. 0 cells across the 10 held-out
+  prompts emitted a practitioner-noun primary.
+
+Net: the principle-driven design generalizes to held-out prompts
+without leaning on test-fit examples. The classifier produces
+narrow-specialist labels with strong agreement on concrete
+prompts and reasonable variance on multi-discipline prompts. The
+remaining hard case (small-software-algorithm prompts on llama
+baseline) is a known small-model limitation, not a v6/v7 design
+issue. PlanExe's stated focus is real-world plans rather than
+toy software algorithms, so the [7] failure mode is unlikely to
+matter in production traffic.
+
 v6 routing design (carried over)
 --------------------------------
 v6 keeps v5's principle-only base prompt and routes to one of
@@ -1633,12 +1708,9 @@ if __name__ == "__main__":
     # (named substances, named regulators, named geographies). v5 trusts
     # both signals to push role assignments toward Personal where
     # appropriate and toward narrow specialist disciplines elsewhere.
-    # Focused experiment: only llama is enabled. The job-title-as-domain
-    # drift was llama-specific; gpt-oss already emits field names. To
-    # iterate on prompt wording we run only the small model.
     LLM_NAMES = [
         "openrouter-llama-3.1-8b-instruct-nitro",
-        # "openrouter-gpt-oss-safeguard-20b-nitro",
+        "openrouter-gpt-oss-safeguard-20b-nitro",
     ]
     # Single model used for both pre-passes (purpose identification and
     # constraint extraction). Picked for speed + reliability on JSON
@@ -1662,6 +1734,10 @@ if __name__ == "__main__":
     #   - seeds 7 and 8 each shuffled full sorted_items and took 20.
     #   - seed 100 then shuffled (sorted_items minus 7's and 8's picks)
     #     and took 40.
+    #   - seed 300 then shuffled (sorted_items minus 7/8/100's picks)
+    #     and took 20 — these are the v6/v7 prompts the system prompts
+    #     have been iteratively shaped against and must be held out
+    #     of any new evaluation.
     import random
     used_ids: set[str] = set()
     for prior_seed in (7, 8):  # each applied to full sorted_items
@@ -1674,22 +1750,25 @@ if __name__ == "__main__":
     random.Random(100).shuffle(prior_shuffled)
     for item in prior_shuffled[:40]:
         used_ids.add(item.id)
+    pool_after_100 = [item for item in sorted_items if item.id not in used_ids]
+    prior_shuffled = list(pool_after_100)
+    random.Random(300).shuffle(prior_shuffled)
+    for item in prior_shuffled[:20]:
+        used_ids.add(item.id)
     fresh_pool = [item for item in sorted_items if item.id not in used_ids]
 
-    SAMPLE_SEED = 300
-    sample_size = min(20, len(fresh_pool))
+    # Held-out sample: 10 catalog prompts the v6/v7 system prompts have
+    # never been measured against. No vague prompts in this sample —
+    # the goal is to evaluate the prompts on prompts they have not
+    # been shaped to handle, not to re-verify the empty-fits path.
+    SAMPLE_SEED = 400
+    sample_size = min(10, len(fresh_pool))
     rng = random.Random(SAMPLE_SEED)
     shuffled = list(fresh_pool)
     rng.shuffle(shuffled)
     catalog_sample = shuffled[:sample_size]
 
-    vague_prompts = [
-        TestPrompt("vague-help", "Help me make a plan for my project."),
-        TestPrompt("vague-thing", "I want to do a thing."),
-        TestPrompt("vague-improve", "Improve things."),
-    ]
-
-    sample_items = list(catalog_sample) + vague_prompts
+    sample_items = list(catalog_sample)
 
     def augment_with_context(
         prompt: str, purpose_md: str, constraints_md: str
@@ -1908,9 +1987,9 @@ if __name__ == "__main__":
         return results
 
     print(
-        f"=== Domain classification (fit-derivation) — fresh sample of "
+        f"=== Domain classification (fit-derivation) — held-out sample of "
         f"{len(catalog_sample)} catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, "
-        f"excluded {len(used_ids)} prior IDs) + {len(vague_prompts)} vague — "
+        f"excluded {len(used_ids)} prior IDs from seeds 7/8/100/300) — "
         f"across {len(LLM_NAMES)} models × 2 conditions (baseline vs augmented) ==="
     )
 

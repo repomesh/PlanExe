@@ -14,9 +14,22 @@ business / other; the classifier then routes to one of three
 purpose-specialised system prompts. v5's principle-only foundation
 (narrowest expert discipline) is preserved.
 
-v7: replace the deterministic priority-chain primary picker
-(derive_primary: high+outcome > medium+outcome > high(any) >
-Unclear) with a second LLM invocation that sees the cleaned fit
+v7 first-pass batching: the first pass runs as an adaptive loop
+that asks the LLM for 3 candidate disciplines per batch and keeps
+calling until 6 distinct candidates have been collected (or
+MAX_CALLS=3 is reached). Pattern adapted from
+identify_potential_levers.py. Subsequent batches inject the
+already-produced candidate names into the user message and ask
+for "3 MORE" that are different. Over-generation is intentional —
+the second-pass primary selector benefits from a richer candidate
+menu, and small models that would have produced 1-2 candidates in
+a single call now produce a more diverse set across batches. If
+batch 1 returns an empty fit list (the prompt is vague), the loop
+exits early and the empty-fits path produces primary="Unclear".
+
+v7 second pass: replace the deterministic priority-chain primary
+picker (derive_primary: high+outcome > medium+outcome > high(any)
+> Unclear) with a second LLM invocation that sees the cleaned fit
 list as an enumerated candidate menu and picks one by index.
 Rationale: derive_primary makes a fixed structural call (preferring
 outcome over method, narrow over broad) but cannot weigh the
@@ -103,6 +116,24 @@ The result carries a `warnings` list naming every silent mutation:
 duplicate fits dropped, empty primary normalized, confidence
 overridden, etc. Downstream consumers can use these to track
 quality regressions without re-running the model.
+
+v7 first-pass batching
+----------------------
+The first pass runs as an adaptive loop. Each LLM call asks for 3
+candidate expert disciplines; the loop continues until 6 distinct
+candidates are collected, MAX_CALLS=3 is reached, or a follow-up
+batch adds zero new candidates (all duplicates / rejected). On
+batch 2+, the user message is prefixed with the names already
+produced and the instruction "Produce 3 MORE candidate expert
+disciplines ... distinct disciplines that ... were not yet
+listed." Batch 1 returning an empty fit list short-circuits the
+loop (vague-prompt path).
+
+Why over-generate? The second-pass primary selector picks from
+the assembled candidate list, and a richer menu lets it re-rank
+with more options. Small models that produce 1-2 reasonable fits
+in a single call tend to produce a more diverse 4-6 across two
+batches.
 
 v7 second-pass primary selection
 --------------------------------
@@ -633,11 +664,12 @@ class DomainFitAssessment(BaseModel):
     domain_fits: list[DomainFit] = Field(
         default_factory=list,
         description=(
-            "1 to 4 substantive candidate domains for THIS project. "
-            "Empty list when the prompt names no concrete project. "
-            "Single-domain projects can have just one entry. The "
-            "pipeline truncates to the top 4 in document order if "
-            "more are emitted."
+            "Exactly 3 candidate domains for the current batch. The "
+            "user message may instruct you that this is the first or a "
+            "subsequent batch — in subsequent batches the candidates "
+            "must be distinct from those already produced. For prompts "
+            "that name no concrete project, emit an empty list "
+            "regardless of the requested batch size."
         ),
     )
 
@@ -751,7 +783,7 @@ The first character of your response is `{`. The last character is `}`. The resp
 
 # How to fill domain_fits
 
-Identify 1 to 4 expert disciplines the project depends on. A single-discipline project gets one entry. A prompt that names no concrete project gets an empty list.
+Identify exactly 3 candidate expert disciplines for the current batch. The downstream pipeline runs you in batches of 3 and concatenates the results — the user message will tell you if this is the first batch or a subsequent batch (in which case it will list the candidates already produced and ask for 3 more that are different). A prompt that names no concrete project gets an empty list regardless of the requested batch size.
 
 Each entry has four fields:
 
@@ -1031,64 +1063,143 @@ class ClassifyDomain:
         logger.debug(f"User Prompt:\n{user_prompt}")
 
         system_prompt = system_prompt_for_purpose(purpose)
-
-        chat_message_list = [
-            ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
-            ChatMessage(role=MessageRole.USER, content=user_prompt),
-        ]
-
         sllm = llm.as_structured_llm(DomainFitAssessment)
-        start_time = time.perf_counter()
-        try:
-            chat_response = sllm.chat(chat_message_list)
-        except Exception as e:
-            llm_error = LLMChatError(cause=e)
-            logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
-            logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
-            raise llm_error from e
 
-        end_time = time.perf_counter()
-        duration_seconds = round(end_time - start_time, 3)
-        raw_content = chat_response.message.content or ""
-        response_byte_count = len(raw_content.encode("utf-8"))
-        logger.info(
-            f"LLM chat interaction completed in {duration_seconds}s. "
-            f"Response byte count: {response_byte_count}"
-        )
+        # First pass: adaptive batch loop. Each batch asks for 3
+        # candidate disciplines; the loop runs until we have
+        # TARGET_CANDIDATES distinct candidates or hit MAX_CALLS.
+        # Pattern adapted from identify_potential_levers.py.
+        # Over-generation feeds the second-pass primary selector a
+        # richer menu so it can re-rank with more options in front of
+        # it. If batch 1 returns an empty list (the prompt is vague),
+        # the loop exits early and the empty-fits path applies.
+        TARGET_CANDIDATES = 6
+        BATCH_SIZE = 3
+        MAX_CALLS = 3
 
-        assessment: DomainFitAssessment = chat_response.raw
-        if assessment is None:
-            raise ValueError("LLM returned empty structured response (chat_response.raw is None).")
-
-        warnings: list[str] = []
-
-        # Normalize, dedupe, drop low-fit entries, cap at 4.
         cleaned_fits: list[DomainFit] = []
         seen_fits: set[str] = set()
-        for f in assessment.domain_fits:
-            domain = normalize_label(f.domain)
-            if not domain:
-                warnings.append("Dropped fit with empty domain label.")
-                continue
-            key = label_key(domain)
-            if key in seen_fits:
-                warnings.append(f"Dropped duplicate fit domain: {domain}")
-                continue
-            if f.fit == "low":
-                warnings.append(f"Dropped low-fit candidate: {domain}")
-                continue
-            if len(cleaned_fits) >= 4:
-                warnings.append(f"Truncated extra fit beyond cap of 4: {domain}")
-                continue
-            seen_fits.add(key)
-            cleaned_fits.append(
-                DomainFit(
-                    domain=domain,
-                    fit=f.fit,
-                    role=f.role,
-                    reason=normalize_label(f.reason),
+        warnings: list[str] = []
+        first_pass_total_seconds = 0.0
+        last_response_byte_count = 0
+        first_pass_call_count = 0
+
+        for call_index in range(1, MAX_CALLS + 1):
+            if call_index == 1:
+                user_msg = user_prompt
+            else:
+                names_list = ", ".join(f'"{f.domain}"' for f in cleaned_fits)
+                user_msg = (
+                    f"You have already produced these candidate domains in earlier batches: [{names_list}].\n"
+                    f"Produce {BATCH_SIZE} MORE candidate expert disciplines for the project below — distinct "
+                    f"disciplines that are also relevant to this project but were not yet listed.\n\n"
+                    f"{user_prompt}"
                 )
+
+            call_start = time.perf_counter()
+            try:
+                chat_response = sllm.chat([
+                    ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
+                    ChatMessage(role=MessageRole.USER, content=user_msg),
+                ])
+            except Exception as e:
+                llm_error = LLMChatError(cause=e)
+                logger.debug(f"First-pass batch {call_index} failed [{llm_error.error_id}]: {e}")
+                logger.error(f"First-pass batch {call_index} failed [{llm_error.error_id}]", exc_info=True)
+                if call_index == 1 and not cleaned_fits:
+                    raise llm_error from e
+                warnings.append(
+                    f"First-pass batch {call_index} failed "
+                    f"({type(e).__name__}: {e}); continuing with "
+                    f"{len(cleaned_fits)} candidate(s)."
+                )
+                continue
+            first_pass_total_seconds += time.perf_counter() - call_start
+            first_pass_call_count += 1
+            last_response_byte_count = len((chat_response.message.content or "").encode("utf-8"))
+
+            assessment: DomainFitAssessment = chat_response.raw
+            if assessment is None:
+                if call_index == 1 and not cleaned_fits:
+                    raise ValueError(
+                        "First-pass batch 1 returned empty structured response."
+                    )
+                warnings.append(
+                    f"First-pass batch {call_index} returned empty; "
+                    f"continuing with {len(cleaned_fits)} candidate(s)."
+                )
+                continue
+
+            # If the first batch is empty, the prompt is vague. Stop the
+            # loop and let the empty-fits path produce primary="Unclear".
+            if call_index == 1 and not assessment.domain_fits:
+                logger.info(
+                    "First-pass batch 1 returned an empty fit list; "
+                    "treating prompt as vague and skipping subsequent batches."
+                )
+                break
+
+            pre_count = len(cleaned_fits)
+            for f in assessment.domain_fits:
+                domain = normalize_label(f.domain)
+                if not domain:
+                    warnings.append("Dropped fit with empty domain label.")
+                    continue
+                key = label_key(domain)
+                if key in seen_fits:
+                    warnings.append(f"Dropped duplicate fit domain: {domain}")
+                    continue
+                if f.fit == "low":
+                    warnings.append(f"Dropped low-fit candidate: {domain}")
+                    continue
+                if len(cleaned_fits) >= TARGET_CANDIDATES:
+                    warnings.append(
+                        f"Truncated extra fit beyond cap of {TARGET_CANDIDATES}: {domain}"
+                    )
+                    continue
+                seen_fits.add(key)
+                cleaned_fits.append(
+                    DomainFit(
+                        domain=domain,
+                        fit=f.fit,
+                        role=f.role,
+                        reason=normalize_label(f.reason),
+                    )
+                )
+            added = len(cleaned_fits) - pre_count
+            logger.info(
+                f"First-pass batch {call_index}: added {added} new "
+                f"candidate(s); total {len(cleaned_fits)}/{TARGET_CANDIDATES}."
             )
+
+            if len(cleaned_fits) >= TARGET_CANDIDATES:
+                break
+
+            # Stop if a follow-up batch added zero new candidates (all
+            # duplicates or rejected) — additional calls would likely
+            # repeat the same set.
+            if added == 0 and call_index > 1:
+                warnings.append(
+                    f"First-pass batch {call_index} added 0 new candidates "
+                    f"(all duplicates or rejected); stopping loop with "
+                    f"{len(cleaned_fits)} candidate(s)."
+                )
+                break
+
+        if cleaned_fits and len(cleaned_fits) < TARGET_CANDIDATES:
+            warnings.append(
+                f"First-pass produced {len(cleaned_fits)} candidate(s) "
+                f"after {first_pass_call_count} batch call(s); target was "
+                f"{TARGET_CANDIDATES}."
+            )
+
+        duration_seconds = round(first_pass_total_seconds, 3)
+        response_byte_count = last_response_byte_count
+        logger.info(
+            f"First-pass total: {duration_seconds}s across "
+            f"{first_pass_call_count} batch call(s); produced "
+            f"{len(cleaned_fits)} candidate(s)."
+        )
 
         # v7: pick primary via a second LLM pass whenever there is at
         # least one candidate. The 1-candidate case used to take a
@@ -1157,6 +1268,8 @@ class ClassifyDomain:
         metadata["llm_classname"] = llm.class_name()
         metadata["duration_seconds"] = duration_seconds
         metadata["response_byte_count"] = response_byte_count
+        metadata["first_pass_call_count"] = first_pass_call_count
+        metadata["first_pass_candidate_count"] = len(cleaned_fits)
         if primary_select_duration:
             metadata["primary_select_duration_seconds"] = primary_select_duration
 

@@ -36,11 +36,13 @@ classifier emits only the fit list; the second-pass selector emits
 the chosen primary's index, the confidence in that choice, and the
 human-readable rationale that justifies the pick. The two values
 are surfaced on the result as `confidence` and `rationale`
-respectively. For the 0-candidate (Unclear) and 1-candidate paths
-where no second pass runs, both fields are derived deterministically
-(low confidence + a hardcoded rationale for Unclear; the lone
-candidate's `fit` level + a "single candidate" note for the
-1-candidate path).
+respectively. For the 0-candidate (Unclear) path where no second
+pass runs, confidence is forced to "low" deterministically and the
+rationale is a hardcoded "no candidates emitted" string. The
+1-candidate case is routed through the second pass (the LLM still
+picks index 0 by construction, but its judgment of confidence and
+rationale catches small-model hallucinations that produce a single
+fabricated fit on a vague prompt).
 
 PROMPT> python -m worker_plan_internal.assume.classify_domain_v7
 """
@@ -125,11 +127,13 @@ The result's `confidence` and `rationale` are sourced as follows:
   - 0 candidates: confidence forced to "low" deterministically
     (Unclear); rationale is a hardcoded "no candidates emitted"
     string. No second pass runs.
-  - 1 candidate: confidence derived from that candidate's own
-    `fit` level (high-fit -> "high", medium-fit -> "medium");
-    rationale is a hardcoded "single candidate available" string.
-    No second pass runs.
-  - 2+ candidates: the second-pass LLM emits both.
+  - 1+ candidates: the second-pass LLM emits both. Routing the
+    1-candidate case through the LLM pays one extra call for a
+    safety net — small models occasionally hallucinate a single
+    high-fit candidate on a vague prompt, and the second pass can
+    catch that (rate it confidence="low" with a rationale that
+    flags the weak grounding) instead of mechanically promoting
+    it.
   - Fallback (LLM call fails): confidence forced to "medium" as a
     no-signal default; rationale describes the fallback path. A
     warning records the failure.
@@ -711,7 +715,15 @@ Apply these preferences in order:
 3. When no candidate has `role="outcome"`, pick the candidate whose discipline best describes what the project is fundamentally about — what someone introducing the project to a stranger would call it.
 4. When two candidates are otherwise equal, prefer `fit="high"` over `fit="medium"`.
 
-The candidate list is fixed. Pick from it. The rationale should briefly justify both the selection and the relegation of the strongest alternative.
+The candidate list is fixed. Pick from it.
+
+# When there is exactly one candidate
+
+When the candidate list has only one entry, `primary_index` is `0` by construction. Use the call as a sanity check on the lone candidate: judge whether it is a strong fit for the project's main success criterion. If the project description names a concrete deliverable, question, outcome, or entity that the candidate clearly serves, set `confidence="high"`. If the candidate is plausible but the project is described loosely or the candidate is a generic umbrella, set `confidence="medium"`. If the project description does not name a concrete project at all (a generic verb with an abstract object, no deliverable, no entity) and the lone candidate looks fabricated rather than grounded in the prompt, set `confidence="low"` and say so in the rationale.
+
+# Rationale guidance
+
+The rationale should briefly justify the selection. With multiple candidates, also briefly note the relegation of the strongest alternative. With one candidate, explain how strongly the candidate is grounded in the project description and whether the confidence reflects that.
 """
 
 
@@ -1078,12 +1090,18 @@ class ClassifyDomain:
                 )
             )
 
-        # v7: pick primary via a second LLM pass when there are 2+
-        # candidates. With 0 candidates, primary is "Unclear". With 1
-        # candidate, the only candidate is the primary (no LLM call
-        # needed). The selection LLM also produces the human-readable
-        # rationale and the confidence level for the chosen primary;
-        # for the 0/1 candidate paths both are derived deterministically.
+        # v7: pick primary via a second LLM pass whenever there is at
+        # least one candidate. The 1-candidate case used to take a
+        # fast-path that returned the sole candidate with confidence
+        # derived from its `fit` level, but that path lost the
+        # second-pass safety net: a small model that hallucinates a
+        # single high-fit candidate on a vague prompt would receive
+        # high confidence with no review. Routing 1-candidate through
+        # the same second-pass LLM pays one extra call for the safety
+        # net and lets the LLM judge whether the lone candidate is a
+        # strong fit for the project's main success criterion.
+        #
+        # With 0 candidates, primary is "Unclear" — no second pass.
         rationale = ""
         primary_select_duration = 0.0
         if not cleaned_fits:
@@ -1091,16 +1109,6 @@ class ClassifyDomain:
             confidence = "low"
             rationale = (
                 "No candidates emitted; the prompt is too vague to identify a project."
-            )
-        elif len(cleaned_fits) == 1:
-            sole = cleaned_fits[0]
-            primary = normalize_label(sole.domain)
-            # The single fit's own fit level is the confidence: a single
-            # high-fit candidate is high confidence; a lone medium-fit
-            # candidate signals a weak classification.
-            confidence = sole.fit if sole.fit in ("low", "medium", "high") else "medium"
-            rationale = (
-                "Only one candidate available; no second-pass selection performed."
             )
         else:
             select_start = time.perf_counter()

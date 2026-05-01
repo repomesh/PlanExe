@@ -14,6 +14,10 @@ The "elephant-alpha" model especially struggle with detecting that, when it othe
 I'm considering making a dedicated system prompt only for VIOLATES_KNOWN_PHYSICS, that is have lower rate of false positives.
 After switching from "Gemini-2.0-flash" to "Gemini-2.5-flash", the "Violates Known Physics" gets fired nearly always.
 
+The mitigation often includes a specific date. I'm seeing "2024-12-31", for a plan that takes place in 2026. It's not possible to fix a problem in the past.
+Mitigation: Risk Manager: Create a risk cascade diagram linking initial risks to second-order impacts 
+(e.g., legal challenges → funding delays → scope reduction) by 2024-12-31.
+
 Adding a new checklist item:
 Find fabricated evidence. Where things aren't true.
 When it hallucinates laws or articles that are non-existing.

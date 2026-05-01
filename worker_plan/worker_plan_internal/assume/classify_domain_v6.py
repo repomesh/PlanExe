@@ -544,33 +544,39 @@ Specialist disciplines that describe a hobby, domestic technique, or private-eve
 _OTHER_GUIDANCE = """
 Purpose-specific guidance: other projects
 =========================================
-This project is in the "other" bucket. "Other" is broader than its name suggests: it covers academic studies, hypothetical scenarios, technical inquiries, government and public-sector initiatives, non-profit organizations, NGOs, charities, foundations, community-led initiatives, AND any project that the upstream purpose pre-pass could not confidently place in business or personal. The pre-pass picks "other" when in doubt, so the bucket sometimes contains projects that would naturally belong in business or personal but did not show clear enough signals upstream. Treat "other" as a catch-all and apply the same discipline-picking principle regardless of why the project landed here.
+This project is in the "other" bucket — a catch-all that includes academic studies, hypothetical scenarios, technical inquiries, government and public-sector initiatives, non-profit organisations, NGOs, charities, foundations, community-led initiatives, AND projects that the upstream pre-pass could not confidently place in business or personal. The pre-pass picks "other" when in doubt, so the bucket sometimes contains projects that would naturally belong in business or personal but lacked clear identifying signals.
 
-Many "other" projects involve real money — budgets, grants, donations, sponsorship, fundraising, volunteer-time-as-cost. That money flow is normal for non-profit, public-sector, and academic work. The presence of money signals in the prompt does not by itself promote the project into the business bucket; what matters is whether the project's outcome is profit-seeking (business) or population-/community-/knowledge-serving / undetermined (other).
+Many "other" projects involve real money (budgets, grants, donations, sponsorship, fundraising, volunteer-time-as-cost). That money flow is normal for non-profit, public-sector, and academic work — it does not by itself promote a project into business; what matters is whether the outcome is profit-seeking.
 
-Apply the following two steps in order. Step 1 must be answered first; step 2 applies only if step 1 yields a concrete project.
+Step 1 — the concreteness rule (always answer this first)
+---------------------------------------------------------
+Before identifying any discipline, identify whether the prompt describes a concrete project. A concrete project names at least one of:
+  - a deliverable (a paper, a study, a system, a model, a corpus, a built artifact, a software product, a fundraising campaign, a regulation, a program)
+  - a question to investigate (a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables)
+  - an outcome the project aims to produce (a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named metric, a sum of money raised for a named cause, a service running, a regulation enacted)
+  - an entity to study or act on (a named species, place, population, substance, historical event, text, artifact, beneficiary group, market segment)
 
-Step 1 — concreteness check
----------------------------
-Decide whether the prompt names a concrete project. A concrete project names at least one of these:
-  - a deliverable: a paper, a report, a study, a system, a model, a corpus, a documented analysis, a program, a regulation, a built artifact, a software product, a fundraising campaign.
-  - a question to investigate: a hypothesis, a measurement, a comparison, a phenomenon, a relationship between variables.
-  - an outcome the project aims to produce: a finding, a proof, a working prototype, an answer to a stated question, an improvement in a named population metric, a sum of money raised for a named cause, a service running, a regulation enacted.
-  - an entity to study or act on: a named species, a named place, a named population, a named substance, a named historical event, a named text or artifact, a named beneficiary group, a named market segment.
+If none of those is named in the prompt, the prompt has not yet described a project. The correct output is:
+  - domain_fits = []
+  - confidence = "low"
+  - rationale = a one-sentence statement naming which kind of concrete element is missing.
 
-If the prompt names none of those, the user message has not yet described a project. The right output is domain_fits=[] paired with confidence="low" and a one-sentence rationale identifying which kind of concrete element is missing (deliverable, question, outcome, or entity). Step 2 does not apply in that case.
+In that case, the empty-list answer is the final answer; step 2 only applies when step 1 yields a concrete project. A project description must name what is being delivered, investigated, produced, or studied or acted on. Prompts that pair generic imperative verbs with abstract or pronominal objects fall short of this requirement, and the right output is the empty-list answer.
 
-Step 2 — discipline pick
-------------------------
-When step 1 yields a concrete project, pick the narrowest specialist expert discipline the prompt's signals support — what a specialist who would lead the project calls themselves. This is the same load-bearing principle as the business prompt: a project that landed in "other" because of an upstream confidence call still gets classified by what it actually is, not by the bucket it arrived through.
+Step 2 — the discipline pick (only when step 1 yields a concrete project)
+------------------------------------------------------------------------
+When step 1 yields a concrete project, pick the narrowest specialist expert discipline the prompt's signals support — what a specialist who would lead the project calls themselves. The same load-bearing principle as the business prompt applies here: a project that landed in "other" because of an upstream confidence call still gets classified by what it actually is, not by the bucket it arrived through.
 
-Specific project shapes that have natural narrow disciplines:
-  - Academic study: the named scientific field (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar). Use "Research" as fallback when the study names no identifiable field.
-  - Hypothetical scenario: the discipline a real version would belong to (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics).
-  - Government, public-sector, NGO, charity, foundation, or community-led initiative serving a population, community, or beneficiary group: Public Health, Public Policy, Education Policy, Social Welfare, International Development, Humanitarian Aid, Philanthropy, Nonprofit Management, or another named policy or non-profit area; pick the narrowest that the prompt's signals support.
-  - Philosophical argument, ethical question, or conceptual framework: Philosophy. Apply this only when the prompt names a specific philosophical question — not as a default when the prompt is unspecific.
+For specific project shapes:
+  - Academic study → the named scientific field (Astrophysics, Linguistics, Genetics, Marine Biology, Volcanology, and similar). Use "Research" as fallback only when the study names no identifiable field.
+  - Hypothetical scenario → the discipline a real version would belong to (a hypothetical Mars colony is Aerospace; a thought experiment about quantum measurement is Physics).
+  - Government, public-sector, NGO, charity, foundation, or community-led initiative serving a population, community, or beneficiary group → the named policy area or non-profit specialty (Public Health, Public Policy, Education Policy, International Development, Humanitarian Aid, Nonprofit Management, and similar); pick the narrowest that fits.
+  - Philosophical argument, ethical question, or conceptual framework → Philosophy. Apply this only when the prompt names a specific philosophical question, not as a default for unspecific prompts.
+  - Other shapes (a manufacturing project, a software product, a construction project, a healthcare service, a transportation system, and so on) → the narrowest specialist discipline the prompt's signals support, just as the business prompt would. Umbrella labels (Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare) are reserved as fallback only when no specific subfield is named.
 
-For project shapes that do not match any of the above (a manufacturing project, a software product, a construction project, a healthcare service, a transportation system, and so on, that landed in "other" because the upstream pre-pass was uncertain), pick the narrowest specialist expert discipline the prompt's signals support, just as the business prompt would. Umbrella labels (Research, Engineering, Science, Technology, Business, Industry, Energy, Environmental, Environmental Science, Healthcare) are reserved as fallback only when no specific subfield, technique, instrument, substance, medium, or application area is named.
+Final check
+-----------
+Before emitting your JSON, re-read the prompt one more time and locate the specific named deliverable, question, outcome, or entity. When you can point to one, step 2 applies and you pick the discipline accordingly. When you cannot, the answer is domain_fits = [] with confidence = "low".
 """
 
 # --- Per-purpose system prompt assembly + dispatch --------------------

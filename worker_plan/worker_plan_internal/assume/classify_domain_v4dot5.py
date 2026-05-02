@@ -8,7 +8,7 @@ fit level), plus an overall confidence and a short rationale. The
 primary domain and secondaries are derived in code from the fits, so
 the model cannot emit a primary that contradicts its own fit list.
 
-PROMPT> python -m worker_plan_internal.assume.classify_domain
+PROMPT> python -m worker_plan_internal.assume.classify_domain_v4dot5
 """
 import time
 import logging

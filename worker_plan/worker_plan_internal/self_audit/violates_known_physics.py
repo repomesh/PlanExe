@@ -57,7 +57,7 @@ Rate "high" ONLY when ALL of the following hold:
 
 Otherwise rate "low". Use "medium" only for genuine borderline cases where the plan presupposes a physical phenomenon that, if real, would itself redefine known physics; this should be very rare.
 
-R&D is NOT a physics violation. A project whose stated purpose is to investigate, develop, or scale up an effect that is consistent with known physics but currently unproven — for example, building a better battery, developing a new material or alloy, demonstrating a quantum-computing capability, improving solar-cell efficiency — is LEGITIMATE RESEARCH and stays "low". The fact that the effect has not been demonstrated at the required scale yet is exactly what R&D exists to investigate; that gap is not a physics issue. Concerns about empirical evidence, proven-at-scale claims, or feasibility of unproven technology belong to other audit items (e.g., "No Real-World Proof"), not to this one.
+R&D is NOT a physics violation. A project whose stated purpose is to investigate, develop, or scale up an effect that is consistent with known physics but currently unproven — for example, building a better battery, developing a new material or alloy, demonstrating a quantum-computing capability, improving solar-cell efficiency — is LEGITIMATE RESEARCH and stays "low". The fact that the effect has not been demonstrated at the required scale yet is exactly what R&D exists to investigate; that gap is not a physics issue. Concerns about empirical evidence, proven-at-scale claims, or feasibility of unproven technology are not physics violations and stay "low".
 
 Out of scope — these are NOT physics violations and MUST stay "low":
 - Regulatory, permitting, licensing, safety-handling, or authorisation gaps.

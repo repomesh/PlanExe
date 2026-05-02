@@ -53,6 +53,10 @@ from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
+from worker_plan_internal.self_audit.violates_known_physics import (
+    CHECKLIST_INDEX as VIOLATES_KNOWN_PHYSICS_INDEX,
+    ViolatesKnownPhysics,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -406,6 +410,8 @@ class SelfAudit:
         for index in range(0, len(checklist_items)):
             logger.info(f"Processing item {index+1} of {len(checklist_items)}")
             system_prompt = system_prompt_list[index]
+            checklist_item = checklist_items[index]
+            checklist_item_index = checklist_item["index"]
 
             # Add previous checklist responses to the bottom of the user prompt
             if index > 0:
@@ -414,6 +420,53 @@ class SelfAudit:
                 user_prompt_with_previous_responses = f"{user_prompt}\n\n# Checklist Answers\n{previous_responses_str}"
             else:
                 user_prompt_with_previous_responses = user_prompt
+
+            # The "Violates Known Physics" item is handled by a dedicated
+            # module: its system prompt is focused on the single mechanical
+            # question, and a deterministic safety net downgrades verdicts
+            # whose justification fails to name a specific physics law.
+            # The shared batch path is bypassed so the rest of the audit
+            # rubric does not crowd the physics question.
+            if checklist_item_index == VIOLATES_KNOWN_PHYSICS_INDEX:
+                def execute_physics_check(llm: LLM) -> dict:
+                    physics_result = ViolatesKnownPhysics.execute(llm, user_prompt)
+                    return {"physics_result": physics_result}
+
+                try:
+                    physics_check_result = llm_executor.run(execute_physics_check)
+                except PipelineStopRequested:
+                    raise
+                except Exception as e:
+                    llm_error = LLMChatError(cause=e)
+                    logger.debug(f"Physics check LLM failed [{llm_error.error_id}]: {e}")
+                    logger.error(f"Physics check LLM failed [{llm_error.error_id}]", exc_info=True)
+                    raise llm_error from e
+
+                physics_result: ViolatesKnownPhysics = physics_check_result["physics_result"]
+
+                # Replace this slot's system prompt with the dedicated
+                # module's prompt so persisted telemetry reflects what
+                # was actually sent to the LLM.
+                system_prompt_list[index] = physics_result.system_prompt
+                user_prompt_list.append(user_prompt)
+
+                checklist_answer = ChecklistAnswer(
+                    justification=physics_result.justification,
+                    mitigation=physics_result.mitigation,
+                    level=physics_result.level,
+                )
+                checklist_answer_cleaned = ChecklistAnswerCleaned(
+                    index=checklist_item_index,
+                    title=checklist_item["title"],
+                    subtitle=checklist_item["subtitle"],
+                    justification=physics_result.justification,
+                    mitigation=physics_result.mitigation,
+                    level=physics_result.level,
+                )
+                checklist_answers_cleaned.append(checklist_answer_cleaned)
+                responses[checklist_item_index] = checklist_answer
+                metadata_list.append(physics_result.metadata)
+                continue
 
             user_prompt_list.append(user_prompt_with_previous_responses)
 
@@ -449,7 +502,7 @@ class SelfAudit:
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
                 raise llm_error from e
-            
+
             chat_message_list.append(
                 ChatMessage(
                     role=MessageRole.ASSISTANT,
@@ -460,8 +513,6 @@ class SelfAudit:
             logger.debug(f"Chat response: {result['chat_response'].raw.model_dump()}")
 
             checklist_answer: ChecklistAnswer = result["chat_response"].raw
-            checklist_item = checklist_items[index]
-            checklist_item_index = checklist_item["index"]
             level: str = checklist_answer.level.lower()
             checklist_answer_cleaned = ChecklistAnswerCleaned(
                 index=checklist_item_index,

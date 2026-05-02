@@ -56,7 +56,7 @@ low for business and personal classifications, at the cost of
 pushing disambiguation onto downstream stages. A project that is
 actually a business may end up in "other" if the prompt did not
 make its commercial framing obvious; downstream consumers (e.g.
-classify_domain_v6's purpose-routed system prompts) need to handle
+classify_domain's purpose-routed system prompts) need to handle
 this by treating the "other" prompt as a catch-all rather than as
 "definitely not business or personal".
 

@@ -1021,7 +1021,6 @@ class ClassifyDomain:
             secondaries=secondaries,
             rationale=rationale,
             fits=cleaned_fits,
-            warnings=warnings,
         )
 
         return cls(
@@ -1059,7 +1058,6 @@ class ClassifyDomain:
         secondaries: list[str],
         rationale: str,
         fits: list[DomainFit],
-        warnings: list[str],
     ) -> str:
         secondary_display = ", ".join(secondaries) if secondaries else "_(none)_"
         lines = [
@@ -1090,11 +1088,6 @@ class ClassifyDomain:
                     f"| {f.domain} | {f.importance} | {f.specificity} | "
                     f"{f.role} | {reason} |"
                 )
-        if warnings:
-            lines.append("")
-            lines.append("**Warnings:**")
-            for w in warnings:
-                lines.append(f"- {w}")
         return "\n".join(lines)
 
     def save_markdown(self, file_path: str) -> None:

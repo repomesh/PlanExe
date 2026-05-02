@@ -51,7 +51,7 @@ IdentifyPurpose tag as the `purpose` argument so the system-
 prompt routing applies. derive_primary serves as a deterministic
 fallback when the second-pass call fails.
 
-PROMPT> python -m worker_plan_internal.assume.classify_domain_v9
+PROMPT> python -m worker_plan_internal.assume.classify_domain
 """
 import time
 import logging

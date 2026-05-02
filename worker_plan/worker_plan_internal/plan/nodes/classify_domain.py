@@ -2,7 +2,7 @@
 import json
 from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
-from worker_plan_internal.assume.classify_domain_v9 import ClassifyDomain
+from worker_plan_internal.assume.classify_domain import ClassifyDomain
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.plan.nodes.setup import SetupTask
 from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask

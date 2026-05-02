@@ -55,9 +55,9 @@ Rate "high" ONLY when ALL of the following hold:
 2. You can describe in one sentence the physical-quantity violation: what is being created from nothing, destroyed, or transmitted faster than physics allows.
 3. The violation is required for plan success — the plan cannot succeed without it.
 
-Rate "medium" only if the plan invokes a physical effect that is consistent with known physics in principle but unproven at the required scale, AND the plan has no fallback. Use sparingly.
+Otherwise rate "low". Use "medium" only for genuine borderline cases where the plan presupposes a physical phenomenon that, if real, would itself redefine known physics; this should be very rare.
 
-Otherwise rate "low".
+R&D is NOT a physics violation. A project whose stated purpose is to investigate, develop, or scale up an effect that is consistent with known physics but currently unproven — for example, building a better battery, developing a new material or alloy, demonstrating a quantum-computing capability, improving solar-cell efficiency — is LEGITIMATE RESEARCH and stays "low". The fact that the effect has not been demonstrated at the required scale yet is exactly what R&D exists to investigate; that gap is not a physics issue. Concerns about empirical evidence, proven-at-scale claims, or feasibility of unproven technology belong to other audit items (e.g., "No Real-World Proof"), not to this one.
 
 Out of scope — these are NOT physics violations and MUST stay "low":
 - Regulatory, permitting, licensing, safety-handling, or authorisation gaps.
@@ -66,6 +66,7 @@ Out of scope — these are NOT physics violations and MUST stay "low":
 - Governance, staffing, change-control, or organisational gaps.
 - Linguistic, social, or policy design.
 - Real-world materials, including radioisotopes.
+- R&D toward unproven-at-scale effects that are consistent with known physics.
 - Surface-level keyword cues such as the words "physical", "fundamental", "science", "law", or "physical location" appearing in the plan.
 
 The plan may be written in any language. Assess the plan's actual mechanism, not the words used to describe it.

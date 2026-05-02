@@ -53,10 +53,14 @@ from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
-from worker_plan_internal.self_audit.violates_known_physics import (
-    CHECKLIST_INDEX as VIOLATES_KNOWN_PHYSICS_INDEX,
-    ViolatesKnownPhysics,
-)
+from worker_plan_internal.self_audit.violates_known_physics import ViolatesKnownPhysics
+
+# Index of the "Violates Known Physics" item in ALL_CHECKLIST_ITEMS.
+# The dedicated module is run once before the main batch loop, and
+# its result is spliced into the corresponding checklist slot. The
+# module itself is unaware of its position in the audit; that is an
+# integration concern owned here.
+VIOLATES_KNOWN_PHYSICS_INDEX = 1
 
 logger = logging.getLogger(__name__)
 
@@ -404,71 +408,80 @@ class SelfAudit:
             system_prompt_list.append(system_prompt)
 
         responses: dict[int, ChecklistAnswer] = {}
-        metadata_list: list[dict] = []
-        user_prompt_list = []
+        metadata_list: list[dict] = [None] * len(checklist_items)
+        user_prompt_list: list[str] = [None] * len(checklist_items)
         checklist_answers_cleaned: list[ChecklistAnswerCleaned] = []
+
+        # The "Violates Known Physics" item is handled by a dedicated
+        # module that owns its own system prompt and response schema.
+        # Run it once before the main batch loop and splice its result
+        # into the corresponding checklist slot, so downstream items
+        # see the physics verdict in their previous-response context
+        # and the report shape is unchanged. The module itself is
+        # unaware of its position in the audit; that is owned here.
+        physics_list_index: Optional[int] = next(
+            (i for i, item in enumerate(checklist_items)
+             if item["index"] == VIOLATES_KNOWN_PHYSICS_INDEX),
+            None,
+        )
+        if physics_list_index is not None:
+            def execute_physics_check(llm: LLM) -> dict:
+                return {"physics_result": ViolatesKnownPhysics.execute(llm, user_prompt)}
+
+            try:
+                physics_check_result = llm_executor.run(execute_physics_check)
+            except PipelineStopRequested:
+                raise
+            except Exception as e:
+                llm_error = LLMChatError(cause=e)
+                logger.debug(f"Physics check LLM failed [{llm_error.error_id}]: {e}")
+                logger.error(f"Physics check LLM failed [{llm_error.error_id}]", exc_info=True)
+                raise llm_error from e
+
+            physics_result: ViolatesKnownPhysics = physics_check_result["physics_result"]
+            physics_checklist_item = checklist_items[physics_list_index]
+            physics_checklist_item_index = physics_checklist_item["index"]
+
+            # Persisted telemetry reflects what was actually sent to the LLM.
+            system_prompt_list[physics_list_index] = physics_result.system_prompt
+            user_prompt_list[physics_list_index] = user_prompt
+            metadata_list[physics_list_index] = physics_result.metadata
+
+            physics_checklist_answer = ChecklistAnswer(
+                justification=physics_result.justification,
+                mitigation=physics_result.mitigation,
+                level=physics_result.level,
+            )
+            checklist_answers_cleaned.append(ChecklistAnswerCleaned(
+                index=physics_checklist_item_index,
+                title=physics_checklist_item["title"],
+                subtitle=physics_checklist_item["subtitle"],
+                justification=physics_result.justification,
+                mitigation=physics_result.mitigation,
+                level=physics_result.level,
+            ))
+            responses[physics_checklist_item_index] = physics_checklist_answer
+
         for index in range(0, len(checklist_items)):
-            logger.info(f"Processing item {index+1} of {len(checklist_items)}")
-            system_prompt = system_prompt_list[index]
             checklist_item = checklist_items[index]
             checklist_item_index = checklist_item["index"]
 
+            # Already handled by the dedicated module above.
+            if checklist_item_index == VIOLATES_KNOWN_PHYSICS_INDEX:
+                continue
+
+            logger.info(f"Processing item {index+1} of {len(checklist_items)}")
+            system_prompt = system_prompt_list[index]
+
             # Add previous checklist responses to the bottom of the user prompt
-            if index > 0:
+            if responses:
                 previous_responses_dict = {k: v.model_dump() for k, v in responses.items()}
                 previous_responses_str = json.dumps(previous_responses_dict, indent=2)
                 user_prompt_with_previous_responses = f"{user_prompt}\n\n# Checklist Answers\n{previous_responses_str}"
             else:
                 user_prompt_with_previous_responses = user_prompt
 
-            # The "Violates Known Physics" item is handled by a dedicated
-            # module: its system prompt is focused on the single mechanical
-            # question, and a deterministic safety net downgrades verdicts
-            # whose justification fails to name a specific physics law.
-            # The shared batch path is bypassed so the rest of the audit
-            # rubric does not crowd the physics question.
-            if checklist_item_index == VIOLATES_KNOWN_PHYSICS_INDEX:
-                def execute_physics_check(llm: LLM) -> dict:
-                    physics_result = ViolatesKnownPhysics.execute(llm, user_prompt)
-                    return {"physics_result": physics_result}
-
-                try:
-                    physics_check_result = llm_executor.run(execute_physics_check)
-                except PipelineStopRequested:
-                    raise
-                except Exception as e:
-                    llm_error = LLMChatError(cause=e)
-                    logger.debug(f"Physics check LLM failed [{llm_error.error_id}]: {e}")
-                    logger.error(f"Physics check LLM failed [{llm_error.error_id}]", exc_info=True)
-                    raise llm_error from e
-
-                physics_result: ViolatesKnownPhysics = physics_check_result["physics_result"]
-
-                # Replace this slot's system prompt with the dedicated
-                # module's prompt so persisted telemetry reflects what
-                # was actually sent to the LLM.
-                system_prompt_list[index] = physics_result.system_prompt
-                user_prompt_list.append(user_prompt)
-
-                checklist_answer = ChecklistAnswer(
-                    justification=physics_result.justification,
-                    mitigation=physics_result.mitigation,
-                    level=physics_result.level,
-                )
-                checklist_answer_cleaned = ChecklistAnswerCleaned(
-                    index=checklist_item_index,
-                    title=checklist_item["title"],
-                    subtitle=checklist_item["subtitle"],
-                    justification=physics_result.justification,
-                    mitigation=physics_result.mitigation,
-                    level=physics_result.level,
-                )
-                checklist_answers_cleaned.append(checklist_answer_cleaned)
-                responses[checklist_item_index] = checklist_answer
-                metadata_list.append(physics_result.metadata)
-                continue
-
-            user_prompt_list.append(user_prompt_with_previous_responses)
+            user_prompt_list[index] = user_prompt_with_previous_responses
 
             chat_message_list = [
                 ChatMessage(
@@ -525,7 +538,7 @@ class SelfAudit:
             checklist_answers_cleaned.append(checklist_answer_cleaned)
 
             responses[checklist_item_index] = checklist_answer
-            metadata_list.append(result["metadata"])
+            metadata_list[index] = result["metadata"]
 
         
         # Sort checklist answers by index, in case the LLM answers the checklist items in a different order.

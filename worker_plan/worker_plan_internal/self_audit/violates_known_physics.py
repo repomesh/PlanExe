@@ -1,35 +1,35 @@
 """
-Dedicated check for "Violates Known Physics" (self-audit item 1).
+Detect plans whose success literally requires breaking a named law of
+physics.
+
+The check is self-contained: it owns its system prompt, response
+schema, and result dataclass, and knows nothing about how it is
+embedded in any larger pipeline. Callers receive a
+`ViolatesKnownPhysics` instance with `justification`, `mitigation`,
+`level`, and `metadata`, and decide where (if anywhere) to splice it
+into a downstream report.
 
 Why this lives in its own module
 --------------------------------
-The shared self-audit batch path produced unreliable verdicts on this
-item. Iterations of the shared system prompt addressed several
-false-positive modes (regulatory laws confused with physics laws,
-"missing fundamentals" treated as physics gaps, surface-keyword
-latching on words like "physical"), but small/medium models still
-occasionally rate medium/high on real-world plans (linguistics
-standard, currency hedging, governance gaps).
-
-Isolating the check lets us:
-  - keep the system prompt focused on a single mechanical question
-    ("which named law of physics is broken, and what physical quantity
-    does the violation involve?") without the rest of the audit's
-    rubric crowding it.
-  - extend the response shape later (additional fields, alternative
-    schemas, second-pass verifiers) without disturbing the shared
-    ChecklistAnswer schema in self_audit.py.
-
-The result is consumed by self_audit.SelfAudit.execute, which splices
-it in as the first entry of checklist_answers_cleaned.
+A shared multi-rubric batch prompt produced unreliable verdicts here:
+small/medium models latched onto regulatory gaps, missing details,
+governance issues, or surface-keyword cues (the words "physical",
+"fundamental", "law") and rated medium/high without ever naming a
+physics law in the justification. Splitting the check out lets the
+system prompt focus on a single mechanical question — "which named
+law of physics is broken, and what physical quantity does the
+violation involve?" — without the rest of an audit's rubric crowding
+it. The dataclass is also free to grow new fields later (confidence
+score, second-pass verifier output, telemetry flags) without
+touching anything else.
 
 Note on safety nets: an earlier draft used a keyword list against the
 justification (thermodynamics / FTL / causality / etc.) to downgrade
 spurious medium/high verdicts. That was removed — plans arrive in
 many languages (e.g. "tidsrejse" for time travel) so any keyword set
 is fragile by design. The check relies on the focused system prompt
-and the schema's justification-before-level field order; if a future
-guard is needed, it should be language-agnostic (e.g. a second LLM
+and the schema's justification-before-level field order; a future
+guard, if needed, should be language-agnostic (e.g. a second LLM
 verifier) rather than a keyword filter.
 """
 import logging
@@ -43,14 +43,6 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
 
 logger = logging.getLogger(__name__)
-
-CHECKLIST_INDEX = 1
-CHECKLIST_TITLE = "Violates Known Physics"
-CHECKLIST_SUBTITLE = (
-    "Does the plan's success require breaking a known law of physics "
-    "(e.g., thermodynamics, conservation of energy, speed-of-light "
-    "limit, causality)?"
-)
 
 SYSTEM_PROMPT = """\
 You assess one yes/no question about a project plan: does the plan's success literally require breaking a specific named law of physics?

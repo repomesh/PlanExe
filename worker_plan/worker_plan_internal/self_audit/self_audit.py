@@ -55,12 +55,18 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
 from worker_plan_internal.self_audit.violates_known_physics import ViolatesKnownPhysics
 
-# Index of the "Violates Known Physics" item in ALL_CHECKLIST_ITEMS.
-# The dedicated module is run once before the main batch loop, and
-# its result is spliced into the corresponding checklist slot. The
-# module itself is unaware of its position in the audit; that is an
-# integration concern owned here.
+# The "Violates Known Physics" check is handled by a dedicated module
+# rather than the shared batch path. The module itself is unaware of
+# its place in the audit — these constants describe how the audit
+# labels and orders that result. The numeric index keeps the entry
+# sorted ahead of every batch item.
 VIOLATES_KNOWN_PHYSICS_INDEX = 1
+VIOLATES_KNOWN_PHYSICS_TITLE = "Violates Known Physics"
+VIOLATES_KNOWN_PHYSICS_SUBTITLE = (
+    "Does the plan's success require breaking a known law of physics "
+    "(e.g., thermodynamics, conservation of energy, speed-of-light "
+    "limit, causality)?"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,14 +146,12 @@ class ChecklistAnswerCleaned(BaseModel):
         description="low, medium, high."
     )
 
-ALL_CHECKLIST_ITEMS = [
-    {
-        "index": 1,
-        "title": "Violates Known Physics",
-        "subtitle": "Does the plan's success require breaking a known law of physics (e.g., thermodynamics, conservation of energy, speed-of-light limit, causality)?",
-        "instruction": "Default rating: LOW. Rate HIGH only when the plan's success literally depends on breaking a specific named law of physics. The justification MUST identify which named law would be violated AND explain the violation in physical terms (what physical quantity is being created, destroyed, or transmitted faster than allowed). Examples of named laws that qualify when actually violated: second law of thermodynamics (no perpetual motion / no spontaneous entropy decrease), conservation of energy (no net energy from nothing), conservation of momentum (no reactionless propulsion), speed-of-light limit (no faster-than-light travel or signaling), causality (no closed timelike curves / time travel into the past), Pauli exclusion principle, conservation of mass-energy. HARD GATE: if you cannot name the specific physics law and describe the physical-quantity violation, the rating MUST be LOW. Do NOT infer a physics violation from any of the following: regulatory or permit gaps, missing implementation details, ambitious timelines, budget/cost concerns, currency or financial risk, governance or staffing gaps, linguistic/social/policy design, real-world materials (including radioisotopes), or vague deliverables. Surface-level cues — the words 'physical', 'fundamental', 'science', 'law', 'physical location', etc. appearing in the plan — are NOT sufficient on their own; only an actual mechanism that contradicts a named law of physics qualifies. LOW-mitigation TEMPLATE: when level is LOW (the common case), the mitigation MUST stay on the physics-violation topic and read along the lines of 'Project Manager: During scope reviews, confirm no plan element requires violating a named law of physics — no further action required.' Do NOT borrow unrelated tasks from elsewhere in the plan (governance, finance, linguistic detail, legal review, etc.) — those belong to other checklist items, not this one. If ≥MEDIUM: ≤30-word justification naming the violated law + mitigation with Owner/Deliverable/Timeframe.",
-        "comment": "Intent: catch plans whose success literally requires breaking a named law of physics. Real-world plans — even ambitious, expensive, or regulated ones — should default LOW. The instruction is principle-only and focuses on naming the specific violated law and describing the physical-quantity violation; earlier framings using 'fantasy', 'fictional-universe', or 'magic' were dropped because they invited the model to find tangential narrative connections instead of asking the mechanical question 'which named physics law is broken?'. Observed false-positive modes worth defending against: (1) Confusing legal/regulatory ‘laws’ with ‘laws of physics’ for plans about policy, currency adoption, governance, etc. (2) Treating an authorization/permit/licensing/handling gap as a physics violation — e.g., a plan involving a Cf-252 isotopic source rated HIGH because ‘handling radioactive material requires NRC authorization’ (regulatory, item 12, not physics; Cf-252 exists under known physics). (3) An ‘If LOW: Mitigation=None.’ carve-out once produced ‘Mitigation: N/A’ outputs that violated the global STRICT RULE; carve-out removed. (4) Reading an old ‘fundamental science’ subtitle as ‘any unspecified fundamental of the plan’ — a linguistics plan (‘Clear English’ standard) was rated HIGH because the plan listed ‘Detailed Grapheme-to-Phoneme mapping strategy’ as Missing Information. Subtitle retargeted to physics laws directly, and HIGH now hard-gated on naming a specific physics law. (5) Self-contradicting verdicts driven by structured-output field order: the schema once emitted `level` before `justification`, so the model committed to HIGH and then wrote a justification that argued LOW. Schema reordered to justification → mitigation → level so the verdict is the last token and must agree with the reasoning. (6) Surface-keyword latching — a currency-hedging plan was rated HIGH because the plan said 'physical locations in the UK' and 'currency risk (USD/GBP)'; the model treated the word 'physical' plus a financial-risk concern as a physics issue. The instruction now explicitly states that surface-level cues (the words 'physical', 'fundamental', 'science', 'law', 'physical location', etc.) are NOT sufficient on their own — only an actual mechanism contradicting a named physics law qualifies — and lists currency/financial risk explicitly as out of scope."
-    },
+# Items handled by the shared batch path (one LLM call per item, all
+# answered with the same ChecklistAnswer schema and the system prompt
+# emitted by `format_system_prompt`). The "Violates Known Physics"
+# item lives in its own module — see VIOLATES_KNOWN_PHYSICS_* above —
+# and is intentionally absent from this list.
+BATCH_CHECKLIST_ITEMS = [
     {
         "index": 2,
         "title": "No Real-World Proof",
@@ -398,33 +402,26 @@ class SelfAudit:
         if max_number_of_items is not None and not isinstance(max_number_of_items, int):
             raise ValueError("Invalid max_number_of_items.")
 
-        checklist_items = ALL_CHECKLIST_ITEMS
-        if max_number_of_items is not None:
-            checklist_items = checklist_items[:max_number_of_items]
-        
-        system_prompt_list = []
-        for index in range(0, len(checklist_items)):
-            system_prompt = format_system_prompt(checklist=checklist_items, current_index=index)
-            system_prompt_list.append(system_prompt)
+        # The dedicated physics check counts as one logical item; the
+        # remaining slots are filled from BATCH_CHECKLIST_ITEMS in
+        # order. max_number_of_items=1 means physics only.
+        run_physics_check = max_number_of_items is None or max_number_of_items >= 1
+        if max_number_of_items is None:
+            batch_items = BATCH_CHECKLIST_ITEMS
+        else:
+            batch_items = BATCH_CHECKLIST_ITEMS[: max(0, max_number_of_items - 1)]
 
         responses: dict[int, ChecklistAnswer] = {}
-        metadata_list: list[dict] = [None] * len(checklist_items)
-        user_prompt_list: list[str] = [None] * len(checklist_items)
+        metadata_list: list[dict] = []
+        user_prompt_list: list[str] = []
+        system_prompt_list: list[str] = []
         checklist_answers_cleaned: list[ChecklistAnswerCleaned] = []
 
-        # The "Violates Known Physics" item is handled by a dedicated
-        # module that owns its own system prompt and response schema.
-        # Run it once before the main batch loop and splice its result
-        # into the corresponding checklist slot, so downstream items
-        # see the physics verdict in their previous-response context
-        # and the report shape is unchanged. The module itself is
-        # unaware of its position in the audit; that is owned here.
-        physics_list_index: Optional[int] = next(
-            (i for i, item in enumerate(checklist_items)
-             if item["index"] == VIOLATES_KNOWN_PHYSICS_INDEX),
-            None,
-        )
-        if physics_list_index is not None:
+        # The "Violates Known Physics" check lives in its own module
+        # with its own system prompt and response schema. Run it once
+        # before the batch loop so its verdict is already in
+        # `responses` when subsequent items are evaluated.
+        if run_physics_check:
             def execute_physics_check(llm: LLM) -> dict:
                 return {"physics_result": ViolatesKnownPhysics.execute(llm, user_prompt)}
 
@@ -439,13 +436,10 @@ class SelfAudit:
                 raise llm_error from e
 
             physics_result: ViolatesKnownPhysics = physics_check_result["physics_result"]
-            physics_checklist_item = checklist_items[physics_list_index]
-            physics_checklist_item_index = physics_checklist_item["index"]
 
-            # Persisted telemetry reflects what was actually sent to the LLM.
-            system_prompt_list[physics_list_index] = physics_result.system_prompt
-            user_prompt_list[physics_list_index] = user_prompt
-            metadata_list[physics_list_index] = physics_result.metadata
+            system_prompt_list.append(physics_result.system_prompt)
+            user_prompt_list.append(user_prompt)
+            metadata_list.append(physics_result.metadata)
 
             physics_checklist_answer = ChecklistAnswer(
                 justification=physics_result.justification,
@@ -453,25 +447,22 @@ class SelfAudit:
                 level=physics_result.level,
             )
             checklist_answers_cleaned.append(ChecklistAnswerCleaned(
-                index=physics_checklist_item_index,
-                title=physics_checklist_item["title"],
-                subtitle=physics_checklist_item["subtitle"],
+                index=VIOLATES_KNOWN_PHYSICS_INDEX,
+                title=VIOLATES_KNOWN_PHYSICS_TITLE,
+                subtitle=VIOLATES_KNOWN_PHYSICS_SUBTITLE,
                 justification=physics_result.justification,
                 mitigation=physics_result.mitigation,
                 level=physics_result.level,
             ))
-            responses[physics_checklist_item_index] = physics_checklist_answer
+            responses[VIOLATES_KNOWN_PHYSICS_INDEX] = physics_checklist_answer
 
-        for index in range(0, len(checklist_items)):
-            checklist_item = checklist_items[index]
+        for index in range(0, len(batch_items)):
+            checklist_item = batch_items[index]
             checklist_item_index = checklist_item["index"]
 
-            # Already handled by the dedicated module above.
-            if checklist_item_index == VIOLATES_KNOWN_PHYSICS_INDEX:
-                continue
-
-            logger.info(f"Processing item {index+1} of {len(checklist_items)}")
-            system_prompt = system_prompt_list[index]
+            logger.info(f"Processing batch item {index+1} of {len(batch_items)}")
+            system_prompt = format_system_prompt(checklist=batch_items, current_index=index)
+            system_prompt_list.append(system_prompt)
 
             # Add previous checklist responses to the bottom of the user prompt
             if responses:
@@ -481,7 +472,7 @@ class SelfAudit:
             else:
                 user_prompt_with_previous_responses = user_prompt
 
-            user_prompt_list[index] = user_prompt_with_previous_responses
+            user_prompt_list.append(user_prompt_with_previous_responses)
 
             chat_message_list = [
                 ChatMessage(
@@ -538,7 +529,7 @@ class SelfAudit:
             checklist_answers_cleaned.append(checklist_answer_cleaned)
 
             responses[checklist_item_index] = checklist_answer
-            metadata_list[index] = result["metadata"]
+            metadata_list.append(result["metadata"])
 
         
         # Sort checklist answers by index, in case the LLM answers the checklist items in a different order.

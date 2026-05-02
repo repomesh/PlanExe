@@ -337,6 +337,7 @@ STRICT RULES
 - justification must quote only from the plan text, and when citing gaps, refer to the absence plainly without using placeholder phrases.
 - Never use the phrase "missing referenced artifacts" or similar placeholders; spell out what evidence is missing and the consequence.
 - mitigation: ONE assignable task. Start with a suggested role/team, followed by a verb, and include a suggested timeframe (e.g., "Legal Team: Draft a memo... within 30 days."). ~30 words.
+- Express every timeframe as a relative duration counted from the start of the plan ("within N days", "within N weeks", "within N months"). NEVER use an absolute calendar date (e.g., "2024-12-31", "by Q4 2024", "by March 2025"). Per-checklist instructions that ask for a "Date" mean a relative timeframe in this format — the plan's own start date may be in the past, so a calendar date can land in the past and become impossible to act on.
 - mitigation must be actionable; never respond with "N/A" or similar placeholders.
 - Mitigation must be specific to the identified issue; avoid vague directives like "review the plan", "consult experts", or "investigate" unless paired with a concrete deliverable that directly reduces the flagged risk.
 - If the level is "low", mitigation should reinforce existing good practice (e.g., document evidence, schedule routine monitoring) rather than delegating a broad re-check of the entire plan.

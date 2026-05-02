@@ -77,7 +77,7 @@ Output a JSON object with three fields, in this order:
 """
 
 
-class _LLMResponse(BaseModel):
+class PhysicsCheck(BaseModel):
     # Field order matters: the structured-output model commits to the
     # first emitted field, then writes the rest. Justification first
     # forces the reasoning onto the page before the level is locked in.
@@ -133,12 +133,12 @@ class ViolatesKnownPhysics:
         # Closure variables capture the LLM-side outputs from inside
         # llm_executor.run so we don't have to thread them back out
         # through a temporary dict.
-        captured_raw: _LLMResponse | None = None
+        captured_raw: PhysicsCheck | None = None
         captured_metadata: dict = {}
 
         def chat_with_llm(llm: LLM) -> None:
             nonlocal captured_raw, captured_metadata
-            sllm = llm.as_structured_llm(_LLMResponse)
+            sllm = llm.as_structured_llm(PhysicsCheck)
             start_time = time.perf_counter()
             chat_response = sllm.chat(chat_message_list)
             duration = int(ceil(time.perf_counter() - start_time))

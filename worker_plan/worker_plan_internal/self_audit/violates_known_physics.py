@@ -214,7 +214,7 @@ if __name__ == "__main__":
     )
 
     LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
-    SAMPLE_SEED = 1100
+    SAMPLE_SEED = 1200
     SAMPLE_SIZE = 20
 
     # Catalog IDs already exercised by earlier smoke runs (SEEDs 700,
@@ -273,6 +273,27 @@ if __name__ == "__main__":
         "45763178-8ba8-4a86-adcd-63ed19d4d47b",
         "1fc46aed-60e2-430b-b524-71d0a2a57805",
         "fe853807-5bfe-4e5b-8071-d6db3c360279",
+        # SEED 1100 (held-out 20-prompt evaluation)
+        "487d6269-3b4c-4123-8a14-49a95713a77b",
+        "a08915c5-2d22-4430-8f56-90565583b776",
+        "a6bef08b-c768-4616-bc28-7503244eff02",
+        "9eef67c3-ad3e-4a1d-bbb4-5ece12de4eea",
+        "899e58f3-e2a6-44f3-b107-0dbca63a38ff",
+        "a3479d4b-724f-4700-a4ba-21de3dee22b5",
+        "3ca89453-e65b-4828-994f-dff0b679444a",
+        "40a47989-0743-4d03-a152-8f7096dfcb5c",
+        "307f7e0c-a160-4b7a-9e3c-76577164497e",
+        "d52e2fe9-913a-405d-a81f-4290c8121c44",
+        "04a91223-02f4-4ca0-b37d-1a353eb475dc",
+        "670a390b-e6fd-4b63-a9dc-aa73eb957300",
+        "c1a6c000-5641-4a47-9d7f-bbdd84dd5a64",
+        "d3e10877-446f-4eb0-8027-864e923973b0",
+        "9c74bb8a-1208-4183-9c08-24ec90f86dfd",
+        "e543e384-45f0-4d89-8ed1-b424a7d6e8c3",
+        "d00e694e-43b0-45ae-b55e-ab8184abf38d",
+        "98a8c63e-4770-4ee1-aef8-693800deec0e",
+        "19dc0718-3df7-48e3-b06d-e2c664ecc07d",
+        "3deda46b-9c9d-4078-a72c-15299b70d915",
     }
 
     prompt_catalog = PromptCatalog()

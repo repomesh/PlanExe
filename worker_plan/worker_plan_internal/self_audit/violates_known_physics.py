@@ -8,26 +8,29 @@ item. Iterations of the shared system prompt addressed several
 false-positive modes (regulatory laws confused with physics laws,
 "missing fundamentals" treated as physics gaps, surface-keyword
 latching on words like "physical"), but small/medium models still
-occasionally rate medium/high while the justification cites a
-non-physics concern (governance, change-control, currency hedging,
-linguistic detail).
+occasionally rate medium/high on real-world plans (linguistics
+standard, currency hedging, governance gaps).
 
 Isolating the check lets us:
   - keep the system prompt focused on a single mechanical question
     ("which named law of physics is broken, and what physical quantity
     does the violation involve?") without the rest of the audit's
     rubric crowding it.
-  - run a deterministic safety net: if the LLM rates >= medium but the
-    justification names no physics law, force the rating back to "low"
-    and replace the mitigation with a template. The HARD GATE in the
-    instruction asks the model to do this; the code enforces it when
-    the model fails.
-  - extend the response shape later (confidence score, list of
-    detected physics laws, telemetry flags) without disturbing the
-    shared ChecklistAnswer schema in self_audit.py.
+  - extend the response shape later (additional fields, alternative
+    schemas, second-pass verifiers) without disturbing the shared
+    ChecklistAnswer schema in self_audit.py.
 
 The result is consumed by self_audit.SelfAudit.execute, which splices
 it in as the first entry of checklist_answers_cleaned.
+
+Note on safety nets: an earlier draft used a keyword list against the
+justification (thermodynamics / FTL / causality / etc.) to downgrade
+spurious medium/high verdicts. That was removed — plans arrive in
+many languages (e.g. "tidsrejse" for time travel) so any keyword set
+is fragile by design. The check relies on the focused system prompt
+and the schema's justification-before-level field order; if a future
+guard is needed, it should be language-agnostic (e.g. a second LLM
+verifier) rather than a keyword filter.
 """
 import logging
 import time
@@ -47,41 +50,6 @@ CHECKLIST_SUBTITLE = (
     "Does the plan's success require breaking a known law of physics "
     "(e.g., thermodynamics, conservation of energy, speed-of-light "
     "limit, causality)?"
-)
-
-# Substrings checked against the lowercased justification when level is
-# medium/high. If none match, the rating is downgraded to "low". Keep
-# this list aligned with the named laws cited in SYSTEM_PROMPT.
-PHYSICS_LAW_KEYWORDS: tuple[str, ...] = (
-    "thermodynamics",
-    "second law",
-    "entropy",
-    "perpetual motion",
-    "conservation of energy",
-    "energy conservation",
-    "conservation of momentum",
-    "momentum conservation",
-    "reactionless",
-    "speed of light",
-    "speed-of-light",
-    "faster than light",
-    "faster-than-light",
-    "ftl",
-    "causality",
-    "closed timelike",
-    "time travel",
-    "pauli exclusion",
-    "uncertainty principle",
-    "relativity",
-    "conservation of mass",
-    "mass-energy",
-    "mass energy",
-)
-
-LOW_FALLBACK_MITIGATION = (
-    "Project Manager: During scope reviews, confirm no plan element "
-    "requires violating a named law of physics — no further action "
-    "required."
 )
 
 SYSTEM_PROMPT = """\
@@ -106,6 +74,8 @@ Out of scope — these are NOT physics violations and MUST stay "low":
 - Linguistic, social, or policy design.
 - Real-world materials, including radioisotopes.
 - Surface-level keyword cues such as the words "physical", "fundamental", "science", "law", or "physical location" appearing in the plan.
+
+The plan may be written in any language. Assess the plan's actual mechanism, not the words used to describe it.
 
 Output a JSON object with three fields, in this order:
 - justification: 1-2 sentences. If level is "low", state plainly that no plan element requires breaking a named law of physics. If level is "medium" or "high", you MUST name the specific physics law and describe the physical-quantity violation; if you cannot, level is "low".
@@ -141,24 +111,13 @@ class _LLMResponse(BaseModel):
 
 @dataclass
 class ViolatesKnownPhysics:
-    """Result of the dedicated physics-violation check.
-
-    `justification` / `mitigation` / `level` are the post-fallback
-    values that should be surfaced in the audit output. The `llm_*`
-    fields preserve the original LLM verdict for telemetry and
-    debugging — useful when investigating whether the deterministic
-    fallback is firing too often.
-    """
+    """Result of the dedicated physics-violation check."""
 
     plan_prompt: str
     system_prompt: str
     justification: str
     mitigation: str
     level: str
-    llm_justification: str
-    llm_mitigation: str
-    llm_level: str
-    fallback_applied: bool
     metadata: dict
 
     @classmethod
@@ -193,53 +152,15 @@ class ViolatesKnownPhysics:
                 "LLM returned empty structured response (chat_response.raw is None)."
             )
 
-        llm_level = raw.level.lower().strip()
-        llm_justification = raw.justification.strip()
-        llm_mitigation = raw.mitigation.strip()
-
-        level = llm_level
-        justification = llm_justification
-        mitigation = llm_mitigation
-        fallback_applied = False
-
-        if level in ("medium", "high") and not _justification_names_physics_law(
-            llm_justification
-        ):
-            logger.warning(
-                "Physics check downgraded to 'low': llm_level=%s but "
-                "justification names no physics law: %r",
-                llm_level,
-                llm_justification,
-            )
-            level = "low"
-            justification = (
-                "Rated LOW because the justification did not name a "
-                f"specific law of physics. Auto-downgraded — original "
-                f"LLM verdict was '{llm_level}' but cited a non-physics "
-                "concern."
-            )
-            mitigation = LOW_FALLBACK_MITIGATION
-            fallback_applied = True
-
         metadata = dict(llm.metadata)
         metadata["llm_classname"] = llm.class_name()
         metadata["duration"] = duration
-        metadata["fallback_applied"] = fallback_applied
 
         return cls(
             plan_prompt=plan_prompt,
             system_prompt=system_prompt,
-            justification=justification,
-            mitigation=mitigation,
-            level=level,
-            llm_justification=llm_justification,
-            llm_mitigation=llm_mitigation,
-            llm_level=llm_level,
-            fallback_applied=fallback_applied,
+            justification=raw.justification.strip(),
+            mitigation=raw.mitigation.strip(),
+            level=raw.level.lower().strip(),
             metadata=metadata,
         )
-
-
-def _justification_names_physics_law(text: str) -> bool:
-    haystack = text.lower()
-    return any(kw in haystack for kw in PHYSICS_LAW_KEYWORDS)

@@ -214,16 +214,54 @@ if __name__ == "__main__":
     )
 
     LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
-    SAMPLE_SEED = 900
-    SAMPLE_SIZE = 10
+    SAMPLE_SEED = 1000
+    SAMPLE_SIZE = 20
+
+    # Catalog IDs already exercised by earlier smoke runs (SEEDs 700,
+    # 800, 900). Held out so subsequent runs evaluate the check on
+    # prompts the system prompt has not been tuned against. Append
+    # new IDs after each fresh smoke run.
+    HELD_OUT_IDS: set[str] = {
+        # SEED 700
+        "79ef9ebf-3173-4b33-81f9-abbd3da7da6d",
+        "0bb00fe6-711c-4612-8f83-a9a88e5c7958",
+        "cdf7f29d-bbcb-478d-8b5a-e82e74ed8626",
+        "d91f09cd-6658-48e7-ae87-1708f814661c",
+        "3f8979e5-ac53-4b0b-967e-ee4b9dca34c2",
+        "d70ced0b-d5c7-4b84-88d7-18a5ada2cfee",
+        "4dc34d55-0d0d-4e9d-92f4-23765f49dd29",
+        "96557141-4a70-45c3-84b9-0c56bdb384be",
+        "27c733dc-4834-4742-aa2a-b432453aac32",
+        "930c2abc-faa7-4c21-8ae1-f0323cbcd120",
+        # SEED 800
+        "d5a07988-d1e3-4f4f-9614-3ef6af398301",
+        "b8aad23f-7c65-46f4-bc1b-9228bae94ab8",
+        "1fa30e80-5213-4ed4-9057-5b578e9423b5",
+        "2891ff5f-4d6e-4909-a6ac-64af1273275e",
+        "22f35414-c01b-4b52-a229-7dc5a78e2b96",
+        "23f2b090-98f0-4092-bdc4-3f2b6a5c9317",
+        "1382d4a1-5eb0-42f3-b93a-74c066ae1c97",
+        "552bb9bb-b515-47fd-a964-b2f4fac17a29",
+        "f206f7e9-8ece-4e65-8e7f-5ac1b6777a62",
+        "a6158408-3827-4f4f-8577-8844204c5c1f",
+        # SEED 900 (new IDs only; overlaps with SEED 700 already listed)
+        "061ef161-324c-4fad-8d60-28b8b53d5c90",
+        "f717e0c0-73b4-4e12-8d1d-8ec426966122",
+        "5c4b4fee-267a-409b-842f-4833d86aa215",
+        "4befd126-4288-436a-a753-c2c1dda65fd8",
+        "7972e5ab-a526-47ea-9b56-d9da4b9b76ef",
+        "c2c45867-be60-4690-aac1-530627fc0818",
+        "4060d2de-8fcc-4f8f-be0c-fdae95c7ab4f",
+    }
 
     prompt_catalog = PromptCatalog()
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
     sorted_items = sorted(all_items, key=lambda x: x.id)
+    fresh_items = [it for it in sorted_items if it.id not in HELD_OUT_IDS]
 
     rng = random.Random(SAMPLE_SEED)
-    shuffled = list(sorted_items)
+    shuffled = list(fresh_items)
     rng.shuffle(shuffled)
     sample_items = shuffled[:SAMPLE_SIZE]
 

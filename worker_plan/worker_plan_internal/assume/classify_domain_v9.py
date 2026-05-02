@@ -1,115 +1,55 @@
 """
 Classify the project domain into a primary domain (and 0-3 secondary
-domains) so downstream stages can apply domain-appropriate expertise,
-risks, and templates.
+domains) so downstream stages can apply domain-appropriate
+expertise, risks, and templates.
 
-The LLM emits only a fit list (each entry: domain + role + reason +
-fit level), plus an overall confidence and a short rationale. The
-primary domain and secondaries are derived in code from the fits, so
-the model cannot emit a primary that contradicts its own fit list.
+Two LLM passes per classification:
 
-v6: purpose-routed system prompts (carried over). The
-IdentifyPurpose pre-pass classifies each prompt as personal /
-business / other; the classifier then routes to one of three
-purpose-specialised system prompts. v5's principle-only foundation
-(narrowest expert discipline) is preserved.
+  1. First pass — adaptive batch loop. The classifier is asked
+     for 3 candidate expert disciplines per batch and the loop
+     repeats until TARGET_CANDIDATES distinct candidates have
+     been collected (or MAX_CALLS is reached, or batch 1 returns
+     empty for a vague prompt). Subsequent batches inject the
+     already-produced names and ask for 3 MORE that are
+     different. Each candidate is scored on two 1-5 Likert
+     scales: `importance` (how much this domain affects whether
+     the project succeeds) and `specificity` (how directly this
+     domain matches the actual project mechanism). The system
+     prompt is purpose-routed — three guidance blocks (personal
+     / business / other) are selected based on the upstream
+     IdentifyPurpose pre-pass tag.
 
-v7 first-pass batching: the first pass runs as an adaptive loop
-that asks the LLM for 3 candidate disciplines per batch and keeps
-calling until TARGET_CANDIDATES distinct candidates have been
-collected (or MAX_CALLS=3 is reached). v7 originally targeted 6;
-v8 raised this to 9 (3 batches × 3 candidates) so the second-pass
-primary selector sees a wider menu and the importance × specificity
-tie-breakers have more material to work on. Pattern adapted from
-identify_potential_levers.py. Subsequent batches inject the
-already-produced candidate names into the user message and ask
-for "3 MORE" that are different. Over-generation is intentional —
-the second-pass primary selector benefits from a richer candidate
-menu, and small models that would have produced 1-2 candidates in
-a single call now produce a more diverse set across batches. If
-batch 1 returns an empty fit list (the prompt is vague), the loop
-exits early and the empty-fits path produces primary="Unclear".
+  2. Second pass — primary selection. The model sees the cleaned
+     candidate list as an enumerated menu, picks one as the
+     primary by `primary_index`, and emits a `rationale`.
+     Tie-breakers: prefer `role="outcome"` first, then highest
+     importance × specificity, then higher specificity (narrower
+     match), then document order. The rationale text refers to
+     candidates by domain name; the bracket index is an
+     interface detail of the structured-output `primary_index`
+     field and is not used in the human-readable rationale.
 
-v7 second pass: replace the deterministic priority-chain primary
-picker (derive_primary: high+outcome > medium+outcome > high(any)
-> Unclear) with a second LLM invocation that sees the cleaned fit
-list as an enumerated candidate menu and picks one by index.
-Rationale: derive_primary makes a fixed structural call (preferring
-outcome over method, narrow over broad) but cannot weigh the
-project's actual emphasis. Letting the model re-rank with the
-fits and the prompt in front of it should produce better primaries
-on multi-discipline prompts, particularly the multi-outcome
-pattern observed in the v6 field probe (Solar Sunshade
-emitting three role="outcome" entries). The primary-selection
-call returns a primary_index and a rationale; both are surfaced
-in the result. derive_primary is kept as a fallback when the
-selection call fails or when there is only one candidate.
+Result schema:
+  - primary_domain (str): the chosen primary, or "Unclear" when
+    no candidates were emitted (vague-prompt case).
+  - secondary_domains (list[str]): up to 3 non-primary
+    candidates in document order.
+  - domain_fits (list[dict]): the cleaned fit list with
+    importance / specificity / role / reason per candidate.
+  - rationale (str): the second-pass LLM's justification (or a
+    hardcoded fallback for the empty / fallback paths).
+  - warnings (list[str]): records any code-side mutations
+    (duplicate fits dropped, out-of-range Likert values clamped,
+    purpose-tag candidates dropped, etc.).
 
-v7 moves the `rationale` field off DomainFitAssessment and onto
-PrimarySelection. The first-pass classifier emits only the fit
-list; the second-pass selector emits the chosen primary's index
-and the human-readable rationale. For the 0-candidate (Unclear)
-path where no second pass runs, the rationale is a hardcoded "no
-candidates emitted" string. The 1-candidate case is routed
-through the second pass (the LLM still picks index 0 by
-construction, but its rationale catches small-model
-hallucinations that produce a single fabricated fit on a vague
-prompt).
-
-The earlier v7 design also included a `confidence` field on
-PrimarySelection. Smoke-run measurement showed it was binary in
-practice (almost all "high" or "low", with "low" coming entirely
-from the deterministic 0-candidate path), so it was removed —
-the rationale carries the qualitative judgment, and downstream
-consumers can compute "is this resolved?" from
-`bool(domain_fits)`.
-
-v8: replace the single ordinal `fit` field (low/medium/high) with
-two independent 1-5 Likert scales, `importance` and `specificity`.
-The High/Medium/Low scale was lossy for downstream lever
-generation: several domains can all score "high" while playing
-very different roles, and the scale couldn't distinguish a broad
-domain that is critical for success from a narrow specialty that
-exactly matches the project mechanism. The two-dimensional scale
-separates "how much does this domain affect success?"
-(importance) from "how directly does this domain match the
-actual project mechanism?" (specificity), so downstream stages
-can score each candidate as importance × specificity (1-25) and
-threshold or weight by need.
-
-  - importance (1-5): 1 = barely affects success; 5 = critical
-    to success / blocking constraint or core capability.
-  - specificity (1-5): 1 = very indirect or background context;
-    5 = direct match to the core mechanism or the specific
-    technique the project uses.
-
-derive_primary's fallback path now picks the candidate with the
-highest importance × specificity (ties broken by role="outcome",
-then document order). The 1=1 case (importance=1 AND
-specificity=1, the "completely useless" candidate) is dropped at
-cleanup time, analogous to v7 dropping fit="low".
-
-The schema design follows ChatGPT feedback to the user that
-flagged High/Medium/Low as too lossy for lever generation. The
-specific role-enum expansions ChatGPT also suggested
-(core_outcome / core_method / engineering_constraint /
-validation_method / regulatory_constraint / external_dependency
-/ execution_support / stakeholder_context / market_context) are
-deliberately not adopted in v8 — the role enum stays at v7's
-seven literals to keep this change focused on the scoring
-dimensions.
-
-v9: tighten the second-pass rationale instructions so the
-emitted rationale refers to candidates by domain name, not by
-the bracket index. The candidate list shown to the second-pass
-LLM enumerates entries as `[0]`, `[1]`, ... so the model can
-return primary_index, but in v8 the model often echoed the
-index notation in its rationale text ("Water Supply Engineering
-(index 0) directly owns ...", "[3] is the primary because ...")
-which becomes ungrounded when the markdown rendering drops the
-indices. v9 explicitly instructs the rationale to use domain
-names only; the bracket index is for the structured-output
-field, not the human-readable text.
+Pipeline integration:
+The Luigi wrapper feeds the first pass with a user message that
+concatenates the raw plan prompt with the IdentifyPurpose
+markdown ("## Plan purpose ...") and the ExtractConstraints
+markdown ("## Extracted constraints ..."), and passes the
+IdentifyPurpose tag as the `purpose` argument so the system-
+prompt routing applies. derive_primary serves as a deterministic
+fallback when the second-pass call fails.
 
 PROMPT> python -m worker_plan_internal.assume.classify_domain_v9
 """
@@ -127,929 +67,180 @@ logger = logging.getLogger(__name__)
 
 
 OPTIMIZE_INSTRUCTIONS = """\
-Goal: classify each plan prompt into a useful primary_domain (and 0-3
-secondary_domains) so downstream stages can apply domain-appropriate
-expertise, risks, and templates.
-
-The LLM emits only candidate fits (with role + reason); primary and
-secondaries are derived deterministically in code. This makes it
-structurally impossible for the model to return a primary that
-contradicts its own fit list.
+Goal
+----
+Classify each plan prompt into a useful primary_domain (and 0-3
+secondary_domains) so downstream stages can apply domain-
+appropriate expertise, risks, and templates.
 
 Pipeline context
 ----------------
-Runs immediately after prompt parsing and before strategic-lever
-identification. Output feeds downstream stages picking assumptions,
-expert lenses, regulators, and planning templates.
+Runs immediately after prompt parsing and the IdentifyPurpose +
+ExtractConstraints pre-passes. Output feeds downstream stages
+picking assumptions, expert lenses, regulators, and planning
+templates.
 
-Schema
-------
-The LLM emits 1-4 DomainFit entries (or 0 when the prompt names
-no concrete project). Each entry has a domain (Title Case noun
-phrase naming an expert discipline), a fit ("medium" or "high"),
-a role (one of seven literals), and a reason (one short sentence).
+The user message sent to the first-pass classifier concatenates
+the raw plan prompt with the IdentifyPurpose markdown (under
+"## Plan purpose ...") and the ExtractConstraints markdown
+(under "## Extracted constraints ..."). The IdentifyPurpose tag
+(personal / business / other) is passed separately and selects
+which of three purpose-routed system prompts the first pass uses;
+unknown / missing values fall back to the business prompt.
+
+Architecture
+------------
+Two LLM passes per classification.
+
+  1. First pass — adaptive batch loop. Each batch asks for
+     BATCH_SIZE candidate disciplines; loop continues until
+     TARGET_CANDIDATES distinct candidates are collected, or
+     MAX_CALLS is reached, or batch 1 returns an empty fit list
+     (vague-prompt path). Subsequent batches inject the names
+     already produced and ask for "BATCH_SIZE MORE" candidates
+     that are different. Pattern adapted from
+     identify_potential_levers.py.
+
+  2. Second pass — primary selection. Sees the cleaned candidate
+     list as an enumerated menu and picks one by primary_index,
+     with a rationale.
+
+Each candidate is two-Likert scored:
+
+  - importance (1-5): how much this domain affects whether the
+    project succeeds. 1 = barely affects success; 5 = critical.
+  - specificity (1-5): how directly this domain matches the
+    actual project mechanism. 1 = very indirect / background
+    context; 5 = direct match to the core mechanism.
+
+Downstream stages can compute importance × specificity (1-25)
+and threshold or weight by need.
 
 Code-side derivation
 --------------------
-Primary domain is normally picked by the second-pass LLM (see
-"second-pass primary selection" below). When the second-pass call
-fails or fits is empty, derive_primary serves as a deterministic
-fallback. Its ranking under v8:
-  1. role="outcome" candidates first (over any other role).
-  2. Within the chosen tier, highest importance × specificity wins
-     (the 1-25 product of the two Likert scales).
-  3. Ties broken by higher specificity (narrower match), then
-     higher importance, then document order.
-  4. "Unclear" when fits is empty.
+The second-pass LLM picks the primary normally. derive_primary
+is a deterministic fallback when the second-pass call fails or
+fits is empty:
+
+  - If fits is empty: primary = "Unclear".
+  - If any role="outcome" exists: prefer those, ranked by
+    importance × specificity (descending), tie-broken by higher
+    specificity, then higher importance, then document order.
+  - Otherwise the same ranking among all fits.
 
 Secondary domains are non-primary candidates in document order,
-capped at 3. The cleanup pipeline already drops the
-importance=1 AND specificity=1 candidates, so anything reaching
-this stage is at least minimally relevant.
+capped at 3.
 
-Confidence is taken from the LLM, but forced to "low" when the
-derived primary is "Unclear". An empty / whitespace-only primary
-also normalizes to "Unclear" with confidence="low".
+Cleanup pipeline
+----------------
+Per-batch cleanup of emitted fits:
 
-Warnings
---------
-The result carries a `warnings` list naming every silent mutation:
-duplicate fits dropped, empty primary normalized, confidence
-overridden, etc. Downstream consumers can use these to track
-quality regressions without re-running the model.
+  - Drop entries with empty domain label.
+  - Drop entries whose normalized domain matches a purpose-tag
+    label ("Personal" / "Business" / "Other") — those are
+    carried separately on the result and would duplicate the
+    purpose tag.
+  - Drop duplicate domains (case-insensitive label match).
+  - Clamp out-of-range Likert values to [1, 5] with a warning.
+  - Drop entries where importance == 1 AND specificity == 1
+    (effectively unrelated; the analog of "low fit").
+  - Truncate beyond TARGET_CANDIDATES with a warning.
 
-v7 first-pass batching
-----------------------
-The first pass runs as an adaptive loop. Each LLM call asks for 3
-candidate expert disciplines; the loop continues until 6 distinct
-candidates are collected, MAX_CALLS=3 is reached, or a follow-up
-batch adds zero new candidates (all duplicates / rejected). On
-batch 2+, the user message is prefixed with the names already
-produced and the instruction "Produce 3 MORE candidate expert
-disciplines ... distinct disciplines that ... were not yet
-listed." Batch 1 returning an empty fit list short-circuits the
-loop (vague-prompt path).
+All silent mutations are recorded in the result's `warnings`
+list. Empty in the common case where the model emits clean
+output.
 
-Why over-generate? The second-pass primary selector picks from
-the assembled candidate list, and a richer menu lets it re-rank
-with more options. Small models that produce 1-2 reasonable fits
-in a single call tend to produce a more diverse 4-6 across two
-batches.
+Design philosophy
+-----------------
+The system prompts are principle-driven. They state the rules
+("pick the narrowest expert discipline", "score importance and
+specificity independently") and refrain from worked examples or
+test-prompt paraphrases.
 
-v7 second-pass primary selection
---------------------------------
-v7 replaces the deterministic priority-chain primary picker with
-a second LLM invocation that sees the cleaned fit list as an
-enumerated candidate menu and returns:
-  - primary_index — the index of the chosen candidate
-  - rationale — one or two sentences justifying the pick
+Reasoning:
 
-The `rationale` field has been moved off DomainFitAssessment (the
-first-pass output) and onto PrimarySelection (the second-pass
-output). The first-pass classifier now emits only the fit list —
-`domain_fits` is its sole field. The second-pass selector is the
-right place for the rationale because it has the candidate list
-and the prompt in front of it and is making the actual primary
-choice; explaining that choice in plain language is a task for
-the same call.
+  - Negative constraints ("do NOT pick X") get latched onto by
+    LLMs and inverted. All constraints are positive ("use Y").
+  - Worked examples that paraphrase test-set prompts make the
+    classifier appear to improve on the test set without
+    learning the underlying principle. Removing them forces
+    the principle to carry the load.
+  - Schema field descriptions are kept short and example-free
+    for the same reasons.
 
-An earlier v7 iteration also placed a `confidence` field on
-PrimarySelection. Smoke-run measurement (10 cases × multiple
-runs) showed it was binary in practice — almost all "high" or
-"low" with no "medium" emissions even on close-call rationales,
-and the "low" cases came entirely from the deterministic
-0-candidate path (forced confidence="low" when fits is empty).
-The field's signal was effectively `bool(domain_fits)`, so it was
-removed. Downstream consumers compute "is this resolved?" from
-the fit list directly and read the rationale for nuance.
+Test prompts MUST NOT be referenced inside the system prompt
+-------------------------------------------------------------
+The system prompts MUST NOT contain any content that mirrors the
+smoke harness's test prompts. Specifically:
 
-The result's `rationale` is sourced as follows:
-  - 0 candidates: hardcoded "no candidates emitted" string;
-    primary_domain is "Unclear". No second pass runs.
-  - 1+ candidates: the second-pass LLM emits the rationale.
-    Routing the 1-candidate case through the LLM pays one extra
-    call for a safety net — small models occasionally hallucinate
-    a single fit on a vague prompt, and the second pass can flag
-    weak grounding in its rationale instead of mechanically
-    promoting it.
-  - Fallback (LLM call fails): hardcoded fallback rationale
-    describing the priority-chain fallback path. A warning
-    records the failure.
+  - No discipline names that are the expected primary or
+    secondary for any test prompt.
+  - No worked examples whose left-hand side paraphrases a test
+    prompt.
+  - No keywords or phrases lifted from any test prompt's text.
+  - No deliverable-type or activity-type enumerations that map
+    one-to-one onto specific test prompts.
 
-derive_primary is kept as the deterministic fallback when the
-second-pass call fails. Otherwise the second-pass LLM is the
-authority over the primary domain, the confidence, and the
-rationale.
+Rationale: any test-prompt-mirroring content in the system
+prompt is a form of training-on-the-test-set. The classifier
+appears to improve on the smoke harness without learning the
+underlying principle, the improvement is tautological.
 
-v7 purpose-tag filter and purpose-aware second pass
----------------------------------------------------
-Two coordinated changes that work together:
+Positive substitutes:
 
-(1) Candidate domains whose normalized label matches the purpose
-    category itself ("Personal" / "Business" / "Other") are
-    filtered out at cleanup time and a warning is emitted. The
-    purpose category is carried separately on the result, so
-    including it as a candidate domain would duplicate that signal
-    without naming an actual expert discipline.
+  - State the principle abstractly. "Use the field of practice,
+    not the practitioner" is principle-shaped; listing
+    "Engineering not Engineer, Architecture not Architect" is
+    example-shaped and risks test-leak when those happen to be
+    test answers.
+  - When examples genuinely help comprehension, use
+    morphological hints ("field nouns typically end in -y, -ics,
+    -ing, -ure") rather than enumerated discipline names.
+  - Use abstract category descriptions ("the broad umbrella
+    categories that subsume many subfields under one banner")
+    instead of enumerated lists of test-relevant labels.
 
-(2) The second-pass primary-selection LLM receives the purpose tag
-    in its user message under a "## Project purpose" heading, and
-    PRIMARY_SELECT_SYSTEM_PROMPT has a "# Project purpose context"
-    section with purpose-aware tie-breakers:
-      - personal: prefer the discipline that names the activity
-        itself (Horticulture for plant care, Cooking for meal
-        prep, Travel Planning for vacation logistics).
-      - business: standard outcome-over-non-outcome and
-        narrowness-over-umbrella rules.
-      - other: prefer the discipline that names the project's
-        actual subject (academic field, real-version-of-
-        hypothetical, policy / non-profit specialty).
-
-The personal-purpose first-pass guidance was rewritten alongside
-these changes to drop the "'Personal' is itself a valid expert
-discipline" framing the cleanup filter would otherwise contradict.
-The first-pass model is now told to emit specialist disciplines
-(Horticulture, Cooking, Travel Planning, Healthcare, Construction,
-Event Planning, Pet Care, Carpentry, Home Improvement) as
-candidates for personal projects.
-
-v7 smoke-run findings (2026-05-02)
-----------------------------------
-Houseplants [10] correctly handled across all four cells (both
-models, both conditions): primary = Horticulture with Plant Care /
-Indoor Gardening / Household Maintenance as secondaries. Combined
-with `purpose: personal` on the result, downstream consumers see
-"a personal Horticulture-flavored project." This is the design
-intent landing — the purpose-tag filter removed the meta-label
-that previously won by default, and the purpose-aware tie-breakers
-told the second pass to prefer the activity discipline.
-
-Solar Sunshade [4] (the multi-outcome motivating case): three of
-four cells still pick a climate-or-deliverable-related primary
-(Climate Engineering, Aerospace Engineering, International
-Relations on the governance angle). One cell shifts to Aerospace
-Engineering with the clean rationale "designing, building, and
-launching the L1 sunshade is the core deliverable; Climate Science
-is a broader outcome." Defensible reading; multi-outcome problem
-still being addressed.
-
-Vague-improve [23] llama still fails (Ecology baseline, Philosophy
-augmented, both high-confidence). Same model running both first
-and second pass cannot catch its own confabulation — the second-
-pass selector receives a hallucinated candidate menu in pass 1 and
-defends it in pass 2. The architectural fix remains: use a sharper
-model for the second pass via the `primary_llm` parameter on
-ClassifyDomain.execute (already wired). The smoke harness does
-not currently exercise this — left for a future change.
-
-Stability shifts: gpt-oss flips 12 -> 7 with the purpose-aware
-tie-breakers (more stable). llama flips 8 -> 15 (more variable —
-the longer second-pass prompt and richer candidate menu give the
-small model more degrees of freedom). Confidence distribution
-unchanged at 82 high / 10 low / 0 medium; models still don't use
-medium even on close-call rationales.
-
-v7 smoke-run findings: confidence-field removal (2026-05-02)
-------------------------------------------------------------
-Re-ran the smoke harness after dropping the confidence field
-entirely from PrimarySelection and from the result schema. Output
-schema is now: `primary_domain`, `secondary_domains`,
-`domain_fits`, `rationale`, `warnings`. Verified zero `confidence`
-or `conf=` references in the smoke log.
-
-Behaviour with the removal:
-
-  - Houseplants [10] stable on both models, both conditions:
-    primary = Horticulture, secondaries = {Plant Care, Gardening,
-    Household Maintenance, Time Management} variants. The
-    purpose-aware second-pass design holds without the confidence
-    field.
-  - Solar Sunshade [4] improved: 4/4 cells pick a
-    climate-or-deliverable-related primary this run (Environmental
-    Engineering on llama baseline, Climate Engineering on the
-    other three). The previous v7d run had Aerospace Engineering
-    on gpt-oss augmented; this run gets Climate Engineering. The
-    improvement is incidental LLM variance, but the multi-outcome
-    case is still being handled correctly.
-  - Vague-improve [23] llama still confabulates (Social Work this
-    run; Ecology / Philosophy / Public Health / Plant Care across
-    earlier runs). Different fabrication each run, same failure
-    mode: same-model first-and-second-pass cannot catch its own
-    hallucination. The rationale text now reveals the
-    confabulation by claiming a focus that is not in the prompt
-    ("a focus on improving unspecified aspects ... social welfare
-    and community development") — useful signal for downstream
-    consumers even without a confidence field. gpt-oss handles the
-    case correctly via the empty-fits path.
-  - Stability: llama flips 14/23, gpt-oss flips 9/23. Comparable
-    to v7d. The confidence field had no measurable effect on the
-    flip count.
-  - Minor quality watch-out (not a regression): a couple of llama
-    outputs use job titles instead of discipline names
-    ("Environmental Engineer", "Escape Room Designer"). The
-    existing first-pass guidance asks for "the discipline a
-    specialist calls themselves" — small models occasionally
-    drift to person-titles. Worth watching but not blocking.
-
-Net: removing the confidence field is clean. The rationale now
-carries the entire qualitative signal in the structured output;
-on real prompts the rationales are coherent and prompt-grounded;
-on confabulation cases the rationale itself reveals the made-up
-content (the lack of grounding is visible in the language).
-Downstream consumers compute "is this resolved?" from
-`bool(domain_fits)` and read the rationale for nuance.
-
-v7 smoke-run findings: test-leak scrub + llama-only run (2026-05-02)
--------------------------------------------------------------------
-After scrubbing all test-relevant discipline names from the LLM-
-facing prompts (see "Test prompts MUST NOT be referenced inside
-the system prompt" above), re-ran the smoke harness with only
-llama-3.1-8b enabled (gpt-oss disabled in LLM_NAMES; pre-pass
-models still use gpt-oss for speed). The objective was to
-re-measure llama's behaviour on cleanly principle-only prompts
-and confirm the job-title-as-discipline drift observed in earlier
-runs (e.g. "Environmental Engineer", "Escape Room Designer") was
-addressed by the morphological field-vs-practitioner hints rather
-than by named-discipline examples.
-
-Findings:
-
-- Job-title drift is GONE. Across all 23 prompts × 2 conditions
-  (46 cells) on llama, no primary domain was emitted as a
-  practitioner noun ending in -er / -ist / -or. The morphological
-  hint in the schema description ("field nouns typically end in
-  -y, -ics, -ing, -ure; practitioner nouns end in -er, -ist,
-  -or") and the abstract "field of practice, not the
-  practitioner" framing landed without needing example pairs.
-- Solar Sunshade [4] still picks Climate Engineering on both
-  conditions. The multi-outcome motivating case is still being
-  handled correctly under the principle-only prompts.
-- Houseplants [10] shifted: previously Horticulture (with the
-  enumerated personal-purpose examples in the prompt); now
-  Botany. Both are defensible answers; "Horticulture" was the
-  applied-discipline framing and "Botany" is the academic-field
-  framing. The shift is the expected side-effect of removing
-  test-fit anchoring — the model now picks from its own
-  knowledge rather than the prompt's examples. Combined with
-  `purpose: personal` on the result, the output remains
-  informative either way.
-- Vague-improve [23] llama still confabulates (Urban Planning
-  baseline with rationale "improve the city's infrastructure" —
-  the prompt is 15 chars and says nothing about cities; Research
-  augmented with rationale at least matching the prompt's actual
-  word "improve"). Same architectural limit as prior runs:
-  same-model first-and-second-pass cannot catch its own
-  hallucination. Not a leakage-cleanup regression.
-- Stability improved: llama flips dropped to 9/23 (was 14/23 in
-  v7d and v7e). The cleaner prompts produced more stable
-  baseline-vs-augmented answers.
-
-Other notable shifts vs. prior runs (mostly defensible
-alternatives, not regressions): [1] Squid Game Criminal Justice
--> Psychology, [9] Statue of Liberty Conservation Engineering ->
-Civil Engineering, [11] Pasteurellosis Epidemiology ->
-Veterinary Epidemiology, [15] Education-poverty Development
-Economics -> Education Policy, [16] Reverse aging Gerontology ->
-Regenerative Medicine. One sub-optimal pick: [17] Minecraft
-escape room augmented picked Interior Design as primary with
-Theme Park Design as secondary; either of those would be a
-better primary, but neither is unreasonable.
-
-Net: the leakage cleanup is a clear win. Job-title drift
-disappeared without re-introducing test-mirror examples.
-Stability improved on llama. The marquee multi-outcome win
-(Solar Sunshade) holds. The remaining failure modes
-(vague-improve confabulation, occasional sub-optimal narrow
-picks) are model-quality issues, not prompt issues.
-
-v7 smoke-run findings: held-out 10-prompt run (2026-05-02)
-----------------------------------------------------------
-First true validation of the v6/v7 prompts on prompts they have
-never been tuned against. The smoke harness was switched to
-SAMPLE_SEED=400, with seeds 7/8/100/300 added to the excluded-
-IDs sequence so the new sample has zero overlap with anything
-the prompts have been iteratively shaped against. Both llama and
-gpt-oss were enabled. No vague prompts in this sample — the
-goal was to evaluate prompts on unseen content, not to re-verify
-the empty-fits path.
-
-Held-out 10 catalog prompts:
-  [1] covert intelligence operation
-  [2] containerised dark-data ingestor fleet (long, ~11k chars)
-  [3] neural-connectome research pilot
-  [4] extreme-poverty sustainability solution
-  [5] clean-water access strategy
-  [6] police-robots deployment
-  [7] small Python script (a bouncing-ball algorithm)
-  [8] Pope-funeral planning
-  [9] short metro-construction prompt (~70 chars)
-  [10] reversible-suspended-metabolism research program (~7k chars)
-
-Findings:
-
-- Strong consistency on concrete prompts. 4 of 10 prompts had
-  unanimous primary across all 4 cells (llama×{baseline,augmented}
-  + gpt-oss×{baseline,augmented}): [2] Digital Preservation,
-  [3] Neuroscience, [6] Robotics, [10] Cryobiology. These are
-  textbook narrow-specialist picks, exactly what the principle-
-  only design was supposed to produce.
-- Reasonable variance on multi-discipline prompts. [1] Undercover
-  / Clandestine / Intelligence Operations; [4] Humanitarian Aid /
-  Development Economics / International Development; [5] Civil /
-  Water Supply / Environmental Engineering; [8] Ceremonial
-  Protocol / Funeral Planning / Event Management; [9] Urban
-  Planning / Civil / Railway Engineering. All flips are between
-  equally-narrow defensible alternatives — no umbrella drift, no
-  job-title drift. Augmented condition often converges to the
-  same answer across models.
-- One real failure: [7] the Python bouncing-ball script. llama on
-  baseline emitted Python code instead of JSON; the existing
-  safeguard ("the user message describes a project; your output
-  remains a JSON classification") was not enough for llama on a
-  small-software-algorithm prompt. llama recovered under
-  augmentation (purpose pre-pass markdown grounded it). gpt-oss
-  handled both conditions correctly (Computer Graphics ->
-  Animation). Same small-model imperative-as-instruction weakness
-  observed in earlier runs; not introduced by the leakage
-  cleanup.
-- Stability: llama 5/10 flips on successful runs (6/10 counting
-  [7]'s error->recovery); gpt-oss 4/10 flips. Slightly higher
-  than in-sample (in-sample llama was 9/23 = 39% post-cleanup),
-  but the absolute count is small and the flips are between
-  equally-narrow alternatives.
-- Rationales remain coherent and prompt-grounded. They quote
-  prompt-specific details (e.g. "500 humanoid police robots",
-  "vitrification protocols", "at-risk analog media") and
-  explicitly demote the strongest alternatives.
-- Confidence-removal verified: the result schema has no
-  confidence field anywhere in this run; rationales carry the
-  qualitative signal.
-- Job-title drift: still gone. 0 cells across the 10 held-out
-  prompts emitted a practitioner-noun primary.
-
-Net: the principle-driven design generalizes to held-out prompts
-without leaning on test-fit examples. The classifier produces
-narrow-specialist labels with strong agreement on concrete
-prompts and reasonable variance on multi-discipline prompts. The
-remaining hard case (small-software-algorithm prompts on llama
-baseline) is a known small-model limitation, not a v6/v7 design
-issue. PlanExe's stated focus is real-world plans rather than
-toy software algorithms, so the [7] failure mode is unlikely to
-matter in production traffic.
-
-v8 smoke-run findings: fresh 10-prompt run (2026-05-02, SAMPLE_SEED=500)
------------------------------------------------------------------------
-Second held-out evaluation, on a fresh 10 catalog prompts the
-v6/v7/v8 system prompts have never been measured against (seed
-400's prior 10 are now in the excluded set). LLM_NAMES = both
-llama and gpt-oss; TARGET_CANDIDATES = 9 (raised from v7's 6).
-
-Findings:
-
-- Strong narrowness across most prompts. The importance ×
-  specificity tie-breaker reliably favours the narrower
-  specialist when multiple candidates are plausible:
-  * Face/Off facility -> "Facial Transplantation"
-    (gpt-oss baseline) — very narrow specialty.
-  * Space debris cleanup -> "Orbital Debris Management"
-    (gpt-oss augmented) — narrowed from "Space Debris
-    Management".
-  * Space-based universal manufacturing -> "Additive
-    Manufacturing" (gpt-oss x 2) — pinpoint discipline.
-  * Computational-biology lab agent -> "Structural
-    Bioinformatics" (gpt-oss augmented) — narrowed from
-    "Computational Biology".
-- Personal-routed prompts behave the same as the houseplants
-  case from earlier runs. "Take out the trash" routes to
-  Recycling / Waste Separation; the `purpose: personal` tag is
-  carried separately so the candidate list focuses on the
-  activity, not the meta-label.
-- Augmentation rescues a small-deliverable prompt: "Write a
-  blog post about Paris" — llama baseline picked Architecture
-  (latched onto the "attractions" cue); llama augmented
-  correctly picked Travel Blogging once the IdentifyPurpose
-  markdown landed in the user message.
-- One regression worse than prior v7: a Python snake-pentagon
-  script prompt (155 chars). Llama BOTH baseline AND augmented
-  failed (wrote Python code instead of emitting JSON; two
-  distinct error IDs). The prior v7 Python prompt failed only
-  on baseline; augmentation rescued it. This prompt is more
-  structurally Python-shaped ("Make sure to handle...") and
-  even the augmented user message couldn't override llama's
-  code-writing instinct. gpt-oss handled it cleanly (Collision
-  Detection -> Computer Graphics).
-- Stability: llama 4/10 flips on successful runs (5/10 counting
-  [4]'s double-failure). gpt-oss 7/10 flips — slightly more
-  variable than v7's 4/10 on the prior held-out, but the flips
-  are between equally-narrow alternatives.
-- Job-title drift: 0/40 cells. Umbrella drift: 0/40 cells.
-
-Net: v8's two-Likert design generalises cleanly. The wider
-TARGET_CANDIDATES=9 menu doesn't appear to break anything; the
-specificity-as-tie-breaker rule is producing visibly narrower
-primaries on cases where v7 settled on broader labels. The
-small-software-algorithm imperative-as-instruction failure mode
-on llama is unchanged from v7 (architectural limit, not v8-
-specific) and remains immune on gpt-oss.
-
-v9 smoke-run findings: rationale bracket-index fix (2026-05-02, SAMPLE_SEED=600)
--------------------------------------------------------------------------------
-v9's only behaviour-affecting change was tightening the rationale
-instructions so the second-pass LLM refers to candidates by
-domain name, not by bracket index. The fix lives in three places
-(defense-in-depth): the PrimarySelection.rationale Field
-description, the PRIMARY_SELECT_SYSTEM_PROMPT output-format
-paragraph, and the # Rationale guidance section. Smoke run on
-SAMPLE_SEED=600 (10 catalog prompts, picked from the full
-catalog of 124 — strict held-out exhausted at this point in
-testing).
-
-Findings:
-
-- Bracket-index leak: 0/40 cells. A regex search across all
-  rationale strings (matching square-bracket indices, "index N"
-  phrases, and "candidate N" phrases) returned zero hits. v9's
-  three-place defense landed.
-- Rationales still reference the importance × specificity
-  metric explicitly (e.g. "Conflict Resolution is the core
-  outcome, with the highest importance×specificity product, ...")
-  — v8's two-Likert reasoning is preserved; v9 only suppresses
-  the index notation, not the score reasoning.
-- Notable narrow picks: gpt-oss augmented on the Stonehenge-
-  replica prompt picks Experimental Archaeology (a genuine
-  specialist subfield exactly matching the prompt's
-  recreate-with-period-tools mechanism); on the Face/Off
-  facility prompt augmented narrows from Plastic Surgery to
-  Facial Transplantation; on the toxic-waste prompt gpt-oss
-  picks Hazardous Waste Management (the discipline that owns
-  this exact problem class) on both conditions.
-- High flip rate: llama 9/10, gpt-oss 7/10 — the seed-600 mix
-  has more multi-angle prompts (peace initiatives, abandon-
-  monarchy, broken-bike commute) where multiple narrow
-  disciplines are defensible, so baseline-vs-augmented
-  selection swings between them. None of the flips look like
-  regressions; both ends of each flip are narrow specialist
-  picks.
-- Zero classification errors. Three "Error" log lines were
-  transient OpenRouter rate-limit retries (HTTP 429 on
-  gpt-oss-safeguard-20b) that succeeded on retry.
-
-Net: v9 cleanly removes the rationale bracket-index leak
-without disturbing v8's substantive scoring or narrowness
-behaviour. The model still reasons about importance × specificity
-in plain language; it just no longer mentions "[N]" or
-"index N" notation that becomes ungrounded once downstream
-markdown rendering drops the index column.
-
-v6 routing design (carried over)
---------------------------------
-v6 keeps v5's principle-only base prompt and routes to one of
-three guidance blocks based on the IdentifyPurpose pre-pass:
-  - personal — Personal is a valid primary discipline; specialist
-    disciplines (Horticulture, Cooking, Travel Planning) are
-    method-role unless the individual is hiring a professional or
-    interacting with a regulator.
-  - business — pick the narrowest specialist expert discipline;
-    umbrellas are fallback only. (This is the v5 default behavior.)
-  - other — the right primary depends on what the prompt is
-    actually about; for academic studies use the named field, for
-    hypotheticals use the discipline a real version would belong
-    to, for ambiguous prompts return Unclear with confidence=low.
-
-Purpose routing makes IdentifyPurpose a load-bearing dependency.
-If purpose information is unavailable, the dispatch falls back to
-the business prompt (most general).
-
-v5 design philosophy (still load-bearing under v6)
---------------------------------------------------
-The system prompt is principle-driven and contains no worked
-examples. The single load-bearing principle is: pick the narrowest
-expert discipline that fits the prompt's signals — what a
-specialist who would lead the project calls themselves. Umbrella
-labels (Research, Engineering, Science, Technology, Business,
-Industry, Energy, Environmental, Environmental Science, Healthcare)
-are reserved for prompts that produce no specific subfield,
-technique, instrument, substance, medium, or application area.
-
-The reasoning behind this approach:
-- Worked examples that paraphrase test-set prompts make the
-  classifier appear to improve on the test set without learning
-  the underlying principle. Removing them forces the principle
-  to carry the load and exposes which models are too small for
-  the task.
-- LLMs latch onto negative constraints and produce exactly the
-  thing they were told to avoid. v5 phrases everything as
-  positive constraints (what to do, not what to avoid).
-- Schema field descriptions (in DomainFit / DomainFitAssessment
-  pydantic Fields) are kept short and example-free for the same
-  reasons.
-
-Architectural notes
--------------------
-- The model cannot emit a primary that contradicts the fit list
-  because it never emits a primary. The cost is that the role
-  definition for "outcome" must be carefully written — if the
-  model misuses outcome, the derived primary will be wrong even
-  though the fit list looks reasonable.
-- Dropping low-fit candidates from the schema reduces token spend.
-- Cardinality 1-4 (instead of forced 3-4) lets simple
-  single-discipline prompts return a single fit without
-  fabricating filler.
-
-Model fitness
--------------
-- Larger models (gpt-oss-safeguard-20b, gemini-2.0-flash) honor
-  the specificity principle reliably from the prompt alone.
-- Smaller models (llama-3.1-8b-instruct) tend to drift toward
-  umbrella labels even when the principle is stated clearly. v5
-  tests how far the principle alone gets without test-fit
-  hardcoding. If remaining drift matters, the next step is a
-  code-side guardrail that demotes umbrellas when narrower fits
-  exist in the same response — not more bullets in the prompt.
+Operational check before any commit that touches an LLM-facing
+prompt: run a string search against the smoke harness's expected
+discipline answers across the catalog sample. Any hit is a leak;
+revise the prompt until the prompt is principle-only.
 
 Evaluation discipline
 ---------------------
 The smoke harness must be evaluated against a held-out test set
-that the prompt has never been tuned against. Otherwise apparent
-improvement is unmeasurable and the team risks the same overfit
-loop that produced v2/v3/v4.
-
-Test prompts MUST NOT be referenced inside the system prompt
--------------------------------------------------------------
-The system prompts (the `_SYSTEM_PROMPT_HEADER`, the three
-purpose-routed `_*_GUIDANCE` blocks, the `_SYSTEM_PROMPT_FOOTER`,
-and the `PRIMARY_SELECT_SYSTEM_PROMPT`) MUST NOT contain any
-content that mirrors the smoke harness's test prompts. Specifically:
-
-- No discipline names that are the expected primary or secondary
-  for any test prompt (e.g. naming "Horticulture", "Marine
-  Biology", or "Game Design" as positive examples in the prompt
-  invalidates the houseplants, GEOMAR, and Minecraft-escape-room
-  test cases).
-- No worked examples whose left-hand-side paraphrases a test
-  prompt (e.g. "for a watering routine, Plant Care or
-  Horticulture" mirrors the houseplants test prompt).
-- No keywords or phrases lifted from any test prompt's text.
-- No deliverable-type or activity-type enumerations that map
-  one-to-one onto specific test prompts (e.g. listing
-  "manufacturing project, software product, construction project"
-  mirrors the paperclip factory, Reddit-for-AI, and Statue of
-  Liberty test cases).
-
-Why this rule is load-bearing: any test-prompt-mirroring content
-in the system prompt is a form of training-on-the-test-set. The
-classifier appears to improve on the smoke harness while not
-learning the underlying principle. The improvement is a
-tautology — the prompt now answers correctly on the test only
-because it was told the answer. This pattern produced the
-overfit cycle that motivated v5's principle-only rewrite.
-
-Positive substitutes:
-
-- State the principle abstractly. "Use the field of practice, not
-  the practitioner" is principle-shaped; listing
-  "Engineering not Engineer, Architecture not Architect" is
-  example-shaped and risks test-leak when those happen to be
-  test answers.
-- When examples genuinely help comprehension, use morphological
-  hints ("field nouns typically end in -y, -ics, -ing, -ure")
-  rather than enumerated discipline names.
-- Use abstract category descriptions ("the broad umbrella
-  categories that subsume many subfields under one banner")
-  instead of enumerated lists of test-relevant labels.
-
-Operational check before any commit that touches an LLM-facing
-prompt: run a string-search against the smoke harness's expected
-discipline answers across the catalog sample. Any hit is a leak;
-revise the prompt until the prompt is principle-only.
-
-Augmentation pre-passes (purpose + constraints)
------------------------------------------------
-The smoke harness in this module runs two pre-passes per prompt
-before classification:
-  - IdentifyPurpose — emits a personal/business/other tag plus a
-    one-line topic summary.
-  - ExtractConstraints — surfaces named substances, named
-    regulators, named geographies, etc.
-Both markdown blocks are concatenated after the original prompt
-under labelled headings (## Plan purpose / ## Extracted
-constraints) and fed to the classifier as a single user message.
-
-Observed effects on the small model (llama-3.1-8b-instruct):
-  - Vague-prompt handling is decisively fixed under the augmented
-    condition. Without augmentation, llama would happily emit
-    Software Engineering / Environmental Science with high
-    confidence on a prompt of "Improve things." Under augmentation
-    it correctly emits Unclear with low confidence, matching the
-    larger model.
-  - "One individual's own household task" is partially helped: the
-    "purpose: personal" signal nudges llama toward home-flavoured
-    labels (Housekeeping, Domestic Maintenance) rather than
-    specialist disciplines (Horticulture). Neither model promotes
-    Personal to primary, however, because v5 dropped the worked
-    example that named Personal as a valid discipline. Recovering
-    that case fully would mean stating the principle "Personal is
-    a valid primary discipline when the project is one
-    individual's own task, hobby, or household activity" — that
-    is a role definition, not test-fit content.
-  - On already-narrow cases, augmentation occasionally introduces
-    label noise: Machine Learning -> Data Science on an ML-paper
-    distillation prompt, Regenerative Medicine -> Biomedical
-    Engineering on an aging-research prompt. Both alternatives
-    are still narrow; the choice between them shifts under
-    augmentation but neither is wrong.
-
-Observed effects on the larger model (gpt-oss-safeguard-20b):
-  - Vague prompts are already handled correctly without
-    augmentation; the pre-passes are not required.
-  - The Horticulture-vs-Personal distinction for the houseplants
-    case is unchanged by augmentation. The "purpose: personal"
-    signal alone is not enough to override the model's instinct
-    to find a specialist discipline; v5's prompt would need to
-    define Personal as itself a valid discipline.
-  - Other cases are stable across conditions, with the same
-    narrow-label noise pattern as the small model.
+that the prompts have never been tuned against. Otherwise
+apparent improvement is unmeasurable and the team risks the
+overfit loop documented above.
 
 Cost notes
 ----------
-Adding both pre-passes ~doubles the LLM call count of the
-augmented condition (one purpose call + one constraint call per
-prompt, before the two classify calls per condition). On
-production traffic this is meaningful — the pre-passes only earn
-their cost on small models and on prompts where the role
-distinction matters. Larger models that already honor the
-specificity principle do not benefit and would be better served
-by skipping augmentation.
+Per classification under typical conditions:
 
-v6 smoke-run observations (2026-05-01, SAMPLE_SEED=300, 23 prompts)
--------------------------------------------------------------------
-Purpose histogram on the test set:
-  personal:  1   ("water my houseplants")
-  business: 17   (catalogue plans + the squid-game / educational
-                  / EU inspection / Yellowstone / GEOMAR prompts)
-  other:     5   (vague-help, vague-thing, vague-improve,
-                  Statue of Liberty relocation, Arxiv ML
-                  paper distillation)
+  - First pass: up to MAX_CALLS=3 batches.
+  - Second pass: 1 LLM call when fits is non-empty (skipped on
+    the empty-fits path).
 
-Wins from purpose routing:
-  - Houseplants is fully fixed on both models. Both llama and
-    gpt-oss now emit primary="Personal" with Horticulture as
-    role="method"/secondary, matching the intent of v5's
-    deleted Personal worked example. The personal-purpose
-    prompt's explicit "Personal is itself a valid expert
-    discipline" line is what unblocks this; v5 with augmentation
-    alone could not.
-  - Most business prompts are unchanged from v5 (which is
-    expected — the business-purpose prompt is essentially the
-    v5 prompt). Narrow specialist labels continue to dominate
-    on gpt-oss; llama still drifts to umbrellas on a couple of
-    cases (water-treatment -> Environmental Engineering, marine
-    pollution -> Environmental Science).
+Total: ~3 LLM calls for the classifier itself. The Luigi pipeline
+also runs IdentifyPurpose and ExtractConstraints as pre-passes
+(1 call each), but those outputs are reused by other downstream
+tasks, so the marginal cost charged to classification is the
+classifier's own ~3 calls.
 
-Regressions from purpose routing:
-  - Vague prompts under the "other" bucket misclassify on
-    llama. "Improve things." now produces Philosophy with
-    confidence=medium under the augmented condition (was
-    Software Engineering with high confidence in v5). gpt-oss
-    correctly emits Unclear. The "other" prompt's mention of
-    Philosophy as a valid discipline for philosophical inquiry
-    is competing with its empty-list guidance, and the
-    aggressive model picks Philosophy rather than admitting it
-    cannot identify a project.
-  - "Help me make a plan for my project." regressed on gpt-oss
-    under augmented (Unclear -> Project Management). The
-    "other" prompt is too permissive about emitting a
-    narrow-discipline guess on prompts that should yield
-    domain_fits=[].
-
-Recommended next step:
-  - Tighten the "other" prompt's empty-list case. Move the
-    "no concrete project -> domain_fits=[]" guidance ahead of
-    the Philosophy / hypothetical scenario examples, or make it
-    a hard precondition on those examples ("If, AND ONLY IF, the
-    prompt names a concrete philosophical question, use
-    Philosophy; otherwise emit domain_fits=[]"). The gating must
-    not turn into a negative constraint that the model latches
-    onto and inverts.
-  - Test set is purpose-skewed: only 1/23 personal prompts. To
-    measure the personal-routed prompt under realistic load,
-    seed the smoke harness with more individual-task prompts
-    and re-run.
-
-v6 "other"-prompt tightening — smoke-run delta (2026-05-01)
------------------------------------------------------------
-The "other" guidance was restructured into two ordered steps:
-step 1 is a concreteness check that gates on a named deliverable,
-question, outcome, or entity to study; step 2 is the discipline
-pick that only applies when step 1 yields a concrete project.
-Philosophy is now explicitly gated on "the prompt names a
-specific philosophical argument, ethical question, or conceptual
-framework" rather than offered as an open default.
-
-Both prior "other"-bucket regressions are fixed:
-  - "Improve things." on llama: was Software Engineering /
-    Philosophy(conf=medium); now Software Engineering / Unclear
-    under augmented. The augmented run correctly bottoms out at
-    domain_fits=[]; the baseline still drifts because the model
-    has no purpose context in the user message and reaches for
-    a discipline anyway.
-  - "Help me make a plan for my project." on gpt-oss: was
-    Unclear / Project Management under augmented; now Unclear /
-    Unclear on both conditions.
-
-No regressions introduced:
-  - Concrete "other"-bucket prompts (Statue of Liberty
-    relocation, Arxiv ML paper distillation) still classify
-    normally. The Statue of Liberty prompt routes to Civil /
-    Structural Engineering on both models because it names a
-    concrete deliverable (a relocated artifact). The Arxiv
-    prompt is in the "other" bucket because IdentifyPurpose
-    tagged it that way; gpt-oss emits Machine Learning Research,
-    llama emits Research Methodology / Computer Science. Llama
-    not picking Machine Learning here is a separate
-    narrow-discipline-sensitivity issue, not an artifact of the
-    tightening.
-  - Houseplants stays Personal on both models, both conditions.
-  - Personal and business buckets are unaffected (their guidance
-    blocks are byte-identical to the prior v6).
-
-Methodological observation: the fix is not a "do not emit
-Philosophy" negative constraint but a positive precondition on
-when discipline guidance applies at all. That preserves the
-model's ability to use Philosophy when the prompt actually
-warrants it (a named ethical question, a named conceptual
-framework) while removing the bait for vague prompts.
-
-Status against the original 10-issue review
--------------------------------------------
-The original review (received before v4) listed 10 issues with
-the v3 output and recommended two 80/20 fixes. Status of each
-after the v4 -> v5 -> v6 progression:
-
-(1) Primary domain too generic.
-    PARTIALLY ADDRESSED. v5's "narrowest expert discipline"
-    principle is load-bearing in v6. On the held-in synthetic
-    test set, gpt-oss reliably picks narrow labels; llama is
-    partial — drifts to umbrellas (Research, Environmental
-    Science) on a minority of prompts. The original failing
-    production case has not been re-run.
-
-(2) Secondary domains wrong.
-    PARTIALLY ADDRESSED, same caveat as (1). Same principle
-    drives both primary and secondaries.
-
-(3) Overly influenced by organization sector.
-    NOT ADDRESSED. The system prompts do not explicitly tell
-    the classifier to base the answer on the project's goal
-    rather than the organization's self-description. Real gap.
-
-(4) No project-level warnings produced.
-    EXPLICITLY DEFERRED. The current `warnings` list is for
-    code-side mutations (dropped duplicate fits, forced
-    confidence override on Unclear, truncations) only. The
-    review's project-level red flags
-    (organization_project_domain_mismatch, radioactive_material_likely,
-    budget_unknown, location_unknown, first_time_project_lead,
-    specialized_facility_likely, high_complexity_project) belong
-    to downstream stages (risk analysis, premortem, assumptions,
-    RedlineGate), not the domain classifier. The classifier's
-    scope is intentionally narrow.
-
-(5) Ontology too broad.
-    ADDRESSED. v5 introduced the specificity principle, v6
-    preserves it. Smoke runs confirm narrow labels on the larger
-    model; small-model drift is the residual.
-
-(6) "Research" treated as a domain instead of a project type.
-    NOT ADDRESSED. The schema still emits a single
-    primary_domain plus a flat secondary_domains list. The
-    review's suggested split (project_type="research_and_development"
-    + primary_domain="Nuclear Physics") would require schema
-    changes downstream consumers depend on.
-
-(7) Lacks domain-specific signal extraction.
-    ADDRESSED INDIRECTLY. The smoke harness now runs
-    ExtractConstraints as a pre-pass that surfaces named
-    substances, regulators, geographies, and beneficiary groups
-    into the classifier's user message under the augmented
-    condition. The actual production case has not been re-run
-    to verify whether this fixes its specific failure.
-
-(8) No outcome / method / constraint distinction in derived output.
-    NOT ADDRESSED. Each fit carries a `role` field that the model
-    populates, but `derive_primary` and `derive_secondaries`
-    collapse the structure into a flat list. The review's
-    suggested expansion (outcome_domain, method_domains,
-    constraint_domains as separate output fields) was not done.
-
-(9) Classifier too confident.
-    NOT ADDRESSED. The `confidence` field is still high / medium
-    / low, sourced from the model. The review suggested splitting
-    "this is technical/scientific" confidence from "this exact
-    domain label is right" confidence; not implemented.
-
-(10) Wrapper too thin / no rule-based guardrail.
-    EXPLICITLY DECLINED by the user. Code-side guardrails were
-    rejected on two grounds: fragility, and PlanExe's
-    multi-language usage (regex-style trigger lists do not
-    generalise across languages). All fixes therefore live in
-    the system prompt.
-
-Original 80/20 fixes:
-- Fix 1 (broad-label penalty + narrowest-discipline rule):
-  ADDRESSED in v5/v6. The primary intended outcome of the v4 ->
-  v5 -> v6 progression.
-- Fix 2 (mandatory warning flags as required output):
-  NOT ADDRESSED; out of scope per the deferral on issue (4).
-
-Honest caveats:
-- The original failing production case was never re-run against
-  v6. Specific terms from that case were deliberately excluded
-  from any shipped artifact, which means we have no direct
-  measurement of whether v6 corrects that specific failure. The
-  principle is in place; the specific verification is not.
-- Issues (3), (6), (8), (9), and (4 / Fix 2) are real gaps. Of
-  those, (4 / Fix 2) is likely the biggest impact on downstream
-  planning quality if no other stage produces those project-level
-  warnings.
-
-Field-quality probe (gpt-oss-safeguard-20b, augmented condition,
-10 prompts: 7 concrete + 3 vague)
----------------------------------------------------------------
-Sampled the same SAMPLE_SEED=300 catalog as the smoke harness and
-ran the full pipeline (IdentifyPurpose pre-pass + ExtractConstraints
-pre-pass + ClassifyDomain on the augmented user message). The 10
-prompts spanned all three purpose buckets and three concreteness
-shapes (vague, single-discipline concrete, multi-discipline
-concrete).
-
-Per-field findings:
-
-- domain (DomainFit): All 28 emitted values are real Title Case
-  noun phrases naming actual expert disciplines. No empty strings,
-  no fabricated labels. The narrowness principle is honored:
-  Arachnology (not Entomology), Water Treatment Engineering (not
-  Environmental), Industrial Automation (not Engineering),
-  Climate Geoengineering (not Environmental Science).
-
-- fit (DomainFit): All values are "high" or "medium" (no "low"
-  leaks reaching the cleanup pipeline). High is reserved for
-  disciplines whose specialists could plausibly own the plan;
-  medium for materially-affecting but not-central disciplines.
-  Software Engineering=high/method on the paperclip factory is a
-  thoughtful call — software is critical to the automation but
-  isn't the outcome.
-
-- role (DomainFit): Roles observed across the sample: outcome,
-  method, constraint. The other four literals (market,
-  stakeholder, tool, unclear) were not triggered because none of
-  the sampled prompts had a clear B2B-customer, named-actor, or
-  generic-tool shape. ONE PRECISION CONCERN: on the most complex
-  prompt in the sample, the model emitted three simultaneous
-  role="outcome" entries (Aerospace Engineering + Climate
-  Geoengineering + International Law). The role spec reads "this
-  domain owns the project's main success criterion," which implies
-  one outcome. The model is using "outcome" to mean "important
-  deliverable," which is looser than the spec. derive_primary
-  still produces a sensible primary (it picks the first
-  high+outcome) but the role distinction is being weakened on
-  multi-faceted prompts. Worth a future principle-clarification
-  pass — "exactly one fit may carry role=outcome; equally
-  load-bearing peers go to method, constraint, or stakeholder"
-  — but this is not a regression and the pipeline absorbs it.
-
-- reason (DomainFit): Every reason is within the ≤15-word
-  constraint and factually grounded in the prompt or its extracted
-  constraints. The model successfully synthesises across the
-  augmented user message — for example, naming "Friday events with
-  VIP ticket sales" on a public-events prompt where that detail
-  came from the ExtractConstraints pre-pass, not the original
-  prompt.
-
-- domain_fits (DomainFitAssessment): Cardinality is correct (1-4
-  for concrete prompts; 0 for vague). No duplicates. The 4-cap
-  was reached on prompts that genuinely span four disciplines.
-
-- confidence (DomainFitAssessment): Every concrete prompt got
-  "high"; every vague prompt got "low". No false-confidence cases
-  on the vague side; no underconfidence on the concrete side. For
-  this sample the calibration is right.
-
-- rationale (DomainFitAssessment): All within ≤40 words and all
-  coherent. They reference the discipline picks and explain why
-  each role applies, not just restate the prompt.
-
-- warnings (code-side): Empty across all 10. The cleanup pipeline
-  (drop low-fit, dedupe, force-confidence-on-Unclear, clear-fits-
-  on-Unclear, truncate beyond cap) is dormant — the model is
-  emitting schema-compliant output without needing post-process
-  mutation. The empty-list rationale text on vague prompts comes
-  from the LLM directly, not from a "forced primary to Unclear"
-  mutation.
-
-Net: across this 10-prompt sample, every required field is filled
-with meaningful, prompt-grounded data; the only quality issue is
-the multi-outcome role usage on complex prompts (noted above).
+Model fitness notes
+-------------------
+- Larger models (gpt-oss-safeguard-20b, gemini-2.0-flash) honour
+  the principle-driven design reliably from the prompt alone.
+- Smaller models (llama-3.1-8b-instruct) sometimes fail on
+  imperative-as-instruction prompts (e.g. "Implement a Python
+  script ...") by emitting code instead of JSON. The
+  IdentifyPurpose markdown sometimes rescues this under
+  augmentation, sometimes not. This is a small-model
+  architectural limit, not a prompt issue.
+- Same-model first-and-second-pass cannot catch its own
+  confabulation on vague prompts. Use a sharper model for the
+  second pass via the `primary_llm` parameter on
+  ClassifyDomain.execute when the first pass is on a small
+  model and you need the safety net.
 """
 
 
@@ -1082,7 +273,7 @@ class DomainFit(BaseModel):
     # output call survives a small model emitting an out-of-range value
     # (0, 6, or a string-coerced int); the cleanup pipeline clamps to
     # [1, 5] with a warning. Entries where both dimensions equal 1 are
-    # dropped during cleanup as the analog of v7's fit="low" drop.
+    # dropped during cleanup as effectively unrelated.
     importance: int = Field(
         description=(
             "How much this domain affects whether the project "
@@ -1166,7 +357,7 @@ class DomainFitAssessment(BaseModel):
     )
 
 
-# --- Second-pass primary-selection schema (v7) ------------------------
+# --- Second-pass primary-selection schema -----------------------------
 
 class PrimarySelection(BaseModel):
     """LLM-returned choice of primary domain from a candidate list."""
@@ -1706,9 +897,9 @@ class ClassifyDomain:
                         f"specificity {f.specificity} -> {specificity}."
                     )
                 if importance == 1 and specificity == 1:
-                    # Analog of v7's fit="low" drop: a candidate that
-                    # both barely affects success AND barely matches
-                    # the project mechanism is effectively useless.
+                    # A candidate that both barely affects success AND
+                    # barely matches the project mechanism is
+                    # effectively useless.
                     warnings.append(
                         f"Dropped 1×1 candidate (importance=1 and "
                         f"specificity=1, effectively unrelated): {domain}"
@@ -1764,16 +955,14 @@ class ClassifyDomain:
             f"{len(cleaned_fits)} candidate(s)."
         )
 
-        # v7: pick primary via a second LLM pass whenever there is at
-        # least one candidate. The 1-candidate case used to take a
-        # fast-path that returned the sole candidate with confidence
-        # derived from its `fit` level, but that path lost the
-        # second-pass safety net: a small model that hallucinates a
-        # single high-fit candidate on a vague prompt would receive
-        # high confidence with no review. Routing 1-candidate through
-        # the same second-pass LLM pays one extra call for the safety
-        # net and lets the LLM judge whether the lone candidate is a
-        # strong fit for the project's main success criterion.
+        # Pick the primary via a second LLM pass whenever there is at
+        # least one candidate. Even on the 1-candidate case (where
+        # the LLM picks index 0 by construction) the call is worth
+        # the extra LLM round-trip: it gives the model a chance to
+        # rate how well the lone candidate is grounded in the
+        # project description, which can catch a small-model
+        # hallucination that produced a single fabricated fit on a
+        # vague prompt.
         #
         # With 0 candidates, primary is "Unclear" — no second pass.
         rationale = ""
@@ -1937,13 +1126,11 @@ if __name__ == "__main__":
     # Two classify models tested side by side, each in two conditions:
     # baseline (raw prompt) and augmented (prompt + identified plan
     # purpose + extracted constraints). The purpose pre-pass tells the
-    # classifier whether the project is personal, business, or other —
-    # which (per IdentifyPurpose's rubric) separates "water my
-    # houseplants" (personal) from a commercial water-treatment program
-    # (business). The constraint pre-pass surfaces explicit signals
-    # (named substances, named regulators, named geographies). v5 trusts
-    # both signals to push role assignments toward Personal where
-    # appropriate and toward narrow specialist disciplines elsewhere.
+    # classifier whether the project is personal, business, or other.
+    # The constraint pre-pass surfaces explicit signals (named
+    # substances, named regulators, named geographies). The classifier
+    # uses both signals to inform role assignments and to favour narrow
+    # specialist disciplines.
     LLM_NAMES = [
         "openrouter-llama-3.1-8b-instruct-nitro",
         "openrouter-gpt-oss-safeguard-20b-nitro",
@@ -1965,56 +1152,14 @@ if __name__ == "__main__":
     all_items = prompt_catalog.all()
     sorted_items = sorted(all_items, key=lambda x: x.id)
 
-    # Replay the prior sampling sequence faithfully so we exclude every
-    # ID that has already been tested:
-    #   - seeds 7 and 8 each shuffled full sorted_items and took 20.
-    #   - seed 100 then shuffled (sorted_items minus 7's and 8's picks)
-    #     and took 40.
-    #   - seed 300 then shuffled (sorted_items minus 7/8/100's picks)
-    #     and took 20 — these are the v6/v7 prompts the system prompts
-    #     have been iteratively shaped against and must be held out
-    #     of any new evaluation.
-    #   - seed 400 then shuffled (sorted_items minus 7/8/100/300's
-    #     picks) and took 10 — the v7 held-out evaluation set, used
-    #     once but excluded again so v8 sees fresh prompts.
+    # Pick a sample from the catalog. Bump SAMPLE_SEED for each
+    # smoke run to get a different sample. The seed determines the
+    # shuffle order over the full catalog; sample_size picks the top
+    # N from the shuffled list. To do a held-out evaluation against
+    # prompts the system prompts have not been shaped against,
+    # exclude IDs from prior smoke runs before shuffling — see git
+    # history for prior seed values used in evaluation.
     import random
-    used_ids: set[str] = set()
-    for prior_seed in (7, 8):  # each applied to full sorted_items
-        prior_shuffled = list(sorted_items)
-        random.Random(prior_seed).shuffle(prior_shuffled)
-        for item in prior_shuffled[:20]:
-            used_ids.add(item.id)
-    pool_after_78 = [item for item in sorted_items if item.id not in used_ids]
-    prior_shuffled = list(pool_after_78)
-    random.Random(100).shuffle(prior_shuffled)
-    for item in prior_shuffled[:40]:
-        used_ids.add(item.id)
-    pool_after_100 = [item for item in sorted_items if item.id not in used_ids]
-    prior_shuffled = list(pool_after_100)
-    random.Random(300).shuffle(prior_shuffled)
-    for item in prior_shuffled[:20]:
-        used_ids.add(item.id)
-    pool_after_300 = [item for item in sorted_items if item.id not in used_ids]
-    prior_shuffled = list(pool_after_300)
-    random.Random(400).shuffle(prior_shuffled)
-    for item in prior_shuffled[:10]:
-        used_ids.add(item.id)
-    pool_after_400 = [item for item in sorted_items if item.id not in used_ids]
-    prior_shuffled = list(pool_after_400)
-    random.Random(500).shuffle(prior_shuffled)
-    for item in prior_shuffled[:10]:
-        used_ids.add(item.id)
-    fresh_pool = [item for item in sorted_items if item.id not in used_ids]
-
-    # v9 evaluation: pick 10 prompts via a new seed on the FULL
-    # catalog (no prior-seed exclusion). The held-out exclusion
-    # sequence is preserved in `used_ids` for documentation /
-    # future use but isn't applied here — v9's only change is the
-    # rationale-formatting instruction (no system-prompt content
-    # was test-fit), so strict held-out is not load-bearing for
-    # checking the bracket-index fix. Picking against the full
-    # catalog also avoids the "fresh pool exhausted" problem now
-    # that 117 of 124 IDs have been used by prior seeds.
     SAMPLE_SEED = 600
     sample_size = 10
     rng = random.Random(SAMPLE_SEED)
@@ -2165,13 +1310,13 @@ if __name__ == "__main__":
         purpose_info_by_idx: dict[int, tuple[str, str]],
         constraints_by_idx: dict[int, str] | None,
     ) -> dict:
-        """Run classify_domain on every sample item under v6 routing.
+        """Run classify_domain on every sample item with purpose routing.
 
-        purpose_info_by_idx is required — v6 always routes the system
-        prompt by purpose, so the purpose pre-pass is mandatory. Each
-        entry is (purpose_value, purpose_md). When purpose_value is
-        empty (pre-pass error or unknown value) the dispatch falls back
-        to the business prompt.
+        purpose_info_by_idx is required — the classifier always routes
+        the system prompt by purpose, so the purpose pre-pass is
+        mandatory. Each entry is (purpose_value, purpose_md). When
+        purpose_value is empty (pre-pass error or unknown value) the
+        dispatch falls back to the business prompt.
 
         constraints_by_idx=None  -> baseline (raw prompt sent; only the
                                     purpose tag is consumed by routing).
@@ -2243,8 +1388,7 @@ if __name__ == "__main__":
     print(
         f"=== Domain classification (importance × specificity) — sample of "
         f"{len(catalog_sample)} catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, "
-        f"picked from full catalog of {len(sorted_items)}; "
-        f"informational: prior runs used {len(used_ids)} IDs across seeds 7/8/100/300/400/500) — "
+        f"picked from full catalog of {len(sorted_items)}) — "
         f"across {len(LLM_NAMES)} models × 2 conditions (baseline vs augmented) ==="
     )
 

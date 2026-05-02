@@ -3,7 +3,6 @@ from worker_plan_internal.plan.run_plan_pipeline import PlanTask, REPORT_EXECUTE
 from worker_plan_internal.report.report_generator import ReportGenerator
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.plan.nodes.setup import SetupTask
-from worker_plan_internal.plan.nodes.classify_domain import ClassifyDomainTask
 from worker_plan_internal.plan.nodes.redline_gate import RedlineGateTask
 from worker_plan_internal.plan.nodes.premise_attack import PremiseAttackTask
 from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
@@ -38,7 +37,6 @@ class ReportTask(PlanTask):
     def requires(self):
         return {
             'setup': self.clone(SetupTask),
-            'classify_domain': self.clone(ClassifyDomainTask),
             'screen_planning_prompt': self.clone(ScreenPlanningPromptTask),
             'redline_gate': self.clone(RedlineGateTask),
             'premise_attack': self.clone(PremiseAttackTask),
@@ -77,13 +75,7 @@ class ReportTask(PlanTask):
         rg.append_markdown('Project Plan', self.input()['project_plan']['markdown'].path)
         rg.append_markdown('Strategic Decisions', self.input()['strategic_decisions_markdown']['markdown'].path)
         rg.append_markdown('Scenarios', self.input()['scenarios_markdown']['markdown'].path)
-        rg.append_markdowns(
-            'Assumptions',
-            [
-                self.input()['classify_domain']['markdown'].path,
-                self.input()['consolidate_assumptions_markdown']['full'].path,
-            ],
-        )
+        rg.append_markdown_with_tables('Assumptions', self.input()['consolidate_assumptions_markdown']['full'].path)
         rg.append_markdown('Governance', self.input()['consolidate_governance'].path)
         rg.append_markdown('Related Resources', self.input()['related_resources']['markdown'].path)
         rg.append_markdown('Data Collection', self.input()['data_collection']['markdown'].path)

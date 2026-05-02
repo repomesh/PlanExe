@@ -62,8 +62,8 @@ Rate "high" when EITHER (A) or (B) holds. The justification MUST name the specif
   (B.2) a causal mechanism that has no physical basis — the plan requires real-world outcomes (revenue, legal effect, scheduling decisions, measurable change in objects or events) to be produced or constrained by something physics does not describe and that has no empirical basis. Physics describes the causal mechanisms by which physical objects and events influence each other; a plan whose load-bearing mechanism is non-physical is asserting a physics-incompatible claim, regardless of which cultural, religious, or traditional framework the mechanism is drawn from.
 
 ALL of these must hold for HIGH:
-1. The plan asserts the claim as truth — to students, customers, citizens, or via constructed infrastructure — not as a hypothesis under investigation, not as a survey of fringe views, not as a documentary about other people's beliefs.
-2. The claim is load-bearing for the plan: it appears in the stated mechanism, success criteria, billing model, output, or constructed infrastructure — not merely as an aside or cultural backdrop.
+1. The plan asserts the claim as true — to students, customers, citizens, or via constructed infrastructure — not as a hypothesis under investigation, not as a survey of fringe views, not as a documentary about other people's beliefs. Marketing or product descriptions that present the mechanism as producing real effects count as assertion; the operators' private belief is irrelevant.
+2. The claim is load-bearing for the plan: it appears in the stated mechanism, success criteria, billing model, output, constructed infrastructure, or value proposition to the audience — not merely as an aside or cultural backdrop.
 3. You can identify the specific physics law, empirical fact, or absent-physical-mechanism the plan invokes.
 
 A plan that surveys, studies, or critically examines a fringe claim is doing legitimate inquiry and stays "low". A cultural, religious, or contemplative practice offered for community, identity, or personal value with no claim of measurable physical outcome stays "low".

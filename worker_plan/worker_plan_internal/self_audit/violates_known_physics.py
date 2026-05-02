@@ -239,6 +239,7 @@ if __name__ == "__main__":
         "16faf60a-c7d0-43e3-90fa-0a8cd7cea8d2": "OSAA — statutory astrological office",
         "8e38db3d-01e7-4b22-b6df-b98f074778ff": "Phi-Free — spirit-clearance firm",
         "9865dc43-b400-480d-b75e-bc3af292456f": "Nyxa — synthetic supernatural commerce",
+        "7f8a2c4d-000e-4b2c-9466-25ca1641bf12": "ban women from computers — sex-based suppression of science access",
     }
 
     # Catalog IDs already exercised by earlier smoke runs (SEEDs 700,

@@ -485,6 +485,61 @@ issue. PlanExe's stated focus is real-world plans rather than
 toy software algorithms, so the [7] failure mode is unlikely to
 matter in production traffic.
 
+v8 smoke-run findings: fresh 10-prompt run (2026-05-02, SAMPLE_SEED=500)
+-----------------------------------------------------------------------
+Second held-out evaluation, on a fresh 10 catalog prompts the
+v6/v7/v8 system prompts have never been measured against (seed
+400's prior 10 are now in the excluded set). LLM_NAMES = both
+llama and gpt-oss; TARGET_CANDIDATES = 9 (raised from v7's 6).
+
+Findings:
+
+- Strong narrowness across most prompts. The importance ×
+  specificity tie-breaker reliably favours the narrower
+  specialist when multiple candidates are plausible:
+  * Face/Off facility -> "Facial Transplantation"
+    (gpt-oss baseline) — very narrow specialty.
+  * Space debris cleanup -> "Orbital Debris Management"
+    (gpt-oss augmented) — narrowed from "Space Debris
+    Management".
+  * Space-based universal manufacturing -> "Additive
+    Manufacturing" (gpt-oss x 2) — pinpoint discipline.
+  * Computational-biology lab agent -> "Structural
+    Bioinformatics" (gpt-oss augmented) — narrowed from
+    "Computational Biology".
+- Personal-routed prompts behave the same as the houseplants
+  case from earlier runs. "Take out the trash" routes to
+  Recycling / Waste Separation; the `purpose: personal` tag is
+  carried separately so the candidate list focuses on the
+  activity, not the meta-label.
+- Augmentation rescues a small-deliverable prompt: "Write a
+  blog post about Paris" — llama baseline picked Architecture
+  (latched onto the "attractions" cue); llama augmented
+  correctly picked Travel Blogging once the IdentifyPurpose
+  markdown landed in the user message.
+- One regression worse than prior v7: a Python snake-pentagon
+  script prompt (155 chars). Llama BOTH baseline AND augmented
+  failed (wrote Python code instead of emitting JSON; two
+  distinct error IDs). The prior v7 Python prompt failed only
+  on baseline; augmentation rescued it. This prompt is more
+  structurally Python-shaped ("Make sure to handle...") and
+  even the augmented user message couldn't override llama's
+  code-writing instinct. gpt-oss handled it cleanly (Collision
+  Detection -> Computer Graphics).
+- Stability: llama 4/10 flips on successful runs (5/10 counting
+  [4]'s double-failure). gpt-oss 7/10 flips — slightly more
+  variable than v7's 4/10 on the prior held-out, but the flips
+  are between equally-narrow alternatives.
+- Job-title drift: 0/40 cells. Umbrella drift: 0/40 cells.
+
+Net: v8's two-Likert design generalises cleanly. The wider
+TARGET_CANDIDATES=9 menu doesn't appear to break anything; the
+specificity-as-tie-breaker rule is producing visibly narrower
+primaries on cases where v7 settled on broader labels. The
+small-software-algorithm imperative-as-instruction failure mode
+on llama is unchanged from v7 (architectural limit, not v8-
+specific) and remains immune on gpt-oss.
+
 v6 routing design (carried over)
 --------------------------------
 v6 keeps v5's principle-only base prompt and routes to one of
@@ -1851,6 +1906,9 @@ if __name__ == "__main__":
     #     and took 20 — these are the v6/v7 prompts the system prompts
     #     have been iteratively shaped against and must be held out
     #     of any new evaluation.
+    #   - seed 400 then shuffled (sorted_items minus 7/8/100/300's
+    #     picks) and took 10 — the v7 held-out evaluation set, used
+    #     once but excluded again so v8 sees fresh prompts.
     import random
     used_ids: set[str] = set()
     for prior_seed in (7, 8):  # each applied to full sorted_items
@@ -1868,13 +1926,19 @@ if __name__ == "__main__":
     random.Random(300).shuffle(prior_shuffled)
     for item in prior_shuffled[:20]:
         used_ids.add(item.id)
+    pool_after_300 = [item for item in sorted_items if item.id not in used_ids]
+    prior_shuffled = list(pool_after_300)
+    random.Random(400).shuffle(prior_shuffled)
+    for item in prior_shuffled[:10]:
+        used_ids.add(item.id)
     fresh_pool = [item for item in sorted_items if item.id not in used_ids]
 
-    # Held-out sample: 10 catalog prompts the v6/v7 system prompts have
-    # never been measured against. No vague prompts in this sample —
-    # the goal is to evaluate the prompts on prompts they have not
-    # been shaped to handle, not to re-verify the empty-fits path.
-    SAMPLE_SEED = 400
+    # Held-out sample: 10 catalog prompts the v6/v7/v8 system prompts
+    # have never been measured against. No vague prompts in this
+    # sample — the goal is to evaluate the prompts on prompts they
+    # have not been shaped to handle, not to re-verify the
+    # empty-fits path.
+    SAMPLE_SEED = 500
     sample_size = min(10, len(fresh_pool))
     rng = random.Random(SAMPLE_SEED)
     shuffled = list(fresh_pool)
@@ -2102,7 +2166,7 @@ if __name__ == "__main__":
     print(
         f"=== Domain classification (importance × specificity) — held-out sample of "
         f"{len(catalog_sample)} catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, "
-        f"excluded {len(used_ids)} prior IDs from seeds 7/8/100/300) — "
+        f"excluded {len(used_ids)} prior IDs from seeds 7/8/100/300/400) — "
         f"across {len(LLM_NAMES)} models × 2 conditions (baseline vs augmented) ==="
     )
 

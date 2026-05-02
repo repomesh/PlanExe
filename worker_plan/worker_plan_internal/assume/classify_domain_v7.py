@@ -1655,12 +1655,21 @@ class ClassifyDomain:
             f"**Rationale:** {rationale}",
         ]
         if fits:
+            # Sort by fit (high first, then medium, then low) for the
+            # rendered table so the strongest disciplines surface at
+            # the top. Stable sort preserves document order within
+            # each fit level. The underlying `fits` list is not
+            # mutated — only the rendering order changes.
+            _fit_rank = {"high": 0, "medium": 1, "low": 2}
+            sorted_fits = sorted(
+                fits, key=lambda f: _fit_rank.get(f.fit, 99)
+            )
             lines.append("")
             lines.append("**Disciplines this project involves:**")
             lines.append("")
             lines.append("| Domain | Fit | Role | Reason |")
             lines.append("|---|---|---|---|")
-            for f in fits:
+            for f in sorted_fits:
                 reason = f.reason.replace("|", "\\|")
                 lines.append(
                     f"| {f.domain} | {f.fit.title()} | {f.role} | {reason} |"

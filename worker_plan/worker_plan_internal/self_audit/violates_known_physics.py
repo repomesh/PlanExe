@@ -41,6 +41,7 @@ from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
+from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 
 logger = logging.getLogger(__name__)
 
@@ -113,9 +114,13 @@ class ViolatesKnownPhysics:
     metadata: dict
 
     @classmethod
-    def execute(cls, llm: LLM, plan_prompt: str) -> "ViolatesKnownPhysics":
-        if not isinstance(llm, LLM):
-            raise ValueError("Invalid LLM instance.")
+    def execute(
+        cls,
+        llm_executor: LLMExecutor,
+        plan_prompt: str,
+    ) -> "ViolatesKnownPhysics":
+        if not isinstance(llm_executor, LLMExecutor):
+            raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(plan_prompt, str):
             raise ValueError("Invalid plan_prompt.")
 
@@ -125,34 +130,49 @@ class ViolatesKnownPhysics:
             ChatMessage(role=MessageRole.USER, content=plan_prompt),
         ]
 
-        sllm = llm.as_structured_llm(_LLMResponse)
-        start_time = time.perf_counter()
-        try:
+        # Closure variables capture the LLM-side outputs from inside
+        # llm_executor.run so we don't have to thread them back out
+        # through a temporary dict.
+        captured_raw: _LLMResponse | None = None
+        captured_metadata: dict = {}
+
+        def chat_with_llm(llm: LLM) -> None:
+            nonlocal captured_raw, captured_metadata
+            sllm = llm.as_structured_llm(_LLMResponse)
+            start_time = time.perf_counter()
             chat_response = sllm.chat(chat_message_list)
+            duration = int(ceil(time.perf_counter() - start_time))
+
+            captured_raw = chat_response.raw
+            captured_metadata = dict(llm.metadata)
+            captured_metadata["llm_classname"] = llm.class_name()
+            captured_metadata["duration"] = duration
+
+        try:
+            llm_executor.run(chat_with_llm)
+        except PipelineStopRequested:
+            raise
         except Exception as e:
             llm_error = LLMChatError(cause=e)
+            logger.debug(
+                f"physics check LLM failed [{llm_error.error_id}]: {e}"
+            )
             logger.error(
                 f"physics check LLM failed [{llm_error.error_id}]",
                 exc_info=True,
             )
             raise llm_error from e
-        duration = int(ceil(time.perf_counter() - start_time))
 
-        raw: _LLMResponse = chat_response.raw
-        if raw is None:
+        if captured_raw is None:
             raise ValueError(
                 "LLM returned empty structured response (chat_response.raw is None)."
             )
 
-        metadata = dict(llm.metadata)
-        metadata["llm_classname"] = llm.class_name()
-        metadata["duration"] = duration
-
         return cls(
             plan_prompt=plan_prompt,
             system_prompt=system_prompt,
-            justification=raw.justification.strip(),
-            mitigation=raw.mitigation.strip(),
-            level=raw.level.lower().strip(),
-            metadata=metadata,
+            justification=captured_raw.justification.strip(),
+            mitigation=captured_raw.mitigation.strip(),
+            level=captured_raw.level.lower().strip(),
+            metadata=captured_metadata,
         )

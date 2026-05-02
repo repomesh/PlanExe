@@ -420,22 +420,12 @@ class SelfAudit:
         # The "Violates Known Physics" check lives in its own module
         # with its own system prompt and response schema. Run it once
         # before the batch loop so its verdict is already in
-        # `responses` when subsequent items are evaluated.
+        # `responses` when subsequent items are evaluated. The module
+        # takes the executor directly and handles its own error
+        # wrapping (PipelineStopRequested re-raised, LLM failures
+        # wrapped as LLMChatError).
         if run_physics_check:
-            def execute_physics_check(llm: LLM) -> dict:
-                return {"physics_result": ViolatesKnownPhysics.execute(llm, user_prompt)}
-
-            try:
-                physics_check_result = llm_executor.run(execute_physics_check)
-            except PipelineStopRequested:
-                raise
-            except Exception as e:
-                llm_error = LLMChatError(cause=e)
-                logger.debug(f"Physics check LLM failed [{llm_error.error_id}]: {e}")
-                logger.error(f"Physics check LLM failed [{llm_error.error_id}]", exc_info=True)
-                raise llm_error from e
-
-            physics_result: ViolatesKnownPhysics = physics_check_result["physics_result"]
+            physics_result = ViolatesKnownPhysics.execute(llm_executor, user_prompt)
 
             system_prompt_list.append(physics_result.system_prompt)
             user_prompt_list.append(user_prompt)

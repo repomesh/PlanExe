@@ -46,14 +46,23 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStop
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """\
-You assess one yes/no question about a project plan: does the plan's success literally require breaking a specific named law of physics?
+You assess one question about a project plan: does the plan put it at odds with the laws of physics? There are two ways this can happen — flag either.
 
-Default answer: NO. The vast majority of real-world plans — even ambitious, expensive, regulated, or technically novel ones — do NOT break any law of physics, and your default rating is "low".
+Default answer: NO. The vast majority of real-world plans — even ambitious, expensive, regulated, or technically novel ones — do NOT clash with the laws of physics, and your default rating is "low".
 
-Rate "high" ONLY when ALL of the following hold:
-1. You can name a specific law of physics that the plan would have to break. Examples include: second law of thermodynamics, conservation of energy, conservation of momentum, speed-of-light limit, causality, Pauli exclusion principle, conservation of mass-energy.
+Rate "high" when EITHER (A) or (B) holds. The justification MUST name the specific physics law or directly-observable physical fact that the plan contradicts.
+
+(A) IMPOSSIBLE-ENGINEERING — the plan's success literally requires breaking a specific named law of physics. ALL of these must hold:
+1. You can name a specific law of physics that would have to break. Examples include: second law of thermodynamics, conservation of energy, conservation of momentum, speed-of-light limit, causality, Pauli exclusion principle, conservation of mass-energy.
 2. You can describe in one sentence the physical-quantity violation: what is being created from nothing, destroyed, or transmitted faster than physics allows.
 3. The violation is required for plan success — the plan cannot succeed without it.
+
+(B) PROPAGATING-FALSEHOOD — the plan's stated purpose is to teach, market, or build infrastructure that requires accepting as true a claim that directly contradicts a named law of physics or a well-established empirical observation about the physical world (e.g., Earth's observed shape, conservation laws, the speed-of-light limit, basic mechanics, radiometric ages). ALL of these must hold:
+1. The plan asserts the false claim as truth — to students, customers, or via constructed infrastructure — not as a hypothesis under investigation, not as a survey of fringe views, not as a documentary about other people's beliefs.
+2. The contradiction is part of the plan's stated content or output, not merely an aside.
+3. You can name the specific physics law or empirical fact the plan contradicts.
+
+A plan that surveys, studies, or critically examines a fringe claim is doing legitimate inquiry and stays "low" under (B). The line is between investigating a claim and asserting it as truth.
 
 Otherwise rate "low". Use "medium" only for genuine borderline cases where the plan presupposes a physical phenomenon that, if real, would itself redefine known physics; this should be very rare.
 
@@ -72,9 +81,9 @@ Out of scope — these are NOT physics violations and MUST stay "low":
 The plan may be written in any language. Assess the plan's actual mechanism, not the words used to describe it.
 
 Output a JSON object with three fields, in this order:
-- justification: 1-2 sentences. If level is "low", state plainly that no plan element requires breaking a named law of physics. If level is "medium" or "high", you MUST name the specific physics law and describe the physical-quantity violation; if you cannot, level is "low".
+- justification: 1-2 sentences. If level is "low", state plainly that the plan does not require breaking a named law of physics and does not propagate a physics-contradicting claim as truth. If level is "medium" or "high", you MUST name the specific physics law or directly-observable physical fact the plan contradicts and explain the contradiction in physical terms; if you cannot, level is "low".
 - mitigation: one assignable task, ~30 words, with role/team + verb + relative timeframe (e.g., "within 14 days", "within 3 months"). Never use absolute calendar dates. When level is "low", the mitigation must stay on the physics-violation topic, e.g., "Project Manager: During scope reviews, confirm no plan element requires violating a named law of physics — no further action required."
-- level: one of "low", "medium", "high". Must agree with the justification — if the justification does not name a specific physics law, level MUST be "low".
+- level: one of "low", "medium", "high". Must agree with the justification — if the justification does not name a specific physics law or directly-observable physical fact the plan contradicts, level MUST be "low".
 """
 
 

@@ -205,7 +205,7 @@ if __name__ == "__main__":
     )
 
     LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
-    SAMPLE_SEED = 700
+    SAMPLE_SEED = 800
     SAMPLE_SIZE = 10
 
     prompt_catalog = PromptCatalog()

@@ -129,7 +129,7 @@ ALL_CHECKLIST_ITEMS = [
         "index": 1,
         "title": "Violates Known Physics",
         "subtitle": "Does the project require a major, unpredictable discovery in fundamental science to succeed?",
-        "instruction": "This check applies only to plans describing physical devices or material processes. Default rating: LOW. Rate HIGH only if the plan requires a physical device or material process that cannot exist under known physics. If LOW: Mitigation=None. If ≥MEDIUM: ≤30-word justification + mitigation with Owner/Deliverable/Date.",
+        "instruction": "This check applies only to plans describing physical devices or material processes. Default rating: LOW. Rate HIGH only if the plan requires a physical device or material process that cannot exist under known physics — name the specific physical law (e.g., second law of thermodynamics, conservation of energy, speed-of-light limit) the requirement violates. Regulatory, permitting, licensing, safety-handling, and authorization gaps are NOT physics violations and belong to the legal/regulatory check; rate LOW here even when those gaps exist. A material that is real and naturally occurring (e.g., a radioisotope) does not violate physics merely because handling it requires authorization. If ≥MEDIUM: ≤30-word justification + mitigation with Owner/Deliverable/Timeframe.",
         "comment": "If the initial prompt is vague/scifi/aggressive or asks for something that is physically impossible, then the generated plan usually end up with some fantasy parts, making the plan unrealistic. Known false-positive: LLMs confuse ‘laws’ (legal/regulatory) with ‘laws of physics’ for plans about policy, currency adoption, governance, etc."
     },
     {

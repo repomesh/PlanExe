@@ -94,14 +94,22 @@ Known problems to guard against
 
 
 class ChecklistAnswer(BaseModel):
-    level: str = Field(
-        description="low, medium, high."
-    )
+    # Field order matters: structured-output models commit to the
+    # first emitted field, then write the rest. Putting `level`
+    # first led to verdicts that contradicted their own
+    # justification (e.g. "Rated HIGH because the plan relies on
+    # breaking no laws of physics"). Justification is emitted
+    # first so the reasoning is on paper before the level is
+    # locked in; mitigation follows so it is shaped by the
+    # justification rather than reverse-engineered from a verdict.
     justification: str = Field(
         description="Why this level and not another level. 30 words."
     )
     mitigation: str = Field(
         description="One concrete action that reduces/removes the flag. 30 words."
+    )
+    level: str = Field(
+        description="low, medium, high. Must be consistent with the justification — if the justification cannot defend a higher rating, level MUST be 'low'."
     )
 
 class ChecklistAnswerCleaned(BaseModel):
@@ -114,14 +122,14 @@ class ChecklistAnswerCleaned(BaseModel):
     subtitle: str = Field(
         description="Subtitle of this checklist item."
     )
-    level: str = Field(
-        description="low, medium, high."
-    )
     justification: str = Field(
         description="Why this level and not another level. 30 words."
     )
     mitigation: str = Field(
         description="One concrete action that reduces/removes the flag. 30 words."
+    )
+    level: str = Field(
+        description="low, medium, high."
     )
 
 ALL_CHECKLIST_ITEMS = [
@@ -322,7 +330,7 @@ You are an expert strategic analyst. Your task is to answer a checklist with red
 You will output only valid JSON. No explanations, no chit-chat, no Markdown, no code fences.
 
 GOAL
-Return exactly one object per checklist item with keys in this order: level, justification, mitigation.
+Return exactly one object per checklist item with keys in this order: justification, mitigation, level. Write the justification first; then the mitigation; the level is the LAST field you write and MUST agree with what the justification just argued. If the justification cannot defend a HIGH/MEDIUM rating, level is "low".
 
 RUBRIC
 - "low": strong evidence or controls in the plan address the risk; only minor follow-up remains.

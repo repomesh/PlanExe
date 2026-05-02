@@ -229,6 +229,18 @@ if __name__ == "__main__":
     SAMPLE_SEED = 1300
     SAMPLE_SIZE = 20
 
+    # Catalog IDs the check is expected to flag HIGH. These are
+    # canary cases run on every smoke invocation regardless of
+    # SAMPLE_SEED, so each run validates the expected-HIGH set
+    # against the current system prompt. Any ID here that comes
+    # back not-HIGH is reported as a canary failure in the summary.
+    EXPECTED_HIGH_IDS: dict[str, str] = {
+        "2891ff5f-4d6e-4909-a6ac-64af1273275e": "flat-earth education curriculum",
+        "16faf60a-c7d0-43e3-90fa-0a8cd7cea8d2": "OSAA — statutory astrological office",
+        "8e38db3d-01e7-4b22-b6df-b98f074778ff": "Phi-Free — spirit-clearance firm",
+        "9865dc43-b400-480d-b75e-bc3af292456f": "Nyxa — synthetic supernatural commerce",
+    }
+
     # Catalog IDs already exercised by earlier smoke runs (SEEDs 700,
     # 800, 900). Held out so subsequent runs evaluate the check on
     # prompts the system prompt has not been tuned against. Append
@@ -333,7 +345,10 @@ if __name__ == "__main__":
     prompt_catalog.load_simple_plan_prompts()
     all_items = prompt_catalog.all()
     sorted_items = sorted(all_items, key=lambda x: x.id)
-    fresh_items = [it for it in sorted_items if it.id not in HELD_OUT_IDS]
+    fresh_items = [
+        it for it in sorted_items
+        if it.id not in HELD_OUT_IDS and it.id not in EXPECTED_HIGH_IDS
+    ]
 
     rng = random.Random(SAMPLE_SEED)
     shuffled = list(fresh_items)
@@ -344,13 +359,42 @@ if __name__ == "__main__":
     llm_executor = LLMExecutor(llm_models=[LLMModelWithInstance(llm)])
 
     print(
-        f"=== Violates Known Physics — sample of {len(sample_items)} "
-        f"catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, model={LLM_NAME}) ==="
+        f"=== Violates Known Physics — {len(EXPECTED_HIGH_IDS)} canaries + "
+        f"sample of {len(sample_items)} catalog prompts "
+        f"(SAMPLE_SEED={SAMPLE_SEED}, model={LLM_NAME}) ==="
     )
 
     level_counts: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
     error_count = 0
+    canary_results: list[tuple[str, str, str]] = []  # (id, label, level)
 
+    print(f"\n--- Expected HIGH canaries ---")
+    for prompt_id, label in EXPECTED_HIGH_IDS.items():
+        item = prompt_catalog.find(prompt_id)
+        if item is None:
+            print(f"!! expected-HIGH prompt {prompt_id} ({label}) not in catalog")
+            continue
+        prompt_preview = item.prompt[:100].replace("\n", " ")
+        print(f"\n[canary | {label}] {prompt_id}")
+        print(
+            f"  prompt: {prompt_preview}"
+            f"{'...' if len(item.prompt) > 100 else ''}"
+        )
+        try:
+            result = ViolatesKnownPhysics.execute(llm_executor, item.prompt)
+        except Exception as exc:
+            error_count += 1
+            canary_results.append((prompt_id, label, "error"))
+            print(f"  ERROR: {exc}")
+            continue
+        level_counts[result.level] = level_counts.get(result.level, 0) + 1
+        canary_results.append((prompt_id, label, result.level))
+        flag = "" if result.level == "high" else "  ⚠ canary failed (expected HIGH)"
+        print(f"  level: {result.level} (expected: high){flag}")
+        print(f"  justification: {result.justification}")
+        print(f"  mitigation: {result.mitigation}")
+
+    print(f"\n--- Random sample ---")
     for idx, item in enumerate(sample_items, start=1):
         prompt_id = item.id
         prompt_preview = item.prompt[:100].replace("\n", " ")
@@ -375,3 +419,11 @@ if __name__ == "__main__":
         print(f"  {lvl:6}: {level_counts.get(lvl, 0)}")
     if error_count:
         print(f"  errors: {error_count}")
+
+    canary_failures = [
+        (pid, label, lvl) for (pid, label, lvl) in canary_results if lvl != "high"
+    ]
+    if canary_failures:
+        print(f"\n=== Canary failures ({len(canary_failures)}/{len(canary_results)}) — expected HIGH ===")
+        for pid, label, lvl in canary_failures:
+            print(f"  {label}: got {lvl} ({pid})")

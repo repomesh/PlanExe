@@ -4,6 +4,7 @@ from worker_plan_internal.lever.identify_potential_levers import IdentifyPotenti
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.classify_domain import ClassifyDomainTask
 from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
 from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 from worker_plan_internal.plan.nodes.extract_constraints import ExtractConstraintsTask
@@ -14,6 +15,7 @@ class PotentialLeversTask(PlanTask):
     def requires(self):
         return {
             'setup': self.clone(SetupTask),
+            'classify_domain': self.clone(ClassifyDomainTask),
             'identify_purpose': self.clone(IdentifyPurposeTask),
             'plan_type': self.clone(PlanTypeTask),
             'extract_constraints': self.clone(ExtractConstraintsTask),
@@ -31,6 +33,8 @@ class PotentialLeversTask(PlanTask):
         # Read inputs from required tasks.
         with self.input()['setup'].open("r") as f:
             plan_prompt = f.read()
+        with self.input()['classify_domain']['markdown'].open("r") as f:
+            classify_domain_markdown = f.read()
         with self.input()['identify_purpose']['markdown'].open("r") as f:
             identify_purpose_markdown = f.read()
         with self.input()['plan_type']['markdown'].open("r") as f:
@@ -42,6 +46,7 @@ class PotentialLeversTask(PlanTask):
 
         query = (
             f"File 'plan.txt':\n{plan_prompt}\n\n"
+            f"File 'classify_domain.md':\n{classify_domain_markdown}\n\n"
             f"File 'purpose.md':\n{identify_purpose_markdown}\n\n"
             f"File 'plan_type.md':\n{plan_type_markdown}"
         )

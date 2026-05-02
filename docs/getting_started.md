@@ -1,6 +1,6 @@
 # Getting started with PlanExe
 
-This guide shows new users how to launch the `frontend_single_user` UI with Docker using OpenRouter as the LLM provider. No local Python or pip setup is needed.
+This guide shows new users how to launch the `frontend_multi_user` UI with Docker using OpenRouter as the LLM provider. No local Python or pip setup is needed.
 
 ## 1. Prerequisites
 
@@ -23,27 +23,25 @@ Add your OpenRouter key:
 OPENROUTER_API_KEY='sk-or-v1-your-key'
 ```
 
-## 4. Start the single-user stack
+## 4. Start the stack
 ```bash
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
 
-Wait for [http://localhost:7860](http://localhost:7860) to become available.
+Wait for [http://localhost:5001](http://localhost:5001) to become available.
 
 Stop with `Ctrl+C`.
 
 ## 5. Use the UI
-Open [http://localhost:7860](http://localhost:7860) in your browser. 
+Open [http://localhost:5001](http://localhost:5001) in your browser and log in (or create an account).
 
 You can now submit your prompt.
 
 The generated plans are written to `run/<timestamped-output-dir>`.
 
-![Screenshot of PlanExe](planexe-humanoid-factory.jpg?raw=true "Screenshot of PlanExe")
-
 ## Verification
 
-- You can open the UI at [http://localhost:7860](http://localhost:7860).
+- You can open the UI at [http://localhost:5001](http://localhost:5001).
 - A plan run creates a new folder in `run/`.
 
 ## Troubleshooting and next steps

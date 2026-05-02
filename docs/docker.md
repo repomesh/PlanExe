@@ -5,10 +5,10 @@ This page covers common Docker workflows and troubleshooting.
 
 ## Basic lifecycle
 - Stop everything: `docker compose down`
-- Build fresh (no cache) after code moves: `docker compose build --no-cache database_postgres worker_plan frontend_single_user frontend_multi_user`
+- Build fresh (no cache) after code moves: `docker compose build --no-cache database_postgres worker_plan frontend_multi_user`
 - Start services: `docker compose up`
 - Stop services (leave images): `docker compose down`
-- Build fresh and start services: `docker compose build --no-cache database_postgres worker_plan frontend_single_user frontend_multi_user && docker compose up`
+- Build fresh and start services: `docker compose build --no-cache database_postgres worker_plan frontend_multi_user && docker compose up`
 
 ## While developing
 
@@ -28,7 +28,6 @@ Frequently I do `docker system prune -a` to free disk space.
   If watch misses changes after file moves, rerun the no-cache build above.
 - View logs: 
   - `docker compose logs -f worker_plan`
-  - `docker compose logs -f frontend_single_user`
   - `docker compose logs -f frontend_multi_user`
 
 ## Run individual files
@@ -76,26 +75,8 @@ psql -h localhost -p 5433 -U planexe -d planexe
 
 ## Environment notes
 - The worker exports logs to stdout when `PLANEXE_WORKER_RELAY_PROCESS_OUTPUT=true` (set in `docker-compose.yml`).
-- Shared volumes: `./run` is mounted into both services; `.env` and `./llm_config/` are mounted read-only. Ensure they exist on the host before starting.***
+- Shared volumes: `.env` and `./llm_config/` are mounted read-only. Ensure they exist on the host before starting.
 - Database: Postgres runs in `database_postgres` and listens on host `${PLANEXE_POSTGRES_PORT:-5432}` mapped to container `5432`; data is persisted in the named volume `database_postgres_data`.
 - Multiuser UI: binds to container port `5000`, exposed on host `${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}`.
 - MCP server downloads: set `PLANEXE_MCP_PUBLIC_BASE_URL` so clients receive a reachable `/download/...` URL (defaults to `http://localhost:8001` in compose).
 
-## Host opener (Open Output Dir)
-Because Docker containers cannot launch host apps, the `Open Output Dir` button needs a host-side service.
-
-Set these environment variables before starting:
-- `PLANEXE_OPEN_DIR_SERVER_URL` so the container can reach the host opener:
-  - macOS/Windows (Docker Desktop): `http://host.docker.internal:5100`
-  - Linux: `http://172.17.0.1:5100` (or add `host.docker.internal` pointing to the bridge IP).
-- `PLANEXE_HOST_RUN_DIR`: optional; defaults to `PlanExe/run` on the host. Set an absolute path if you relocate the run directory.
-
-1) Start host opener **before** Docker (on the host):
-```bash
-cd open_dir_server
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python app.py
-```
-2) Provide `PLANEXE_OPEN_DIR_SERVER_URL` via your shell env, `.env`, or docker compose environment for `frontend_single_user`.

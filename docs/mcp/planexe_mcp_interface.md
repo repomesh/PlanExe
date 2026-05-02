@@ -15,7 +15,7 @@ The plan is a **project plan**: a DAG of steps (Luigi pipeline stages) that prod
 Implementors should expose the following to agents so they understand what PlanExe does:
 
 - **What:** PlanExe turns a plain-English goal into a strategic project-plan draft (20+ sections) in ~10–20 min. Sections include executive summary, interactive Gantt charts, investor pitch, SWOT, governance, team profiles, work breakdown, scenario comparison, expert criticism, and adversarial sections (premortem, self-audit, premise attacks) that stress-test the plan. The output is a draft to refine, not an executable or final document — but it surfaces hard questions the prompter may not have considered.
-- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_download` (mcp_local helper) or `plan_file_info` (mcp_cloud tool) when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal error, `stopped` = user called plan_stop). If a plan fails or is stopped before completing all steps, call `plan_resume` to continue from where it left off without discarding completed work. Use `plan_retry` for a full restart (plan must be in failed or stopped state). Both accept the `plan_id` and optional `model_profile` (default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
+- **Required interaction order:** Call `example_plans` (optional) and `example_prompts` first. Optional before `plan_create`: call `model_profiles` to inspect profile guidance and available models in each profile. Then complete a non-tool step: formulate a detailed prompt as flowing prose (not structured markdown), typically ~300-800 words, using the examples as a baseline; include objective, scope, constraints, timeline, stakeholders, budget/resources, and success criteria; get user approval. Only after approval, call `plan_create`. Then poll `plan_status` (about every 5 minutes); use `plan_file_info` to fetch the download URL when complete (`pending`/`processing` = keep polling, `completed` = download now, `failed` = terminal error, `stopped` = user called plan_stop). If a plan fails or is stopped before completing all steps, call `plan_resume` to continue from where it left off without discarding completed work. Use `plan_retry` for a full restart (plan must be in failed or stopped state). Both accept the `plan_id` and optional `model_profile` (default `baseline`). To stop, call `plan_stop` with the `plan_id` from `plan_create`.
 - **Output:** Self-contained interactive HTML report (~700KB) with collapsible sections and interactive Gantt charts — open in a browser. The zip contains the intermediary pipeline files (md, json, csv) that fed the report.
 
 ### 1.3 Scope of this document
@@ -71,10 +71,10 @@ The interface is designed to support:
 
 The MCP specification defines two different mechanisms:
 
-- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry, plan_resume, send_feedback): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_resume or plan_retry on failed/stopped → uses plan_file_info (and optionally plan_download via mcp_local). Agents can call send_feedback at any time to report issues or share observations. This document specifies those tools.
+- **MCP tools** (e.g. plan_create, plan_status, plan_stop, plan_retry, plan_resume, send_feedback): the server exposes named tools; the client calls them and receives a response. PlanExe's interface is **tool-based**: the agent calls plan_create → receives plan_id → polls plan_status → optionally calls plan_resume or plan_retry on failed/stopped → uses plan_file_info to fetch the download URL. Agents can call send_feedback at any time to report issues or share observations. This document specifies those tools.
 - **MCP tasks protocol** ("Run as task" in some UIs): a separate mechanism where the client can run a tool "as a task" using RPC methods such as tasks/run, tasks/get, tasks/result, tasks/cancel, tasks/list, so the tool runs in the background and the client polls for results.
 
-PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: optionally call `example_plans`; call `example_prompts`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed or stopped call `plan_resume` to continue or `plan_retry` for a full restart (optional); then call `plan_file_info` (or `plan_download` via mcp_local) when completed.
+PlanExe **does not** use or advertise the MCP tasks protocol. Implementors and clients should use the **tools only**. Do not enable "Run as task" for PlanExe; many clients (e.g. Cursor) and the Python MCP SDK do not support the tasks protocol properly. Intended flow: optionally call `example_plans`; call `example_prompts`; optionally call `model_profiles`; perform the non-tool prompt drafting/approval step; call `plan_create`; poll `plan_status`; if failed or stopped call `plan_resume` to continue or `plan_retry` for a full restart (optional); then call `plan_file_info` when completed.
 
 ---
 
@@ -307,7 +307,7 @@ For the full catalog file:
 
 **Important**
 
-- plan_id is a UUID returned by plan_create. Use this exact UUID for plan_status/plan_stop/plan_retry/plan_file_info (and plan_download when using mcp_local).
+- plan_id is a UUID returned by plan_create. Use this exact UUID for plan_status/plan_stop/plan_retry/plan_file_info.
 
 **Behavior**
 
@@ -561,27 +561,16 @@ Bump `PIPELINE_VERSION` whenever the pipeline changes in a way that would break 
 
 ---
 
-### 6.7 Download flow (plan_download vs plan_file_info)
+### 6.7 Download flow (plan_file_info)
 
-**If your client exposes plan_download** (e.g. mcp_local): use it to save the report or zip locally; it calls plan_file_info under the hood, then fetches and writes to the local save path (e.g. PLANEXE_PATH).
-
-**If you only have plan_file_info** (e.g. direct connection to mcp_cloud): call it with plan_id and artifact ("report" or "zip"); use the returned download_url to fetch the file (e.g. GET with API key if configured).
+Call `plan_file_info` with `plan_id` and `artifact` ("report" or "zip"); use the returned `download_url` to fetch the file (e.g. GET with API key if configured).
 
 **plan_file_info input**
 
 - plan_id: UUID returned by plan_create. Use it to download the created plan.
 - artifact: "report" or "zip" (default "report").
 
-**plan_download local path behavior (mcp_local)**
-
-- Save directory is `PLANEXE_PATH`.
-- If `PLANEXE_PATH` is unset, save to current working directory.
-- If `PLANEXE_PATH` points to a file (not a directory), return an error.
-- Filenames are `<plan_id>-report.html` or `<plan_id>-run.zip`.
-- If a filename already exists, append `-1`, `-2`, ... before extension.
-- Successful responses include `saved_path`.
-
-**plan_file_info URL behavior (mcp_cloud)**
+**plan_file_info URL behavior**
 
 - `download_url` is an absolute URL where the requested artifact can be downloaded.
 
@@ -708,7 +697,6 @@ Example:
   - returns `{}` (not an error) while artifacts are not ready.
   - may return `{"error": ...}` with `isError=false` for terminal artifact-level problems.
   - returns `isError=true` for unknown plan_id (`PLAN_NOT_FOUND`).
-- `mcp_local` may return proxy/transport failures as `REMOTE_ERROR` and local download write failures as `DOWNLOAD_FAILED`.
 
 ### 9.3 Minimal code contract (current)
 
@@ -728,16 +716,10 @@ Cloud/core tool codes:
 - `generation_failed`: plan_file_info report path when plan ended in failed.
 - `content_unavailable`: plan_file_info cannot read requested artifact bytes.
 
-Local proxy specific codes:
-
-- `REMOTE_ERROR`: mcp_local could not call mcp_cloud (network/HTTP/protocol layer failure).
-- `DOWNLOAD_FAILED`: mcp_local could not write/download artifact to local filesystem.
-
 ### 9.4 Caller handling guidance
 
 - Retry with backoff:
   - `INTERNAL_ERROR`
-  - `REMOTE_ERROR`
   - `content_unavailable` (short retry window)
 - Do not retry unchanged request:
   - `INVALID_USER_API_KEY`
@@ -850,7 +832,7 @@ Clients must ignore unknown fields and unknown event types.
 
 ## 16. Future Extensions (MCP Resources)
 
-PlanExe is artifact-first, and MCP already has a native concept for that: resources. Today artifacts are exposed via download_url or via proxy download + saved_path. Future versions SHOULD expose artifacts as MCP resources so clients can fetch them via standard resource reads (and treat PlanExe as a first-class MCP server rather than a thin API wrapper).
+PlanExe is artifact-first, and MCP already has a native concept for that: resources. Today artifacts are exposed via `plan_file_info` and its `download_url`. Future versions SHOULD expose artifacts as MCP resources so clients can fetch them via standard resource reads (and treat PlanExe as a first-class MCP server rather than a thin API wrapper).
 
 **Proposed resource identifiers**
 

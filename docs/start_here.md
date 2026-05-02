@@ -35,5 +35,4 @@ Pick the path that matches your goal. Each path is short and points to a deeper 
 ## Path 4: I want to develop on PlanExe
 
 1. Install the dev setup: [Developer install](install_developer.md)
-2. Read a component doc to understand the architecture: [Open dir server](developer/open_dir_server.md)
-3. Use Docker for local services: [Docker](docker.md)
+2. Use Docker for local services: [Docker](docker.md)

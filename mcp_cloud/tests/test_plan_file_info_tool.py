@@ -27,13 +27,13 @@ class TestPlanFileInfoTool(unittest.TestCase):
         buffer = BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
             zip_file.writestr(REPORT_FILENAME, "<html>ok</html>")
-            zip_file.writestr("001-2-plan.txt", "Plan prompt")
+            zip_file.writestr("plan.txt", "Plan prompt")
         zip_bytes = buffer.getvalue()
 
         files = list_files_from_zip_bytes(zip_bytes)
         file_names = [name for name, _ in files]
         self.assertIn(REPORT_FILENAME, file_names)
-        self.assertIn("001-2-plan.txt", file_names)
+        self.assertIn("plan.txt", file_names)
 
         report_bytes = extract_file_from_zip_bytes(zip_bytes, REPORT_FILENAME)
         self.assertEqual(report_bytes, b"<html>ok</html>")

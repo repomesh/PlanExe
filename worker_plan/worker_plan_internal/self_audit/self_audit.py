@@ -9,6 +9,30 @@ The Secondary Reader (The Project Manager/Lead): This is the person tasked with 
 
     Value: It serves as a prioritized "fix-it" list. It tells the project manager which fires are the biggest. They don't need to worry about the team size (a ⚠️ Medium risk) if the entire project is a 🛑 High "Legal Minefield." It focuses their attention on the foundational, existential threats to the project's success.
 
+The "violates known physics" detection is often gets triggered, freaking out about "faster than light travel" on documents that have nothing to do with FTL.
+The "elephant-alpha" model especially struggle with detecting that, when it otherwise does an ok job at everything else.
+I'm considering making a dedicated system prompt only for VIOLATES_KNOWN_PHYSICS, that is have lower rate of false positives.
+After switching from "Gemini-2.0-flash" to "Gemini-2.5-flash", the "Violates Known Physics" gets fired nearly always.
+
+The mitigation often includes a specific date. I'm seeing "2024-12-31", for a plan that takes place in 2026. It's not possible to fix a problem in the past.
+Mitigation: Risk Manager: Create a risk cascade diagram linking initial risks to second-order impacts 
+(e.g., legal challenges → funding delays → scope reduction) by 2024-12-31.
+
+Adding a new checklist item:
+Find fabricated evidence. Where things aren't true.
+When it hallucinates laws or articles that are non-existing.
+
+Adding a new checklist item:
+Calling out fake confidence in the plan, where there isn’t sufficient evidence.
+
+Adding a new checklist item:
+attack on vague filler language.
+It's filler language when the document repeatedly says 
+- “develop a robust strategy”
+- “implement a communication strategy,” 
+Without specify the actual strategy. 
+that is placeholder language.
+
 Calibation. Skewed distribution: 16 “High” flags out of 20 reads like alarm fatigue. 
 Yes, the majority may be red. Holding the items up against each other is not the job for this checklist. It's further downstream.
 I'm not going to reserve High for the most significant issues.
@@ -313,6 +337,7 @@ STRICT RULES
 - justification must quote only from the plan text, and when citing gaps, refer to the absence plainly without using placeholder phrases.
 - Never use the phrase "missing referenced artifacts" or similar placeholders; spell out what evidence is missing and the consequence.
 - mitigation: ONE assignable task. Start with a suggested role/team, followed by a verb, and include a suggested timeframe (e.g., "Legal Team: Draft a memo... within 30 days."). ~30 words.
+- Express every timeframe as a relative duration counted from the start of the plan ("within N days", "within N weeks", "within N months"). NEVER use an absolute calendar date (e.g., "1984-12-31", "by Q4 1984", "by March 1984"). Per-checklist instructions that ask for a "Date" mean a relative timeframe in this format — the plan's own start date may be in the past, so a calendar date can land in the past and become impossible to act on.
 - mitigation must be actionable; never respond with "N/A" or similar placeholders.
 - Mitigation must be specific to the identified issue; avoid vague directives like "review the plan", "consult experts", or "investigate" unless paired with a concrete deliverable that directly reduces the flagged risk.
 - If the level is "low", mitigation should reinforce existing good practice (e.g., document evidence, schedule routine monitoring) rather than delegating a broad re-check of the entire plan.

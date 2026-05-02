@@ -8,13 +8,12 @@ Locations: [Github](https://github.com/modelcontextprotocol/inspector), [Documen
 
 ## Overview of PlanExe's MCP servers
 
-PlanExe has multiple MCP servers that can be connected to.
+PlanExe has two MCP servers that can be connected to.
 
 |#|Difficulty|Description|
 |-|----------|-----------|
 | 1 | Beginner | MCP server at [mcp.planexe.org/](https://mcp.planexe.org/) and cost credits to use. Manage your credits via this page: [home.planexe.org](https://home.planexe.org) |
 | 2 | Medium | MCP server inside docker on your own computer. I recommend using OpenRouter for inference, which cost money. You can be lucky finding a free model on OpenRouter, but this requires developer skills and several attempts. You can also run models on your own computer. |
-| 3 | Expert | MCP server as a python program on your own computer. |
 
 ## Approach 1. MCP server at mcp.planexe.org
 
@@ -93,7 +92,7 @@ Follow these steps:
 
 ### Prerequisites
 
-I assume you are able to create plans on your computer via the `frontend_single_user` web interface, [http://localhost:7860/](http://localhost:7860/). It doesn't make sense proceeding if there is a problem with LLMs and no plans can be created.
+I assume you are able to create plans on your computer via the `frontend_multi_user` web interface, [http://localhost:5001/](http://localhost:5001/). It doesn't make sense proceeding if there is a problem with LLMs and no plans can be created.
 
 ### Start docker
 
@@ -127,53 +126,3 @@ Click `example_prompts`, click `Run Tool`.
 ![Screenshot example prompts](inspector_step4_docker.webp)
 
 
-## Approach 3. MCP server as a python program
-
-If MCP had a built-in download mechanism, then there wouldn't be a need for this python program. As of 2026-Feb-12 MCP doesn't have such download mechanism, and developers make kludgy workarounds. The `mcp_local/planexe_mcp_local.py` proxy runs a tiny Python MCP server that forwards tool calls to the remote `mcp_cloud` while downloading reports into a local directory.
-
-### Prerequisites
-
-I assume that you already have verified that things are working in "Approach 2. MCP server inside docker". If things are broken there, it makes no sense following the instructions here.
-
-### Start docker
-
-PlanExe's docker stack exposes the MCP endpoint on your loopback interface (default `127.0.0.1:8001/mcp/`). Start with `docker compose up` and wait until you see `mcp_cloud` and `/healthcheck` like this:
-```
-mcp_cloud | INFO: 127.0.0.1:43988 - "GET /healthcheck HTTP/1.1" 200 OK
-```
-
-### Start inspector
-
-In a separate terminal; launch the inspector.
-
-On my computer, I launch the inspector like this:
-
-![Screenshot example prompts](inspector_step1_local.webp)
-
-You have to make these adjustments for your computer.
-
-The `PLANEXE_PATH` is an absolute directory that PlanExe is allowed to write to. The downloaded files lands here.
-
-The `/absolute/path/to/PlanExe` is where you have cloned the PlanExe repo.
-
-```bash
-npx @modelcontextprotocol/inspector \
-  -e "PLANEXE_URL=http://localhost:8001/mcp" \
-  -e "PLANEXE_PATH=/absolute/path/for/downloads" \
-  --transport stdio \
-  uv run --with mcp /absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py
-```
-
-Once the UI opens in the browser, click `Connect`.
-
-![Screenshot example prompts](inspector_step2_local.webp)
-
-### When connected
-
-Then open the `Tools` tab, click `List Tools`.
-
-![Screenshot example prompts](inspector_step3_local.webp)
-
-Click `example_prompts`, click `Run Tool`.
-
-![Screenshot example prompts](inspector_step4_local.webp)

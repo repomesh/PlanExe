@@ -10,15 +10,14 @@ Implemented
 
 PlanExe's MCP tools use a `task_` prefix for the tools that manage a planning run:
 
-| Current name     | Where exposed      |
-|------------------|--------------------|
-| `task_create`    | mcp_local, mcp_cloud |
-| `task_status`    | mcp_local, mcp_cloud |
-| `task_stop`      | mcp_local, mcp_cloud |
-| `task_retry`     | mcp_local, mcp_cloud |
-| `task_list`      | mcp_local, mcp_cloud |
-| `task_file_info` | mcp_cloud only      |
-| `task_download`  | mcp_local only      |
+| Current name     | Where exposed |
+|------------------|---------------|
+| `task_create`    | mcp_cloud     |
+| `task_status`    | mcp_cloud     |
+| `task_stop`      | mcp_cloud     |
+| `task_retry`     | mcp_cloud     |
+| `task_list`      | mcp_cloud     |
+| `task_file_info` | mcp_cloud     |
 
 The MCP specification itself uses "task" as a protocol-level concept (the `tasks/run`, `tasks/get`, `tasks/cancel` RPC methods in the optional "Run as task" extension). When MCP clients read the PlanExe tool list, seeing `task_create` and `task_status` is ambiguous: it looks like PlanExe is implementing the MCP tasks protocol, which it explicitly does not (see `docs/mcp/planexe_mcp_interface.md` section 3.1).
 
@@ -44,7 +43,7 @@ Additionally, the word "task" is overloaded in this codebase: the internal Pytho
 
 ### Option A — `plan_`  *(recommended)*
 
-`plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_list`, `plan_file_info`, `plan_download`
+`plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_list`, `plan_file_info`
 
 **Pros:**
 - Directly reflects what PlanExe produces: a *plan*.
@@ -59,7 +58,7 @@ Additionally, the word "task" is overloaded in this codebase: the internal Pytho
 
 ### Option B — `run_`
 
-`run_create`, `run_status`, `run_stop`, `run_retry`, `run_list`, `run_file_info`, `run_download`
+`run_create`, `run_status`, `run_stop`, `run_retry`, `run_list`, `run_file_info`
 
 **Pros:**
 - Describes the *execution* aspect accurately: each call creates a pipeline run.
@@ -74,7 +73,7 @@ Additionally, the word "task" is overloaded in this codebase: the internal Pytho
 
 ### Option C — `job_`
 
-`job_create`, `job_status`, `job_stop`, `job_retry`, `job_list`, `job_file_info`, `job_download`
+`job_create`, `job_status`, `job_stop`, `job_retry`, `job_list`, `job_file_info`
 
 **Pros:**
 - Well-established term in async/queue systems (background jobs).
@@ -110,7 +109,6 @@ If a future proposal decides to rename `task_id`, it should be addressed in a se
 
 | File | What changes |
 |------|-------------|
-| `mcp_local/planexe_mcp_local.py` | Tool definition `name` strings, handler function names, `TOOL_HANDLERS` dict keys, docstrings, inline description strings referencing tool names |
 | `mcp_cloud/app.py` | Tool definition `name` strings, handler function names, handler dispatch dict, docstrings, inline description strings |
 | `mcp_cloud/tool_models.py` | Docstrings and `description` strings in `Field(...)` calls that mention old tool names |
 | `mcp_cloud/http_server.py` | Any inline tool name references |
@@ -131,7 +129,7 @@ If a future proposal decides to rename `task_id`, it should be addressed in a se
 
 | File | What changes |
 |------|-------------|
-| `docs/mcp/planexe_mcp_interface.md` | All section headings and all occurrences of `task_create`, `task_status`, `task_stop`, `task_retry`, `task_file_info`, `task_download`, `task_list` |
+| `docs/mcp/planexe_mcp_interface.md` | All section headings and all occurrences of `task_create`, `task_status`, `task_stop`, `task_retry`, `task_file_info`, `task_list` |
 | `docs/mcp/mcp_details.md` | Same |
 | `docs/mcp/mcp_welcome.md` | Same |
 | `docs/mcp/mcp_setup.md` | Same |
@@ -172,14 +170,13 @@ task_stop      → plan_stop
 task_retry     → plan_retry
 task_list      → plan_list
 task_file_info → plan_file_info
-task_download  → plan_download
 ```
 
 ### Step 4 — Update `mcp_cloud/tool_models.py`
 
 Update only the `description` strings and docstrings that reference old tool names. Python class names (`TaskCreateInput`, `TaskStatusOutput`, etc.) are internal and can stay unchanged for now or be renamed in a follow-up.
 
-Search pattern: `grep -rn "task_create\|task_status\|task_stop\|task_retry\|task_list\|task_file_info\|task_download" mcp_cloud/tool_models.py`
+Search pattern: `grep -rn "task_create\|task_status\|task_stop\|task_retry\|task_list\|task_file_info" mcp_cloud/tool_models.py`
 
 Replace all occurrences with the new names.
 
@@ -191,23 +188,11 @@ Replace all occurrences with the new names.
 4. Update all description strings and docstrings that reference old tool names (e.g. "Returns task_id; use it for task_status, task_stop…" → "…use it for plan_status, plan_stop…").
 5. Update `PLANEXE_SERVER_INSTRUCTIONS` string.
 
-### Step 6 — Update `mcp_local/planexe_mcp_local.py`
-
-Same pattern as Step 5:
-
-1. Rename `ToolDefinition` name strings.
-2. Rename handler functions: `handle_task_create` → `handle_plan_create`, etc.
-3. Update `TOOL_HANDLERS` dict.
-4. Update all description strings and the `PLANEXE_SERVER_INSTRUCTIONS` string.
-5. Update internal `_call_remote_tool("task_create", …)` calls to pass the new names (since mcp_local forwards to mcp_cloud, both sides must be renamed together).
-
-**Note:** mcp_local and mcp_cloud must be renamed in the same commit because mcp_local forwards tool calls to mcp_cloud by name. If they diverge, calls will fail with `INVALID_TOOL`.
-
-### Step 7 — Update `mcp_cloud/http_server.py`
+### Step 6 — Update `mcp_cloud/http_server.py`
 
 Search for any inline tool name string references and update them.
 
-### Step 8 — Rename and update test files
+### Step 7 — Rename and update test files
 
 For each test file named `test_task_*.py`:
 1. Create a new file with the renamed path (`test_plan_*.py`).
@@ -216,30 +201,29 @@ For each test file named `test_task_*.py`:
 
 Update `test_tool_surface_consistency.py` to expect the new tool names in the tool list.
 
-### Step 9 — Update documentation
+### Step 8 — Update documentation
 
 For each file in the documentation scope listed above:
-- Search for `task_create`, `task_status`, `task_stop`, `task_retry`, `task_list`, `task_file_info`, `task_download`.
+- Search for `task_create`, `task_status`, `task_stop`, `task_retry`, `task_list`, `task_file_info`.
 - Replace with the corresponding new name.
 - Be careful **not** to rename `task_id` (the UUID field name) — only rename the tool names themselves.
 
 A useful grep to find all documentation occurrences before editing:
 
 ```bash
-grep -rn "task_create\|task_status\|task_stop\|task_retry\|task_list\|task_file_info\|task_download" \
+grep -rn "task_create\|task_status\|task_stop\|task_retry\|task_list\|task_file_info" \
   docs/ skills/ README.md public/llms.txt
 ```
 
-### Step 10 — Run the test suite
+### Step 9 — Run the test suite
 
 ```bash
 python -m pytest mcp_cloud/tests/ -v
-python -m pytest mcp_local/tests/ -v   # if tests exist
 ```
 
 All tests must pass. Fix any failures before proceeding.
 
-### Step 11 — Smoke-test locally with MCP Inspector
+### Step 10 — Smoke-test locally with MCP Inspector
 
 Start mcp_cloud locally and open the MCP Inspector:
 
@@ -251,15 +235,14 @@ Start mcp_cloud locally and open the MCP Inspector:
 # Call plan_status with the returned task_id
 ```
 
-### Step 12 — Open a pull request
+### Step 11 — Open a pull request
 
 Describe the rename in the PR summary. Include:
 - The prefix chosen and why.
 - A note that `task_id` (the field name) was intentionally kept unchanged.
-- Confirmation that mcp_local and mcp_cloud were updated together.
 - Test run results.
 
-### Step 13 — Update deployment configuration (if needed)
+### Step 12 — Update deployment configuration (if needed)
 
 If any external configuration files, environment variable values, or client-side configs reference old tool names by string, update those too.
 
@@ -269,16 +252,15 @@ If any external configuration files, environment variable values, or client-side
 
 | Risk | Mitigation |
 |------|-----------|
-| mcp_local and mcp_cloud renamed at different times → `INVALID_TOOL` errors | Steps 5 and 6 must be committed together in one atomic change. |
 | External clients hardcoding `task_create` break | This is a breaking change. Announce in release notes. Consider a temporary alias period if external users exist. |
-| Partial rename leaves docs inconsistent | Run the grep command from Step 9 after editing to verify zero remaining occurrences. |
+| Partial rename leaves docs inconsistent | Run the grep command from Step 8 after editing to verify zero remaining occurrences. |
 | `task_id` accidentally renamed | Grep for `plan_id` after the rename to confirm it does not appear anywhere in tool schemas or payloads. |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] All MCP tool names exposed by mcp_cloud and mcp_local use the new prefix.
+- [ ] All MCP tool names exposed by mcp_cloud use the new prefix.
 - [ ] All prose and code in `docs/` and `skills/` uses the new names.
 - [ ] `README.md` and `public/llms.txt` use the new names.
 - [ ] The `task_id` field name is unchanged in all request/response schemas.

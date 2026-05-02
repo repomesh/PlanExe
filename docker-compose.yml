@@ -1,16 +1,24 @@
 # ============================================================================
-# POSTGRES PORT CONFLICT NOTE
+# PUBLISHED PORTS / BIND HOST NOTE
 # ============================================================================
-# The default PostgreSQL port is 5432. On developer machines, this port is
-# often already occupied by a local PostgreSQL installation (e.g., Postgres.app
-# on macOS, or a system PostgreSQL on Linux).
+# Several services have permissive defaults that are fine for localhost-only
+# development but would be a foot-gun on a shared network: admin/admin on the
+# frontend, PLANEXE_MCP_REQUIRE_AUTH=false with empty API key on mcp_cloud,
+# default postgres password, no auth at all on worker_plan.
 #
-# If port 5432 is in use, set PLANEXE_POSTGRES_PORT to a different value:
-#   export PLANEXE_POSTGRES_PORT=5433
-#   docker compose up
-#
-# This only affects the HOST port mapping (how you access Postgres from your
-# machine). Inside Docker, containers always connect to each other on port 5432.
+# Ports policy:
+#  - database_postgres and worker_plan have NO host port mapping. They are
+#    reached by other containers via the docker network at
+#    database_postgres:5432 and worker_plan:8000. To inspect them from the
+#    host use `docker compose exec` or a one-off override file. Side effect:
+#    no host port to collide with a local Postgres on 5432.
+#  - frontend_multi_user and mcp_cloud are published, bound to PLANEXE_BIND_HOST
+#    (default 127.0.0.1). To expose them to the LAN (testing from your phone,
+#    Claude Desktop on another machine), set:
+#      export PLANEXE_BIND_HOST=0.0.0.0
+#      docker compose up
+#    First set strong PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD,
+#    PLANEXE_MCP_API_KEY, and PLANEXE_MCP_REQUIRE_AUTH=true.
 # ============================================================================
 
 x-worker_plan_database-base: &worker_plan_database_base
@@ -25,7 +33,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   environment: &worker_plan_database_env
     PLANEXE_WORKER_ID: ${PLANEXE_WORKER_ID:-worker_plan_database}
     PLANEXE_CONFIG_PATH: /app
-    PLANEXE_RUN_DIR: /app/run
     # Internal container-to-container connection always uses port 5432.
     # This is NOT affected by PLANEXE_POSTGRES_PORT (which is for host mapping only).
     PLANEXE_POSTGRES_HOST: database_postgres
@@ -38,7 +45,6 @@ x-worker_plan_database-base: &worker_plan_database_base
   volumes:
     - ./.env:/app/.env:ro
     - ./llm_config:/app/llm_config:ro
-    - ./run:/app/run
   restart: unless-stopped
 
 services:
@@ -54,12 +60,10 @@ services:
       POSTGRES_USER: ${PLANEXE_POSTGRES_USER:-planexe}
       POSTGRES_PASSWORD: ${PLANEXE_POSTGRES_PASSWORD:-planexe}
       POSTGRES_DB: ${PLANEXE_POSTGRES_DB:-planexe}
-    ports:
-      # PLANEXE_POSTGRES_PORT sets the HOST port (left side). The container always
-      # listens on 5432 internally (right side). If your machine already has a
-      # Postgres running on 5432 (e.g., Postgres.app on macOS), set a different
-      # host port: export PLANEXE_POSTGRES_PORT=5433
-      - "${PLANEXE_POSTGRES_PORT:-5432}:5432"
+    # No host port mapping by default. Other containers reach this DB via the
+    # docker network as database_postgres:5432. If you want to inspect the
+    # database from your host (DBeaver, psql) use a one-off override file or
+    # `docker compose exec database_postgres psql -U planexe`.
     volumes:
       - database_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -79,15 +83,13 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_HOST_RUN_DIR: ${PLANEXE_HOST_RUN_DIR:-${PWD}/run}
-      PLANEXE_RUN_DIR: /app/run
       PLANEXE_WORKER_RELAY_PROCESS_OUTPUT: "true"
-    ports:
-      - "8000:8000"
+    # No host port mapping by default. frontend_multi_user reaches this API
+    # via the docker network as worker_plan:8000. To curl it from the host
+    # use a one-off override file or `docker compose exec worker_plan ...`.
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthcheck').read()"]
       interval: 10s
@@ -132,51 +134,6 @@ services:
       <<: *worker_plan_database_env
       PLANEXE_WORKER_ID: "3"
 
-  frontend_single_user:
-    build:
-      context: .
-      dockerfile: frontend_single_user/Dockerfile
-    container_name: frontend_single_user
-    depends_on:
-      worker_plan:
-        condition: service_healthy
-    env_file:
-      - .env
-    environment:
-      PLANEXE_WORKER_PLAN_URL: ${PLANEXE_WORKER_PLAN_URL:-http://worker_plan:8000}
-      PLANEXE_WORKER_PLAN_TIMEOUT: ${PLANEXE_WORKER_PLAN_TIMEOUT:-30}
-      PLANEXE_GRADIO_SERVER_NAME: ${PLANEXE_GRADIO_SERVER_NAME:-0.0.0.0}
-      PLANEXE_GRADIO_SERVER_PORT: ${PLANEXE_GRADIO_SERVER_PORT:-7860}
-      PLANEXE_PASSWORD: ${PLANEXE_PASSWORD:-}
-      PLANEXE_OPEN_DIR_SERVER_URL: ${PLANEXE_OPEN_DIR_SERVER_URL:-}
-    ports:
-      - "7860:7860"
-    volumes:
-      - ./.env:/app/.env:ro
-      - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
-    restart: unless-stopped
-    develop:
-      watch:
-        - action: sync
-          path: ./frontend_single_user
-          target: /app/frontend_single_user
-        - action: restart
-          path: ./frontend_single_user
-        - action: sync
-          path: ./worker_plan
-          target: /app/worker_plan
-        - action: sync
-          path: ./llm_config
-          target: /app/llm_config
-        - action: sync
-          path: ./.env
-          target: /app/.env
-        - action: rebuild
-          path: ./worker_plan/pyproject.toml
-        - action: restart
-          path: ./docker-compose.yml
-
   frontend_multi_user:
     build:
       context: .
@@ -200,11 +157,12 @@ services:
       PLANEXE_DATABASE_WORKER_URL: ${PLANEXE_DATABASE_WORKER_URL:-http://database_worker:8002}
       PLANEXE_DATABASE_WORKER_API_KEY: ${PLANEXE_DATABASE_WORKER_API_KEY:-}
     ports:
-      - "${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}:5000"
+      # PLANEXE_BIND_HOST defaults to 127.0.0.1; override with 0.0.0.0 only
+      # after setting a strong PLANEXE_FRONTEND_MULTIUSER_ADMIN_PASSWORD.
+      - "${PLANEXE_BIND_HOST:-127.0.0.1}:${PLANEXE_FRONTEND_MULTIUSER_PORT:-5001}:5000"
     volumes:
       - ./.env:/app/.env:ro
       - ./llm_config:/app/llm_config:ro
-      - ./run:/app/run
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/healthcheck').read()"]
       interval: 10s
@@ -246,7 +204,6 @@ services:
       - .env
     environment:
       PLANEXE_CONFIG_PATH: /app
-      PLANEXE_RUN_DIR: /app/run
       # Internal container-to-container connection always uses port 5432.
       PLANEXE_POSTGRES_HOST: database_postgres
       PLANEXE_POSTGRES_PORT: "5432"
@@ -260,7 +217,9 @@ services:
       PLANEXE_MCP_PUBLIC_BASE_URL: ${PLANEXE_MCP_PUBLIC_BASE_URL:-http://localhost:8001}
       PLANEXE_WORKER_PLAN_URL: ${PLANEXE_WORKER_PLAN_URL:-http://worker_plan:8000}
     ports:
-      - "${PLANEXE_MCP_HTTP_PORT:-8001}:8001"
+      # PLANEXE_BIND_HOST defaults to 127.0.0.1; override with 0.0.0.0 only
+      # after setting PLANEXE_MCP_REQUIRE_AUTH=true and PLANEXE_MCP_API_KEY.
+      - "${PLANEXE_BIND_HOST:-127.0.0.1}:${PLANEXE_MCP_HTTP_PORT:-8001}:8001"
     volumes:
       - ./llm_config:/app/llm_config:ro
     restart: unless-stopped

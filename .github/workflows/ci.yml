@@ -80,9 +80,7 @@ jobs:
           cache-dependency-path: |
             worker_plan/pyproject.toml
             frontend_multi_user/pyproject.toml
-            frontend_single_user/requirements.txt
             worker_plan_database/requirements.txt
-            open_dir_server/requirements.txt
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -95,13 +93,9 @@ jobs:
           .venv/bin/python -m pip install --upgrade pip
           .venv/bin/pip install -e worker_plan
           .venv/bin/pip install -e frontend_multi_user
-          .venv/bin/pip install -r frontend_single_user/requirements.txt
           .venv/bin/pip install -r worker_plan_database/requirements.txt
-          .venv/bin/pip install -r open_dir_server/requirements.txt
           ln -sfn ../.venv frontend_multi_user/.venv
-          ln -sfn ../.venv frontend_single_user/.venv
           ln -sfn ../.venv worker_plan_database/.venv
-          ln -sfn ../.venv open_dir_server/.venv
 
       - name: Install pyright
         run: npm install -g pyright
@@ -109,6 +103,4 @@ jobs:
       - name: Run pyright (non-blocking while baseline is established)
         run: |
           pyright -p frontend_multi_user/pyrightconfig.json
-          pyright -p frontend_single_user/pyrightconfig.json
           pyright -p worker_plan_database/pyrightconfig.json
-          pyright -p open_dir_server/pyrightconfig.json

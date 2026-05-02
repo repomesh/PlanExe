@@ -41,8 +41,6 @@ PLANEXE_OAUTH_GOOGLE_CLIENT_SECRET="secret"
 PLANEXE_POSTGRES_HOST="databasepostgres.railway.internal"
 PLANEXE_POSTGRES_PASSWORD="secret"
 PLANEXE_STRIPE_SECRET_KEY="secret"
-POSTGRES_DATABASE_HOST="secret"
-POSTGRES_DATABASE_PUBLIC_PORT="secret"
 ```
 
 Generate `<a-strong-random-string>` with `openssl rand -hex 32`.

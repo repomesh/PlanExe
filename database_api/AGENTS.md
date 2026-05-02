@@ -16,8 +16,8 @@ consumers.
   `frontend_multi_user/src/app.py`) and related docs.
 - Allowed imports: stdlib, `sqlalchemy`, `sqlalchemy_utils`, and
   `database_api.planexe_db_singleton`.
-- Forbidden imports: `worker_plan*`, `frontend_*`, `worker_plan_database`,
-  `open_dir_server` (keep this package service-agnostic).
+- Forbidden imports: `worker_plan*`, `frontend_*`, `worker_plan_database`
+  (keep this package service-agnostic).
 - Use UTC timestamps for defaults (`datetime.now(UTC)`), matching existing models.
 - Foreign keys: current models do not define `ForeignKey` constraints. Confirm
   with the owner before adding any.

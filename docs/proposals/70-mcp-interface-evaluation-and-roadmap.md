@@ -6,13 +6,13 @@ date: 2026-02-26
 
 # MCP Interface — Evaluation and Roadmap
 
-An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed by concrete improvements and promotion ideas.
+An honest audit of the current MCP surface (`mcp_cloud`), followed by concrete improvements and promotion ideas.
 
 **Revision history:**
 
 - **2026-02-26 (rev 1):** Initial version after `task_`* → `plan_*` rename.
 - **2026-02-26 (rev 2):** Updated after `app.py` refactor into modules, `plan_list` `user_api_key` made optional in schema (auto-injected by HTTP layer), and re-evaluation of all open issues.
-- **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed across `mcp_cloud` and `mcp_local`. Test files renamed from `test_task_`* to `test_plan_*`.
+- **2026-02-26 (rev 3):** Updated after completing 4.9 — all stale `task` variable names, request classes, helper functions, and backward-compat aliases renamed/removed in `mcp_cloud`. Test files renamed from `test_task_`* to `test_plan_*`.
 - **2026-02-26 (rev 4):** Updated after completing 4.2 — added separate download rate limiter with configurable limits (default 10 req/60s).
 - **2026-02-26 (rev 5):** Renamed external-facing fields: `task_id` → `plan_id`, `tasks` → `plans`, error codes `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`. Internal function names and download URL paths unchanged.
 - **2026-03-02 (rev 6):** SSE progress streaming implemented (`mcp_cloud/sse.py`, `GET /sse/plan/{plan_id}`). Incorporated feedback from Claude Code agent evaluation of the MCP interface: improved SSE documentation across server instructions, tool descriptions, and field descriptions to be actionable for agents; added new proposed improvements for credit feedback, pipeline stage names, and files array completeness. Discovered and fixed BaseHTTPMiddleware blocking issue with SSE streams.
@@ -21,23 +21,20 @@ An honest audit of the current MCP surface (`mcp_cloud` + `mcp_local`), followed
 
 ## 1. Current Tool Surface
 
-Nine tools, split across two transports:
+Eight tools exposed by `mcp_cloud`:
 
 
-| Tool              | Cloud (`mcp_cloud`) | Local (`mcp_local`) | Auth     | Annotations             |
-| ----------------- | ------------------- | ------------------- | -------- | ----------------------- |
-| `example_prompts` | yes                 | yes                 | Public   | readOnly, idempotent    |
-| `model_profiles`  | yes                 | yes                 | Public   | readOnly, idempotent    |
-| `plan_create`     | yes                 | yes                 | Required | openWorld               |
-| `plan_status`     | yes                 | yes                 | Required | readOnly, idempotent    |
-| `plan_stop`       | yes                 | yes                 | Required | destructive, idempotent |
-| `plan_retry`      | yes                 | yes                 | Required | openWorld               |
-| `plan_file_info`  | yes                 | —                   | Required | readOnly, idempotent    |
-| `plan_download`   | —                   | yes                 | Required | openWorld               |
-| `plan_list`       | yes                 | yes                 | Required | readOnly, idempotent    |
+| Tool              | Auth     | Annotations             |
+| ----------------- | -------- | ----------------------- |
+| `example_prompts` | Public   | readOnly, idempotent    |
+| `model_profiles`  | Public   | readOnly, idempotent    |
+| `plan_create`     | Required | openWorld               |
+| `plan_status`     | Required | readOnly, idempotent    |
+| `plan_stop`       | Required | destructive, idempotent |
+| `plan_retry`      | Required | openWorld               |
+| `plan_file_info`  | Required | readOnly, idempotent    |
+| `plan_list`       | Required | readOnly, idempotent    |
 
-
-`plan_download` is a local-only synthetic tool that internally proxies to `plan_file_info` on the cloud, then downloads and saves the artifact to the user's filesystem. This intentional asymmetry is tested in `test_tool_surface_consistency.py`.
 
 **Auth model for `plan_create` and `plan_list`:** Both tools accept an optional `user_api_key` in the visible MCP input schema. When called over HTTP, the middleware authenticates the caller via the `X-API-Key` header and auto-injects `user_api_key` into handler arguments. This means MCP clients never need to pass `user_api_key` explicitly — the key is invisible in the tool's published schema but enforced at runtime. Both handlers return `USER_API_KEY_REQUIRED` if no key arrives by either path.
 
@@ -45,7 +42,7 @@ Nine tools, split across two transports:
 
 ## 2. What's Working Well
 
-**Dual transport.** `mcp_cloud` (stateless HTTP / Railway) and `mcp_local` (stdio proxy) cover the two major deployment patterns. Most users can pick one without reading source code.
+**Cloud HTTP transport.** `mcp_cloud` is a stateless HTTP service on Railway. Clients connect directly over HTTP — no local proxy required.
 
 **Clean module structure.** `mcp_cloud/app.py` is now a thin re-export facade (~195 lines). Logic lives in focused modules: `handlers.py` (tool handlers), `schemas.py` (tool definitions), `tool_models.py` (Pydantic models), `db_queries.py` (DB operations), `auth.py` (key hashing/user resolution), `download_tokens.py` (signed tokens), `model_profiles.py`, `worker_fetchers.py`, `zip_utils.py`, `example_prompts.py`. This makes PRs reviewable and bugs easy to isolate.
 
@@ -105,7 +102,7 @@ Now returns `{"ready": false, "reason": "processing"}` while running and `{"read
 
 ### 3.6 ~~No `plan_list` tool — lost `task_id` = lost task~~ (FIXED)
 
-Added `plan_list` to both `mcp_cloud` and `mcp_local`. Returns up to 50 tasks newest-first.
+Added `plan_list` to `mcp_cloud`. Returns up to 50 tasks newest-first.
 
 ### 3.7 ~~Signed, expiring download tokens~~ (FIXED)
 
@@ -141,7 +138,7 @@ A separate download rate limiter (`_enforce_download_rate_limit`) now covers `/d
 
 ### ~~4.4 `plan_file_info` silently defaults invalid artifact to `"report"`~~ (FIXED)
 
-Both `handle_plan_file_info` (cloud) and `handle_plan_download` (local) now return `INVALID_ARGUMENT` with a descriptive message when the artifact value is not `"report"` or `"zip"`.
+`handle_plan_file_info` now returns `INVALID_ARGUMENT` with a descriptive message when the artifact value is not `"report"` or `"zip"`.
 
 ### ~~4.5 No dedicated `plan_list` test~~ (FIXED)
 
@@ -161,7 +158,7 @@ Extracted to `PROMPT_EXCERPT_MAX_LENGTH = 100` at module level in `db_queries.py
 
 ### ~~4.9 Stale `task` variable names and backward-compat aliases~~ (FIXED)
 
-All internal naming now uses `plan` consistently. Request classes renamed (`TaskCreateRequest` → `PlanCreateRequest`, etc.), DB query helpers renamed (`_create_task_sync` → `_create_plan_sync`, `get_task_by_id` → `get_plan_by_id`, etc.), local variables renamed (`task_snapshot` → `plan_snapshot`, etc.), all backward-compat aliases removed from `tool_models.py`, `schemas.py`, `handlers.py`, `app.py`, and `mcp_local/planexe_mcp_local.py` (~86 lines deleted). Test files renamed from `test_task_*.py` to `test_plan_*.py` with patch targets updated.
+All internal naming now uses `plan` consistently. Request classes renamed (`TaskCreateRequest` → `PlanCreateRequest`, etc.), DB query helpers renamed (`_create_task_sync` → `_create_plan_sync`, `get_task_by_id` → `get_plan_by_id`, etc.), local variables renamed (`task_snapshot` → `plan_snapshot`, etc.), all backward-compat aliases removed from `tool_models.py`, `schemas.py`, `handlers.py`, and `app.py` (~86 lines deleted). Test files renamed from `test_task_*.py` to `test_plan_*.py` with patch targets updated.
 
 ### ~~4.10 `plan_list` auth differs from `plan_create`~~ (FIXED)
 

@@ -10,8 +10,8 @@ consumers.
   - Avoid renaming response fields like `run_id`, `run_dir`, `display_run_dir`.
 - Artifact contract: `/runs/{run_id}/zip` must not include
   `track_activity.jsonl` in downloadable zips.
-- Maintain the run directory conventions (`PlanExe_...`) and environment-driven
-  paths (`PLANEXE_RUN_DIR`, `PLANEXE_HOST_RUN_DIR`, `PLANEXE_CONFIG_PATH`).
+- Maintain the run directory conventions (`PlanExe_...`); run outputs go under
+  `{PLANEXE_CONFIG_PATH}/run/`.
 - When changing pipeline behavior, keep the subprocess invocation in
   `start_pipeline_subprocess` consistent with `worker_plan_internal`.
 - Keep `PlanExeDotEnv.load().update_os_environ()` early so `.env` overrides work.

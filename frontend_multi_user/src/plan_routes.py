@@ -3,13 +3,14 @@ import io
 import json
 import logging
 import os
+import time
 import uuid
 import zipfile
 from datetime import datetime, UTC
 from decimal import Decimal
 from typing import Any, Optional
 
-from flask import Blueprint, current_app, jsonify, make_response, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, Response, current_app, jsonify, make_response, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import func
 from sqlalchemy.exc import DataError
@@ -44,8 +45,6 @@ from src.utils import (
 logger = logging.getLogger(__name__)
 
 plan_routes_bp = Blueprint("plan_routes", __name__)
-
-SHOW_DEMO_PLAN = False
 
 
 def _new_model(model_cls: Any, **kwargs: Any) -> Any:
@@ -115,7 +114,7 @@ def _load_prompt_preview_safe(task_id: Any, max_chars: int = 240) -> str:
     except DataError:
         db.session.rollback()
         logger.warning(
-            "Detected invalid UTF-8 in task_item.prompt for task_id=%s; using placeholder preview.",
+            "Detected invalid UTF-8 in plans.prompt for task_id=%s; using placeholder preview.",
             task_id,
             exc_info=True,
         )
@@ -903,22 +902,31 @@ def viewplan():
         logger.warning("Unauthorized report access attempt. plan_id=%s user_id=%s", plan_id, current_user.id)
         return jsonify({"error": "Forbidden"}), 403
 
-    if SHOW_DEMO_PLAN:
-        planexe_run_dir = current_app.config["PLANEXE_RUN_DIR"]
-        demo_plan_id = "20250524_universal_manufacturing"
-        demo_plan_dir = (planexe_run_dir / demo_plan_id).absolute()
-        path_to_html_file = demo_plan_dir / FilenameEnum.REPORT.value
-        if not path_to_html_file.exists():
-            return jsonify({"error": "Demo report not found"}), 404
-        return send_file(str(path_to_html_file), mimetype="text/html")
-
-    if not plan.generated_report_html:
+    if not plan.has_generated_report_html:
         logger.error("Report HTML not found for plan_id=%s", plan_id)
         return jsonify({"error": "Report not available"}), 404
 
-    response = make_response(plan.generated_report_html)
-    response.headers["Content-Type"] = "text/html"
-    return response
+    # generated_report_html is a deferred TEXT column (~800KB typical). Loading
+    # it can stall when the row is large or the DB is busy with a checkpoint;
+    # log timing so we can attribute future worker timeouts to the right step.
+    load_start = time.monotonic()
+    report_html = plan.generated_report_html
+    load_secs = time.monotonic() - load_start
+    if not report_html:
+        logger.error("Report HTML empty for plan_id=%s", plan_id)
+        return jsonify({"error": "Report not available"}), 404
+    report_bytes = report_html.encode("utf-8")
+    logger.info(
+        "ViewPlan: loaded report for plan_id=%s in %.2fs (%d bytes)",
+        plan_id, load_secs, len(report_bytes),
+    )
+
+    chunk_size = 65536
+    def _stream():
+        for i in range(0, len(report_bytes), chunk_size):
+            yield report_bytes[i:i + chunk_size]
+
+    return Response(_stream(), mimetype="text/html")
 
 
 @plan_routes_bp.route("/plan")
@@ -946,7 +954,7 @@ def plan():
             )
         except DataError:
             db.session.rollback()
-            logger.warning("Detected invalid UTF-8 in task_item.prompt for user_id=%s; falling back.", user_id, exc_info=True)
+            logger.warning("Detected invalid UTF-8 in plans.prompt for user_id=%s; falling back.", user_id, exc_info=True)
             tasks = (
                 db.session.query(PlanItem.id, PlanItem.timestamp_created, PlanItem.state, PlanItem.stop_requested)
                 .filter(uid_filter)

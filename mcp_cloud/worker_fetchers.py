@@ -12,7 +12,6 @@ from flask import has_app_context
 from worker_plan_api.format_datetime import format_datetime_utc
 
 from mcp_cloud.db_setup import (
-    BASE_DIR_RUN,
     REPORT_FILENAME,
     WORKER_PLAN_URL,
     ZIP_SNAPSHOT_MAX_BYTES,
@@ -177,36 +176,6 @@ async def fetch_file_list_from_worker_plan(run_id: str) -> Optional[list[tuple[s
         logger.error(f"Error fetching file list from worker_plan: {e}", exc_info=True)
         return None
 
-
-def list_files_from_local_run_dir(run_id: str) -> Optional[list[tuple[str, str]]]:
-    """
-    List files from local run directory when this service shares PLANEXE_RUN_DIR
-    with the worker (e.g., Docker compose).
-
-    Returns list of (filename, ISO-8601 UTC timestamp) tuples sorted by name,
-    or None if the directory does not exist.
-    """
-
-    run_dir = (BASE_DIR_RUN / run_id).resolve()
-    try:
-        if not run_dir.is_relative_to(BASE_DIR_RUN):
-            return None
-    except ValueError:
-        return None
-    if not run_dir.exists() or not run_dir.is_dir():
-        return None
-    try:
-        results = []
-        for path in run_dir.iterdir():
-            if path.is_file():
-                mtime = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
-                mtime_str = format_datetime_utc(mtime)
-                results.append((path.name, mtime_str))
-        results.sort(key=lambda t: t[0])
-        return results
-    except Exception as exc:
-        logger.warning("Unable to list local run dir files for %s: %s", run_id, exc)
-        return None
 
 async def fetch_zip_from_worker_plan(run_id: str) -> Optional[bytes]:
     """Fetch the zip snapshot from worker_plan via HTTP."""

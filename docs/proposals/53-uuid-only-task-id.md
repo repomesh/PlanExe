@@ -68,23 +68,7 @@ Mixed ID formats create ambiguity and extra branching in code paths, tests, and 
 
 ---
 
-## 3) Frontend single user (major UX impact area)
-
-### `/Users/neoneye/git/PlanExeGroup/PlanExe/frontend_single_user/app.py`
-
-- Remove `RUN_ID_PREFIX` import.
-- Remove `Config.use_uuid_as_run_id` and related payload field.
-- Stop sending `use_uuid_as_run_id` in `worker_client.start_run(...)` payload.
-- Update Advanced tab purge UI text/value that currently assumes `PlanExe_` prefixes.
-
-### `/Users/neoneye/git/PlanExeGroup/PlanExe/frontend_single_user/AGENTS.md`
-
-- Remove instruction to keep `RUN_ID_PREFIX` conventions.
-- Replace with UUID-only task-id convention.
-
----
-
-## 4) Frontend multi user cleanup
+## 3) Frontend multi user cleanup
 
 ### `/Users/neoneye/git/PlanExeGroup/PlanExe/frontend_multi_user/src/app.py`
 
@@ -93,7 +77,7 @@ Mixed ID formats create ambiguity and extra branching in code paths, tests, and 
 
 ---
 
-## 5) Purge behavior and old assumptions
+## 4) Purge behavior and old assumptions
 
 ### `/Users/neoneye/git/PlanExeGroup/PlanExe/worker_plan/worker_plan_internal/utils/purge_old_runs.py`
 
@@ -106,7 +90,7 @@ Suggested direction:
 
 ---
 
-## 6) Documentation updates
+## 5) Documentation updates
 
 Update docs that mention `PlanExe_...` run IDs to UUID-only examples.
 
@@ -129,29 +113,12 @@ This is mostly mechanical and can be staged after UUID-only rollout.
 
 ---
 
-## Known drawback
-
-Switching from human-readable `PlanExe_19841231_195936` to UUID directory names is worse UX in `frontend_single_user` when browsing output folders directly.
-
-### Mitigations
-
-1. Show a friendly display label in UI:
-   - Example: `Started 1984-12-31 19:59:36 (task_id: 920da16e-...)`
-2. Add a small metadata file inside each run folder:
-   - `meta.json` with prompt snippet, start time, model, and status.
-3. Optional local-only alias symlink:
-   - Human-readable symlink name pointing to UUID directory.
-4. Keep “Open output dir” UX focused on file list/report links rather than folder names.
-
----
-
 ## Rollout plan
 
 1. Implement UUID-only generation + remove toggles.
-2. Update single-user frontend payload/config.
-3. Update purge behavior.
-4. Update tests/docs.
-5. Run one migration pass for any tooling that assumes `PlanExe_` prefix.
+2. Update purge behavior.
+3. Update tests/docs.
+4. Run one migration pass for any tooling that assumes `PlanExe_` prefix.
 
 ---
 
@@ -159,5 +126,5 @@ Switching from human-readable `PlanExe_19841231_195936` to UUID directory names 
 
 - No new run/task IDs use timestamp format.
 - No UI or API option exists to request timestamp IDs.
-- Single-user and multi-user flows both create UUID directory names.
+- Multi-user flow create UUID directory names.
 - Tests and docs contain UUID-only examples.

@@ -107,10 +107,11 @@ class ConvertPitchToMarkdown:
             markdown_content = response_content  # Use the entire content if delimiters are missing
             logger.warning("Output delimiters not found in LLM response.")
 
-        # The bullet lists are supposed to be preceded by 2 newlines. 
-        # However often there is just 1 newline. 
+        # The bullet lists are supposed to be preceded by 2 newlines.
+        # However often there is just 1 newline.
         # This fix makes sure there are 2 newlines before bullet lists.
         markdown_content = fix_bullet_lists(markdown_content)
+        markdown_content = "Persuasive elevator pitch.\n\n" + markdown_content
 
         json_response = {}
         json_response['response_content'] = response_content

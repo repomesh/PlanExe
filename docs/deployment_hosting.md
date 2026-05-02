@@ -25,5 +25,4 @@ This page summarizes ways to deploy PlanExe.
 ## MCP deployments
 
 - MCP server lives in `mcp_cloud`.
-- Local proxy lives in `mcp_local`.
 - Start with: [MCP setup](mcp/mcp_setup.md)

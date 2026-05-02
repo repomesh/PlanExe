@@ -10,6 +10,12 @@ No MCP experience is required to get started.
 
 ---
 
+## Recommended starting point
+
+Start with the hosted server at `https://mcp.planexe.org/mcp` — it's the fastest path and needs nothing installed beyond your MCP client and a `pex_...` key from [home.planexe.org](https://home.planexe.org/). Only switch to local Docker if you need full control over the stack (models, privacy, or offline work).
+
+---
+
 ## Who this is for
 
 - **You’re an AI agent** — You have access to PlanExe’s tools and want to create a plan for the user.
@@ -39,6 +45,7 @@ The MCP user chooses which artifact to download:
 ## Next steps
 
 - **Setup** — [MCP setup](mcp_setup.md): recommended path to a working integration.
+- **Client config snippets** — [MCP client config snippets](mcp_client_config.md): canonical cloud + local-Docker JSON blocks for `mcpServers`-style clients.
 - **Publish to MCP Registry** — [MCP registry publishing](mcp_registry.md): publish `mcp.planexe.org` metadata so it appears in `github.com/mcp`.
 - **See the tools and a typical flow** — [MCP details](mcp_details.md): tool list, example prompts, and step-by-step flow without heavy protocol detail.
  - **Set up in Claude** — [Claude](claude.md): Claude desktop app and Claude Code, with cloud and local Docker options.

@@ -26,9 +26,9 @@ Common MCP integration issues and fixes.
 
 ## Download fails
 
-- Confirm the download URL is reachable from your network.
-- If you run locally, make sure any proxy or base URL is correct.
-- Ensure `PLANEXE_PATH` is a valid directory and that you have write permissions.
+- Confirm the `download_url` returned by `plan_file_info` is reachable from your network.
+- If you run locally, make sure the base URL (`http://localhost:8001/mcp`) is correct.
+- If downloads 401/403, re-check the `X-API-Key` header (cloud) or `PLANEXE_MCP_REQUIRE_AUTH` (Docker).
 
 ---
 

@@ -30,11 +30,11 @@ DEFAULT_LLM='openrouter-paid-gemini-2.0-flash-001'   # or openrouter-paid-openai
    The containers mount `.env` and `llm_config/<profile>.json` automatically.
 4. Start PlanExe:
 ```
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
-   - Wait for http://localhost:7860 to come up, submit a prompt, and watch progress with `docker compose logs -f worker_plan`.
+   - Wait for http://localhost:5001 to come up, submit a prompt, and watch progress with `docker compose logs -f worker_plan`.
    - Outputs are written to `run/<timestamped-output-dir>` on the host (mounted from the containers).
-5. Stop with `Ctrl+C` (or `docker compose down`). If you change `llm_config/<profile>.json`, restart the containers so they reload it: `docker compose restart worker_plan frontend_single_user` (or `docker compose down && docker compose up`). No rebuild is needed for config-only edits.
+5. Stop with `Ctrl+C` (or `docker compose down`). If you change `llm_config/<profile>.json`, restart the containers so they reload it: `docker compose restart worker_plan frontend_multi_user` (or `docker compose down && docker compose up`). No rebuild is needed for config-only edits.
 
 ## Configuration
 
@@ -48,7 +48,7 @@ Open the `.env` file in a text editor and insert your OpenRouter API key. Like t
 OPENROUTER_API_KEY='INSERT YOUR KEY HERE'
 ```
 
-If you edit `llm_config/<profile>.json` later, restart the worker/frontend containers to pick up the changes: `docker compose restart worker_plan frontend_single_user` (or stop/start). Rebuilds are only needed when dependencies change.
+If you edit `llm_config/<profile>.json` later, restart the worker/frontend containers to pick up the changes: `docker compose restart worker_plan frontend_multi_user` (or stop/start). Rebuilds are only needed when dependencies change.
 
 ## Troubleshooting
 

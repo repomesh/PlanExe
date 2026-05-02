@@ -96,8 +96,7 @@ http_server.py (re-export shim)
   - `progress_message` stays "Stop requested by user." (not "Stopped") because the
     worker is typically still busy processing and will stop after its current LLM call.
   - Return current public `state` (now `"failed"`) plus `stop_requested: true`.
-- Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`,
-  `open_dir_server`.
+- Forbidden imports: `worker_plan.app`, `worker_plan_internal`, `frontend_*`.
 
 ## Async/sync boundary
 
@@ -321,16 +320,9 @@ The same `_get_download_base_url()` function is used to build both `download_url
 - Keep `GET /robots.txt` available (200) for crawler health checks and metadata discovery.
 - FastMCP session lifecycle lines like `Terminating session: None` are expected informational logs; do not treat them as application failures solely based on Railway's log-level labeling.
 
-## mcp_local integration
-- `mcp_local` runs on the user's machine and forwards tool calls to this server over HTTP.
-- It targets either:
-  - the HTTP wrapper endpoint (`/mcp/tools/call`), or
-  - the streamable MCP JSON-RPC endpoint (`/mcp`).
-- Tool-surface split must stay explicit:
-  - `mcp_cloud` exposes `plan_file_info` (not `plan_download`).
-  - `mcp_local` exposes `plan_download` and implements it via cloud `plan_file_info`.
-- `plan_file_info` provides download metadata that `mcp_local` uses to download
-  artifacts via `/download/{plan_id}/...`.
+## Download flow
+- `mcp_cloud` exposes `plan_file_info`, which returns download metadata;
+  callers fetch artifacts from `/download/{plan_id}/...`.
 
 ## Troubleshooting guidance (caller-facing text)
 - Keep guidance aligned across server instructions and tool descriptions:
@@ -372,10 +364,9 @@ The same `_get_download_base_url()` function is used to build both `download_url
   example: three isolated try/except blocks for HTTP, DB, and zip snapshot.
 
 ## Worker HTTP fallback ordering
-- When resolving file lists or artifacts, try fast local sources first:
-  1. DB (`fetch_report_from_db` / `list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`)
-  2. Local run directory (`list_files_from_local_run_dir`)
-  3. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`)
+- When resolving file lists or artifacts, check the DB first and fall back to the worker for anything not yet persisted:
+  1. DB (`fetch_report_from_db` / `list_files_from_zip_snapshot` / `fetch_file_from_zip_snapshot`) — for completed/snapshotted plans
+  2. Worker HTTP (`fetch_file_list_from_worker_plan` / `fetch_artifact_from_worker_plan`) — the live source for in-flight plans
 - The report fallback chain (`_fetch_report_with_fallbacks`) follows this same
   DB-first convention: DB → zip snapshot → HTTP.  This matches the zip path
   (`fetch_user_downloadable_zip`) which also tries the DB before HTTP.

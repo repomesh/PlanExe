@@ -1,7 +1,11 @@
-# PlanExe
-
 <p align="center">
-  <img src="docs/planexe-humanoid-factory.gif?raw=true" alt="PlanExe - Turn your idea into a comprehensive plan in minutes, not months." width="700">
+  <picture>
+    <source media="(prefers-color-scheme: dark)"
+            srcset="docs/hero/planexe-hero-v1-grid-dark.svg">
+    <img src="docs/hero/planexe-hero-v1-grid-light.svg"
+         alt="The PlanExe icon is the P character and E character"
+         width="100%">
+  </picture>
 </p>
 
 <p align="center">
@@ -9,12 +13,18 @@
 </p>
 
 <p align="center">
-  <strong>PlanExe is the premier planning tool for AI agents.</strong>
+  <a href="https://app.mach-ai.com/planexe_early_access">
+    <img src="https://img.shields.io/badge/%F0%9F%9A%80%20Try%20PlanExe%20in%20your%20browser-Generate%20a%20free%20plan-2ea44f?style=for-the-badge" alt="Try PlanExe in your browser — generate a free plan" height="48">
+  </a>
+</p>
+
+<p align="center">
+  Describe your idea, hit submit, and PlanExe returns a ~40-page plan in about 15 minutes.
 </p>
 
 <p align="center">
   <a href="https://home.planexe.org/"><strong>Create an account</strong></a> &nbsp;|&nbsp;
-  <a href="https://app.mach-ai.com/planexe_early_access"><strong>Generate a free plan</strong></a> &nbsp;|&nbsp;
+  <a href="https://planexe.org/examples/"><strong>See example plans</strong></a> &nbsp;|&nbsp;
   <a href="https://docs.planexe.org/getting_started/"><strong>Getting started guide</strong></a>
 </p>
 
@@ -62,7 +72,7 @@ The Tool workflow
 5. `plan_create`
 6. `plan_status` (poll every 5 minutes until done)
 7. optional if failed: `plan_retry`
-8. download the result via `plan_download` or via `plan_file_info`
+8. download the result via `plan_file_info`
 
 Concurrency note: each `plan_create` call returns a new `plan_id`; server-side global per-client concurrency is not capped, so clients should track their own parallel plans.
 
@@ -89,32 +99,7 @@ Use this endpoint directly in your MCP client:
 }
 ```
 
-### Option B: Remote MCP + local downloads via proxy (`mcp_local`)
-
-If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "https://mcp.planexe.org/mcp",
-        "PLANEXE_MCP_API_KEY": "pex_your_api_key_here",
-        "PLANEXE_PATH": "/absolute/path/for/downloads"
-      }
-    }
-  }
-}
-```
-
-### Option C: Run MCP server locally with Docker
+### Option B: Run MCP server locally with Docker
 
 #### Prerequisites
 
@@ -136,30 +121,6 @@ Then connect your client to:
 
 For local docker defaults, auth is disabled in `docker-compose.yml`.
 
-#### Local file downloads via proxy (`mcp_local`)
-
-If you want artifacts saved directly to your disk from your MCP client, run the local proxy:
-
-```json
-{
-  "mcpServers": {
-    "planexe": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--with",
-        "mcp",
-        "/absolute/path/to/PlanExe/mcp_local/planexe_mcp_local.py"
-      ],
-      "env": {
-        "PLANEXE_URL": "http://localhost:8001/mcp/",
-        "PLANEXE_PATH": "/absolute/path/for/downloads"
-      }
-    }
-  }
-}
-```
-
 ### MCP docs
 
 - Setup overview: [https://docs.planexe.org/mcp/mcp_setup/](https://docs.planexe.org/mcp/mcp_setup/)
@@ -176,7 +137,7 @@ If you want artifacts saved directly to your disk from your MCP client, run the 
 ## Running the Pipeline via CLI (no frontend)
 
 If you have a local Python environment set up and want to invoke the pipeline
-directly — without the Gradio or Flask UI — use the `planexe` CLI script at
+directly — without the Flask UI — use the `planexe` CLI script at
 the repo root.
 
 ```bash
@@ -195,8 +156,8 @@ The script creates the run directory if it does not exist and writes:
 
 | File | Contents |
 |---|---|
-| `001-1-start_time.json` | `{"server_iso_utc": "<current UTC ISO timestamp>"}` |
-| `001-2-plan.txt` | The plain-text plan prompt |
+| `start_time.json` | `{"server_iso_utc": "<current UTC ISO timestamp>"}` |
+| `plan.txt` | The plain-text plan prompt |
 
 ---
 
@@ -208,7 +169,7 @@ PlanExe is designed as infrastructure for AI agents. If you are an AI agent read
 - **MCP endpoint:** `https://mcp.planexe.org/mcp` — connect with an API key from [home.planexe.org](https://home.planexe.org/).
 - **Workflow:** Call `example_prompts` to learn the expected prompt format, draft a detailed prompt (~300-800 words of flowing prose), then call `plan_create`.
 - **Agent guide:** See [`docs/mcp/autonomous_agent_guide.md`](docs/mcp/autonomous_agent_guide.md) for the complete autonomous workflow.
-- **Key outputs in zip:** `018-2-wbs_level1.json` (work packages), `018-5-wbs_level2.json` (tasks), `004-2-pre_project_assessment.json` (feasibility).
+- **Key outputs in zip:** `wbs_level1.json` (work packages), `wbs_level2.json` (tasks), `pre_project_assessment.json` (feasibility).
 
 ---
 
@@ -219,7 +180,7 @@ PlanExe is designed as infrastructure for AI agents. If you are an AI agent read
 
 **Prerequisite:** Docker with Docker Compose installed; you only need basic [Docker](https://en.wikipedia.org/wiki/Docker_(software)) knowledge. No local Python setup is required because everything runs in containers.
 
-### Quickstart: single-user UI + worker (frontend_single_user + worker_plan)
+### Follow these steps
 
 1. Clone the repo and enter it:
 
@@ -233,12 +194,12 @@ cd PlanExe
 3. Start the stack (first run builds the images):
 
 ```bash
-docker compose up worker_plan frontend_single_user
+docker compose up worker_plan frontend_multi_user
 ```
 
-   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:7860 after the worker healthcheck passes.
+   The worker listens on http://localhost:8000 and the UI comes up on http://localhost:5001 after the Postgres and worker healthchecks pass.
 
-4. Open http://localhost:7860 in your browser. Optional: set `PLANEXE_PASSWORD` in `.env` to require a password. Enter your idea, click the generate button, and watch progress with:
+4. Open http://localhost:5001 in your browser, create an account (or log in with the admin credentials from `.env`), enter your idea, and watch progress with:
 
 ```bash
 docker compose logs -f worker_plan
@@ -249,7 +210,7 @@ docker compose logs -f worker_plan
 5. Stop with `Ctrl+C` (or `docker compose down`). Rebuild after code/dependency changes:
 
 ```bash
-docker compose build --no-cache worker_plan frontend_single_user
+docker compose build --no-cache worker_plan frontend_multi_user
 ```
 
 For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `docker-compose.md`.
@@ -261,21 +222,6 @@ For compose tips, alternate ports, or troubleshooting, see `docs/docker.md` or `
 **Config B:** Run models locally on a high-end computer. Follow the instructions for either [Ollama](https://docs.planexe.org/ai_providers/ollama/) or [LM Studio](https://docs.planexe.org/ai_providers/lm_studio/). When using host-side tools with Docker, point the model URL at the host (for example `http://host.docker.internal:11434` for Ollama).
 
 Recommendation: I recommend **Config A** as it offers the most straightforward path to getting PlanExe working reliably.
-
-</details>
-
----
-
-<details>
-<summary><strong> Screenshots (Click to expand)</strong></summary>
-
-<br>
-
-You input a vague description of what you want and PlanExe outputs a plan.
-
-[YouTube video: Using PlanExe to plan a lunar base](https://www.youtube.com/watch?v=7AM2F1C4CGI)
-
-![Screenshot of PlanExe](/docs/planexe-humanoid-factory.jpg?raw=true "Screenshot of PlanExe")
 
 </details>
 

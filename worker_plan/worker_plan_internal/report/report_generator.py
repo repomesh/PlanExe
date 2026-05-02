@@ -118,7 +118,7 @@ class ReportGenerator:
             return
         html = markdown.markdown(md_data)
         self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
-    
+
     def append_markdown_with_tables(self, document_title: str, file_path: Path, css_classes: list[str] = []):
         """Append a markdown document to the report. Render markdown tables as HTML tables."""
         md_data = self.read_markdown_file(file_path)
@@ -239,6 +239,7 @@ class ReportGenerator:
         <h2>Redline Gate</h2>
         {redline_gate_html}
         <h2>Premise Attack</h2>
+        <p>Why this fails.</p>
         {premise_attack_html}
         """
         self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
@@ -351,7 +352,7 @@ def main():
     report_generator = ReportGenerator()
     report_generator.append_markdown('Initial Plan', input_path / FilenameEnum.INITIAL_PLAN.value)
     report_generator.append_markdown('Pitch', input_path / FilenameEnum.PITCH_MARKDOWN.value)
-    report_generator.append_markdown('Assumptions', input_path / FilenameEnum.CONSOLIDATE_ASSUMPTIONS_FULL_MARKDOWN.value)
+    report_generator.append_markdown_with_tables('Assumptions', input_path / FilenameEnum.CONSOLIDATE_ASSUMPTIONS_FULL_MARKDOWN.value)
     report_generator.append_markdown('SWOT Analysis', input_path / FilenameEnum.SWOT_MARKDOWN.value)
     report_generator.append_markdown('Team', input_path / FilenameEnum.TEAM_MARKDOWN.value)
     report_generator.append_markdown('Expert Criticism', input_path / FilenameEnum.EXPERT_CRITICISM_MARKDOWN.value)

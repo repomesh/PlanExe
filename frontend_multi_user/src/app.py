@@ -17,7 +17,7 @@ from urllib.parse import quote_plus, urlparse
 from typing import Dict, Optional, Tuple, Any, cast
 from types import SimpleNamespace
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, abort
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for, session, abort, g
 from flask_admin import Admin, AdminIndexView, expose
 from flask_login import LoginManager, UserMixin, login_user, login_required, current_user
 from authlib.integrations.flask_client import OAuth
@@ -57,10 +57,6 @@ from worker_plan_api.llm_class_filter import (
 )
 
 from src.utils import CREDIT_SCALE, to_credit_decimal, format_credit_display
-
-RUN_DIR = "run"
-
-SHOW_DEMO_PLAN = False
 
 DEMO_FORM_RUN_PROMPT_UUIDS = [
     "ab700769-c3ba-4f8a-913d-8589fea4624e",
@@ -270,15 +266,6 @@ class MyFlaskApp:
         self.planexe_project_root = Path(__file__).parent.parent.parent.absolute()
         logger.info(f"MyFlaskApp.__init__. planexe_project_root: {self.planexe_project_root!r}")
 
-        override_planexe_run_dir = self.planexe_dotenv.get_absolute_path_to_dir(DotEnvKeyEnum.PLANEXE_RUN_DIR.value)
-        if isinstance(override_planexe_run_dir, Path):
-            debug_planexe_run_dir = 'override'
-            self.planexe_run_dir = override_planexe_run_dir
-        else:
-            debug_planexe_run_dir = 'default'
-            self.planexe_run_dir = self.planexe_project_root / RUN_DIR
-        logger.info(f"MyFlaskApp.__init__. planexe_run_dir ({debug_planexe_run_dir}): {self.planexe_run_dir!r}")
-
         self.worker_plan_url = (os.environ.get("PLANEXE_WORKER_PLAN_URL") or "http://worker_plan:8000").rstrip("/")
         logger.info(f"MyFlaskApp.__init__. worker_plan_url: {self.worker_plan_url}")
 
@@ -386,26 +373,59 @@ class MyFlaskApp:
         self.db = db
         self.db.init_app(self.app)
 
+        def _ensure_plans_table_name() -> None:
+            """Rename legacy 'task_item' (and its indexes) to 'plans' (idempotent).
+
+            Serialized via a Postgres advisory lock so concurrent replicas do not
+            race. Must run before db.create_all() so SQLAlchemy does not create
+            a second empty 'plans' table alongside 'task_item'.
+            """
+            sql = """
+            DO $$
+            BEGIN
+                PERFORM pg_advisory_xact_lock(8462357421);
+                IF EXISTS (SELECT 1 FROM information_schema.tables
+                           WHERE table_schema = current_schema() AND table_name = 'task_item')
+                   AND NOT EXISTS (SELECT 1 FROM information_schema.tables
+                                   WHERE table_schema = current_schema() AND table_name = 'plans') THEN
+                    ALTER TABLE task_item RENAME TO plans;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes
+                           WHERE schemaname = current_schema() AND indexname = 'idx_task_item_user_id_timestamp_created') THEN
+                    ALTER INDEX idx_task_item_user_id_timestamp_created RENAME TO idx_plans_user_id_timestamp_created;
+                END IF;
+                IF EXISTS (SELECT 1 FROM pg_indexes
+                           WHERE schemaname = current_schema() AND indexname = 'idx_task_item_api_key_id') THEN
+                    ALTER INDEX idx_task_item_api_key_id RENAME TO idx_plans_api_key_id;
+                END IF;
+            END$$;
+            """
+            try:
+                with self.db.engine.begin() as conn:
+                    conn.execute(text(sql))
+            except Exception as exc:
+                logger.warning("Rename task_item -> plans failed: %s", exc, exc_info=True)
+
         def _ensure_planitem_artifact_columns() -> None:
             insp = inspect(self.db.engine)
-            columns = {col["name"] for col in insp.get_columns("task_item")}
+            columns = {col["name"] for col in insp.get_columns("plans")}
             with self.db.engine.begin() as conn:
                 if "generated_report_html" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS generated_report_html TEXT"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS generated_report_html TEXT"))
                 if "run_zip_snapshot" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_zip_snapshot BYTEA"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS run_zip_snapshot BYTEA"))
                 if "run_track_activity_jsonl" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS run_track_activity_jsonl TEXT"))
                 if "run_track_activity_bytes" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS run_track_activity_bytes INTEGER"))
                 if "run_activity_overview_json" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS run_activity_overview_json JSON"))
                 if "run_artifact_layout_version" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS run_artifact_layout_version INTEGER"))
                 if "stop_requested" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS stop_requested BOOLEAN"))
                 if "stop_requested_timestamp" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS stop_requested_timestamp TIMESTAMP"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS stop_requested_timestamp TIMESTAMP"))
 
         def _ensure_token_metrics_columns() -> None:
             insp = inspect(self.db.engine)
@@ -473,7 +493,7 @@ class MyFlaskApp:
             statements = (
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS label VARCHAR(128)",
                 "ALTER TABLE user_api_key ADD COLUMN IF NOT EXISTS key_plaintext VARCHAR(64)",
-                "ALTER TABLE task_item ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
+                "ALTER TABLE plans ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
                 "ALTER TABLE credit_history ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
                 "ALTER TABLE token_metrics ADD COLUMN IF NOT EXISTS api_key_id VARCHAR(36)",
             )
@@ -486,38 +506,38 @@ class MyFlaskApp:
 
         def _ensure_step_count_columns() -> None:
             insp = inspect(self.db.engine)
-            columns = {col["name"] for col in insp.get_columns("task_item")}
+            columns = {col["name"] for col in insp.get_columns("plans")}
             with self.db.engine.begin() as conn:
                 if "steps_completed" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS steps_completed INTEGER"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS steps_completed INTEGER"))
                 if "steps_total" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS steps_total INTEGER"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS steps_total INTEGER"))
                 if "current_step" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS current_step VARCHAR(128)"))
 
         def _ensure_failure_diagnostic_columns() -> None:
             insp = inspect(self.db.engine)
-            columns = {col["name"] for col in insp.get_columns("task_item")}
+            columns = {col["name"] for col in insp.get_columns("plans")}
             with self.db.engine.begin() as conn:
                 if "failure_reason" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS failure_reason VARCHAR(64)"))
                 if "failed_step" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS failed_step VARCHAR(128)"))
                 if "recoverable" not in columns:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS recoverable BOOLEAN"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS recoverable BOOLEAN"))
             # Rename last_error -> error_message in a separate transaction so a
             # failed RENAME (race with another container) doesn't poison the above.
             if "error_message" not in columns:
                 if "last_error" in columns:
                     try:
                         with self.db.engine.begin() as conn:
-                            conn.execute(text("ALTER TABLE task_item RENAME COLUMN last_error TO error_message"))
+                            conn.execute(text("ALTER TABLE plans RENAME COLUMN last_error TO error_message"))
                     except Exception:
                         with self.db.engine.begin() as conn:
-                            conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+                            conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
                 else:
                     with self.db.engine.begin() as conn:
-                        conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
+                        conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS error_message VARCHAR(256)"))
 
         def _ensure_stopped_state() -> None:
             """Add 'stopped' value to the planstate/taskstate enum type (idempotent).
@@ -540,23 +560,23 @@ class MyFlaskApp:
 
         def _ensure_last_progress_at_column() -> None:
             insp = inspect(self.db.engine)
-            columns = {col["name"] for col in insp.get_columns("task_item")}
+            columns = {col["name"] for col in insp.get_columns("plans")}
             if "last_progress_at" not in columns:
                 with self.db.engine.begin() as conn:
-                    conn.execute(text("ALTER TABLE task_item ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP"))
+                    conn.execute(text("ALTER TABLE plans ADD COLUMN IF NOT EXISTS last_progress_at TIMESTAMP"))
 
         def _ensure_planitem_indexes() -> None:
             insp = inspect(self.db.engine)
             table_names = set(insp.get_table_names())
             statements: list[str] = []
-            if "task_item" in table_names:
+            if "plans" in table_names:
                 statements.append(
-                    "CREATE INDEX IF NOT EXISTS idx_task_item_user_id_timestamp_created "
-                    "ON task_item (user_id, timestamp_created)"
+                    "CREATE INDEX IF NOT EXISTS idx_plans_user_id_timestamp_created "
+                    "ON plans (user_id, timestamp_created)"
                 )
                 statements.append(
-                    "CREATE INDEX IF NOT EXISTS idx_task_item_api_key_id "
-                    "ON task_item (api_key_id)"
+                    "CREATE INDEX IF NOT EXISTS idx_plans_api_key_id "
+                    "ON plans (api_key_id)"
                 )
             if "credit_history" in table_names:
                 statements.append(
@@ -606,6 +626,7 @@ class MyFlaskApp:
                         with self.db.engine.connect() as lock_conn:
                             lock_conn.execute(text(f"SELECT pg_advisory_lock({_ADVISORY_LOCK_KEY})"))
                             try:
+                                _ensure_plans_table_name()
                                 self.db.create_all()
                                 _ensure_planitem_artifact_columns()
                                 _ensure_token_metrics_columns()
@@ -670,7 +691,7 @@ class MyFlaskApp:
         self.admin = Admin(self.app, name='PlanExe Admin', index_view=MyAdminIndexView())
 
         # Add database tables to admin panel
-        self.admin.add_view(PlanItemView(model=PlanItem, session=self.db.session, name="Task"))
+        self.admin.add_view(PlanItemView(model=PlanItem, session=self.db.session, name="Plan"))
         self.admin.add_view(AdminOnlyModelView(model=EventItem, session=self.db.session, name="Event"))
         self.admin.add_view(WorkerItemView(model=WorkerItem, session=self.db.session, name="Worker"))
         self.admin.add_view(NonceItemView(model=NonceItem, session=self.db.session, name="Nonce"))
@@ -688,7 +709,6 @@ class MyFlaskApp:
         self.app.config['PUBLIC_BASE_URL'] = self.public_base_url
         self.app.config['OAUTH_PROVIDERS'] = self.oauth_providers
         self.app.config['WORKER_PLAN_URL'] = self.worker_plan_url
-        self.app.config['PLANEXE_RUN_DIR'] = self.planexe_run_dir
         self.app.config['PLANEXE_PROJECT_ROOT'] = self.planexe_project_root
         self.app.config['PATH_TO_PYTHON'] = self.path_to_python
         self.app.config['PROMPT_CATALOG'] = self.prompt_catalog
@@ -904,6 +924,33 @@ class MyFlaskApp:
         from src.auth import get_or_create_api_key, _auth_provider_label
         from src.billing import _record_event, _finalize_stripe_checkout_session
         from src.plan_routes import _get_current_user_account, _admin_user_ids
+
+        # /healthcheck fires every 10s from the docker healthcheck and
+        # produces a gunicorn access-log line on its own; skip it here so the
+        # console isn't flooded. If healthchecks ever hang, the absence of the
+        # gunicorn access-log line + a WORKER TIMEOUT is still diagnostic.
+        _trace_skip_paths = frozenset({"/healthcheck"})
+
+        @self.app.before_request
+        def _trace_request_arrival():
+            """Log every request entry so a hung worker's URL is visible even
+            if the handler never returns. Pairs with _trace_request_completion."""
+            if request.path in _trace_skip_paths:
+                return
+            g._planexe_req_started = time.monotonic()
+            logger.info("→ %s %s", request.method, request.full_path.rstrip("?"))
+
+        @self.app.after_request
+        def _trace_request_completion(response):
+            if request.path in _trace_skip_paths:
+                return response
+            started = g.pop("_planexe_req_started", None)
+            duration_ms = (time.monotonic() - started) * 1000 if started is not None else -1
+            logger.info(
+                "← %s %s %s %.0fms",
+                response.status_code, request.method, request.full_path.rstrip("?"), duration_ms,
+            )
+            return response
 
         @self.app.before_request
         def _auto_login_open_access():

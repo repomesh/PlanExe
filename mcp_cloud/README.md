@@ -16,17 +16,8 @@ mcp_cloud provides a standardized MCP interface for PlanExe's plan generation wo
 
 ## Run as task (MCP tasks protocol)
 
-MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `example_plans`, `example_prompts`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_file_info` (or `plan_download` via `mcp_local`). The agent creates a task, polls status, retries on failed when needed, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
+MCP has two ways to run long-running work: **tools** (what we use) and the **tasks** protocol ("Run as task" in some UIs). PlanExe uses **tools only**: `example_plans`, `example_prompts`, `model_profiles`, `plan_create`, `plan_status`, `plan_stop`, `plan_retry`, `plan_file_info`. The agent creates a task, polls status, retries on failed when needed, then downloads; that is the intended flow per `docs/mcp/planexe_mcp_interface.md`. We do not advertise or implement the MCP tasks protocol (tasks/get, tasks/result, etc.). Clients like Cursor do not support it properly—use the tools directly.
 Workflow clarity: prompt drafting + user approval is a non-tool step between setup tools and `plan_create`.
-
-## Client Choice Guide
-
-- **Use `mcp_cloud` directly (HTTP)**: If you are running in the cloud or you do
-  not need files saved to the local filesystem.
-- **Use `mcp_local` (proxy)**: Recommended when you want artifacts downloaded to
-  your local disk (`PLANEXE_PATH`). The proxy forwards MCP calls to this server
-  and handles file downloads locally.
-- **Recommended flow**: Docker (`mcp_cloud`) → `mcp_local` → MCP client (LM Studio/Claude).
 
 ## Docker Usage (Recommended)
 
@@ -177,8 +168,6 @@ Minimal error contract:
 - Tool errors use `{"error":{"code","message","details?"}}`.
 - Common codes: `PLAN_NOT_FOUND`, `PLAN_NOT_FAILED`, `INVALID_USER_API_KEY`, `USER_API_KEY_REQUIRED`, `INSUFFICIENT_CREDITS`, `INTERNAL_ERROR`, `generation_failed`, `content_unavailable`.
 - `plan_file_info` may return `{}` while output is not ready (not an error payload).
-
-Note: `plan_download` is a synthetic tool provided by `mcp_local`, not by this server. If your client exposes `plan_download`, use it to save the report or zip locally; otherwise use `plan_file_info` to get `download_url` and fetch the file yourself.
 
 > **Breaking change (v2026-02-26):** External-facing field names were renamed from `task_id` → `plan_id`, `tasks` → `plans`, and error codes from `TASK_NOT_FOUND` → `PLAN_NOT_FOUND`, `TASK_NOT_FAILED` → `PLAN_NOT_FAILED`.
 
@@ -430,10 +419,9 @@ Client → FastAPI (http_server.py)
 
 When fetching plan files (reports, zips), `worker_fetchers.py` tries sources in priority order:
 
-1. **DB** (`PlanItem.generated_report_html` / `PlanItem.run_zip_snapshot`) — fastest, always available for completed plans
-2. **Zip snapshot extraction** — extracts individual files from the DB zip snapshot
-3. **Local run directory** (`PLANEXE_RUN_DIR/{run_id}/`) — low latency if co-located
-4. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — last-resort fallback (10s timeout, 3s connect)
+1. **DB** (`PlanItem.generated_report_html` / `PlanItem.run_zip_snapshot`) — served directly from Postgres; available once a plan has completed (or a snapshot has been persisted)
+2. **Zip snapshot extraction** — pulls an individual file out of the DB-stored zip snapshot
+3. **Worker HTTP** (`PLANEXE_WORKER_PLAN_URL/runs/{run_id}/...`) — the live source for in-flight plans and anything not yet persisted to the DB (10s timeout, 3s connect)
 
 This layered approach avoids blocking on the worker HTTP API when the data is already available locally or in the database.
 
@@ -441,7 +429,7 @@ This layered approach avoids blocking on the worker HTTP API when the data is al
 
 For local development, you can run mcp_cloud over stdio instead of HTTP. This is
 useful for testing but requires local Python + Postgres setup. For most users, the
-recommended flow is Docker (server) + `mcp_local` (client).
+recommended flow is Docker (server) + an MCP client that speaks HTTP.
 
 ### Setup
 

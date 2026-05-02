@@ -177,3 +177,79 @@ class ViolatesKnownPhysics:
             level=captured_raw.level.lower().strip(),
             metadata=captured_metadata,
         )
+
+
+if __name__ == "__main__":
+    # Smoke harness for ViolatesKnownPhysics.
+    #
+    # Pulls a sample of N prompts from the simple-plan catalog and
+    # runs the physics-violation check against each, printing the
+    # rated level, the justification, and the suggested mitigation.
+    # Bump SAMPLE_SEED to draw a different shuffle of the catalog;
+    # the same seed produces the same sample so iterations on the
+    # system prompt can be compared head-to-head.
+    #
+    # Run: python -m worker_plan_internal.self_audit.violates_known_physics
+    import logging
+    import random
+    from worker_plan_internal.llm_factory import get_llm
+    from worker_plan_internal.llm_util.llm_executor import LLMModelWithInstance
+    from worker_plan_api.prompt_catalog import PromptCatalog
+    from worker_plan_api.planexe_dotenv import PlanExeDotEnv
+
+    PlanExeDotEnv.load().update_os_environ()
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
+    LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
+    SAMPLE_SEED = 700
+    SAMPLE_SIZE = 10
+
+    prompt_catalog = PromptCatalog()
+    prompt_catalog.load_simple_plan_prompts()
+    all_items = prompt_catalog.all()
+    sorted_items = sorted(all_items, key=lambda x: x.id)
+
+    rng = random.Random(SAMPLE_SEED)
+    shuffled = list(sorted_items)
+    rng.shuffle(shuffled)
+    sample_items = shuffled[:SAMPLE_SIZE]
+
+    llm = get_llm(LLM_NAME, temperature=0.0)
+    llm_executor = LLMExecutor(llm_models=[LLMModelWithInstance(llm)])
+
+    print(
+        f"=== Violates Known Physics — sample of {len(sample_items)} "
+        f"catalog prompts (SAMPLE_SEED={SAMPLE_SEED}, model={LLM_NAME}) ==="
+    )
+
+    level_counts: dict[str, int] = {"low": 0, "medium": 0, "high": 0}
+    error_count = 0
+
+    for idx, item in enumerate(sample_items, start=1):
+        prompt_id = item.id
+        prompt_preview = item.prompt[:100].replace("\n", " ")
+        print(f"\n[{idx}/{len(sample_items)}] {prompt_id}")
+        print(
+            f"  prompt: {prompt_preview}"
+            f"{'...' if len(item.prompt) > 100 else ''}"
+        )
+        try:
+            result = ViolatesKnownPhysics.execute(llm_executor, item.prompt)
+        except Exception as exc:
+            error_count += 1
+            print(f"  ERROR: {exc}")
+            continue
+        level_counts[result.level] = level_counts.get(result.level, 0) + 1
+        print(f"  level: {result.level}")
+        print(f"  justification: {result.justification}")
+        print(f"  mitigation: {result.mitigation}")
+
+    print("\n=== Summary ===")
+    for lvl in ("low", "medium", "high"):
+        print(f"  {lvl:6}: {level_counts.get(lvl, 0)}")
+    if error_count:
+        print(f"  errors: {error_count}")

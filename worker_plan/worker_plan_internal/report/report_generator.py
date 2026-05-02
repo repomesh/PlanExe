@@ -118,6 +118,26 @@ class ReportGenerator:
             return
         html = markdown.markdown(md_data)
         self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+
+    def append_markdowns(self, document_title: str, file_paths: list[Path], css_classes: list[str] = []):
+        """Append several markdown files concatenated under a single section title.
+
+        Markdown tables in any of the input files are rendered as HTML
+        tables via the `tables` extension; fenced code blocks are
+        rendered via `fenced_code`. Plain markdown (no tables, no code
+        blocks) renders identically with these extensions enabled.
+        """
+        parts: list[str] = []
+        for fp in file_paths:
+            md_data = self.read_markdown_file(fp)
+            if md_data is None:
+                logging.warning(f"Document: '{document_title}'. Could not read markdown file: {fp}")
+                continue
+            parts.append(md_data)
+        if not parts:
+            return
+        html = markdown.markdown("\n\n".join(parts), extensions=['tables', 'fenced_code'])
+        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
     
     def append_markdown_with_tables(self, document_title: str, file_path: Path, css_classes: list[str] = []):
         """Append a markdown document to the report. Render markdown tables as HTML tables."""
@@ -352,7 +372,7 @@ def main():
     report_generator = ReportGenerator()
     report_generator.append_markdown('Initial Plan', input_path / FilenameEnum.INITIAL_PLAN.value)
     report_generator.append_markdown('Pitch', input_path / FilenameEnum.PITCH_MARKDOWN.value)
-    report_generator.append_markdown('Assumptions', input_path / FilenameEnum.CONSOLIDATE_ASSUMPTIONS_FULL_MARKDOWN.value)
+    report_generator.append_markdown_with_tables('Assumptions', input_path / FilenameEnum.CONSOLIDATE_ASSUMPTIONS_FULL_MARKDOWN.value)
     report_generator.append_markdown('SWOT Analysis', input_path / FilenameEnum.SWOT_MARKDOWN.value)
     report_generator.append_markdown('Team', input_path / FilenameEnum.TEAM_MARKDOWN.value)
     report_generator.append_markdown('Expert Criticism', input_path / FilenameEnum.EXPERT_CRITICISM_MARKDOWN.value)

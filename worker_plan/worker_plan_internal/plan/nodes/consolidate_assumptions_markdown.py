@@ -6,6 +6,7 @@ from worker_plan_internal.assume.shorten_markdown import ShortenMarkdown
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 from worker_plan_internal.plan.nodes.identify_purpose import IdentifyPurposeTask
+from worker_plan_internal.plan.nodes.classify_domain import ClassifyDomainTask
 from worker_plan_internal.plan.nodes.plan_type import PlanTypeTask
 from worker_plan_internal.plan.nodes.physical_locations import PhysicalLocationsTask
 from worker_plan_internal.plan.nodes.currency_strategy import CurrencyStrategyTask
@@ -22,6 +23,7 @@ class ConsolidateAssumptionsMarkdownTask(PlanTask):
     def requires(self):
         return {
             'identify_purpose': self.clone(IdentifyPurposeTask),
+            'classify_domain': self.clone(ClassifyDomainTask),
             'plan_type': self.clone(PlanTypeTask),
             'physical_locations': self.clone(PhysicalLocationsTask),
             'currency_strategy': self.clone(CurrencyStrategyTask),
@@ -43,6 +45,7 @@ class ConsolidateAssumptionsMarkdownTask(PlanTask):
         # Define the list of (title, path) tuples
         title_path_list = [
             ('Purpose', self.input()['identify_purpose']['markdown'].path),
+            ('Domain', self.input()['classify_domain']['markdown'].path),
             ('Plan Type', self.input()['plan_type']['markdown'].path),
             ('Physical Locations', self.input()['physical_locations']['markdown'].path),
             ('Currency Strategy', self.input()['currency_strategy']['markdown'].path),

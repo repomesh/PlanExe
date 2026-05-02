@@ -64,6 +64,28 @@
         },
         "pricing_kind": "paid"
     },
+    "openrouter-gpt-oss-safeguard-20b-nitro": {
+        "comment": "Released Oct 29, 2025. OpenAI's safety-classification variant of gpt-oss-20b. :nitro variant routes to highest-throughput provider (Groq is typically fast) with fallbacks. 131,072 context. $0.075/M input tokens. $0.30/M output tokens.",
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "openai/gpt-oss-safeguard-20b:nitro",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 131072,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 65536,
+            "max_retries": 5
+        },
+        "model_info_url": "https://openrouter.ai/openai/gpt-oss-safeguard-20b:nitro",
+        "pricing": {
+            "input_per_million_tokens": 0.075,
+            "output_per_million_tokens": 0.30
+        },
+        "pricing_kind": "paid"
+    },
     "openrouter-elephant-alpha": {
         "comment": "Released Apr 13, 2026. 262,144 context. $0/M input tokens. $0/M output tokens",
         "luigi_workers": 4,
@@ -218,6 +240,28 @@
         "pricing": {
             "input_per_million_tokens": 0.08,
             "output_per_million_tokens": 0.28
+        },
+        "pricing_kind": "paid"
+    },
+    "openrouter-llama-3.1-8b-instruct-nitro": {
+        "comment": "Released Jul 23, 2024. :nitro variant routes to highest-throughput provider (Groq, Cerebras) with fallbacks. 16,384 context. $0.02/M input tokens. $0.05/M output tokens.",
+        "luigi_workers": 4,
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "meta-llama/llama-3.1-8b-instruct:nitro",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 16384,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 4096,
+            "max_retries": 5
+        },
+        "model_info_url": "https://openrouter.ai/meta-llama/llama-3.1-8b-instruct:nitro",
+        "pricing": {
+            "input_per_million_tokens": 0.02,
+            "output_per_million_tokens": 0.05
         },
         "pricing_kind": "paid"
     },

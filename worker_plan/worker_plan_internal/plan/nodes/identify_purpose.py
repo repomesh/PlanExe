@@ -9,7 +9,9 @@ from worker_plan_internal.plan.nodes.setup import SetupTask
 class IdentifyPurposeTask(PlanTask):
     """Classify the plan as business, personal, or other to tailor downstream prompts."""
     def requires(self):
-        return self.clone(SetupTask)
+        return {
+            'setup': self.clone(SetupTask),
+        }
 
     def output(self):
         return {
@@ -19,7 +21,7 @@ class IdentifyPurposeTask(PlanTask):
 
     def run_with_llm(self, llm: LLM) -> None:
         # Read inputs from required tasks.
-        with self.input().open("r") as f:
+        with self.input()['setup'].open("r") as f:
             plan_prompt = f.read()
 
         identify_purpose = IdentifyPurpose.execute(llm, plan_prompt)

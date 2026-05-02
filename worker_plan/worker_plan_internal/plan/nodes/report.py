@@ -75,7 +75,7 @@ class ReportTask(PlanTask):
         rg.append_markdown('Project Plan', self.input()['project_plan']['markdown'].path)
         rg.append_markdown('Strategic Decisions', self.input()['strategic_decisions_markdown']['markdown'].path)
         rg.append_markdown('Scenarios', self.input()['scenarios_markdown']['markdown'].path)
-        rg.append_markdown('Assumptions', self.input()['consolidate_assumptions_markdown']['full'].path)
+        rg.append_markdown_with_tables('Assumptions', self.input()['consolidate_assumptions_markdown']['full'].path)
         rg.append_markdown('Governance', self.input()['consolidate_governance'].path)
         rg.append_markdown('Related Resources', self.input()['related_resources']['markdown'].path)
         rg.append_markdown('Data Collection', self.input()['data_collection']['markdown'].path)

@@ -57,12 +57,24 @@ Rate "high" when EITHER (A) or (B) holds. The justification MUST name the specif
 2. You can describe in one sentence the physical-quantity violation: what is being created from nothing, destroyed, or transmitted faster than physics allows.
 3. The violation is required for plan success — the plan cannot succeed without it.
 
-(B) PROPAGATING-FALSEHOOD — the plan's stated purpose is to teach, market, or build infrastructure that requires accepting as true a claim that directly contradicts a named law of physics or a well-established empirical observation about the physical world (e.g., Earth's observed shape, conservation laws, the speed-of-light limit, basic mechanics, radiometric ages). ALL of these must hold:
-1. The plan asserts the false claim as truth — to students, customers, or via constructed infrastructure — not as a hypothesis under investigation, not as a survey of fringe views, not as a documentary about other people's beliefs.
-2. The contradiction is part of the plan's stated content or output, not merely an aside.
-3. You can name the specific physics law or empirical fact the plan contradicts.
+(B) PROPAGATING-FALSEHOOD — the plan's stated mechanism, success criteria, billing model, or constructed infrastructure depends on customers, students, citizens, or institutional partners accepting as true either:
+  (B.1) a claim that directly contradicts a named law of physics or a well-established empirical observation about the physical world (e.g., conservation laws, speed-of-light limit, basic mechanics, radiometric ages, geodesy and the observed structure of the planet, the standard model); OR
+  (B.2) a causal mechanism that has no physical basis — the plan requires real-world outcomes (revenue, legal effect, scheduling decisions, measurable change in objects or events) to be produced or constrained by something physics does not describe and that has no empirical basis. Physics describes the causal mechanisms by which physical objects and events influence each other; a plan whose load-bearing mechanism is non-physical is asserting a physics-incompatible claim, regardless of which cultural, religious, or traditional framework the mechanism is drawn from.
 
-A plan that surveys, studies, or critically examines a fringe claim is doing legitimate inquiry and stays "low" under (B). The line is between investigating a claim and asserting it as truth.
+ALL of these must hold for HIGH:
+1. The plan asserts the claim as truth — to students, customers, citizens, or via constructed infrastructure — not as a hypothesis under investigation, not as a survey of fringe views, not as a documentary about other people's beliefs.
+2. The claim is load-bearing for the plan: it appears in the stated mechanism, success criteria, billing model, output, or constructed infrastructure — not merely as an aside or cultural backdrop.
+3. You can identify the specific physics law, empirical fact, or absent-physical-mechanism the plan invokes.
+
+A plan that surveys, studies, or critically examines a fringe claim is doing legitimate inquiry and stays "low". A cultural, religious, or contemplative practice offered for community, identity, or personal value with no claim of measurable physical outcome stays "low".
+
+Where the line falls under (B.2): the question is structural, not cultural. Cultural framing, religious tradition, or widespread practice of the mechanism does NOT exempt a plan from HIGH. Subjective success metrics (client self-report, customer satisfaction with absence of negative events) do NOT exempt a plan if the metric is operationalized as evidence the mechanism worked. Use this test: would the plan's billing model, success criteria, legal authority, or institutional structure still make sense if the non-physical mechanism is acknowledged to have no causal power? If no — if the plan only "works" because the non-physical mechanism is treated as actually producing real-world effects — that is load-bearing non-physical causation and the rating is HIGH.
+
+Concrete operational tests for (B.2):
+- Does the plan's revenue model require customers to pay because the non-physical mechanism produces a real-world change?
+- Does the plan publish a success metric measuring a real-world outcome (commercial, behavioural, audit-measured, statistical correlation, or self-reported absence of phenomena) and attribute that outcome to the non-physical mechanism?
+- Does the plan's legal or institutional structure grant the non-physical mechanism authority that binds real-world decisions?
+If yes to any, HIGH.
 
 Otherwise rate "low". Use "medium" only for genuine borderline cases where the plan presupposes a physical phenomenon that, if real, would itself redefine known physics; this should be very rare.
 
@@ -81,9 +93,9 @@ Out of scope — these are NOT physics violations and MUST stay "low":
 The plan may be written in any language. Assess the plan's actual mechanism, not the words used to describe it.
 
 Output a JSON object with three fields, in this order:
-- justification: 1-2 sentences. If level is "low", state plainly that the plan does not require breaking a named law of physics and does not propagate a physics-contradicting claim as truth. If level is "medium" or "high", you MUST name the specific physics law or directly-observable physical fact the plan contradicts and explain the contradiction in physical terms; if you cannot, level is "low".
+- justification: 1-2 sentences. If level is "low", state plainly that the plan does not require breaking a named law of physics and does not depend on a physics-incompatible claim as a load-bearing mechanism. If level is "medium" or "high", you MUST identify exactly which trigger fires — (A) impossible-engineering, (B.1) contradicts-named-law / observable-fact, or (B.2) non-physical-causation — and either name the specific physics law or empirical fact the plan contradicts (B.1) or describe the non-physical mechanism the plan depends on and the real-world outcome it claims to produce (B.2). If you cannot, level is "low".
 - mitigation: one assignable task, ~30 words, with role/team + verb + relative timeframe (e.g., "within 14 days", "within 3 months"). Never use absolute calendar dates. When level is "low", the mitigation must stay on the physics-violation topic, e.g., "Project Manager: During scope reviews, confirm no plan element requires violating a named law of physics — no further action required."
-- level: one of "low", "medium", "high". Must agree with the justification — if the justification does not name a specific physics law or directly-observable physical fact the plan contradicts, level MUST be "low".
+- level: one of "low", "medium", "high". Must agree with the justification — if the justification does not name a specific physics law / empirical fact the plan contradicts, or a non-physical mechanism the plan's success load-bearing-depends on, level MUST be "low".
 """
 
 

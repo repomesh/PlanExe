@@ -16,8 +16,11 @@ purpose-specialised system prompts. v5's principle-only foundation
 
 v7 first-pass batching: the first pass runs as an adaptive loop
 that asks the LLM for 3 candidate disciplines per batch and keeps
-calling until 6 distinct candidates have been collected (or
-MAX_CALLS=3 is reached). Pattern adapted from
+calling until TARGET_CANDIDATES distinct candidates have been
+collected (or MAX_CALLS=3 is reached). v7 originally targeted 6;
+v8 raised this to 9 (3 batches × 3 candidates) so the second-pass
+primary selector sees a wider menu and the importance × specificity
+tie-breakers have more material to work on. Pattern adapted from
 identify_potential_levers.py. Subsequent batches inject the
 already-produced candidate names into the user message and ask
 for "3 MORE" that are different. Over-generation is intentional —
@@ -1471,8 +1474,6 @@ class ClassifyDomain:
         if primary_llm is None:
             primary_llm = llm
 
-        logger.debug(f"User Prompt:\n{user_prompt}")
-
         system_prompt = system_prompt_for_purpose(purpose)
         sllm = llm.as_structured_llm(DomainFitAssessment)
 
@@ -1484,7 +1485,7 @@ class ClassifyDomain:
         # richer menu so it can re-rank with more options in front of
         # it. If batch 1 returns an empty list (the prompt is vague),
         # the loop exits early and the empty-fits path applies.
-        TARGET_CANDIDATES = 6
+        TARGET_CANDIDATES = 9
         BATCH_SIZE = 3
         MAX_CALLS = 3
 

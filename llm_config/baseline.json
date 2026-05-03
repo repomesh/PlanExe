@@ -130,6 +130,72 @@
         },
         "pricing_kind": "free"
     },
+    "openrouter-granite-4.1-8b": {
+        "comment": "IBM Granite 4.1 8B. Released Apr 30, 2026. Dense decoder-only 8B model, Apache 2.0. 131,072 context. $0.05/M input tokens. $0.10/M output tokens.",
+        "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/ibm-granite/granite-4.1-8b",
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "ibm-granite/granite-4.1-8b",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 131072,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8192,
+            "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0.05,
+            "output_per_million_tokens": 0.10
+        },
+        "pricing_kind": "paid"
+    },
+    "openrouter-laguna-xs.2-free": {
+        "comment": "Poolside Laguna XS.2 (free). Released Apr 28, 2026. Compact fp8 model targeted at agentic coding. 128,000 context. $0/M input tokens. $0/M output tokens.",
+        "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/poolside/laguna-xs.2",
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "poolside/laguna-xs.2:free",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 128000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 8000,
+            "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0,
+            "output_per_million_tokens": 0
+        },
+        "pricing_kind": "free"
+    },
+    "openrouter-nemotron-3-nano-omni-30b-reasoning-free": {
+        "comment": "NVIDIA Nemotron 3 Nano Omni 30B A3B reasoning (free). Released Apr 28, 2026. Reasoning model — uses more tokens than non-reasoning models. 256,000 context. $0/M input tokens. $0/M output tokens.",
+        "luigi_workers": 4,
+        "model_info_url": "https://openrouter.ai/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "class": "OpenRouter",
+        "arguments": {
+            "model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+            "api_key": "${OPENROUTER_API_KEY}",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 256000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 16384,
+            "max_retries": 5
+        },
+        "pricing": {
+            "input_per_million_tokens": 0,
+            "output_per_million_tokens": 0
+        },
+        "pricing_kind": "free"
+    },
     "openrouter-gemini-2.5-flash-lite-preview-09-2025": {
         "comment": "Created Sep 25, 2025. 1,048,576 context. $0.10/M input tokens. $0.40/M output tokens.",
         "priority": 1,
@@ -308,7 +374,7 @@
         },
         "pricing_kind": "paid"
     },
-    "deepseek-v4-flash": {
+    "deepseek-v4-flash-thinking-disabled": {
         "comment": "DeepSeek's flash tier via the native DeepSeek API. Requires a DEEPSEEK_API_KEY in the .env file. 1,000,000 context, 384,000 max output. Thinking mode is explicitly disabled (defaults to enabled). $0.14/M input (cache miss). $0.28/M output. See https://api-docs.deepseek.com/quick_start/pricing/",
         "luigi_workers": 4,
         "class": "OpenAILike",

@@ -394,13 +394,28 @@ class SelfAudit:
     markdown: str
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, user_prompt: str, max_number_of_items: Optional[int] = None) -> 'SelfAudit':
+    def execute(
+        cls,
+        llm_executor: LLMExecutor,
+        user_prompt: str,
+        max_number_of_items: Optional[int] = None,
+        physics_user_prompt: Optional[str] = None,
+    ) -> 'SelfAudit':
         if not isinstance(llm_executor, LLMExecutor):
             raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(user_prompt, str):
             raise ValueError("Invalid user_prompt.")
         if max_number_of_items is not None and not isinstance(max_number_of_items, int):
             raise ValueError("Invalid max_number_of_items.")
+        if physics_user_prompt is not None and not isinstance(physics_user_prompt, str):
+            raise ValueError("Invalid physics_user_prompt.")
+        # The physics check runs on the bare initial user prompt when
+        # provided. Without it, falls back to the same user_prompt as
+        # the rest of the audit. The bare-prompt routing avoids
+        # misfires caused by the expanded plan's risk-register
+        # vocabulary ("load-bearing", "Decision N", "Failure mode N")
+        # being misread as (B.2) non-physical-causation.
+        physics_input = physics_user_prompt if physics_user_prompt is not None else user_prompt
 
         # The dedicated physics check counts as one logical item; the
         # remaining slots are filled from BATCH_CHECKLIST_ITEMS in
@@ -425,10 +440,10 @@ class SelfAudit:
         # wrapping (PipelineStopRequested re-raised, LLM failures
         # wrapped as LLMChatError).
         if run_physics_check:
-            physics_result = ViolatesKnownPhysics.execute(llm_executor, user_prompt)
+            physics_result = ViolatesKnownPhysics.execute(llm_executor, physics_input)
 
             system_prompt_list.append(physics_result.system_prompt)
-            user_prompt_list.append(user_prompt)
+            user_prompt_list.append(physics_input)
             metadata_list.append(physics_result.metadata)
 
             physics_checklist_answer = ChecklistAnswer(

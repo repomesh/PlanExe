@@ -6,6 +6,7 @@ from worker_plan_internal.self_audit.self_audit import SelfAudit
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.speedvsdetail import SpeedVsDetailEnum
 from worker_plan_api.filenames import FilenameEnum
+from worker_plan_internal.plan.nodes.setup import SetupTask
 from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
 from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
 from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
@@ -37,6 +38,7 @@ class SelfAuditTask(PlanTask):
 
     def requires(self):
         return {
+            'setup': self.clone(SetupTask),
             'strategic_decisions_markdown': self.clone(StrategicDecisionsMarkdownTask),
             'scenarios_markdown': self.clone(ScenariosMarkdownTask),
             'consolidate_assumptions_markdown': self.clone(ConsolidateAssumptionsMarkdownTask),
@@ -59,6 +61,8 @@ class SelfAuditTask(PlanTask):
         llm_executor: LLMExecutor = self.create_llm_executor()
 
         # Read inputs from required tasks.
+        with self.input()['setup'].open("r") as f:
+            initial_user_prompt = f.read()
         with self.input()['strategic_decisions_markdown']['markdown'].open("r") as f:
             strategic_decisions_markdown = f.read()
         with self.input()['scenarios_markdown']['markdown'].open("r") as f:
@@ -114,11 +118,20 @@ class SelfAuditTask(PlanTask):
         else:
             logger.info("Processing all SelfAudit items.")
 
-        # Invoke the LLM
+        # Invoke the LLM. The physics check runs on the bare initial
+        # user prompt rather than the 200KB+ expanded-plan blob — the
+        # expanded plan's premortem/decisions/risk-register vocabulary
+        # ("load-bearing", "Decision N", "Failure mode N", "$X budget")
+        # tends to mislead small models into reading engineering risk
+        # as a (B.2) non-physical-causation trigger. The bare prompt
+        # is sufficient to answer "does this plan require breaking
+        # physics?" and is what the smoke harness validates against.
+        # Other audit items continue to see the full expanded plan.
         self_audit = SelfAudit.execute(
             llm_executor=llm_executor,
             user_prompt=user_prompt,
             max_number_of_items=max_number_of_items,
+            physics_user_prompt=initial_user_prompt,
         )
 
         # Save the results.

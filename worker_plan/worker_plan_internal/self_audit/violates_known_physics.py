@@ -226,8 +226,8 @@ if __name__ == "__main__":
     )
 
     LLM_NAME = "openrouter-gpt-oss-safeguard-20b-nitro"
-    SAMPLE_SEED = 1300
-    SAMPLE_SIZE = 20
+    SAMPLE_SEED = 1400
+    SAMPLE_SIZE = 30
 
     # Catalog IDs the check is expected to flag HIGH. These are
     # canary cases run on every smoke invocation regardless of

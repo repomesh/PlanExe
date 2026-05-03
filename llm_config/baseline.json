@@ -86,27 +86,27 @@
         },
         "pricing_kind": "paid"
     },
-    "openrouter-elephant-alpha": {
-        "comment": "Released Apr 13, 2026. 262,144 context. $0/M input tokens. $0/M output tokens",
+    "openrouter-ling-2.6-flash": {
+        "comment": "Production name for what was previously the 'Elephant Alpha' stealth release (revealed Apr 21, 2026). 262,144 context. $0.08/M input tokens. $0.24/M output tokens.",
         "luigi_workers": 4,
-        "model_info_url": "https://openrouter.ai/openrouter/elephant-alpha",
+        "model_info_url": "https://openrouter.ai/inclusionai/ling-2.6-flash",
         "class": "OpenRouter",
         "arguments": {
-            "model": "openrouter/elephant-alpha",
+            "model": "inclusionai/ling-2.6-flash",
             "api_key": "${OPENROUTER_API_KEY}",
             "temperature": 0.1,
             "timeout": 60.0,
-            "context_window": 1048576,
+            "context_window": 262144,
             "is_function_calling_model": false,
             "is_chat_model": true,
             "max_tokens": 8192,
             "max_retries": 5
         },
         "pricing": {
-            "input_per_million_tokens": 0,
-            "output_per_million_tokens": 0
+            "input_per_million_tokens": 0.08,
+            "output_per_million_tokens": 0.24
         },
-        "pricing_kind": "free"
+        "pricing_kind": "paid"
     },
     "openrouter-ling-2.6-1t-free": {
         "comment": "Released Apr 23, 2026. Scheduled to be removed from OpenRouter on Apr 30, 2026. 262,144 context. $0/M input tokens. $0/M output tokens.",
@@ -305,6 +305,34 @@
         "pricing": {
             "input_per_million_tokens": 0.05,
             "output_per_million_tokens": 0.40
+        },
+        "pricing_kind": "paid"
+    },
+    "deepseek-v4-flash": {
+        "comment": "DeepSeek's flash tier via the native DeepSeek API. Requires a DEEPSEEK_API_KEY in the .env file. 1,000,000 context, 384,000 max output. Thinking mode is explicitly disabled (defaults to enabled). $0.14/M input (cache miss). $0.28/M output. See https://api-docs.deepseek.com/quick_start/pricing/",
+        "luigi_workers": 4,
+        "class": "OpenAILike",
+        "arguments": {
+            "model": "deepseek-v4-flash",
+            "api_key": "${DEEPSEEK_API_KEY}",
+            "api_base": "https://api.deepseek.com/v1",
+            "temperature": 0.1,
+            "timeout": 60.0,
+            "context_window": 1000000,
+            "is_function_calling_model": false,
+            "is_chat_model": true,
+            "max_tokens": 16384,
+            "max_retries": 5,
+            "additional_kwargs": {
+                "extra_body": {
+                    "thinking": {"type": "disabled"}
+                }
+            }
+        },
+        "model_info_url": "https://api-docs.deepseek.com/quick_start/pricing/",
+        "pricing": {
+            "input_per_million_tokens": 0.14,
+            "output_per_million_tokens": 0.28
         },
         "pricing_kind": "paid"
     },

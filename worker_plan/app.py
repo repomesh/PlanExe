@@ -1,7 +1,6 @@
 import logging
 import os
 import subprocess
-import json
 import sys
 import tempfile
 import threading
@@ -18,7 +17,7 @@ from worker_plan_api.planexe_dotenv import PlanExeDotEnv
 PlanExeDotEnv.load().update_os_environ()
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from worker_plan_api.filenames import FilenameEnum, ExtraFilenameEnum
@@ -29,7 +28,7 @@ from worker_plan_api.model_profile import ModelProfileEnum, DEFAULT_MODEL_PROFIL
 from worker_plan_internal.plan.pipeline_environment import PipelineEnvironmentEnum
 from worker_plan_api.plan_file import PlanFile
 from worker_plan_api.start_time import StartTime
-from worker_plan_internal.llm_factory import obtain_llm_info, get_llm_names_by_priority, get_llm
+from worker_plan_internal.llm_factory import obtain_llm_info, get_llm_names_by_priority, get_all_llm_names_with_priority, get_llm
 from worker_plan_internal.utils.time_since_last_modification import time_since_last_modification
 from worker_plan_internal.utils.purge_old_runs import purge_old_runs, start_purge_scheduler
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -422,78 +421,68 @@ def llm_info() -> LLMInfo:
     return obtain_llm_info()
 
 
-@app.get("/llm-ping")
-def llm_ping() -> StreamingResponse:
-    """
-    Stream ping results for each configured LLM model.
-    """
+_PING_SYSTEM_PROMPT = "You are a healthcheck endpoint. Reply with exactly OK. Do not add any other words."
+_PING_USER_PROMPT = "Reply with exactly OK."
 
-    def event_stream():
-        logger.info("Starting llm-ping stream")
-        ping_system_prompt = "You are a healthcheck endpoint. Reply with exactly OK. Do not add any other words."
-        ping_user_prompt = "Reply with exactly OK."
-        ping_targets: list[tuple[ModelProfileEnum, str, str]] = []
-        try:
-            for profile in ModelProfileEnum:
-                llm_names = get_llm_names_by_priority(model_profile=profile)
-                for llm_name in llm_names:
-                    display_name = f"{profile.value}:{llm_name}"
-                    ping_targets.append((profile, llm_name, display_name))
-        except Exception as exc:  # pragma: no cover - runtime probe
-            logger.error("llm-ping failed to enumerate llm names: %s", exc)
-            yield f"data: {json.dumps({'name': 'worker_plan', 'status': 'error', 'response_time': 0, 'response': str(exc)})}\n\n"
-            yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
-            return
 
-        if len(ping_targets) == 0:
-            yield f"data: {json.dumps({'name': 'worker_plan', 'status': 'error', 'response_time': 0, 'response': 'No models found in whitelisted llm_config profiles.'})}\n\n"
-            yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
-            return
+def _enumerate_ping_targets() -> list[dict]:
+    targets: list[dict] = []
+    for profile in ModelProfileEnum:
+        for llm_name, priority in get_all_llm_names_with_priority(model_profile=profile):
+            targets.append({
+                "profile": profile.value,
+                "llm_name": llm_name,
+                "display_name": f"{profile.value}:{llm_name}",
+                "priority": priority,
+            })
+    return targets
 
-        for model_profile, llm_name, display_name in ping_targets:
-            yield f"data: {json.dumps({'name': display_name, 'status': 'pinging', 'response_time': 0, 'response': 'Pinging model…'})}\n\n"
-            try:
-                start_time = time.time()
-                llm = get_llm(llm_name, model_profile=model_profile)
-                chat_message_list = [
-                    ChatMessage(
-                        role=MessageRole.SYSTEM,
-                        content=ping_system_prompt,
-                    ),
-                    ChatMessage(
-                        role=MessageRole.USER,
-                        content=ping_user_prompt,
-                    )
-                ]
-                response = llm.chat(chat_message_list)
-                end_time = time.time()
 
-                response_text = getattr(getattr(response, "message", None), "content", None)
-                if response_text is None:
-                    response_text = str(response)
-                response_text = str(response_text).strip()
-                is_exact_ok = response_text == "OK"
+@app.get("/llm-list")
+def llm_list() -> dict:
+    """List every (profile, llm_name) pair configured in the active llm_config profiles."""
+    try:
+        return {"models": _enumerate_ping_targets()}
+    except Exception as exc:
+        logger.error("llm-list failed to enumerate llm names: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-                payload = {
-                    "name": display_name,
-                    "status": "success" if is_exact_ok else "error",
-                    "response_time": int((end_time - start_time) * 1000),
-                    "response": "OK" if is_exact_ok else f"Expected exact 'OK', got: {response_text}"
-                }
-            except Exception as exc:  # pragma: no cover - runtime probe
-                logger.error("llm-ping error for %s: %s", llm_name, exc)
-                payload = {
-                    "name": display_name,
-                    "status": "error",
-                    "response_time": 0,
-                    "response": str(exc)
-                }
-            yield f"data: {json.dumps(payload)}\n\n"
 
-        logger.info("llm-ping stream complete")
-        yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
+@app.get("/llm-ping-one")
+def llm_ping_one(profile: str, llm_name: str) -> dict:
+    """Ping a single configured model and return the result as JSON."""
+    model_profile = normalize_model_profile(profile)
+    display_name = f"{model_profile.value}:{llm_name}"
+    try:
+        start_time = time.time()
+        llm = get_llm(llm_name, model_profile=model_profile)
+        chat_message_list = [
+            ChatMessage(role=MessageRole.SYSTEM, content=_PING_SYSTEM_PROMPT),
+            ChatMessage(role=MessageRole.USER, content=_PING_USER_PROMPT),
+        ]
+        response = llm.chat(chat_message_list)
+        elapsed_ms = int((time.time() - start_time) * 1000)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+        response_text = getattr(getattr(response, "message", None), "content", None)
+        if response_text is None:
+            response_text = str(response)
+        response_text = str(response_text).strip()
+        is_exact_ok = response_text == "OK"
+
+        return {
+            "name": display_name,
+            "status": "success" if is_exact_ok else "error",
+            "response_time": elapsed_ms,
+            "response": "OK" if is_exact_ok else f"Expected exact 'OK', got: {response_text}",
+        }
+    except Exception as exc:
+        logger.error("llm-ping-one error for %s:%s: %s", model_profile.value, llm_name, exc)
+        return {
+            "name": display_name,
+            "status": "error",
+            "response_time": 0,
+            "response": str(exc),
+        }
 
 
 @app.post("/purge-runs", response_model=PurgeRunsResponse)

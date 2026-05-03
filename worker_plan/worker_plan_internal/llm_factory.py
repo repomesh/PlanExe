@@ -38,7 +38,7 @@ SPECIAL_AUTO_LABEL = 'Auto'
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["get_llm", "LLMInfo", "get_llm_names_by_priority", "SPECIAL_AUTO_ID", "is_valid_llm_name", "obtain_llm_info"]
+__all__ = ["get_llm", "LLMInfo", "get_llm_names_by_priority", "get_all_llm_names_with_priority", "SPECIAL_AUTO_ID", "is_valid_llm_name", "obtain_llm_info"]
 
 
 def _resolve_model_profile(model_profile: Optional[ModelProfileEnum | str]) -> ModelProfileEnum:
@@ -173,6 +173,26 @@ def get_llm_names_by_priority(model_profile: Optional[ModelProfileEnum | str] = 
     configs = [(name, config) for name, config in planexe_llmconfig.llm_config_dict.items() if config.get("priority") is not None]
     configs.sort(key=lambda x: x[1].get("priority", 0))
     return [name for name, _ in configs]
+
+
+def get_all_llm_names_with_priority(model_profile: Optional[ModelProfileEnum | str] = None) -> list[tuple[str, Optional[int]]]:
+    """
+    Return every configured LLM name in the profile and its priority (None when unset).
+
+    Models with a priority come first, sorted ascending. Models without a priority
+    follow, in the order the config file declares them.
+    """
+    planexe_llmconfig = _load_llm_config(model_profile)
+    prioritized: list[tuple[str, Optional[int]]] = []
+    unprioritized: list[tuple[str, Optional[int]]] = []
+    for name, config in planexe_llmconfig.llm_config_dict.items():
+        priority = config.get("priority")
+        if priority is None:
+            unprioritized.append((name, None))
+        else:
+            prioritized.append((name, int(priority)))
+    prioritized.sort(key=lambda x: x[1])
+    return prioritized + unprioritized
 
 def is_valid_llm_name(llm_name: str, model_profile: Optional[ModelProfileEnum | str] = None) -> bool:
     """

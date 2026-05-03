@@ -90,7 +90,12 @@ Out of scope — these are NOT physics violations and MUST stay "low":
 - Linguistic, social, or policy design.
 - Real-world materials, including radioisotopes.
 - R&D toward unproven-at-scale effects that are consistent with known physics.
+- Engineering or computational feasibility uncertainty under cost, time, or scope constraints — e.g., whether a software component, custom model, parser, integration, or data pipeline can be built within budget X by date Y. That is empirical engineering risk, not a physics question. Stays "low" no matter how central the deliverable is to the plan's success.
 - Surface-level keyword cues such as the words "physical", "fundamental", "science", "law", or "physical location" appearing in the plan.
+
+Plans routinely use words like "load-bearing", "critical", "central to risk", "non-negotiable", "Decision N", "Risk N", "Failure mode N" to describe their own engineering, governance, or strategic deliverables. That vocabulary in the plan does NOT match this rule's "(B.2) load-bearing non-physical mechanism" — those phrases are about plan-internal importance, not about physics. Do not flag HIGH because a plan calls something "load-bearing" or "critical"; (B.2) requires concrete physics-incompatibility.
+
+If your reasoning includes "borderline case", "leans toward", "high rating is preferred", "central to risk register", or "engineering feasibility uncertainty", the rating MUST be "low". HIGH requires concrete, named physics-incompatibility, not generic plan-importance.
 
 The plan may be written in any language. Assess the plan's actual mechanism, not the words used to describe it.
 

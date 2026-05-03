@@ -229,29 +229,53 @@ if __name__ == "__main__":
     SAMPLE_SEED = 1400
     SAMPLE_SIZE = 30
 
-    # Catalog IDs the check is expected to flag HIGH. These are
-    # canary cases run on every smoke invocation regardless of
-    # SAMPLE_SEED, so each run validates the expected-HIGH set
-    # against the current system prompt. Any ID here that comes
-    # back not-HIGH is reported as a canary failure in the summary.
+    # Catalog IDs the check is expected to flag HIGH. Run on every
+    # smoke invocation regardless of SAMPLE_SEED so each run validates
+    # the expected-HIGH set against the current system prompt. Any ID
+    # that comes back not-HIGH is reported as a canary failure in the
+    # summary. The dict value is the short label printed at runtime;
+    # the per-entry comment block above each line explains why the
+    # case is in this set and which trigger it should fire under.
     EXPECTED_HIGH_IDS: dict[str, str] = {
+        # Curriculum that asserts a flat Earth as taught fact, directly
+        # contradicting the observed shape of Earth and the laws governing
+        # gravity, orbital mechanics, and geodesy. Trigger (B.1) — load-
+        # bearing assertion of a claim that contradicts observed physical
+        # fact. Should fire HIGH on every run.
         "2891ff5f-4d6e-4909-a6ac-64af1273275e": "flat-earth education curriculum",
+        # Statutory office with binding muhurta certification over cabinet
+        # action and procurement; success criteria publicly claim outcome
+        # correlation between planetary alignment and policy success.
+        # Trigger (B.2) — load-bearing non-physical causation on real-world
+        # institutional decisions. Should fire HIGH.
         "16faf60a-c7d0-43e3-90fa-0a8cd7cea8d2": "OSAA — statutory astrological office",
+        # B2B spirit-clearance firm with a published 85% no-recurrence
+        # success metric and certificate-of-clearance accepted by
+        # brokerages. Trigger (B.2) — revenue and KPIs depend on rituals
+        # producing measurable real-world change. Should fire HIGH.
         "8e38db3d-01e7-4b22-b6df-b98f074778ff": "Phi-Free — spirit-clearance firm",
-        "9865dc43-b400-480d-b75e-bc3af292456f": "Nyxa — synthetic supernatural commerce",
-        # Note: the ban-women-from-computers prompt is kept here as a
-        # documented scope-mismatch canary. It is a sex-based suppression
-        # of access to computing/internet — an unjust premise and a
-        # discrimination/rights problem, but NOT a physics-laws problem
-        # (the plan does not assert physics-incompatible claims; it
-        # imposes an unjust restriction). The physics check correctly
-        # LOWs it. This kind of plan is properly attacked by
+        # Cross-border supernatural-commerce platform with synthetic
+        # AI-generated lore and sockpuppet community-seeding. Documented
+        # scope-mismatch: operators are explicit cynics whose own success
+        # metrics are commercial (GMV, ban rate, regulatory survival),
+        # not "the rituals worked". The plan is load-bearing on commercial
+        # deception, not on supernatural causation. Kept here because the
+        # tags include "supernatural" and a future broadening might catch
+        # it; the "misinformation about science" framing fits a separate
+        # audit item, not this one. Currently expected to LOW under the
+        # physics check; canary failure surfaces this at every run.
+        "9865dc43-b400-480d-b75e-bc3af292456f": "Nyxa — synthetic supernatural commerce (known scope-mismatch; deception, not load-bearing supernatural causation)",
+        # Sex-based federal device-ban policy. Documented scope-mismatch:
+        # it is a discrimination / rights problem, not a physics-laws
+        # problem (the plan does not assert physics-incompatible claims;
+        # it imposes an unjust restriction). Properly attacked by
         # diagnostics/premise_attack.py, which targets fundamental,
         # unfixable flaws in a prompt's premise (including the
-        # rights/dignity/consent critique). Do NOT broaden this rule
-        # to catch it — that would over-flag a wide class of
-        # ideological/political plans and dilute the physics check.
-        "7f8a2c4d-000e-4b2c-9466-25ca1641bf12": "ban women from computers — handled by premise_attack.py; kept here as scope-mismatch canary",
+        # rights/dignity/consent critique). Do NOT broaden this rule to
+        # catch it — that would over-flag a wide class of ideological /
+        # political plans and dilute the physics check. Kept here as a
+        # documented scope-mismatch canary; expected LOW.
+        "7f8a2c4d-000e-4b2c-9466-25ca1641bf12": "ban women from computers (known scope-mismatch; discrimination/rights problem, routed to premise_attack.py)",
     }
 
     # Catalog IDs already exercised by earlier smoke runs (SEEDs 700,

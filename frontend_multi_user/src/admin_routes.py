@@ -370,40 +370,50 @@ def admin_database_backup():
         return jsonify({"error": str(e)}), 502
 
 
-@admin_routes_bp.route("/ping/stream")
+@admin_routes_bp.route("/ping/list")
 @login_required
-def ping_stream():
+def ping_list():
     worker_plan_url = current_app.config["WORKER_PLAN_URL"]
+    url = f"{worker_plan_url}/llm-list"
+    try:
+        resp = requests.get(url, timeout=(5, 30))
+    except Exception as exc:
+        logger.error("LLM ping list proxy exception: %s", exc)
+        return jsonify({"error": str(exc)}), 502
+    if resp.status_code != 200:
+        return jsonify({"error": f"worker_plan responded with {resp.status_code}"}), 502
+    return jsonify(resp.json())
 
-    def generate():
-        url = f"{worker_plan_url}/llm-ping"
-        logger.info("Proxying LLM ping stream from %s", url)
-        try:
-            with requests.get(
-                url,
-                stream=True,
-                timeout=(5, 300),
-                headers={"Accept": "text/event-stream"},
-            ) as resp:
-                if resp.status_code != 200:
-                    msg = f"worker_plan responded with {resp.status_code}"
-                    logger.error("LLM ping proxy error: %s", msg)
-                    yield f"data: {json.dumps({'name': 'worker_plan', 'status': 'error', 'response_time': 0, 'response': msg})}\n\n"
-                    yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
-                    return
-                for line in resp.iter_lines(decode_unicode=True):
-                    if line is None or line.strip() == "":
-                        continue
-                    yield f"{line}\n\n"
-        except Exception as exc:
-            logger.error("LLM ping proxy exception: %s", exc)
-            error_payload = {"name": "worker_plan", "status": "error", "response_time": 0, "response": str(exc)}
-            yield f"data: {json.dumps(error_payload)}\n\n"
-            yield f"data: {json.dumps({'name': 'server', 'status': 'done', 'response_time': 0, 'response': ''})}\n\n"
 
-    response = Response(generate(), mimetype="text/event-stream")
-    response.headers["X-Accel-Buffering"] = "no"
-    return response
+@admin_routes_bp.route("/ping/one")
+@login_required
+def ping_one():
+    worker_plan_url = current_app.config["WORKER_PLAN_URL"]
+    profile = request.args.get("profile", "")
+    llm_name = request.args.get("llm_name", "")
+    url = f"{worker_plan_url}/llm-ping-one"
+    try:
+        resp = requests.get(
+            url,
+            params={"profile": profile, "llm_name": llm_name},
+            timeout=(5, 300),
+        )
+    except Exception as exc:
+        logger.error("LLM ping-one proxy exception: %s", exc)
+        return jsonify({
+            "name": f"{profile}:{llm_name}",
+            "status": "error",
+            "response_time": 0,
+            "response": str(exc),
+        }), 502
+    if resp.status_code != 200:
+        return jsonify({
+            "name": f"{profile}:{llm_name}",
+            "status": "error",
+            "response_time": 0,
+            "response": f"worker_plan responded with {resp.status_code}",
+        }), 502
+    return jsonify(resp.json())
 
 
 @admin_routes_bp.route("/admin/demo_run")

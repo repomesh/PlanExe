@@ -53,6 +53,20 @@ from pydantic import BaseModel, Field
 from llama_index.core.llms import ChatMessage, MessageRole
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor, PipelineStopRequested
 from worker_plan_internal.llm_util.llm_errors import LLMChatError
+from worker_plan_internal.self_audit.violates_known_physics import ViolatesKnownPhysics
+
+# The "Violates Known Physics" check is handled by a dedicated module
+# rather than the shared batch path. The module itself is unaware of
+# its place in the audit — these constants describe how the audit
+# labels and orders that result. The numeric index keeps the entry
+# sorted ahead of every batch item.
+VIOLATES_KNOWN_PHYSICS_INDEX = 1
+VIOLATES_KNOWN_PHYSICS_TITLE = "Violates Known Physics"
+VIOLATES_KNOWN_PHYSICS_SUBTITLE = (
+    "Does the plan's success require breaking a known law of physics "
+    "(e.g., thermodynamics, conservation of energy, speed-of-light "
+    "limit, causality)?"
+)
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +108,22 @@ Known problems to guard against
 
 
 class ChecklistAnswer(BaseModel):
-    level: str = Field(
-        description="low, medium, high."
-    )
+    # Field order matters: structured-output models commit to the
+    # first emitted field, then write the rest. Putting `level`
+    # first led to verdicts that contradicted their own
+    # justification (e.g. "Rated HIGH because the plan relies on
+    # breaking no laws of physics"). Justification is emitted
+    # first so the reasoning is on paper before the level is
+    # locked in; mitigation follows so it is shaped by the
+    # justification rather than reverse-engineered from a verdict.
     justification: str = Field(
         description="Why this level and not another level. 30 words."
     )
     mitigation: str = Field(
         description="One concrete action that reduces/removes the flag. 30 words."
+    )
+    level: str = Field(
+        description="low, medium, high. Must be consistent with the justification — if the justification cannot defend a higher rating, level MUST be 'low'."
     )
 
 class ChecklistAnswerCleaned(BaseModel):
@@ -114,24 +136,22 @@ class ChecklistAnswerCleaned(BaseModel):
     subtitle: str = Field(
         description="Subtitle of this checklist item."
     )
-    level: str = Field(
-        description="low, medium, high."
-    )
     justification: str = Field(
         description="Why this level and not another level. 30 words."
     )
     mitigation: str = Field(
         description="One concrete action that reduces/removes the flag. 30 words."
     )
+    level: str = Field(
+        description="low, medium, high."
+    )
 
-ALL_CHECKLIST_ITEMS = [
-    {
-        "index": 1,
-        "title": "Violates Known Physics",
-        "subtitle": "Does the project require a major, unpredictable discovery in fundamental science to succeed?",
-        "instruction": "Scope: fundamental physics ONLY (e.g., perpetual motion, faster-than-light travel, reactionless/anti-gravity propulsion, time travel). ‘Laws’ here means ONLY the laws of physics (thermodynamics, conservation of energy, relativity, etc.) — NOT legal statutes, treaty law, constitutional law, regulations, or policy. A plan involving legislation, treaties, currency adoption, governance reform, or any non-physics ‘laws’ does NOT violate physics — rate LOW. HIGH only if success literally requires breaking a named law of physics; MEDIUM only if a physics-consistent but unproven physical effect at required scale is mandatory with no conventional fallback; otherwise LOW. Economics/crypto/tokenization/governance/AI/regulation/policy/finance/engineering-scale are out of scope—rate LOW. If you cannot name a specific law of physics (e.g., second law of thermodynamics, speed of light) that is violated, rate LOW. If LOW: Mitigation=None. If ≥ MEDIUM: name the specific physical law violated, ≤30-word justification + mitigation with Owner/Deliverable/Date.",
-        "comment": "If the initial prompt is vague/scifi/aggressive or asks for something that is physically impossible, then the generated plan usually end up with some fantasy parts, making the plan unrealistic. Known false-positive: LLMs confuse ‘laws’ (legal/regulatory) with ‘laws of physics’ for plans about policy, currency adoption, governance, etc."
-    },
+# Items handled by the shared batch path (one LLM call per item, all
+# answered with the same ChecklistAnswer schema and the system prompt
+# emitted by `format_system_prompt`). The "Violates Known Physics"
+# item lives in its own module — see VIOLATES_KNOWN_PHYSICS_* above —
+# and is intentionally absent from this list.
+BATCH_CHECKLIST_ITEMS = [
     {
         "index": 2,
         "title": "No Real-World Proof",
@@ -322,7 +342,7 @@ You are an expert strategic analyst. Your task is to answer a checklist with red
 You will output only valid JSON. No explanations, no chit-chat, no Markdown, no code fences.
 
 GOAL
-Return exactly one object per checklist item with keys in this order: level, justification, mitigation.
+Return exactly one object per checklist item with keys in this order: justification, mitigation, level. Write the justification first; then the mitigation; the level is the LAST field you write and MUST agree with what the justification just argued. If the justification cannot defend a HIGH/MEDIUM rating, level is "low".
 
 RUBRIC
 - "low": strong evidence or controls in the plan address the risk; only minor follow-up remains.
@@ -374,33 +394,83 @@ class SelfAudit:
     markdown: str
 
     @classmethod
-    def execute(cls, llm_executor: LLMExecutor, user_prompt: str, max_number_of_items: Optional[int] = None) -> 'SelfAudit':
+    def execute(
+        cls,
+        llm_executor: LLMExecutor,
+        user_prompt: str,
+        max_number_of_items: Optional[int] = None,
+        physics_user_prompt: Optional[str] = None,
+    ) -> 'SelfAudit':
         if not isinstance(llm_executor, LLMExecutor):
             raise ValueError("Invalid LLMExecutor instance.")
         if not isinstance(user_prompt, str):
             raise ValueError("Invalid user_prompt.")
         if max_number_of_items is not None and not isinstance(max_number_of_items, int):
             raise ValueError("Invalid max_number_of_items.")
+        if physics_user_prompt is not None and not isinstance(physics_user_prompt, str):
+            raise ValueError("Invalid physics_user_prompt.")
+        # The physics check runs on the bare initial user prompt when
+        # provided. Without it, falls back to the same user_prompt as
+        # the rest of the audit. The bare-prompt routing avoids
+        # misfires caused by the expanded plan's risk-register
+        # vocabulary ("load-bearing", "Decision N", "Failure mode N")
+        # being misread as (B.2) non-physical-causation.
+        physics_input = physics_user_prompt if physics_user_prompt is not None else user_prompt
 
-        checklist_items = ALL_CHECKLIST_ITEMS
-        if max_number_of_items is not None:
-            checklist_items = checklist_items[:max_number_of_items]
-        
-        system_prompt_list = []
-        for index in range(0, len(checklist_items)):
-            system_prompt = format_system_prompt(checklist=checklist_items, current_index=index)
-            system_prompt_list.append(system_prompt)
+        # The dedicated physics check counts as one logical item; the
+        # remaining slots are filled from BATCH_CHECKLIST_ITEMS in
+        # order. max_number_of_items=1 means physics only.
+        run_physics_check = max_number_of_items is None or max_number_of_items >= 1
+        if max_number_of_items is None:
+            batch_items = BATCH_CHECKLIST_ITEMS
+        else:
+            batch_items = BATCH_CHECKLIST_ITEMS[: max(0, max_number_of_items - 1)]
 
         responses: dict[int, ChecklistAnswer] = {}
         metadata_list: list[dict] = []
-        user_prompt_list = []
+        user_prompt_list: list[str] = []
+        system_prompt_list: list[str] = []
         checklist_answers_cleaned: list[ChecklistAnswerCleaned] = []
-        for index in range(0, len(checklist_items)):
-            logger.info(f"Processing item {index+1} of {len(checklist_items)}")
-            system_prompt = system_prompt_list[index]
+
+        # The "Violates Known Physics" check lives in its own module
+        # with its own system prompt and response schema. Run it once
+        # before the batch loop so its verdict is already in
+        # `responses` when subsequent items are evaluated. The module
+        # takes the executor directly and handles its own error
+        # wrapping (PipelineStopRequested re-raised, LLM failures
+        # wrapped as LLMChatError).
+        if run_physics_check:
+            physics_result = ViolatesKnownPhysics.execute(llm_executor, physics_input)
+
+            system_prompt_list.append(physics_result.system_prompt)
+            user_prompt_list.append(physics_input)
+            metadata_list.append(physics_result.metadata)
+
+            physics_checklist_answer = ChecklistAnswer(
+                justification=physics_result.justification,
+                mitigation=physics_result.mitigation,
+                level=physics_result.level,
+            )
+            checklist_answers_cleaned.append(ChecklistAnswerCleaned(
+                index=VIOLATES_KNOWN_PHYSICS_INDEX,
+                title=VIOLATES_KNOWN_PHYSICS_TITLE,
+                subtitle=VIOLATES_KNOWN_PHYSICS_SUBTITLE,
+                justification=physics_result.justification,
+                mitigation=physics_result.mitigation,
+                level=physics_result.level,
+            ))
+            responses[VIOLATES_KNOWN_PHYSICS_INDEX] = physics_checklist_answer
+
+        for index in range(0, len(batch_items)):
+            checklist_item = batch_items[index]
+            checklist_item_index = checklist_item["index"]
+
+            logger.info(f"Processing batch item {index+1} of {len(batch_items)}")
+            system_prompt = format_system_prompt(checklist=batch_items, current_index=index)
+            system_prompt_list.append(system_prompt)
 
             # Add previous checklist responses to the bottom of the user prompt
-            if index > 0:
+            if responses:
                 previous_responses_dict = {k: v.model_dump() for k, v in responses.items()}
                 previous_responses_str = json.dumps(previous_responses_dict, indent=2)
                 user_prompt_with_previous_responses = f"{user_prompt}\n\n# Checklist Answers\n{previous_responses_str}"
@@ -441,7 +511,7 @@ class SelfAudit:
                 logger.debug(f"LLM chat interaction failed [{llm_error.error_id}]: {e}")
                 logger.error(f"LLM chat interaction failed [{llm_error.error_id}]", exc_info=True)
                 raise llm_error from e
-            
+
             chat_message_list.append(
                 ChatMessage(
                     role=MessageRole.ASSISTANT,
@@ -452,8 +522,6 @@ class SelfAudit:
             logger.debug(f"Chat response: {result['chat_response'].raw.model_dump()}")
 
             checklist_answer: ChecklistAnswer = result["chat_response"].raw
-            checklist_item = checklist_items[index]
-            checklist_item_index = checklist_item["index"]
             level: str = checklist_answer.level.lower()
             checklist_answer_cleaned = ChecklistAnswerCleaned(
                 index=checklist_item_index,

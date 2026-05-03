@@ -80,14 +80,6 @@ I'm terrible at SKILL.md, so I'm not at a place where I can easily automate this
 
 ## Directions to go
 
-**Violates Known Physics false positive:** After switching from "Gemini-2.0-flash" to "Gemini-2.5-flash", I have noticed the "Violates Known Physics" gets triggered way too often, for reasons not related to physics. See the "Self Audit" section here, embarrasing:
-https://planexe.org/20260203_bering_bridge_report.html
-Violates Known Physics
-Does the project require a major, unpredictable discovery in fundamental science to succeed?
-Level: 🛑 High
-Justification: Rated HIGH because the plan is entirely focused on non-physics constraints (governance, finance, regulation, logistics). The scenario involves no claims of perpetual motion, FTL travel, or violation of laws like thermodynamics or relativity. Mitigation is required for checklist completion based on scope instructions.
-Mitigation: Governance Architect: Review the plan against fundamental conservation laws (Mass/Energy) to confirm no implicit physics rule violation exists by Q2 2025.
-
 **Boost initial prompt:** The `initial prompt` has the biggest impact on the generated plan, if it's bad then the final plan is bad.
 If it's well written, concise, there is a higher chance for a realistic/feasible plan.
 I'm pondering about making a chat interface talking with planexe MCP interface, that assists the user in writing a plan.
@@ -107,9 +99,6 @@ a different set of levers, fixing typos.
 - User specifies a budget of 0..100 USD. Which is unrealistic, when the plan is to hire a team, and work on it for months.
 - User leaves out physical location(s). So PlanExe picks a random location in a different part of the world.
 - Confusing prompt. `Less than 100 employees`, that can be a solopreneur or a company with 99 employees. Better with a range 80..120 employees, and a number of people available to the project.
-
-**Classify domain:** A step before identifying levers. Determine the `primary domain` and `secondary domains` and hints for what to attend to downstream.
-Currently levers gets created from the initial prompt, there is no assumptions being made before the levers, causing a poor choice of levers.
 
 **Ask for expert help:** Establish contact between people, for reviewing a plan, for executing the plan, for getting funding.
 The “Ask for expert help” section, serve the content from planexe.org. Either as an iframe or as javascript or be generated dynamic?
@@ -153,7 +142,7 @@ PlanExe’s Level: It is a linguistic engine, not a computational engine. It kno
 Verdict: Sub-Human. It provides the architecture for the math, but cannot execute it.
 
 **Self Audit:** Do more sanity checks. Find the worst issues in the report, eventual catch these issues earlier in the pipeline.
-`Fabricated evidence`, `False precision`, `Over confidence`.
+`Fabricated evidence`, `False precision`, `Over confidence`, `Misinformation`, `Discrimination`.
 
 **Original insight:** did the LLM add anything beyond reframing the obvious.
 

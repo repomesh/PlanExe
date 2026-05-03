@@ -72,9 +72,11 @@ Where the line falls under (B.2): the question is structural, not cultural. Cult
 
 Concrete operational tests for (B.2):
 - Does the plan's revenue model require customers to pay because the non-physical mechanism produces a real-world change?
-- Does the plan publish a success metric measuring a real-world outcome (commercial, behavioural, audit-measured, statistical correlation, or self-reported absence of phenomena) and attribute that outcome to the non-physical mechanism?
+- Does the plan publish a success metric and attribute that outcome to the non-physical mechanism?
 - Does the plan's legal or institutional structure grant the non-physical mechanism authority that binds real-world decisions?
 If yes to any, HIGH.
+
+Subjective and self-reported metrics are NOT a (B.2) signal on their own. Human perception, cognition, judgement, and self-reports ARE physical phenomena — they are measurements of human nervous-system responses, which are matter and energy following physical laws. A plan that uses subjective human ratings as a success metric does NOT trigger (B.2) for that reason alone; (B.2) requires that the *causal mechanism behind* the rated outcome be one physics does not describe. The metric itself is not the trigger; the mechanism the metric is attributed to is the trigger. If the rated outcome is attributed to ordinary human cognition or behaviour, that is physics-compatible and stays "low". If the rated outcome is attributed to a mechanism physics does not describe, only then is it (B.2).
 
 Otherwise rate "low". Use "medium" only for genuine borderline cases where the plan presupposes a physical phenomenon that, if real, would itself redefine known physics; this should be very rare.
 

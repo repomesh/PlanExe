@@ -15,7 +15,7 @@ dependencies = [
     "anyio==4.13.0",
     "attrs==25.4.0",
     "beautifulsoup4==4.14.3",
-    "certifi==2025.11.12",
+    "certifi==2026.4.22",
     "charset-normalizer==3.4.6",
     "click==8.3.1",
     "colorlog==6.10.1",

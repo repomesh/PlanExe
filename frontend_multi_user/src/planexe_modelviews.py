@@ -4,6 +4,7 @@ Custom ModelViews for the PlanExe-server tables.
 import base64
 import json
 import math
+import typing
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -18,8 +19,21 @@ from flask_login import current_user
 from sqlalchemy.orm import defer
 from wtforms import FileField, BooleanField
 
+if typing.TYPE_CHECKING:
+    # flask-admin 2.1.0 typed `ModelView.session` via an overload pair
+    # that pyright resolves to `None`, and `ModelView.model` as
+    # `type[DeclarativeBase]`, which loses access to project-specific
+    # columns. Narrow both attributes for static analysis only —
+    # runtime behaviour is unchanged.
+    from sqlalchemy.orm import Session
+    from database_api.model_planitem import PlanItem
+
+
 class AdminOnlyModelView(ModelView):
     """Restrict admin views to authenticated admin users only."""
+    if typing.TYPE_CHECKING:
+        session: Session
+
     def is_accessible(self):
         return current_user.is_authenticated and getattr(current_user, "is_admin", False)
 
@@ -105,6 +119,9 @@ class WorkerItemView(AdminOnlyModelView):
 
 class PlanItemView(AdminOnlyModelView):
     """Custom ModelView for PlanItem"""
+    if typing.TYPE_CHECKING:
+        model: type[PlanItem]
+
     column_list = [
         'id',
         'timestamp_created',

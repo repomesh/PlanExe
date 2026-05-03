@@ -2,21 +2,19 @@
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_api.plan_file import PlanFile
+from worker_plan_internal.plan.nodes.initial_plan_raw import InitialPlanRawTask
 
 
 class SetupTask(PlanTask):
     """Read plan_raw.json and produce plan.txt from the template."""
+    def requires(self):
+        return self.clone(InitialPlanRawTask)
+
     def output(self):
         return self.local_target(FilenameEnum.INITIAL_PLAN)
 
     def run(self):
-        raw_path = self.run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value
-        if not raw_path.exists():
-            raise FileNotFoundError(
-                f"Before starting the pipeline the '{FilenameEnum.INITIAL_PLAN_RAW.value}' file "
-                f"must be present in the run_id_dir: {self.run_id_dir!r}"
-            )
-        plan_file = PlanFile.load(str(raw_path))
+        plan_file = PlanFile.load(self.input().path)
         plan_text = plan_file.to_plan_text()
         with open(self.output().path, "w", encoding="utf-8") as f:
             f.write(plan_text)

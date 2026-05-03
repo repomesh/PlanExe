@@ -4,7 +4,7 @@ from worker_plan_internal.diagnostics.prompt_adherence import PromptAdherence
 from worker_plan_internal.llm_util.llm_executor import LLMExecutor
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_api.plan_file import PlanFile
-from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_internal.plan.nodes.initial_plan_raw import InitialPlanRawTask
 from worker_plan_internal.plan.nodes.project_plan import ProjectPlanTask
 from worker_plan_internal.plan.nodes.executive_summary import ExecutiveSummaryTask
 from worker_plan_internal.plan.nodes.consolidate_assumptions_markdown import ConsolidateAssumptionsMarkdownTask
@@ -21,7 +21,7 @@ class PromptAdherenceTask(PlanTask):
 
     def requires(self):
         return {
-            'setup': self.clone(SetupTask),
+            'plan_raw': self.clone(InitialPlanRawTask),
             'project_plan': self.clone(ProjectPlanTask),
             'executive_summary': self.clone(ExecutiveSummaryTask),
             'consolidate_assumptions_markdown': self.clone(ConsolidateAssumptionsMarkdownTask),
@@ -30,8 +30,7 @@ class PromptAdherenceTask(PlanTask):
     def run_inner(self):
         llm_executor: LLMExecutor = self.create_llm_executor()
 
-        plan_raw_path = self.run_id_dir / FilenameEnum.INITIAL_PLAN_RAW.value
-        plan_file = PlanFile.load(str(plan_raw_path))
+        plan_file = PlanFile.load(self.input()['plan_raw'].path)
         plan_prompt = plan_file.plan_prompt
         with self.input()['project_plan']['markdown'].open("r") as f:
             project_plan_markdown = f.read()

@@ -3,13 +3,14 @@ from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
 from worker_plan_internal.diagnostics.screen_planning_prompt import ScreenPlanningPrompt
 from worker_plan_api.filenames import FilenameEnum
-from worker_plan_internal.plan.nodes.setup import SetupTask
+from worker_plan_api.plan_file import PlanFile
+from worker_plan_internal.plan.nodes.initial_plan_raw import InitialPlanRawTask
 
 
 class ScreenPlanningPromptTask(PlanTask):
     """Flag prompts as UNUSABLE when there is high confidence the prompt is garbage."""
     def requires(self):
-        return self.clone(SetupTask)
+        return self.clone(InitialPlanRawTask)
 
     def output(self):
         return {
@@ -18,8 +19,8 @@ class ScreenPlanningPromptTask(PlanTask):
         }
 
     def run_with_llm(self, llm: LLM) -> None:
-        with self.input().open("r") as f:
-            plan_prompt = f.read()
+        plan_file = PlanFile.load(self.input().path)
+        plan_prompt = plan_file.plan_prompt
 
         result = ScreenPlanningPrompt.execute(llm, plan_prompt)
 

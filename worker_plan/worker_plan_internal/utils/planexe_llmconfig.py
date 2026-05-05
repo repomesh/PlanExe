@@ -36,34 +36,6 @@ class PlanExeLLMConfig:
         profile_key = model_profile.value if isinstance(model_profile, ModelProfileEnum) else model_profile
         return _load_cached(profile_key, llm_config_json_name_override)
 
-
-@cache
-def _load_cached(
-    profile_key: str | None,
-    llm_config_json_name_override: str | None,
-) -> PlanExeLLMConfig:
-    config = PlanExeConfig.load(
-        model_profile_override=profile_key,
-        llm_config_json_name_override=llm_config_json_name_override,
-    )
-    config.raise_if_required_files_not_found()
-    planexe_dotenv = PlanExeDotEnv.load()
-
-    llm_config_json_path = config.llm_config_json_path
-    llm_config_dict_raw = PlanExeLLMConfig.load_llm_config(llm_config_json_path)
-    # Filter before substituting so we don't warn about env vars
-    # belonging to entries that are about to be dropped (e.g. when
-    # PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES=OpenRouter is set in
-    # production and OPENAI_API_KEY / DEEPSEEK_API_KEY are absent).
-    llm_config_dict = PlanExeLLMConfig.filter_by_whitelisted_classes(llm_config_dict_raw, planexe_dotenv.dotenv_dict)
-    llm_config_dict = PlanExeLLMConfig.substitute_env_vars(llm_config_dict, planexe_dotenv.dotenv_dict)
-
-    return PlanExeLLMConfig(
-        llm_config_json_path=llm_config_json_path,
-        llm_config_dict_raw=llm_config_dict_raw,
-        llm_config_dict=llm_config_dict,
-    )
-
     @classmethod
     def load_llm_config(cls, llm_config_json_path: Path) -> Dict[str, Any]:
         """Loads the configuration from a JSON file."""
@@ -137,6 +109,34 @@ def _load_cached(
 
     def __repr__(self):
         return f"PlanExeLLMConfig(llm_config_json_path={self.llm_config_json_path!r}, llm_config_dict.keys()={self.llm_config_dict.keys()!r})"
+
+
+@cache
+def _load_cached(
+    profile_key: str | None,
+    llm_config_json_name_override: str | None,
+) -> PlanExeLLMConfig:
+    config = PlanExeConfig.load(
+        model_profile_override=profile_key,
+        llm_config_json_name_override=llm_config_json_name_override,
+    )
+    config.raise_if_required_files_not_found()
+    planexe_dotenv = PlanExeDotEnv.load()
+
+    llm_config_json_path = config.llm_config_json_path
+    llm_config_dict_raw = PlanExeLLMConfig.load_llm_config(llm_config_json_path)
+    # Filter before substituting so we don't warn about env vars
+    # belonging to entries that are about to be dropped (e.g. when
+    # PLANEXE_LLM_CONFIG_WHITELISTED_CLASSES=OpenRouter is set in
+    # production and OPENAI_API_KEY / DEEPSEEK_API_KEY are absent).
+    llm_config_dict = PlanExeLLMConfig.filter_by_whitelisted_classes(llm_config_dict_raw, planexe_dotenv.dotenv_dict)
+    llm_config_dict = PlanExeLLMConfig.substitute_env_vars(llm_config_dict, planexe_dotenv.dotenv_dict)
+
+    return PlanExeLLMConfig(
+        llm_config_json_path=llm_config_json_path,
+        llm_config_dict_raw=llm_config_dict_raw,
+        llm_config_dict=llm_config_dict,
+    )
 
 if __name__ == "__main__":
     llm_config = PlanExeLLMConfig.load()

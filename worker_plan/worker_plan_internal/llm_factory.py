@@ -51,8 +51,15 @@ def _resolve_model_profile(model_profile: Optional[ModelProfileEnum | str]) -> M
     return resolve_model_profile_from_env()
 
 
+_llm_config_cache: dict[ModelProfileEnum, PlanExeLLMConfig] = {}
+
+
 def _load_llm_config(model_profile: Optional[ModelProfileEnum | str]) -> PlanExeLLMConfig:
     resolved_profile = _resolve_model_profile(model_profile)
+    cached = _llm_config_cache.get(resolved_profile)
+    if cached is not None:
+        return cached
+
     planexe_llmconfig = PlanExeLLMConfig.load(model_profile=resolved_profile)
     try:
         from worker_plan_internal.llm_util.model_pricing import load_pricing_from_llm_config
@@ -64,6 +71,8 @@ def _load_llm_config(model_profile: Optional[ModelProfileEnum | str]) -> PlanExe
         install_anthropic_usage_hook()
     except Exception:
         logger.debug("Failed to install Anthropic usage hook", exc_info=True)
+
+    _llm_config_cache[resolved_profile] = planexe_llmconfig
     return planexe_llmconfig
 
 
@@ -230,7 +239,9 @@ def get_llm(llm_name: Optional[str] = None, model_profile: Optional[ModelProfile
 
     config = planexe_llmconfig.llm_config_dict[llm_name]
     class_name = config.get("class")
-    arguments = config.get("arguments", {})
+    # Copy before mutating — _load_llm_config caches the parsed config
+    # across calls, so we must not write per-call kwargs back into it.
+    arguments = dict(config.get("arguments", {}))
 
     # Override with any kwargs passed to get_llm()
     arguments.update(kwargs)

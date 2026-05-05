@@ -17,6 +17,7 @@ IDEA: validate the contents of ".env"
 IDEA: validate the contents of profile config files (llm_config/*.json)
 """
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Optional
 import logging
@@ -91,49 +92,12 @@ class PlanExeConfig:
         :param llm_config_json_name_override: Optional explicit config filename override.
         :return: A new PlanExeConfig instance with resolved paths and profile metadata.
         """
-        logger.debug("PlanExeConfig.load() creating a new instance...")
-        planexe_config_path = cls.resolve_planexe_config_path()
-
-        if isinstance(model_profile_override, ModelProfileEnum):
-            model_profile = model_profile_override
-        elif isinstance(model_profile_override, str):
-            model_profile = normalize_model_profile(model_profile_override)
-        else:
-            model_profile = resolve_model_profile_from_env()
-
-        llm_config_json_name = resolve_llm_config_filename(
-            model_profile=model_profile,
-            explicit_filename=llm_config_json_name_override,
+        profile_key = (
+            model_profile_override.value
+            if isinstance(model_profile_override, ModelProfileEnum)
+            else model_profile_override
         )
-
-        dotenv_path = cls.find_file_in_search_order(
-            ConfigNameEnum.DOTENV.value,
-            planexe_config_path,
-            is_optional=True,
-        )
-        llm_config_json_path = cls.find_file_in_search_order(llm_config_json_name, planexe_config_path)
-
-        # Safe fallback: if profile config is missing, use baseline config.
-        if llm_config_json_path is None and llm_config_json_name != ConfigNameEnum.LLM_CONFIG_JSON_DEFAULT.value:
-            baseline_name = ConfigNameEnum.LLM_CONFIG_JSON_DEFAULT.value
-            baseline_path = cls.find_file_in_search_order(baseline_name, planexe_config_path)
-            if baseline_path is not None:
-                logger.warning(
-                    "Selected profile config %r not found. Falling back to baseline config %r.",
-                    llm_config_json_name,
-                    baseline_name,
-                )
-                llm_config_json_name = baseline_name
-                llm_config_json_path = baseline_path
-                model_profile = DEFAULT_MODEL_PROFILE
-
-        return cls(
-            planexe_config_path=planexe_config_path,
-            dotenv_path=dotenv_path,
-            model_profile=model_profile,
-            llm_config_json_name=llm_config_json_name,
-            llm_config_json_path=llm_config_json_path,
-        )
+        return _load_cached(profile_key, llm_config_json_name_override)
 
     @classmethod
     def resolve_planexe_config_path(cls) -> Optional[Path]:
@@ -204,6 +168,54 @@ class PlanExeConfig:
         else:
             logger.warning(f"{filename!r} not found in any of the search locations (ENV_VAR, CWD, Project Root).")
         return None
+
+
+@cache
+def _load_cached(
+    profile_key: Optional[str],
+    llm_config_json_name_override: Optional[str],
+) -> PlanExeConfig:
+    logger.debug("PlanExeConfig.load() creating a new instance...")
+    planexe_config_path = PlanExeConfig.resolve_planexe_config_path()
+
+    if profile_key is None:
+        model_profile = resolve_model_profile_from_env()
+    else:
+        model_profile = normalize_model_profile(profile_key)
+
+    llm_config_json_name = resolve_llm_config_filename(
+        model_profile=model_profile,
+        explicit_filename=llm_config_json_name_override,
+    )
+
+    dotenv_path = PlanExeConfig.find_file_in_search_order(
+        ConfigNameEnum.DOTENV.value,
+        planexe_config_path,
+        is_optional=True,
+    )
+    llm_config_json_path = PlanExeConfig.find_file_in_search_order(llm_config_json_name, planexe_config_path)
+
+    # Safe fallback: if profile config is missing, use baseline config.
+    if llm_config_json_path is None and llm_config_json_name != ConfigNameEnum.LLM_CONFIG_JSON_DEFAULT.value:
+        baseline_name = ConfigNameEnum.LLM_CONFIG_JSON_DEFAULT.value
+        baseline_path = PlanExeConfig.find_file_in_search_order(baseline_name, planexe_config_path)
+        if baseline_path is not None:
+            logger.warning(
+                "Selected profile config %r not found. Falling back to baseline config %r.",
+                llm_config_json_name,
+                baseline_name,
+            )
+            llm_config_json_name = baseline_name
+            llm_config_json_path = baseline_path
+            model_profile = DEFAULT_MODEL_PROFILE
+
+    return PlanExeConfig(
+        planexe_config_path=planexe_config_path,
+        dotenv_path=dotenv_path,
+        model_profile=model_profile,
+        llm_config_json_name=llm_config_json_name,
+        llm_config_json_path=llm_config_json_path,
+    )
 
 
 if __name__ == "__main__":

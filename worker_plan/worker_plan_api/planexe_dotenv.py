@@ -4,6 +4,7 @@ Load PlanExe's environment, combining the OS environment and optional .env file 
 PROMPT> python -m worker_plan_api.planexe_dotenv
 """
 from dataclasses import dataclass
+from functools import cache
 import os
 from pathlib import Path
 from typing import Optional
@@ -13,6 +14,7 @@ from worker_plan_api.planexe_config import PlanExeConfig
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
 
 class DotEnvKeyEnum(str, Enum):
     PATH_TO_PYTHON = "PATH_TO_PYTHON"
@@ -24,28 +26,7 @@ class PlanExeDotEnv:
 
     @classmethod
     def load(cls):
-        config = PlanExeConfig.load()
-        dotenv_path = config.dotenv_path
-        env_before = os.environ.copy()
-
-        # Load from .env if present, otherwise fall back to an empty dict.
-        dotenv_file_values = {}
-        if dotenv_path is not None:
-            dotenv_file_values = {k: v for k, v in dotenv_values(dotenv_path=dotenv_path).items() if v is not None}
-
-        # Merge .env file values with the real environment (environment variables take precedence).
-        dotenv_dict = {**dotenv_file_values, **os.environ}
-
-        if env_before != os.environ:
-            logger.error("PlanExeDotEnv.load() The dotenv_values() modified the environment variables. My assumption is that it doesn't do that. If you see this, please report it as a bug.")
-            logger.error(f"PlanExeDotEnv.load() The dotenv_values() modified the environment variables. count before: {len(env_before)}, count after: {len(os.environ)}")
-            logger.error(f"PlanExeDotEnv.load() The dotenv_values() modified the environment variables. content before: {env_before!r}, content after: {os.environ!r}")
-        else:
-            logger.debug(f"PlanExeDotEnv.load() Great! This is what is expected. The dotenv_values() did not modify the environment variables. number of items: {len(os.environ)}")
-        return cls(
-            dotenv_path=dotenv_path, 
-            dotenv_dict=dotenv_dict
-        )
+        return _load_cached()
 
     def update_os_environ(self):
         """Update os.environ with the resolved environment values."""
@@ -62,14 +43,14 @@ class PlanExeDotEnv:
         Resolves and validates the "key" variable.
         It's expected to be an absolute path to a file.
         If the key is not found, returns None.
-        
+
         :return: A Path object if valid, otherwise None.
         """
         path_str = self.dotenv_dict.get(key)
         if path_str is None:
             logger.debug(f"{key} is not set")
             return None
-            
+
         try:
             path_obj = Path(path_str)
         except Exception as e: # If path_str is bizarre
@@ -89,14 +70,14 @@ class PlanExeDotEnv:
         Resolves and validates the "key" variable.
         It's expected to be an absolute path to a directory.
         If the key is not found, returns None.
-        
+
         :return: A Path object if valid, otherwise None.
         """
         path_str = self.dotenv_dict.get(key)
         if path_str is None:
             logger.debug(f"{key} is not set")
             return None
-            
+
         try:
             path_obj = Path(path_str)
         except Exception as e: # If path_str is bizarre
@@ -113,6 +94,32 @@ class PlanExeDotEnv:
 
     def __repr__(self):
         return f"PlanExeDotEnv(dotenv_path={self.dotenv_path!r}, dotenv_dict.keys()={self.dotenv_dict.keys()!r})"
+
+
+@cache
+def _load_cached() -> PlanExeDotEnv:
+    config = PlanExeConfig.load()
+    dotenv_path = config.dotenv_path
+    env_before = os.environ.copy()
+
+    # Load from .env if present, otherwise fall back to an empty dict.
+    dotenv_file_values = {}
+    if dotenv_path is not None:
+        dotenv_file_values = {k: v for k, v in dotenv_values(dotenv_path=dotenv_path).items() if v is not None}
+
+    # Merge .env file values with the real environment (environment variables take precedence).
+    dotenv_dict = {**dotenv_file_values, **os.environ}
+
+    if env_before != os.environ:
+        logger.error("PlanExeDotEnv.load() The dotenv_values() modified the environment variables. My assumption is that it doesn't do that. If you see this, please report it as a bug.")
+        logger.error(f"PlanExeDotEnv.load() The dotenv_values() modified the environment variables. count before: {len(env_before)}, count after: {len(os.environ)}")
+        logger.error(f"PlanExeDotEnv.load() The dotenv_values() modified the environment variables. content before: {env_before!r}, content after: {os.environ!r}")
+    else:
+        logger.debug(f"PlanExeDotEnv.load() Great! This is what is expected. The dotenv_values() did not modify the environment variables. number of items: {len(os.environ)}")
+    return PlanExeDotEnv(
+        dotenv_path=dotenv_path,
+        dotenv_dict=dotenv_dict,
+    )
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

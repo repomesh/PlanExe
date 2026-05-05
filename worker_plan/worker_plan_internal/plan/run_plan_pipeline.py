@@ -25,6 +25,7 @@ from worker_plan_internal.llm_util.llm_executor import LLMExecutor, LLMModelFrom
 from worker_plan_internal.llm_factory import get_llm_names_by_priority, SPECIAL_AUTO_ID, is_valid_llm_name
 from worker_plan_api.model_profile import ModelProfileEnum, normalize_model_profile
 from worker_plan_internal.luigi_util.obtain_output_files import ObtainOutputFiles
+from worker_plan_internal.luigi_util.parameters import PathParameter, CallableParameter
 from worker_plan_internal.plan.pipeline_environment import PipelineEnvironment
 from worker_plan_internal.plan.ping_llm import run_ping_llm_report
 
@@ -62,7 +63,7 @@ class PlanTask(luigi.Task):
     # Default it to the current timestamp, eg. 19841231_235959
     # Path to the 'run/{run_id}' directory
     _default_outputs_dir = os.getenv('PLANEXE_OUTPUTS_DIR', 'run')
-    run_id_dir = luigi.Parameter(default=Path(_default_outputs_dir) / datetime.now().strftime("%Y%m%d_%H%M%S"))
+    run_id_dir = PathParameter(default=Path(_default_outputs_dir) / datetime.now().strftime("%Y%m%d_%H%M%S"))
 
     # By default, run everything but it's slow.
     # This can be overridden in developer mode, where a quick turnaround is needed, and the details are not important.
@@ -76,7 +77,7 @@ class PlanTask(luigi.Task):
     # If the callback raises exceptions different than PipelineStopRequested, the pipeline will be aborted. This means that something went wrong, and we should not continue.
     # If the callback doesn't raise an exception, the pipeline will continue.
     # If the callback is not provided, the pipeline will run until completion.
-    _pipeline_executor_callback = luigi.Parameter(default=None, significant=False, visibility=luigi.parameter.ParameterVisibility.PRIVATE)
+    _pipeline_executor_callback = CallableParameter(default=None, significant=False, visibility=luigi.parameter.ParameterVisibility.PRIVATE)
 
     @classmethod
     def description(cls) -> str:

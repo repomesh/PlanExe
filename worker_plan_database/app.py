@@ -201,6 +201,30 @@ app.config['SQLALCHEMY_DATABASE_URI'] = sqlalchemy_database_uri
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_recycle' : 280, 'pool_pre_ping': True}
 db.init_app(app)
 
+
+def _dispose_db_pool_in_forked_child() -> None:
+    """Drop the psycopg2 connection pool inherited from the parent after fork.
+
+    Without this, sibling Luigi workers share the parent's open
+    PostgreSQL sockets — interleaved writes corrupt the protocol
+    stream AND can route one user's row data into another user's
+    read buffer.
+
+    `close=False` is required: a normal close would send TCP close
+    packets down the parent's still-live socket and corrupt its
+    protocol stream. The next access in the child opens a fresh
+    connection.
+    """
+    try:
+        with app.app_context():
+            db.engine.dispose(close=False)
+    except Exception:
+        pass
+
+
+os.register_at_fork(after_in_child=_dispose_db_pool_in_forked_child)
+
+
 def ensure_plans_table_name() -> None:
     """Rename legacy 'task_item' table (and its indexes) to 'plans' (idempotent).
 

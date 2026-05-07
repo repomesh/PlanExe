@@ -100,6 +100,10 @@ a different set of levers, fixing typos.
 - User leaves out physical location(s). So PlanExe picks a random location in a different part of the world.
 - Confusing prompt. `Less than 100 employees`, that can be a solopreneur or a company with 99 employees. Better with a range 80..120 employees, and a number of people available to the project.
 
+Detect silly prompts, and maybe show a banner that it's garbage input.
+Currently PlanExe fails to recognize the comedic/weird prompts. Prompt has a playful tone, that isn't your typical enterprise project.
+It yields a non-sense plan. Instead it would make more sense to respond with a similar playful tone.
+
 **Ask for expert help:** Establish contact between people, for reviewing a plan, for executing the plan, for getting funding.
 The “Ask for expert help” section, serve the content from planexe.org. Either as an iframe or as javascript or be generated dynamic?
 

@@ -25,10 +25,17 @@ class ReportDocumentItem:
     document_html_content: str
     css_classes: list[str] = field(default_factory=list)
 
+@dataclass
+class ReportMarkdownItem:
+    document_title: str
+    document_markdown_content: str
+
 class ReportGenerator:
     def __init__(self):
-        self.report_item_list: list[ReportDocumentItem] = []
+        self.report_html_item_list: list[ReportDocumentItem] = []
+        self.report_markdown_item_list: list[ReportMarkdownItem] = []
         self.top_banner_html: str = ""
+        self.top_banner_markdown: str = ""
         self.html_head_content: list[str] = []
         self.html_body_script_content: list[str] = []
 
@@ -99,17 +106,18 @@ class ReportGenerator:
         if json_data is None:
             logging.warning(f"Document: '{document_title}'. Could not read JSON file: {file_path}")
             return
-        
+
         # Convert the JSON data to a formatted string
         json_str = json.dumps(json_data, indent=2)
-        
+
         # Create markdown content with JSON in a code block
         markdown_content = f"```json\n{json_str}\n```"
-        
+
         # Convert markdown to HTML and add to report (fenced_code extension needed for ``` blocks)
         html = markdown.markdown(markdown_content, extensions=['fenced_code'])
-        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
-        
+        self.report_html_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_markdown_item_list.append(ReportMarkdownItem(document_title, markdown_content))
+
     def append_markdown(self, document_title: str, file_path: Path, css_classes: list[str] = []):
         """Append a markdown document to the report."""
         md_data = self.read_markdown_file(file_path)
@@ -117,7 +125,8 @@ class ReportGenerator:
             logging.warning(f"Document: '{document_title}'. Could not read markdown file: {file_path}")
             return
         html = markdown.markdown(md_data)
-        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_html_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_markdown_item_list.append(ReportMarkdownItem(document_title, md_data))
 
     def append_markdown_with_tables(self, document_title: str, file_path: Path, css_classes: list[str] = []):
         """Append a markdown document to the report. Render markdown tables as HTML tables."""
@@ -126,8 +135,9 @@ class ReportGenerator:
             logging.warning(f"Document: '{document_title}'. Could not read markdown file: {file_path}")
             return
         html = markdown.markdown(md_data, extensions=['tables', 'fenced_code'])
-        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
-    
+        self.report_html_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_markdown_item_list.append(ReportMarkdownItem(document_title, md_data))
+
     def append_csv(self, document_title: str, file_path: Path, css_classes: list[str] = []):
         """Append a CSV to the report."""
         df_data = self.read_csv_file(file_path)
@@ -138,13 +148,21 @@ class ReportGenerator:
         # Remove any completely empty rows or columns
         df = df_data.dropna(how='all', axis=0).dropna(how='all', axis=1)
         html = df.to_html(classes='dataframe', index=False, na_rep='')
-        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_html_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+
+        csv_text = df.to_csv(index=False)
+        markdown_content = f"```csv\n{csv_text}```"
+        self.report_markdown_item_list.append(ReportMarkdownItem(document_title, markdown_content))
 
     def append_html(self, document_title: str, file_path: Path, css_classes: list[str] = []):
-        """Append an HTML document to the report."""
+        """Append an HTML document to the report.
+
+        HTML-only: not added to the markdown report (the markdown output is intended for LLM consumption,
+        and embedded JavaScript/HTML widgets are not useful there).
+        """
         with open(file_path, 'r') as f:
             html_raw = f.read()
-        
+
         # Extract the html_head content between <!--HTML_HEAD_START--> and <!--HTML_HEAD_END-->
         html_head_match = re.search(r'<!--HTML_HEAD_START-->(.*)<!--HTML_HEAD_END-->', html_raw, re.DOTALL)
         if html_head_match:
@@ -152,16 +170,16 @@ class ReportGenerator:
             self.html_head_content.append(html_head)
         else:
             logging.warning(f"Document: '{document_title}'. Could not find HTML_HEAD_START and HTML_HEAD_END in {file_path}")
-        
+
         # Extract the html_body content between <!--HTML_BODY_CONTENT_START--> and <!--HTML_BODY_CONTENT_END-->
         html_body_match = re.search(r'<!--HTML_BODY_CONTENT_START-->(.*)<!--HTML_BODY_CONTENT_END-->', html_raw, re.DOTALL)
         if html_body_match:
             html_body = html_body_match.group(1)
-            self.report_item_list.append(ReportDocumentItem(document_title, html_body))
+            self.report_html_item_list.append(ReportDocumentItem(document_title, html_body))
         else:
             logging.warning(f"Document: '{document_title}'. Could not find HTML_BODY_CONTENT_START and HTML_BODY_CONTENT_END in {file_path}")
             # If no markers found, use the entire content as the body
-            self.report_item_list.append(ReportDocumentItem(document_title, html_raw, css_classes=css_classes))
+            self.report_html_item_list.append(ReportDocumentItem(document_title, html_raw, css_classes=css_classes))
 
         # Extract the html_body_script content between <!--HTML_BODY_SCRIPT_START--> and <!--HTML_BODY_SCRIPT_END-->
         html_body_script_match = re.search(r'<!--HTML_BODY_SCRIPT_START-->(.*)<!--HTML_BODY_SCRIPT_END-->', html_raw, re.DOTALL)
@@ -190,7 +208,8 @@ class ReportGenerator:
                 screening_raw = _json.load(f)
             if screening_raw.get("verdict") == "UNUSABLE":
                 reason = screening_raw.get("reason", "unknown")
-                rationale = escape(screening_raw.get("rationale", ""))
+                rationale_raw = screening_raw.get("rationale", "")
+                rationale = escape(rationale_raw)
                 reason_display = reason.replace("_", " ").title()
                 screening_banner_html = f"""
         <div class="prompt-quality-warning">
@@ -203,11 +222,18 @@ class ReportGenerator:
         </div>
 """
                 self.top_banner_html = screening_banner_html
+                self.top_banner_markdown = (
+                    f"> **⚠ Prompt Quality Warning**\n>\n"
+                    f"> The initial prompt was classified as **UNUSABLE** ({reason_display}). "
+                    f"This plan is likely to contain hallucinated or nonsensical content. Garbage in, garbage out.\n>\n"
+                    f"> {rationale_raw}"
+                )
         except Exception as e:
             logging.warning(f"Document: '{document_title}'. Could not read screening result: {e}")
 
         # The screening markdown contains markdown tables.
         screening_html = ""
+        screening_markdown = ""
         try:
             with open(screen_planning_prompt_markdown_file_path, 'r', encoding='utf-8') as f:
                 screening_markdown = f.read()
@@ -242,7 +268,30 @@ class ReportGenerator:
         <p>Why this fails.</p>
         {premise_attack_html}
         """
-        self.report_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+        self.report_html_item_list.append(ReportDocumentItem(document_title, html, css_classes=css_classes))
+
+        markdown_parts = [
+            "## Initial Prompt",
+            "",
+            "```text",
+            initial_prompt_raw,
+            "```",
+            "",
+            "## Prompt Screening",
+            "",
+            screening_markdown,
+            "",
+            "## Redline Gate",
+            "",
+            redline_gate_markdown,
+            "",
+            "## Premise Attack",
+            "",
+            "Why this fails.",
+            "",
+            premise_attack_markdown,
+        ]
+        self.report_markdown_item_list.append(ReportMarkdownItem(document_title, "\n".join(markdown_parts)))
 
     def generate_html_report(self, title: Optional[str] = None, execute_plan_section_hidden: bool = True) -> str:
         """Generate an HTML report from the gathered data."""
@@ -291,7 +340,7 @@ class ReportGenerator:
             </div>
             """)
 
-        for item in self.report_item_list:
+        for item in self.report_html_item_list:
             add_section(item.document_title, item.document_html_content, item.css_classes)
 
         html_content = '\n'.join(html_parts)
@@ -310,17 +359,51 @@ class ReportGenerator:
 
         return html
 
-    def save_report(self, output_path: Path, title: Optional[str] = None, execute_plan_section_hidden: bool = True) -> None:
-        """Generate and save the report."""
+    def save_html_report(self, output_path: Path, title: Optional[str] = None, execute_plan_section_hidden: bool = True) -> None:
+        """Generate and save the HTML report."""
         html_report = self.generate_html_report(
-            title=title, 
+            title=title,
             execute_plan_section_hidden=execute_plan_section_hidden
         )
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_report)
-        
-        logger.info(f"Report generated successfully: {output_path}")
+
+        logger.info(f"HTML report generated successfully: {output_path}")
+
+    def generate_markdown_report(self, title: Optional[str] = None) -> str:
+        """Generate a markdown report from the gathered data.
+
+        Intended for LLM consumption: no JavaScript, no embedded HTML widgets.
+        """
+        resolved_title = title if title else "PlanExe Project Report"
+
+        parts: list[str] = []
+        parts.append(f"# {resolved_title}")
+        parts.append("")
+        parts.append(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} with PlanExe.")
+        parts.append("")
+
+        if self.top_banner_markdown:
+            parts.append(self.top_banner_markdown)
+            parts.append("")
+
+        for item in self.report_markdown_item_list:
+            parts.append(f"# {item.document_title}")
+            parts.append("")
+            parts.append(item.document_markdown_content)
+            parts.append("")
+
+        return "\n".join(parts)
+
+    def save_markdown_report(self, output_path: Path, title: Optional[str] = None) -> None:
+        """Generate and save the markdown report."""
+        md_report = self.generate_markdown_report(title=title)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(md_report)
+
+        logger.info(f"Markdown report generated successfully: {output_path}")
 
 def main():
     from worker_plan_internal.plan.filenames import FilenameEnum
@@ -348,7 +431,8 @@ def main():
         return
     
     output_path = input_path / FilenameEnum.REPORT_HTML.value
-    
+    markdown_output_path = input_path / FilenameEnum.REPORT_MARKDOWN.value
+
     report_generator = ReportGenerator()
     report_generator.append_markdown('Initial Plan', input_path / FilenameEnum.INITIAL_PLAN.value)
     report_generator.append_markdown('Pitch', input_path / FilenameEnum.PITCH_MARKDOWN.value)
@@ -357,7 +441,8 @@ def main():
     report_generator.append_markdown('Team', input_path / FilenameEnum.TEAM_MARKDOWN.value)
     report_generator.append_markdown('Expert Criticism', input_path / FilenameEnum.EXPERT_CRITICISM_MARKDOWN.value)
     report_generator.append_csv('Work Breakdown Structure', input_path / FilenameEnum.WBS_PROJECT_LEVEL1_AND_LEVEL2_AND_LEVEL3_CSV.value)
-    report_generator.save_report(output_path, title="Demo Project Report", execute_plan_section_hidden=False)
+    report_generator.save_html_report(output_path, title="Demo Project Report", execute_plan_section_hidden=False)
+    report_generator.save_markdown_report(markdown_output_path, title="Demo Project Report")
         
     if not args.no_browser:
         # Try to open the report in the default browser

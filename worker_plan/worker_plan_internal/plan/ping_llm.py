@@ -117,8 +117,8 @@ def _build_ping_report_html(result: PingLLMResult) -> str:
 def _write_ping_report(output_path: Path, result: PingLLMResult) -> None:
     rg = ReportGenerator()
     ping_html = _build_ping_report_html(result)
-    rg.report_item_list.append(ReportDocumentItem("LLM Ping", ping_html))
-    rg.save_report(output_path, title=PING_LLM_REPORT_TITLE, execute_plan_section_hidden=True)
+    rg.report_html_item_list.append(ReportDocumentItem("LLM Ping", ping_html))
+    rg.save_html_report(output_path, title=PING_LLM_REPORT_TITLE, execute_plan_section_hidden=True)
 
 
 def run_ping_llm_report(

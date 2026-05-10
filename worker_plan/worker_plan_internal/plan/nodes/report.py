@@ -85,7 +85,7 @@ class ReportTask(PlanTask):
         rg.append_markdown('Expert Criticism', self.input()['expert_review'].path)
         rg.append_csv('Work Breakdown Structure', self.input()['wbs_project123']['csv'].path)
         rg.append_markdown('Review Plan', self.input()['review_plan']['markdown'].path)
-        rg.append_html('Questions & Answers', self.input()['questions_and_answers']['html'].path)
+        rg.append_markdown('Questions & Answers', self.input()['questions_and_answers']['markdown'].path)
         rg.append_markdown_with_tables('Premortem', self.input()['premortem']['markdown'].path)
         rg.append_markdown_with_tables('Self Audit', self.input()['self_audit']['markdown'].path)
         rg.append_initial_prompt_vetted(

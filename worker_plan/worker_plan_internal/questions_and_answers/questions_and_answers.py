@@ -1,9 +1,8 @@
 """
 For a reader of the plan that is unfamiliar with the domain, provide a list of Q&A pairs that are relevant to the plan.
 
-PROMPT> python -m worker_plan_internal.questions_answers.questions_answers
+PROMPT> python -m worker_plan_internal.questions_and_answers.questions_and_answers
 """
-import html
 import json
 import time
 import logging
@@ -77,7 +76,7 @@ Use the following JSON models:
 SECOND_USER_PROMPT = "Generate 5 additional question and answer pairs from the document, focusing on clarifying the risks, ethical considerations, controversial aspects, or broader implications discussed in the plan."
 
 @dataclass
-class QuestionsAnswers:
+class QuestionsAndAnswers:
     """
     Identify what questions and answers are relevant to the plan.
     """
@@ -86,10 +85,9 @@ class QuestionsAnswers:
     response: dict
     metadata: dict
     markdown: str
-    html: str
 
     @classmethod
-    def execute(cls, llm: LLM, user_prompt: str) -> 'QuestionsAnswers':
+    def execute(cls, llm: LLM, user_prompt: str) -> 'QuestionsAndAnswers':
         """
         Invoke LLM with the project description.
         """
@@ -186,15 +184,13 @@ class QuestionsAnswers:
         }
 
         markdown = cls.convert_to_markdown(DocumentDetails(**merged_response))
-        html = cls.convert_to_html(DocumentDetails(**merged_response))
 
-        result = QuestionsAnswers(
+        result = QuestionsAndAnswers(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response=merged_response,
             metadata=metadata,
             markdown=markdown,
-            html=html
         )
         return result
     
@@ -232,21 +228,6 @@ class QuestionsAnswers:
         with open(output_file_path, 'w', encoding='utf-8') as f:
             f.write(self.markdown)
 
-    @staticmethod
-    def convert_to_html(document_details: DocumentDetails) -> str:
-        """
-        Convert the raw document details to html.
-        """
-        rows = []
-        for index, item in enumerate(document_details.question_answer_pairs, start=1):
-            rows.append(f'<div class="question-answer-pair"><p><strong>{index}.</strong> {html.escape(item.question)}</p>')
-            rows.append(f'<p>{html.escape(item.answer)}</p></div>')
-        return "\n".join(rows)
-
-    def save_html(self, output_file_path: str):
-        with open(output_file_path, 'w', encoding='utf-8') as f:
-            f.write(self.html)
-
 if __name__ == "__main__":
     from worker_plan_internal.llm_factory import get_llm
     from worker_plan_internal.plan.find_plan_prompt import find_plan_prompt
@@ -261,7 +242,7 @@ if __name__ == "__main__":
     )
     print(f"Query: {query}")
 
-    physical_locations = QuestionsAnswers.execute(llm, query)
+    physical_locations = QuestionsAndAnswers.execute(llm, query)
     json_response = physical_locations.to_dict(include_system_prompt=False, include_user_prompt=False)
     print("\n\nResponse:")
     print(json.dumps(json_response, indent=2))

@@ -1,7 +1,7 @@
 """QuestionsAndAnswersTask - Generates Q&A about the plan."""
 from llama_index.core.llms.llm import LLM
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask
-from worker_plan_internal.questions_answers.questions_answers import QuestionsAnswers
+from worker_plan_internal.questions_and_answers.questions_and_answers import QuestionsAndAnswers
 from worker_plan_api.filenames import FilenameEnum
 from worker_plan_internal.plan.nodes.strategic_decisions_markdown import StrategicDecisionsMarkdownTask
 from worker_plan_internal.plan.nodes.scenarios_markdown import ScenariosMarkdownTask
@@ -26,7 +26,6 @@ class QuestionsAndAnswersTask(PlanTask):
         return {
             'raw': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_RAW),
             'markdown': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_MARKDOWN),
-            'html': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_HTML)
         }
 
     def requires(self):
@@ -91,12 +90,10 @@ class QuestionsAndAnswersTask(PlanTask):
         )
 
         # Invoke the LLM
-        question_answers = QuestionsAnswers.execute(llm, query)
+        question_answers = QuestionsAndAnswers.execute(llm, query)
 
         # Save the results.
         json_path = self.output()['raw'].path
         question_answers.save_raw(json_path)
         markdown_path = self.output()['markdown'].path
         question_answers.save_markdown(markdown_path)
-        html_path = self.output()['html'].path
-        question_answers.save_html(html_path)

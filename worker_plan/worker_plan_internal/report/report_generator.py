@@ -381,7 +381,11 @@ class ReportGenerator:
         parts: list[str] = []
         parts.append(f"# {resolved_title}")
         parts.append("")
-        parts.append(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} with PlanExe.")
+        parts.append(
+            f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} with PlanExe. "
+            f"[Discord](https://planexe.org/discord.html), "
+            f"[GitHub](https://github.com/PlanExeOrg/PlanExe)"
+        )
         parts.append("")
 
         if self.top_banner_markdown:

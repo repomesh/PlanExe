@@ -1,7 +1,7 @@
 """
 For a reader of the plan that is unfamiliar with the domain, provide a list of Q&A pairs that are relevant to the plan.
 
-PROMPT> python -m worker_plan_internal.questions_answers.questions_and_answers
+PROMPT> python -m worker_plan_internal.questions_and_answers.questions_and_answers
 """
 import json
 import time

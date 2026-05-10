@@ -215,7 +215,7 @@ class QuestionsAndAnswers:
         """
         rows = []
         for index, item in enumerate(document_details.question_answer_pairs, start=1):
-            rows.append(f"Q{index}: **{item.question}**")
+            rows.append(f"**Q{index}: {item.question}**")
             rows.append(f"A{index}: {item.answer}")
         return "\n\n".join(rows)
 

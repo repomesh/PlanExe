@@ -1205,7 +1205,7 @@ def execute_pipeline_for_job(
     logger.info(f"Pipeline for {run_id_dir!r} executed in {duration_in_seconds:.2f} seconds")
 
     # Collect artifacts for storage.
-    report_path = run_id_dir / FilenameEnum.REPORT.value
+    report_path = run_id_dir / FilenameEnum.REPORT_HTML.value
     report_html: Optional[str] = None
     if pipeline_instance.has_report_file and report_path.exists():
         try:
@@ -1341,7 +1341,7 @@ def execute_pipeline_for_job(
                 logger.debug(f"WBS_LEVEL1_PROJECT_TITLE file found at {title_path!r}. Using the plan_name: {plan_name!r}.")
             else:
                 logger.warning(f"WBS_LEVEL1_PROJECT_TITLE file not found at {title_path!r}. Using the default plan_name: {plan_name!r}.")
-            machai_instance.post_confirmation_ok_with_file(session_id=user_id, path=run_id_dir / FilenameEnum.REPORT.value, plan_name=plan_name)
+            machai_instance.post_confirmation_ok_with_file(session_id=user_id, path=run_id_dir / FilenameEnum.REPORT_HTML.value, plan_name=plan_name)
         else:
             machai_instance.post_confirmation_error(session_id=user_id, message=str(machai_error_message))
     else:
@@ -1349,7 +1349,7 @@ def execute_pipeline_for_job(
 
     # Upload report to worker_plan service (internal, independent of MachAI).
     if pipeline_instance.has_report_file:
-        upload_report_to_worker_plan(run_id=str(task_id), report_path=run_id_dir / FilenameEnum.REPORT.value)
+        upload_report_to_worker_plan(run_id=str(task_id), report_path=run_id_dir / FilenameEnum.REPORT_HTML.value)
 
 def process_pending_tasks() -> bool:
     """

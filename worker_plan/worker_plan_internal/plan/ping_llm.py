@@ -153,7 +153,7 @@ def run_ping_llm_report(
         error_message=str(error) if error else None,
     )
 
-    report_path = run_id_dir / FilenameEnum.REPORT.value
+    report_path = run_id_dir / FilenameEnum.REPORT_HTML.value
     _write_ping_report(report_path, result)
 
     if error is None:

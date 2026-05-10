@@ -347,7 +347,7 @@ def run_report(run_id: str) -> FileResponse:
     if not run_dir.exists():
         raise HTTPException(status_code=404, detail=f"Run directory does not exist: {run_dir}")
 
-    report_path = run_dir / FilenameEnum.REPORT.value
+    report_path = run_dir / FilenameEnum.REPORT_HTML.value
     if not report_path.exists():
         raise HTTPException(status_code=404, detail=f"Report file not found for run {run_id}")
 
@@ -355,7 +355,7 @@ def run_report(run_id: str) -> FileResponse:
         return FileResponse(
             path=report_path,
             media_type="text/html",
-            filename=FilenameEnum.REPORT.value,
+            filename=FilenameEnum.REPORT_HTML.value,
         )
     except Exception as exc:
         logger.warning("Unable to serve report for run %s: %s", run_id, exc)

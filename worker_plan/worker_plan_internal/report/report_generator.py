@@ -347,7 +347,7 @@ def main():
         print(f"Error: Input path does not exist: {input_path}")
         return
     
-    output_path = input_path / FilenameEnum.REPORT.value
+    output_path = input_path / FilenameEnum.REPORT_HTML.value
     
     report_generator = ReportGenerator()
     report_generator.append_markdown('Initial Plan', input_path / FilenameEnum.INITIAL_PLAN.value)

@@ -214,10 +214,9 @@ class QuestionsAndAnswers:
         Convert the raw document details to markdown.
         """
         rows = []
-
         for index, item in enumerate(document_details.question_answer_pairs, start=1):
-            rows.append(f"{index}. **{item.question}**")
-            rows.append(item.answer)
+            rows.append(f"Q{index}: **{item.question}**")
+            rows.append(f"A{index}: {item.answer}")
         return "\n\n".join(rows)
 
     def save_markdown(self, output_file_path: str):

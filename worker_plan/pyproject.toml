@@ -39,7 +39,7 @@ dependencies = [
     "jiter==0.12.0",
     "joblib==1.5.3",
     "json_repair==0.58.7",
-    "jsonpath-python==1.1.5",
+    "jsonpath-python==1.1.6",
     # "llama-cloud==0.1.8",
     # "llama-index-agent-openai==0.4.1",
     # "llama-index-cli==0.4.0",

@@ -76,7 +76,7 @@ Use the following JSON models:
 SECOND_USER_PROMPT = "Generate 5 additional question and answer pairs from the document, focusing on clarifying the risks, ethical considerations, controversial aspects, or broader implications discussed in the plan."
 
 @dataclass
-class QuestionsAnswers:
+class QuestionsAndAnswers:
     """
     Identify what questions and answers are relevant to the plan.
     """
@@ -87,7 +87,7 @@ class QuestionsAnswers:
     markdown: str
 
     @classmethod
-    def execute(cls, llm: LLM, user_prompt: str) -> 'QuestionsAnswers':
+    def execute(cls, llm: LLM, user_prompt: str) -> 'QuestionsAndAnswers':
         """
         Invoke LLM with the project description.
         """
@@ -185,7 +185,7 @@ class QuestionsAnswers:
 
         markdown = cls.convert_to_markdown(DocumentDetails(**merged_response))
 
-        result = QuestionsAnswers(
+        result = QuestionsAndAnswers(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
             response=merged_response,
@@ -242,7 +242,7 @@ if __name__ == "__main__":
     )
     print(f"Query: {query}")
 
-    physical_locations = QuestionsAnswers.execute(llm, query)
+    physical_locations = QuestionsAndAnswers.execute(llm, query)
     json_response = physical_locations.to_dict(include_system_prompt=False, include_user_prompt=False)
     print("\n\nResponse:")
     print(json.dumps(json_response, indent=2))

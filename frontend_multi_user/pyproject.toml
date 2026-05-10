@@ -15,7 +15,7 @@ dependencies = [
     "stripe==15.1.0",
     "python-dotenv==1.2.2",
     "sqlalchemy-utils==0.42.1",
-    "WTForms==3.2.1", # This is an older version of WTForms. Since WTForms 3.2.1 breaks the "edit" button in the admin panel.
+    "WTForms==3.2.2", # This is an older version of WTForms. Since WTForms 3.2.1 breaks the "edit" button in the admin panel.
     "gunicorn==25.3.0"
 ] 
 

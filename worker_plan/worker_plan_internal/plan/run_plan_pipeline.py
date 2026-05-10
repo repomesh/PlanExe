@@ -372,7 +372,7 @@ class ExecutePipeline:
 
     @property
     def has_report_file(self) -> bool:
-        file_path = self.run_id_dir / FilenameEnum.REPORT.value
+        file_path = self.run_id_dir / FilenameEnum.REPORT_HTML.value
         return file_path.exists()
 
     @property

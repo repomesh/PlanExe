@@ -27,7 +27,7 @@ class TestPingLLMReport(unittest.TestCase):
             self.assertFalse(result.attempts[0].success)
             self.assertTrue(result.attempts[1].success)
 
-            report_path = run_id_dir / FilenameEnum.REPORT.value
+            report_path = run_id_dir / FilenameEnum.REPORT_HTML.value
             self.assertTrue(report_path.exists())
             report_html = report_path.read_text(encoding="utf-8")
             self.assertIn("PONG ok", report_html)

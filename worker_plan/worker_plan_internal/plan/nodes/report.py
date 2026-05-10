@@ -32,7 +32,7 @@ from worker_plan_internal.plan.nodes.screen_planning_prompt import ScreenPlannin
 class ReportTask(PlanTask):
     """Assemble all pipeline outputs into the final HTML report."""
     def output(self):
-        return self.local_target(FilenameEnum.REPORT)
+        return self.local_target(FilenameEnum.REPORT_HTML)
 
     def requires(self):
         return {

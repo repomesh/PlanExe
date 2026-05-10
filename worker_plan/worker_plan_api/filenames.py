@@ -133,7 +133,7 @@ class FilenameEnum(str, Enum):
     SELF_AUDIT_MARKDOWN = "self_audit.md"
     PROMPT_ADHERENCE_RAW = "prompt_adherence_raw.json"
     PROMPT_ADHERENCE_MARKDOWN = "prompt_adherence.md"
-    REPORT = "report.html"
+    REPORT_HTML = "report.html"
     PIPELINE_COMPLETE = "pipeline_complete.txt"
 
 class ExtraFilenameEnum(str, Enum):

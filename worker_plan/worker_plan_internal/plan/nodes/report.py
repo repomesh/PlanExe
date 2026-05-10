@@ -1,4 +1,4 @@
-"""ReportTask - Generates the final HTML report document."""
+"""ReportTask - Generates the final HTML and Markdown report documents."""
 from worker_plan_internal.plan.run_plan_pipeline import PlanTask, REPORT_EXECUTE_PLAN_SECTION_HIDDEN
 from worker_plan_internal.report.report_generator import ReportGenerator
 from worker_plan_api.filenames import FilenameEnum
@@ -30,9 +30,12 @@ from worker_plan_internal.plan.nodes.screen_planning_prompt import ScreenPlannin
 
 
 class ReportTask(PlanTask):
-    """Assemble all pipeline outputs into the final HTML report."""
+    """Assemble all pipeline outputs into the final HTML and Markdown reports."""
     def output(self):
-        return self.local_target(FilenameEnum.REPORT_HTML)
+        return {
+            'html': self.local_target(FilenameEnum.REPORT_HTML),
+            'markdown': self.local_target(FilenameEnum.REPORT_MARKDOWN),
+        }
 
     def requires(self):
         return {
@@ -97,4 +100,5 @@ class ReportTask(PlanTask):
             premise_attack_markdown_file_path=self.input()['premise_attack']['markdown'].path
         )
         rg.append_markdown_with_tables('Prompt Adherence', self.input()['prompt_adherence']['markdown'].path)
-        rg.save_report(self.output().path, title=title, execute_plan_section_hidden=REPORT_EXECUTE_PLAN_SECTION_HIDDEN)
+        rg.save_html_report(self.output()['html'].path, title=title, execute_plan_section_hidden=REPORT_EXECUTE_PLAN_SECTION_HIDDEN)
+        rg.save_markdown_report(self.output()['markdown'].path, title=title)

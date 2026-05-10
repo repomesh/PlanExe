@@ -3,7 +3,6 @@ For a reader of the plan that is unfamiliar with the domain, provide a list of Q
 
 PROMPT> python -m worker_plan_internal.questions_answers.questions_answers
 """
-import html
 import json
 import time
 import logging
@@ -86,7 +85,6 @@ class QuestionsAnswers:
     response: dict
     metadata: dict
     markdown: str
-    html: str
 
     @classmethod
     def execute(cls, llm: LLM, user_prompt: str) -> 'QuestionsAnswers':
@@ -186,7 +184,6 @@ class QuestionsAnswers:
         }
 
         markdown = cls.convert_to_markdown(DocumentDetails(**merged_response))
-        html = cls.convert_to_html(DocumentDetails(**merged_response))
 
         result = QuestionsAnswers(
             system_prompt=system_prompt,
@@ -194,7 +191,6 @@ class QuestionsAnswers:
             response=merged_response,
             metadata=metadata,
             markdown=markdown,
-            html=html
         )
         return result
     
@@ -231,21 +227,6 @@ class QuestionsAnswers:
     def save_markdown(self, output_file_path: str):
         with open(output_file_path, 'w', encoding='utf-8') as f:
             f.write(self.markdown)
-
-    @staticmethod
-    def convert_to_html(document_details: DocumentDetails) -> str:
-        """
-        Convert the raw document details to html.
-        """
-        rows = []
-        for index, item in enumerate(document_details.question_answer_pairs, start=1):
-            rows.append(f'<div class="question-answer-pair"><p><strong>{index}.</strong> {html.escape(item.question)}</p>')
-            rows.append(f'<p>{html.escape(item.answer)}</p></div>')
-        return "\n".join(rows)
-
-    def save_html(self, output_file_path: str):
-        with open(output_file_path, 'w', encoding='utf-8') as f:
-            f.write(self.html)
 
 if __name__ == "__main__":
     from worker_plan_internal.llm_factory import get_llm

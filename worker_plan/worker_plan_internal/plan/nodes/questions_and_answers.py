@@ -26,7 +26,6 @@ class QuestionsAndAnswersTask(PlanTask):
         return {
             'raw': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_RAW),
             'markdown': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_MARKDOWN),
-            'html': self.local_target(FilenameEnum.QUESTIONS_AND_ANSWERS_HTML)
         }
 
     def requires(self):
@@ -98,5 +97,3 @@ class QuestionsAndAnswersTask(PlanTask):
         question_answers.save_raw(json_path)
         markdown_path = self.output()['markdown'].path
         question_answers.save_markdown(markdown_path)
-        html_path = self.output()['html'].path
-        question_answers.save_html(html_path)

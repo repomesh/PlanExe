@@ -126,7 +126,6 @@ class FilenameEnum(str, Enum):
     SCHEDULE_GANTT_MACHAI_CSV = "schedule_gantt_machai.csv"
     QUESTIONS_AND_ANSWERS_RAW = "questions_and_answers_raw.json"
     QUESTIONS_AND_ANSWERS_MARKDOWN = "questions_and_answers.md"
-    QUESTIONS_AND_ANSWERS_HTML = "questions_and_answers.html"
     PREMORTEM_RAW = "premortem_raw.json"
     PREMORTEM_MARKDOWN = "premortem.md"
     SELF_AUDIT_RAW = "self_audit_raw.json"

@@ -93,7 +93,7 @@ This single line preserves full backward compatibility with the existing databas
 | `mcp_cloud/AGENTS.md` | Update `TaskItem ↔ MCP task` mapping description |
 | `mcp_cloud/README.md` | Update `TaskItem` references |
 | `worker_plan_database/README.md` | Update `TaskItem` references |
-| `docs/proposals/55-taskitem-activity-log-decomposition-and-secure-downloads.md` | Historical — leave filename as-is; prose can be left unchanged (it is a completed proposal) |
+| `docs/proposals/done/55-taskitem-activity-log-decomposition-and-secure-downloads.md` | Historical — leave filename as-is; prose can be left unchanged (it is a completed proposal) |
 
 ### Comment-only references (no import needed)
 
@@ -244,7 +244,7 @@ grep -rn "TaskItem\|TaskState\|model_taskitem\|test_taskitem" \
 ```
 
 The only acceptable remaining hits after this step are:
-- The historical proposal file `docs/proposals/55-taskitem-activity-log-decomposition-and-secure-downloads.md` (filename and completed-proposal prose — leave unchanged).
+- The historical proposal file `docs/proposals/done/55-taskitem-activity-log-decomposition-and-secure-downloads.md` (filename and completed-proposal prose — leave unchanged).
 - Database column names `task_id` and `current_task_id` in model files and comments (intentionally kept).
 
 ### Step 10 — Verify `__tablename__` is set

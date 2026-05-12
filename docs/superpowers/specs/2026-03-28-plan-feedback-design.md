@@ -1,7 +1,7 @@
 # Design: `send_feedback` MCP Tool
 
 **Date:** 2026-03-28
-**Proposal:** [127-mcp-feedback.md](../../proposals/127-mcp-feedback.md)
+**Proposal:** [127-mcp-feedback.md](../../proposals/done/127-mcp-feedback.md)
 
 ## Summary
 

@@ -410,16 +410,28 @@ _GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the gates_and_thresholds list.
 
 Each item is a pass/fail condition, KPI cutoff, validation gate, or deadline
-that triggers a decision. State the condition AND the consequence if it
-fails.
+that triggers a decision. Write each gate as an if/then sentence so the
+condition AND the consequence read in the correct logical direction.
 
 Template shape (substitute the actual metric, comparison, threshold, and
 consequence from the source):
-- '<metric> must <comparison> <threshold>, else <consequence>'
+- 'If <failure condition>, then <consequence>.'
+
+Examples of the right direction (these are templates — substitute values
+from the source, do not copy the literals):
+- 'If <metric> falls below <threshold>, then <consequence>.'
+- 'If <approval> is not granted by <date>, then <consequence>.'
+- 'If <ratio> exceeds <threshold>, then <surcharge/contingency action>.'
+
+Write the failure case as the if-clause. Avoid the inverted form where the
+gate reads as 'X must Y, else Z' — that pattern flips the logical direction
+and a downstream extractor can misread the boolean.
 
 A gate must be expressible as a threshold, boolean, ratio, surplus, or
 deficit. If something is a qualitative trade-off without a pass/fail edge,
-do NOT list it here.
+leave it out. If a condition is named but no numeric threshold is given in
+the source, put the missing threshold in missing_data_to_estimate rather
+than emitting a vague gate like 'must meet a threshold'.
 
 At most 8 items.
 """.strip()

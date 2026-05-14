@@ -113,12 +113,18 @@ class _ScoredItem(BaseModel):
     source_evidence: int = Field(
         description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
     )
-    source_status: Literal["explicit", "derived", "inferred"] = Field(
+    source_status: Literal["explicit", "derived", "inferred", "stress_test"] = Field(
         description=(
             "'explicit' = literally stated in the source; "
             "'derived' = computed from explicit source values; "
             "'inferred' = a plausible business assumption you added that the "
-            "source does not state. When in doubt prefer 'inferred'."
+            "source does not state; "
+            "'stress_test' = a downside scenario magnitude (cost of a "
+            "failure, duration of a disruption, lost revenue under a "
+            "failure mode) — never a plan fact. Premortem shock magnitudes "
+            "are 'stress_test' by default. When in doubt prefer 'inferred' "
+            "over 'explicit', and 'stress_test' over 'inferred' for shock "
+            "magnitudes."
         )
     )
     source_quote: str = Field(
@@ -208,10 +214,18 @@ _SECTION_GUIDANCE = {
         "disambiguation, do not treat its numbers as commitments of the chosen plan."
     ),
     ReportSectionTypeEnum.REVIEW_PLAN.value: (
-        "This is Review Plan. The signal is in *what must be checked* and *what fails "
-        "if it isn't*. Keep: validation questions, KPI thresholds, fragile assumptions "
-        "called out for review, deadlines tied to gates, missing-evidence flags. Drop: "
-        "review-process descriptions, methodology prose, generic 'we will review' lines."
+        "This is the Review Plan — the *review document* that examines the plan's "
+        "validation questions, KPI thresholds, fragile assumptions, gates, and "
+        "missing-evidence flags. The signal is in *what must be CHECKED* and *what "
+        "FAILS if it is not*. "
+        "Do NOT frame the digest as 'a list of strategic decisions'. The source may "
+        "enumerate decisions because they are being reviewed, but the compressed "
+        "output is about the review's gates, validation questions, and required "
+        "evidence — not about restating the decisions themselves. "
+        "Keep: validation questions, KPI thresholds, fragile assumptions called out "
+        "for review, deadlines tied to gates, missing-evidence flags. Drop: review-"
+        "process descriptions, methodology prose, generic 'we will review' lines, "
+        "and any narrative that merely lists the decisions rather than reviewing them."
     ),
     ReportSectionTypeEnum.PREMORTEM.value: (
         "This is Premortem. The signal is in *failure paths*, *tripwires*, and *the "
@@ -388,8 +402,11 @@ Scoring rules (identical across buckets):
   it. Be honest.
 - source_status: 'explicit' = literally stated in the source; 'derived' =
   computed from explicit source values; 'inferred' = a plausible assumption
-  you added that the source does not state. When in doubt prefer
-  'inferred'.
+  you added that the source does not state; 'stress_test' = a downside
+  scenario magnitude (cost of a failure, duration of a disruption, lost
+  revenue under a failure mode) — never a plan fact. Premortem shock
+  magnitudes are 'stress_test' by default. When in doubt prefer 'inferred'
+  over 'explicit', and 'stress_test' over 'inferred' for shock magnitudes.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section that supports this item. If the item is not in the section,
   write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to

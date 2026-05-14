@@ -169,6 +169,29 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     assert "quote: unverified" in markdown
 
 
+def test_source_status_accepts_stress_test() -> None:
+    """stress_test is a distinct epistemic tag used for premortem shock
+    magnitudes that are NOT plan facts. Schema must accept it without
+    coercion, and the markdown render must surface the tag."""
+    item = _si(
+        "Single kiln breakdown: 4-8 weeks production stoppage",
+        status="stress_test",
+        e=3,
+        r=4,
+    )
+    compressed = CompressedReportSection(
+        section_summary="Premortem digest.",
+        numeric_values=[],
+        load_bearing_assumptions=[],
+        gates_and_thresholds=[],
+        risks_and_shocks=[item],
+        missing_data_to_estimate=[],
+    )
+    assert compressed.risks_and_shocks[0].source_status == "stress_test"
+    markdown = CompressReportSection.convert_to_markdown(compressed)
+    assert "[stress_test | e=3 r=4 |" in markdown
+
+
 def test_markdown_uses_english_keeps_original_in_json() -> None:
     """Markdown renders the clean English version; line_original is
     preserved only in the JSON shape (model_dump)."""

@@ -1,10 +1,15 @@
 """Run CompressReportSection for each PlanExe section using the same input
 the corresponding Luigi node ingests, plus that node's own output appended.
 
-- compress_strategic_decisions: classify_domain.md + strategic_decisions.md
+- compress_selected_scenario:   SelectScenarioTask inputs + selected_scenario.json
 - compress_review_plan:         ReviewPlanTask inputs + review_plan.md
 - compress_premortem:           PremortemTask inputs + premortem.md
 - compress_expert_criticism:    ExpertReviewTask inputs + expert_criticism.md
+
+For "what plan are we actually modelling?" the selected_scenario is the right
+source. The full Strategic Decisions section also contains rejected
+alternatives whose numbers should NOT be extracted as parameters, so that
+section is not compressed here.
 
 The file-name headers mirror the ``File '<name>':\\n<content>`` format each
 Luigi task uses when it builds its LLM query, so the compressor sees the same
@@ -53,20 +58,30 @@ class CompressJob:
     name: str
     section_type: ReportSectionTypeEnum
     title: str
-    # (header_filename_as_seen_by_llm, sample_dir_filename, is_json)
-    files: list[tuple[str, str, bool]]
+    # Each entry is (header_seen_by_llm, sample_dir_filename, is_json,
+    # optional_json_subfield). When the optional subfield is set, the file
+    # is loaded as JSON and only that top-level key's value is serialised
+    # (mirrors Luigi tasks that read a single subfield like 'levers' or
+    # 'scenarios' before passing to format_json_for_use_in_query).
+    files: list[tuple[str, str, bool, str | None]]
 
 
-# strategic_decisions Luigi node is a markdown renderer with no LLM input
-# (StrategicDecisionsMarkdownTask just formats levers JSON), so we use
-# classify_domain.md as the upstream artifact and append the node output.
-_STRATEGIC_DECISIONS_JOB = CompressJob(
-    name="strategic_decisions",
-    section_type=ReportSectionTypeEnum.STRATEGIC_DECISIONS,
-    title="Strategic Decisions (classify_domain + strategic_decisions)",
+# SelectScenarioTask query order — see plan/nodes/select_scenario.py.
+# levers_vital_few and candidate_scenarios are wrapped in
+# format_json_for_use_in_query to match the Luigi serialisation. The
+# selected_scenario.json output is appended so the compressor sees both the
+# inputs the selector saw AND the commitment it made.
+_SELECTED_SCENARIO_JOB = CompressJob(
+    name="selected_scenario",
+    section_type=ReportSectionTypeEnum.SELECTED_SCENARIO,
+    title="Selected Scenario (full Luigi input + output)",
     files=[
-        ("classify_domain.md", "classify_domain.md", False),
-        ("strategic_decisions.md", "strategic_decisions.md", False),
+        ("plan.txt", "plan.txt", False, None),
+        ("purpose.md", "identify_purpose.md", False, None),
+        ("plan_type.md", "plan_type.md", False, None),
+        ("levers_vital_few.json", "vital_few_levers_raw.json", True, "levers"),
+        ("candidate_scenarios.json", "candidate_scenarios.json", True, "scenarios"),
+        ("selected_scenario.json", "selected_scenario.json", True, None),
     ],
 )
 
@@ -76,18 +91,18 @@ _REVIEW_PLAN_JOB = CompressJob(
     section_type=ReportSectionTypeEnum.REVIEW_PLAN,
     title="Review Plan (full Luigi input + output)",
     files=[
-        ("strategic_decisions.md", "strategic_decisions.md", False),
-        ("scenarios.md", "scenarios.md", False),
-        ("assumptions.md", "consolidate_assumptions_short.md", False),
-        ("project-plan.md", "project_plan.md", False),
-        ("data-collection.md", "data_collection.md", False),
-        ("related-resources.md", "related_resources.md", False),
-        ("swot-analysis.md", "swot_analysis.md", False),
-        ("team.md", "team.md", False),
-        ("pitch.md", "pitch.md", False),
-        ("expert-review.md", "expert_criticism.md", False),
-        ("work-breakdown-structure.csv", "wbs_project_level1_and_level2_and_level3.csv", False),
-        ("review_plan.md", "review_plan.md", False),
+        ("strategic_decisions.md", "strategic_decisions.md", False, None),
+        ("scenarios.md", "scenarios.md", False, None),
+        ("assumptions.md", "consolidate_assumptions_short.md", False, None),
+        ("project-plan.md", "project_plan.md", False, None),
+        ("data-collection.md", "data_collection.md", False, None),
+        ("related-resources.md", "related_resources.md", False, None),
+        ("swot-analysis.md", "swot_analysis.md", False, None),
+        ("team.md", "team.md", False, None),
+        ("pitch.md", "pitch.md", False, None),
+        ("expert-review.md", "expert_criticism.md", False, None),
+        ("work-breakdown-structure.csv", "wbs_project_level1_and_level2_and_level3.csv", False, None),
+        ("review_plan.md", "review_plan.md", False, None),
     ],
 )
 
@@ -97,20 +112,20 @@ _PREMORTEM_JOB = CompressJob(
     section_type=ReportSectionTypeEnum.PREMORTEM,
     title="Premortem (full Luigi input + output)",
     files=[
-        ("strategic_decisions.md", "strategic_decisions.md", False),
-        ("scenarios.md", "scenarios.md", False),
-        ("assumptions.md", "consolidate_assumptions_short.md", False),
-        ("project-plan.md", "project_plan.md", False),
-        ("data-collection.md", "data_collection.md", False),
-        ("related-resources.md", "related_resources.md", False),
-        ("swot-analysis.md", "swot_analysis.md", False),
-        ("team.md", "team.md", False),
-        ("pitch.md", "pitch.md", False),
-        ("expert-review.md", "expert_criticism.md", False),
-        ("work-breakdown-structure.csv", "wbs_project_level1_and_level2_and_level3.csv", False),
-        ("review-plan.md", "review_plan.md", False),
-        ("questions-and-answers.md", "questions_and_answers.md", False),
-        ("premortem.md", "premortem.md", False),
+        ("strategic_decisions.md", "strategic_decisions.md", False, None),
+        ("scenarios.md", "scenarios.md", False, None),
+        ("assumptions.md", "consolidate_assumptions_short.md", False, None),
+        ("project-plan.md", "project_plan.md", False, None),
+        ("data-collection.md", "data_collection.md", False, None),
+        ("related-resources.md", "related_resources.md", False, None),
+        ("swot-analysis.md", "swot_analysis.md", False, None),
+        ("team.md", "team.md", False, None),
+        ("pitch.md", "pitch.md", False, None),
+        ("expert-review.md", "expert_criticism.md", False, None),
+        ("work-breakdown-structure.csv", "wbs_project_level1_and_level2_and_level3.csv", False, None),
+        ("review-plan.md", "review_plan.md", False, None),
+        ("questions-and-answers.md", "questions_and_answers.md", False, None),
+        ("premortem.md", "premortem.md", False, None),
     ],
 )
 
@@ -122,18 +137,18 @@ _EXPERT_CRITICISM_JOB = CompressJob(
     section_type=ReportSectionTypeEnum.EXPERT_CRITICISM,
     title="Expert Criticism (full Luigi input + output)",
     files=[
-        ("initial-plan.txt", "plan.txt", False),
-        ("strategic_decisions.md", "strategic_decisions.md", False),
-        ("scenarios.md", "scenarios.md", False),
-        ("pre-project assessment.json", "pre_project_assessment.json", True),
-        ("project_plan.md", "project_plan.md", False),
-        ("SWOT Analysis.md", "swot_analysis.md", False),
-        ("expert_criticism.md", "expert_criticism.md", False),
+        ("initial-plan.txt", "plan.txt", False, None),
+        ("strategic_decisions.md", "strategic_decisions.md", False, None),
+        ("scenarios.md", "scenarios.md", False, None),
+        ("pre-project assessment.json", "pre_project_assessment.json", True, None),
+        ("project_plan.md", "project_plan.md", False, None),
+        ("SWOT Analysis.md", "swot_analysis.md", False, None),
+        ("expert_criticism.md", "expert_criticism.md", False, None),
     ],
 )
 
 JOBS: tuple[CompressJob, ...] = (
-    _STRATEGIC_DECISIONS_JOB,
+    _SELECTED_SCENARIO_JOB,
     _REVIEW_PLAN_JOB,
     _PREMORTEM_JOB,
     _EXPERT_CRITICISM_JOB,
@@ -146,15 +161,22 @@ def build_blob(job: CompressJob, sample_dir: Path) -> str:
     """
     parts: list[str] = []
     total_bytes = 0
-    for header, filename, is_json in job.files:
+    for header, filename, is_json, json_subfield in job.files:
         path = sample_dir / filename
         if not path.exists():
             logger.warning("[%s] Missing input: %s", job.name, path)
             continue
         if is_json:
-            content = format_json_for_use_in_query(
-                json.loads(path.read_text(encoding="utf-8"))
-            )
+            data = json.loads(path.read_text(encoding="utf-8"))
+            if json_subfield is not None:
+                if not isinstance(data, dict) or json_subfield not in data:
+                    logger.warning(
+                        "[%s] %s: subfield %r not found at top level; skipping",
+                        job.name, filename, json_subfield,
+                    )
+                    continue
+                data = data[json_subfield]
+            content = format_json_for_use_in_query(data)
         else:
             content = path.read_text(encoding="utf-8")
         parts.append(f"File '{header}':\n{content}")

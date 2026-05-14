@@ -55,6 +55,7 @@ logger = logging.getLogger(__name__)
 
 class ReportSectionTypeEnum(str, Enum):
     STRATEGIC_DECISIONS = "strategic_decisions"
+    SELECTED_SCENARIO = "selected_scenario"
     REVIEW_PLAN = "review_plan"
     PREMORTEM = "premortem"
     EXPERT_CRITICISM = "expert_criticism"
@@ -109,6 +110,7 @@ class CompressedReportSection(BaseModel):
 
 _SECTION_TYPE_BY_STEM = {
     "strategic_decisions": ReportSectionTypeEnum.STRATEGIC_DECISIONS.value,
+    "selected_scenario": ReportSectionTypeEnum.SELECTED_SCENARIO.value,
     "review_plan": ReportSectionTypeEnum.REVIEW_PLAN.value,
     "premortem": ReportSectionTypeEnum.PREMORTEM.value,
     "expert_criticism": ReportSectionTypeEnum.EXPERT_CRITICISM.value,
@@ -121,6 +123,18 @@ _SECTION_GUIDANCE = {
         "that quantify the choice (budget %, capacity, deadline), and the *consequence* "
         "if the decision turns out wrong. Drop: long synergy/conflict prose, repeated "
         "framing of the same lever, persuasive narrative."
+    ),
+    ReportSectionTypeEnum.SELECTED_SCENARIO.value: (
+        "This is the Selected (picked) Scenario — the actual plan to model, not the "
+        "menu of options. The signal is in what the plan *committed to*. "
+        "Keep: chosen strategy name, explicit commitments and the numbers attached to "
+        "them (budget envelope, contingency %, revenue mix, deadlines, conversion "
+        "targets), viability gates for the chosen strategy, risk buffers and "
+        "mitigations. "
+        "Drop HARD: rejected alternatives' numbers (do NOT extract them as parameters), "
+        "speculative trade-offs the plan ultimately did not pick, generic 'option A vs B' "
+        "narrative. If a rejected alternative is mentioned only for disambiguation, do "
+        "not treat its numbers as commitments of the chosen plan."
     ),
     ReportSectionTypeEnum.REVIEW_PLAN.value: (
         "This is Review Plan. The signal is in *what must be checked* and *what fails "

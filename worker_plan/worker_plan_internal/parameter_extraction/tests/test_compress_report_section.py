@@ -169,6 +169,70 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     assert "quote: unverified" in markdown
 
 
+def test_annotate_forces_missing_status_for_missing_data_bucket() -> None:
+    """The annotator overwrites source_status to 'missing' for items in the
+    missing_data_to_estimate bucket, regardless of what the LLM said. The
+    bucket name already determines the right status."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        _annotate_scored_items,
+        _ScoredItem,
+    )
+
+    llm_items = [
+        _ScoredItem(
+            line_english="Year 1 fixed labor cost in DKK/month — needed for cash burn model",
+            line_original="Year 1 fixed labor cost in DKK/month — needed for cash burn model",
+            modelling_relevance=5,
+            source_evidence=2,
+            source_status="explicit",  # LLM got this wrong
+            source_quote="exact fixed annualized cost",
+        ),
+        _ScoredItem(
+            line_english="Direct utility overhead in DKK/month — estimate from metered trial",
+            line_original="Direct utility overhead in DKK/month — estimate from metered trial",
+            modelling_relevance=5,
+            source_evidence=1,
+            source_status="inferred",
+            source_quote="NOT IN SOURCE",
+        ),
+    ]
+
+    kept, scored = _annotate_scored_items(
+        llm_items, section_markdown="", field_name="missing_data_to_estimate"
+    )
+
+    # Every surviving item in missing_data_to_estimate must have source_status='missing'.
+    for item in kept:
+        assert item.source_status == "missing", item
+    # And the metadata copy also reflects the overwrite.
+    for record in scored:
+        assert record["source_status"] == "missing", record
+
+
+def test_annotate_does_not_force_status_for_other_buckets() -> None:
+    """The forced-status override only applies to missing_data_to_estimate.
+    Other buckets pass the LLM's source_status through untouched."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        _annotate_scored_items,
+        _ScoredItem,
+    )
+
+    llm_items = [
+        _ScoredItem(
+            line_english="Single kiln breakdown: 4-8 weeks production stoppage",
+            line_original="Single kiln breakdown: 4-8 weeks production stoppage",
+            modelling_relevance=5,
+            source_evidence=3,
+            source_status="stress_test",
+            source_quote="4-8 weeks total production stop",
+        ),
+    ]
+    kept, _ = _annotate_scored_items(
+        llm_items, section_markdown="", field_name="risks_and_shocks"
+    )
+    assert kept[0].source_status == "stress_test"
+
+
 def test_source_status_accepts_stress_test() -> None:
     """stress_test is a distinct epistemic tag used for premortem shock
     magnitudes that are NOT plan facts. Schema must accept it without

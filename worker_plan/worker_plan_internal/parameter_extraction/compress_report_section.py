@@ -113,7 +113,9 @@ class _ScoredItem(BaseModel):
     source_evidence: int = Field(
         description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
     )
-    source_status: Literal["explicit", "derived", "inferred", "stress_test"] = Field(
+    source_status: Literal[
+        "explicit", "derived", "inferred", "stress_test", "missing"
+    ] = Field(
         description=(
             "'explicit' = literally stated in the source; "
             "'derived' = computed from explicit source values; "
@@ -122,9 +124,14 @@ class _ScoredItem(BaseModel):
             "'stress_test' = a downside scenario magnitude (cost of a "
             "failure, duration of a disruption, lost revenue under a "
             "failure mode) — never a plan fact. Premortem shock magnitudes "
-            "are 'stress_test' by default. When in doubt prefer 'inferred' "
-            "over 'explicit', and 'stress_test' over 'inferred' for shock "
-            "magnitudes."
+            "are 'stress_test' by default; "
+            "'missing' = a primitive input the plan needs but the source "
+            "does not supply a value for. Used for every item in the "
+            "missing_data_to_estimate bucket — the bucket name already says "
+            "the value is absent, so the status records that the entry "
+            "describes a NEED, not a known fact. "
+            "When in doubt prefer 'inferred' over 'explicit', and "
+            "'stress_test' over 'inferred' for shock magnitudes."
         )
     )
     source_quote: str = Field(
@@ -405,8 +412,12 @@ Scoring rules (identical across buckets):
   you added that the source does not state; 'stress_test' = a downside
   scenario magnitude (cost of a failure, duration of a disruption, lost
   revenue under a failure mode) — never a plan fact. Premortem shock
-  magnitudes are 'stress_test' by default. When in doubt prefer 'inferred'
-  over 'explicit', and 'stress_test' over 'inferred' for shock magnitudes.
+  magnitudes are 'stress_test' by default. 'missing' = a primitive input
+  the plan needs but the source does not supply — used for every item in
+  the missing_data_to_estimate bucket; the pipeline will overwrite the
+  status to 'missing' there regardless of what you set, so do not try to
+  game it. When in doubt prefer 'inferred' over 'explicit', and
+  'stress_test' over 'inferred' for shock magnitudes.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section that supports this item. If the item is not in the section,
   write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to
@@ -562,10 +573,14 @@ Prefer primitives over derived quantities. Avoid words like 'gap',
 naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
-Note: by definition these items are absent from the source, so
-source_quote will usually be 'NOT IN SOURCE' and source_evidence will be
-1. When the section EXPLICITLY says 'we need to estimate X', you may
-quote that phrase and raise source_evidence accordingly.
+Note: by definition these items are absent from the source. Always set
+source_status to 'missing' for items in this bucket (the pipeline will
+overwrite it to 'missing' anyway, but setting it correctly upfront keeps
+the assistant turn the model sees in the chat history honest). When the
+source has no value, source_quote is 'NOT IN SOURCE' and source_evidence
+is 1. When the section EXPLICITLY says 'we need to estimate X', you may
+quote that phrase and raise source_evidence accordingly — but source_status
+still stays 'missing' because the value itself is what's absent.
 
 At most 6 items.
 """.strip() + "\n\n" + _SCORING_DISCIPLINE
@@ -619,6 +634,16 @@ _SCORED_LIST_FIELDS: tuple[str, ...] = (
     "missing_data_to_estimate",
 )
 
+# For buckets where the bucket name already determines the right
+# source_status, override whatever the LLM emitted. The
+# missing_data_to_estimate bucket is by definition about absent values, so
+# every entry there is 'missing' — the LLM occasionally tags them
+# 'explicit' because the NEED was explicit in the source, which confuses
+# the downstream consumer.
+_FORCED_STATUS_BY_BUCKET: dict[str, str] = {
+    "missing_data_to_estimate": "missing",
+}
+
 
 def _normalise_for_quote_match(text: str) -> str:
     """Lowercase, normalise unicode dashes, and collapse whitespace.
@@ -645,6 +670,7 @@ def _quote_is_in_source(quote: str, section_markdown: str) -> bool:
 def _annotate_scored_items(
     items: list[_ScoredItem],
     section_markdown: str,
+    field_name: str,
 ) -> tuple[list[ScoredItem], list[dict]]:
     """Verify each item's quote, sort by composite confidence, and return
     the top survivors as rich ``ScoredItem`` objects.
@@ -656,13 +682,22 @@ def _annotate_scored_items(
     items), and keep the top ``_MAX_ITEMS_PER_BUCKET``. The full set of
     scored items (including dropped ones) is returned as a list of dicts
     so the caller can stash them in metadata for inspection.
+
+    For buckets listed in ``_FORCED_STATUS_BY_BUCKET`` (currently just
+    ``missing_data_to_estimate``), the ``source_status`` is overwritten
+    after the LLM call — the bucket name already determines the right
+    status and we should not let the LLM disagree.
     """
+    forced_status = _FORCED_STATUS_BY_BUCKET.get(field_name)
     scored_dicts: list[dict] = []
     annotated_pairs: list[tuple[int, ScoredItem]] = []
     for llm_item in items:
         verified = _quote_is_in_source(llm_item.source_quote, section_markdown)
+        item_dict = llm_item.model_dump()
+        if forced_status is not None:
+            item_dict["source_status"] = forced_status
         public_item = ScoredItem(
-            **llm_item.model_dump(),
+            **item_dict,
             quote_verified=verified,
         )
         scored_dicts.append(public_item.model_dump())
@@ -829,7 +864,7 @@ class CompressReportSection:
             }
             if spec.field_name in _SCORED_LIST_FIELDS:
                 bucket_values[spec.field_name], scored_items = _annotate_scored_items(
-                    raw_field_value, section_markdown
+                    raw_field_value, section_markdown, spec.field_name
                 )
                 bucket_metadata["scored_items"] = scored_items
             else:

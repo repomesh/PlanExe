@@ -10,20 +10,28 @@ from worker_plan_internal.parameter_extraction.compress_report_section import (
 
 
 def test_infer_section_type_from_path() -> None:
-    assert infer_section_type_from_path("strategic_decisions.md") == "strategic_decisions"
+    assert infer_section_type_from_path("/tmp/selected_scenario.md") == "selected_scenario"
     assert infer_section_type_from_path("/tmp/review_plan.md") == "review_plan"
     assert infer_section_type_from_path("/tmp/premortem.md") == "premortem"
     assert infer_section_type_from_path("/tmp/expert_criticism.md") == "expert_criticism"
     assert infer_section_type_from_path("/tmp/something_else.md") == "unknown"
+    # Strategic Decisions is no longer a recognised standalone section type:
+    # its content is captured upstream by SELECTED_SCENARIO and downstream
+    # by the Luigi-input blobs feeding review_plan / premortem /
+    # expert_criticism. Compressing it directly would double-compress.
+    assert infer_section_type_from_path("strategic_decisions.md") == "unknown"
 
 
 def test_normalize_section_type() -> None:
-    assert normalize_section_type("Strategic Decisions") == "strategic_decisions"
+    assert normalize_section_type("Selected Scenario") == "selected_scenario"
     assert normalize_section_type("review-plan") == "review_plan"
     assert normalize_section_type("PREMORTEM") == "premortem"
     assert normalize_section_type("expert_criticism") == "expert_criticism"
     assert normalize_section_type("garbage") == "unknown"
     assert normalize_section_type(None) == "unknown"
+    # See note in test_infer_section_type_from_path.
+    assert normalize_section_type("strategic_decisions") == "unknown"
+    assert normalize_section_type("Strategic Decisions") == "unknown"
 
 
 def test_build_user_prompt_includes_section_specific_guidance() -> None:

@@ -54,7 +54,14 @@ logger = logging.getLogger(__name__)
 
 
 class ReportSectionTypeEnum(str, Enum):
-    STRATEGIC_DECISIONS = "strategic_decisions"
+    # No STRATEGIC_DECISIONS entry on purpose: the full Strategic Decisions
+    # section also contains rejected alternatives whose numbers should not be
+    # extracted as parameters. SELECTED_SCENARIO is the upstream of "what
+    # plan are we modelling"; strategic_decisions.md still arrives via the
+    # multi-file Luigi blobs that feed review_plan / premortem /
+    # expert_criticism, so its content is not lost — only the standalone
+    # compression path is removed to prevent double-compression and
+    # rejected-alternative leakage.
     SELECTED_SCENARIO = "selected_scenario"
     REVIEW_PLAN = "review_plan"
     PREMORTEM = "premortem"
@@ -174,7 +181,6 @@ class CompressedReportSection(BaseModel):
 
 
 _SECTION_TYPE_BY_STEM = {
-    "strategic_decisions": ReportSectionTypeEnum.STRATEGIC_DECISIONS.value,
     "selected_scenario": ReportSectionTypeEnum.SELECTED_SCENARIO.value,
     "review_plan": ReportSectionTypeEnum.REVIEW_PLAN.value,
     "premortem": ReportSectionTypeEnum.PREMORTEM.value,
@@ -182,13 +188,6 @@ _SECTION_TYPE_BY_STEM = {
 }
 
 _SECTION_GUIDANCE = {
-    ReportSectionTypeEnum.STRATEGIC_DECISIONS.value: (
-        "This is Strategic Decisions. The signal is in the *trade-offs* and *levers*. "
-        "Keep: decision title, the core choice, the trade-off it forces, any numbers "
-        "that quantify the choice (budget %, capacity, deadline), and the *consequence* "
-        "if the decision turns out wrong. Drop: long synergy/conflict prose, repeated "
-        "framing of the same lever, persuasive narrative."
-    ),
     ReportSectionTypeEnum.SELECTED_SCENARIO.value: (
         "This is the Selected (picked) Scenario — the actual plan to model, not the "
         "menu of options. The signal is in what the plan *committed to*. "
@@ -922,7 +921,7 @@ if __name__ == "__main__":
     sample_path = Path(
         os.environ.get(
             "COMPRESS_REPORT_SECTION_SAMPLE",
-            "/Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop/strategic_decisions.md",
+            "/Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop/premortem.md",
         )
     )
     if not sample_path.exists():

@@ -62,17 +62,26 @@ class ReportSectionTypeEnum(str, Enum):
     UNKNOWN = "unknown"
 
 
-class _NumericValueItem(BaseModel):
-    """LLM-facing per-item schema for the numeric_values bucket. Does NOT
-    include ``quote_verified`` — that field is computed in code from a
-    substring check against the source markdown, not by the LLM.
+class _ScoredItem(BaseModel):
+    """LLM-facing per-item schema shared by all of the list buckets in
+    ``CompressedReportSection`` (numeric_values, load_bearing_assumptions,
+    gates_and_thresholds, risks_and_shocks, missing_data_to_estimate).
 
-    Detailed instructions live in the numeric_values bucket prompt; the
-    schema field descriptions are kept short on purpose so the JSON-schema
-    overhead in the structured-output system message stays small.
+    The ``line`` field carries the bucket-specific content (a labelled
+    number, an if/then gate, a primitive missing input, etc.) — the bucket
+    prompt defines what shape ``line`` should take in that context. The
+    other fields (scores, source_status, source_quote) have the same
+    meaning everywhere.
+
+    Does NOT include ``quote_verified`` — that field is computed in code
+    from a substring check against the source markdown, not by the LLM.
+
+    Detailed instructions live in each bucket prompt; the schema field
+    descriptions are kept short on purpose so the JSON-schema overhead in
+    the structured-output system message stays small.
     """
 
-    line: str = Field(description="'label: value [unit] — modelling role'.")
+    line: str = Field(description="Bucket-specific content (see bucket prompt for the required format).")
     modelling_relevance: int = Field(
         description="1-5 Likert: usefulness for Monte Carlo / napkin-math modelling."
     )
@@ -92,10 +101,10 @@ class _NumericValueItem(BaseModel):
     )
 
 
-class NumericValueItem(_NumericValueItem):
-    """Public per-item shape for compressed numeric_values entries.
+class ScoredItem(_ScoredItem):
+    """Public per-item shape for compressed list-bucket entries.
 
-    Inherits the LLM-populated fields from ``_NumericValueItem`` and adds
+    Inherits the LLM-populated fields from ``_ScoredItem`` and adds
     ``quote_verified``, which the pipeline sets after substring-checking the
     model's ``source_quote`` against the section markdown.
     """
@@ -124,36 +133,25 @@ class CompressedReportSection(BaseModel):
             "to Monte Carlo / napkin-math modelling. Plain English."
         )
     )
-    numeric_values: list[NumericValueItem] = Field(
+    numeric_values: list[ScoredItem] = Field(
         default_factory=list,
-        description=(
-            "Modelling-relevant numbers with per-item scoring, source-status, "
-            "quote, and code-verified flag. See NumericValueItem."
-        ),
+        description="Modelling-relevant numbers — see ScoredItem and the numeric_values bucket prompt.",
     )
-    load_bearing_assumptions: list[str] = Field(
+    load_bearing_assumptions: list[ScoredItem] = Field(
         default_factory=list,
-        description=(
-            "Foundational claims whose failure would change the plan's viability."
-        ),
+        description="Foundational claims whose failure would change the plan's viability.",
     )
-    gates_and_thresholds: list[str] = Field(
+    gates_and_thresholds: list[ScoredItem] = Field(
         default_factory=list,
-        description=(
-            "Pass/fail conditions with consequence on failure."
-        ),
+        description="Pass/fail conditions with consequence on failure (if/then form).",
     )
-    risks_and_shocks: list[str] = Field(
+    risks_and_shocks: list[ScoredItem] = Field(
         default_factory=list,
-        description=(
-            "Downside triggers with quantitative or operationally specific impact."
-        ),
+        description="Downside triggers with quantitative or operationally specific impact.",
     )
-    missing_data_to_estimate: list[str] = Field(
+    missing_data_to_estimate: list[ScoredItem] = Field(
         default_factory=list,
-        description=(
-            "Primitive inputs the section does not supply, with an estimation hint."
-        ),
+        description="Primitive inputs the section does not supply, with an estimation hint.",
     )
 
 
@@ -286,35 +284,35 @@ class _SectionSummaryOnly(BaseModel):
 
 
 class _NumericValuesOnly(BaseModel):
-    numeric_values: list[_NumericValueItem] = Field(
+    numeric_values: list[_ScoredItem] = Field(
         default_factory=list,
         description="See system prompt for the required line format and scoring.",
     )
 
 
 class _LoadBearingAssumptionsOnly(BaseModel):
-    load_bearing_assumptions: list[str] = Field(
+    load_bearing_assumptions: list[_ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
 class _GatesAndThresholdsOnly(BaseModel):
-    gates_and_thresholds: list[str] = Field(
+    gates_and_thresholds: list[_ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
 class _RisksAndShocksOnly(BaseModel):
-    risks_and_shocks: list[str] = Field(
+    risks_and_shocks: list[_ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
 class _MissingDataOnly(BaseModel):
-    missing_data_to_estimate: list[str] = Field(
+    missing_data_to_estimate: list[_ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
@@ -336,6 +334,41 @@ handled in other calls.
 """.strip()
 
 
+# Shared scoring rules that apply identically to every list bucket. Each
+# per-bucket prompt below appends this block so the LLM sees the same
+# discipline regardless of which bucket it is currently producing.
+_SCORING_DISCIPLINE = """
+Every item in the list is a scored object with five fields: line,
+modelling_relevance, source_evidence, source_status, source_quote.
+
+Scoring rules (identical across buckets):
+- modelling_relevance (1-5): how useful this item is for Monte Carlo /
+  napkin-math modelling. 5 = primary driver of viability; 1 = irrelevant
+  narrative.
+- source_evidence (1-5): how directly the source text supports this exact
+  item. 5 = near-verbatim quote present in the section; 1 = you invented
+  it. Be honest.
+- source_status: 'explicit' = literally stated in the source; 'derived' =
+  computed from explicit source values; 'inferred' = a plausible assumption
+  you added that the source does not state. When in doubt prefer
+  'inferred'.
+- source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
+  the section that supports this item. If the item is not in the section,
+  write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to
+  'inferred'.
+
+Cast a wide net — surface borderline candidates with honest low scores
+rather than self-censoring; the Python pipeline drops the lowest-scoring
+items after sorting, so the cost of including a weak candidate is small
+and the cost of missing a real one is large. But never *invent* a specific
+value where the source is silent — mark such guesses 'inferred' with
+source_evidence 1 if you include them at all.
+
+Keep each source_quote to ≤8 words so the response stays within the output
+budget.
+""".strip()
+
+
 _NUMERIC_VALUES_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the numeric_values list.
 
@@ -345,10 +378,8 @@ Do NOT emit any other top-level key (no section_summary, no
 load_bearing_assumptions, no gates_and_thresholds, no risks_and_shocks, no
 missing_data_to_estimate). Do NOT emit a bare top-level array.
 
-Each item is a scored object with five fields: line, modelling_relevance,
-source_evidence, source_status, source_quote.
-
-The 'line' field MUST follow the form 'label: value [unit] — modelling role':
+The 'line' field for this bucket MUST follow the form
+'label: value [unit] — modelling role':
 - label names what the number represents in 2-6 words
 - value [unit] is the literal value and unit from the source, preserved
   verbatim — never invent, translate, or substitute the currency, unit, or
@@ -370,65 +401,40 @@ If the source contains conflicting values for the same quantity, list each
 with a disambiguating label (e.g. 'minimum', 'aspirational') rather than
 picking one silently.
 
-Scoring discipline:
-- modelling_relevance (1-5): how useful this number is for Monte Carlo /
-  napkin-math modelling. 5 = primary driver of viability; 1 = irrelevant
-  narrative number.
-- source_evidence (1-5): how directly the source text supports this exact
-  value AND label. 5 = near-verbatim quote present in the section; 1 = you
-  invented it. Be honest.
-- source_status: 'explicit' = literally stated in the source; 'derived' =
-  computed from explicit source values (note the computation in the
-  modelling role); 'inferred' = a plausible business assumption you added
-  that the source does not state. When in doubt prefer 'inferred'.
-- source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
-  the section containing this number. If the number is not in the section,
-  write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to
-  'inferred'. Do not paste long passages — a 5-10 word fragment is plenty.
-
-We DO NOT drop items downstream — the consumer reads everything and uses
-your scores and source_status as guidance. So:
-- prefer redundancy over conciseness. Include borderline items with honest
-  low scores rather than silently skipping them.
-- but never *invent* a specific value where the source is silent. If the
-  source says '2M total budget' you may report that. You may NOT then
-  report '1M for staff' or '40% admin markup' as separate items unless the
-  source states them — mark such guesses 'inferred' with source_evidence 1
-  if you include them at all.
-
-At most 8 items, sorted by your judgement of importance for modelling.
-Fewer items is fine. Cast a wide net — surface borderline candidates with
-honest low scores rather than self-censoring; the Python pipeline drops
-the lowest-scoring items after sorting, so the cost of including a weak
-candidate is small and the cost of missing a real one is large.
-Keep each source_quote to ≤8 words so the response stays within the
-small-LLM output budget.
-""".strip()
+Skip numbers that only appear for narrative color. At most 8 items, sorted
+by your judgement of importance for modelling. Fewer items is fine.
+""".strip() + "\n\n" + _SCORING_DISCIPLINE
 
 
 _LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the load_bearing_assumptions list.
 
-Each item is a foundational claim that, if false, changes the plan's
-viability. State the assumption itself in 25 words or fewer. Prefer
-assumptions that have an obvious modelling consequence — regulatory
-permissions, demand assumptions, supply assumptions, cost-stability
-assumptions, capacity assumptions.
+Output exactly one JSON OBJECT with key 'load_bearing_assumptions' whose
+value is a list of scored items. Do NOT emit any other top-level key. Do
+NOT emit a bare top-level array.
 
-Each line should be a complete short sentence stating the assumption. Do
-not enumerate the supporting numbers here — they are handled in another
-call.
+The 'line' field for this bucket is a complete short sentence stating the
+assumption itself, in 25 words or fewer. Prefer assumptions that have an
+obvious modelling consequence — regulatory permissions, demand
+assumptions, supply assumptions, cost-stability assumptions, capacity
+assumptions. Do not enumerate supporting numbers in the line — numbers
+belong in numeric_values.
 
-At most 10 items.
-""".strip()
+At most 8 items.
+""".strip() + "\n\n" + _SCORING_DISCIPLINE
 
 
 _GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the gates_and_thresholds list.
 
-Each item is a pass/fail condition, KPI cutoff, validation gate, or deadline
-that triggers a decision. Write each gate as an if/then sentence so the
-condition AND the consequence read in the correct logical direction.
+Output exactly one JSON OBJECT with key 'gates_and_thresholds' whose value
+is a list of scored items. Do NOT emit any other top-level key. Do NOT
+emit a bare top-level array.
+
+The 'line' field for this bucket is a pass/fail condition, KPI cutoff,
+validation gate, or deadline that triggers a decision. Write each gate as
+an if/then sentence so the condition AND the consequence read in the
+correct logical direction.
 
 Template shape (substitute the actual metric, comparison, threshold, and
 consequence from the source):
@@ -451,14 +457,18 @@ the source, put the missing threshold in missing_data_to_estimate rather
 than emitting a vague gate like 'must meet a threshold'.
 
 At most 8 items.
-""".strip()
+""".strip() + "\n\n" + _SCORING_DISCIPLINE
 
 
 _RISKS_AND_SHOCKS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the risks_and_shocks list.
 
-Each item: trigger plus modelling-relevant impact. Template shape
-(substitute from the source):
+Output exactly one JSON OBJECT with key 'risks_and_shocks' whose value is
+a list of scored items. Do NOT emit any other top-level key. Do NOT emit
+a bare top-level array.
+
+The 'line' field for this bucket is a trigger plus modelling-relevant
+impact. Template shape (substitute from the source):
 - '<trigger>: <quantitative or operationally specific impact>'
 
 A risk is a downside scenario that could happen — an external shock, a
@@ -468,18 +478,26 @@ condition you actively check). If you have already produced an item in
 gates_and_thresholds, do not restate it here.
 
 Skip purely qualitative risks that do not name a number, a date, a capacity,
-or an operationally specific failure mode.
+or an operationally specific failure mode. If you include a scenario
+shock whose magnitude the source does not state, set source_status to
+'inferred' and source_evidence to 1 — do not present invented shock
+magnitudes as if they were plan facts.
 
-At most 10 items.
-""".strip()
+At most 8 items.
+""".strip() + "\n\n" + _SCORING_DISCIPLINE
 
 
 _MISSING_DATA_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the missing_data_to_estimate list.
 
-Each item is a PRIMITIVE input the model would need but the section does
-not supply. A primitive is a single quantity with a unit (currency/month,
-kWh, hours, count, percent). State what is missing AND how to estimate it.
+Output exactly one JSON OBJECT with key 'missing_data_to_estimate' whose
+value is a list of scored items. Do NOT emit any other top-level key. Do
+NOT emit a bare top-level array.
+
+The 'line' field for this bucket names a PRIMITIVE input the model would
+need but the section does not supply. A primitive is a single quantity
+with a unit (currency/month, kWh, hours, count, percent). State what is
+missing AND how to estimate it.
 
 Template shape:
 - '<missing primitive quantity with unit> — <how to estimate>'
@@ -489,8 +507,13 @@ Prefer primitives over derived quantities. Avoid words like 'gap',
 naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
+Note: by definition these items are absent from the source, so
+source_quote will usually be 'NOT IN SOURCE' and source_evidence will be
+1. When the section EXPLICITLY says 'we need to estimate X', you may
+quote that phrase and raise source_evidence accordingly.
+
 At most 6 items.
-""".strip()
+""".strip() + "\n\n" + _SCORING_DISCIPLINE
 
 
 @dataclass(frozen=True)
@@ -524,12 +547,22 @@ _BUCKET_SPECS: tuple[_BucketSpec, ...] = (
 # samples fresh.
 _PER_BUCKET_MAX_ATTEMPTS = 3
 
-# Public numeric_values list is capped to the top-N items after the
-# LLM-side cap, sorted by (modelling_relevance * source_evidence) with a
-# bonus for items whose quote was code-verified. The LLM is asked to
-# over-produce so the Python sort can drop the weakest candidates;
-# everything stays in metadata for inspection.
-_MAX_NUMERIC_VALUES_IN_OUTPUT = 6
+# Public list buckets are capped to the top-N items after the LLM-side
+# cap, sorted by (modelling_relevance * source_evidence) with a bonus for
+# items whose quote was code-verified. The LLM is asked to over-produce so
+# the Python sort can drop the weakest candidates; everything stays in
+# metadata for inspection.
+_MAX_ITEMS_PER_BUCKET = 6
+
+# Buckets whose schema is list[_ScoredItem] (i.e. everything except
+# section_summary). The order matches _BUCKET_SPECS below.
+_SCORED_LIST_FIELDS: tuple[str, ...] = (
+    "numeric_values",
+    "load_bearing_assumptions",
+    "gates_and_thresholds",
+    "risks_and_shocks",
+    "missing_data_to_estimate",
+)
 
 
 def _normalise_for_quote_match(text: str) -> str:
@@ -554,26 +587,26 @@ def _quote_is_in_source(quote: str, section_markdown: str) -> bool:
     return _normalise_for_quote_match(quote) in _normalise_for_quote_match(section_markdown)
 
 
-def _annotate_numeric_values(
-    items: list[_NumericValueItem],
+def _annotate_scored_items(
+    items: list[_ScoredItem],
     section_markdown: str,
-) -> tuple[list[NumericValueItem], list[dict]]:
+) -> tuple[list[ScoredItem], list[dict]]:
     """Verify each item's quote, sort by composite confidence, and return
-    the top survivors as rich ``NumericValueItem`` objects.
+    the top survivors as rich ``ScoredItem`` objects.
 
-    The LLM produces ``_NumericValueItem`` (line + scores + status + quote).
-    For each, we substring-check the quote against the source markdown,
-    build a ``NumericValueItem`` with ``quote_verified`` set accordingly,
-    sort by ``source_evidence * modelling_relevance`` (with a bonus for
-    verified items), and keep the top ``_MAX_NUMERIC_VALUES_IN_OUTPUT``.
-    The full set of scored items (including dropped ones) is returned as a
-    list of dicts so the caller can stash them in metadata for inspection.
+    The LLM produces ``_ScoredItem`` (line + scores + status + quote). For
+    each, we substring-check the quote against the source markdown, build
+    a ``ScoredItem`` with ``quote_verified`` set accordingly, sort by
+    ``source_evidence * modelling_relevance`` (with a bonus for verified
+    items), and keep the top ``_MAX_ITEMS_PER_BUCKET``. The full set of
+    scored items (including dropped ones) is returned as a list of dicts
+    so the caller can stash them in metadata for inspection.
     """
     scored_dicts: list[dict] = []
-    annotated_pairs: list[tuple[int, NumericValueItem]] = []
+    annotated_pairs: list[tuple[int, ScoredItem]] = []
     for llm_item in items:
         verified = _quote_is_in_source(llm_item.source_quote, section_markdown)
-        public_item = NumericValueItem(
+        public_item = ScoredItem(
             **llm_item.model_dump(),
             quote_verified=verified,
         )
@@ -585,12 +618,12 @@ def _annotate_numeric_values(
         annotated_pairs.append((sort_key, public_item))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
-    kept = [item for _, item in annotated_pairs[:_MAX_NUMERIC_VALUES_IN_OUTPUT]]
+    kept = [item for _, item in annotated_pairs[:_MAX_ITEMS_PER_BUCKET]]
     return kept, scored_dicts
 
 
-def _format_numeric_value_line(item: NumericValueItem) -> str:
-    """Render one NumericValueItem as a markdown bullet body.
+def _format_scored_item_line(item: ScoredItem) -> str:
+    """Render one ScoredItem as a markdown bullet body.
 
     Format mirrors the v10 inline-tag convention so the downstream
     consumer's expectations do not change with the schema refactor.
@@ -737,8 +770,8 @@ class CompressReportSection:
                 "response_byte_count": bucket_byte_count,
                 "user_prompt": user_content,
             }
-            if spec.field_name == "numeric_values":
-                bucket_values[spec.field_name], scored_items = _annotate_numeric_values(
+            if spec.field_name in _SCORED_LIST_FIELDS:
+                bucket_values[spec.field_name], scored_items = _annotate_scored_items(
                     raw_field_value, section_markdown
                 )
                 bucket_metadata["scored_items"] = scored_items
@@ -824,26 +857,20 @@ class CompressReportSection:
         title = section_title or "Compressed Section"
         lines: list[str] = [f"# {title}", "", compressed.section_summary.strip(), ""]
 
-        if compressed.numeric_values:
-            lines.append("## Numeric values")
-            for item in compressed.numeric_values:
-                rendered = _format_numeric_value_line(item).replace("\n", " ").strip()
-                lines.append(f"- {rendered}")
-            lines.append("")
-
-        string_sections: list[tuple[str, list[str]]] = [
+        sections: list[tuple[str, list[ScoredItem]]] = [
+            ("Numeric values", compressed.numeric_values),
             ("Load-bearing assumptions", compressed.load_bearing_assumptions),
             ("Gates and thresholds", compressed.gates_and_thresholds),
             ("Risks and shocks", compressed.risks_and_shocks),
             ("Missing data to estimate", compressed.missing_data_to_estimate),
         ]
-        for heading, items in string_sections:
+        for heading, items in sections:
             if not items:
                 continue
             lines.append(f"## {heading}")
             for item in items:
-                cleaned = item.strip().replace("\n", " ")
-                lines.append(f"- {cleaned}")
+                rendered = _format_scored_item_line(item).replace("\n", " ").strip()
+                lines.append(f"- {rendered}")
             lines.append("")
 
         return "\n".join(lines).rstrip() + "\n"

@@ -2,7 +2,7 @@ from worker_plan_internal.parameter_extraction.compress_report_section import (
     COMPRESS_REPORT_SECTION_SYSTEM_PROMPT,
     CompressedReportSection,
     CompressReportSection,
-    NumericValueItem,
+    ScoredItem,
     build_user_prompt,
     infer_section_type_from_path,
     normalize_section_type,
@@ -52,19 +52,18 @@ def test_system_prompt_states_compression_role() -> None:
 def test_pydantic_schema_shape() -> None:
     """Guard against accidental drift in the assembled schema.
 
-    numeric_values carries the per-item ``NumericValueItem`` shape (line +
-    scoring + status + quote + code-computed quote_verified). The other
-    four list buckets remain ``list[str]`` for now; if their schemas grow
-    to rich items too, update this test.
+    All four list buckets carry the per-item ``ScoredItem`` shape
+    (line + scoring + status + quote + code-computed quote_verified). The
+    bucket prompts define what ``line`` should contain for each bucket.
     """
     fields = CompressedReportSection.model_fields
     expected = {
         "section_summary": str,
-        "numeric_values": list[NumericValueItem],
-        "load_bearing_assumptions": list[str],
-        "gates_and_thresholds": list[str],
-        "risks_and_shocks": list[str],
-        "missing_data_to_estimate": list[str],
+        "numeric_values": list[ScoredItem],
+        "load_bearing_assumptions": list[ScoredItem],
+        "gates_and_thresholds": list[ScoredItem],
+        "risks_and_shocks": list[ScoredItem],
+        "missing_data_to_estimate": list[ScoredItem],
     }
     assert set(fields.keys()) == set(expected.keys())
     for name, expected_type in expected.items():
@@ -74,7 +73,7 @@ def test_pydantic_schema_shape() -> None:
         )
 
 
-def _nv(
+def _si(
     line: str,
     *,
     status: str = "explicit",
@@ -82,8 +81,8 @@ def _nv(
     r: int = 5,
     quote: str = "verbatim quote",
     verified: bool = True,
-) -> NumericValueItem:
-    return NumericValueItem(
+) -> ScoredItem:
+    return ScoredItem(
         line=line,
         modelling_relevance=r,
         source_evidence=e,
@@ -100,13 +99,13 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
             "staffing model, revenue mix, and contingency sizing."
         ),
         numeric_values=[
-            _nv("Year 1 budget: 2M DKK — input to cash burn model"),
-            _nv(
+            _si("Year 1 budget: 2M DKK — input to cash burn model"),
+            _si(
                 "Startup contingency: 15% of Year 1 budget = 300,000 DKK — shock buffer",
                 status="derived",
                 e=4,
             ),
-            _nv(
+            _si(
                 "Off-peak (Nov-Feb) is the low-utilisation season — capacity ceiling",
                 e=3,
                 r=3,
@@ -114,18 +113,29 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
             ),
         ],
         load_bearing_assumptions=[
-            "Greenlandic labor law allows contractor classification of instructors",
-            "Tourist demand in Q3 is strong enough to subsidise local off-peak",
+            _si("Greenlandic labor law allows contractor classification of instructors"),
+            _si("Tourist demand in Q3 is strong enough to subsidise local off-peak"),
         ],
         gates_and_thresholds=[
-            "If off-peak revenue falls below 75% of direct utility overhead, then contingency funds operating costs",
+            _si(
+                "If off-peak revenue falls below 75% of direct utility overhead, "
+                "then contingency funds operating costs",
+            ),
         ],
         risks_and_shocks=[
-            "Single-kiln overload during June-September: bookings exceed 24/7 capacity by >48h",
-            "Labor reclassification consumes the entire 300,000 DKK contingency",
+            _si(
+                "Single-kiln overload during June-September: bookings exceed 24/7 capacity by >48h"
+            ),
+            _si("Labor reclassification consumes the entire 300,000 DKK contingency"),
         ],
         missing_data_to_estimate=[
-            "Direct monthly utility overhead in DKK — derive from metered pricing trial",
+            _si(
+                "Direct monthly utility overhead in DKK — derive from metered pricing trial",
+                status="inferred",
+                e=1,
+                quote="NOT IN SOURCE",
+                verified=False,
+            ),
         ],
     )
 
@@ -142,16 +152,17 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     # Verbatim numbers preserved (not converted to fractions or rounded)
     assert "300,000 DKK" in markdown
     assert "75%" in markdown
-    # Inline tag is composed from NumericValueItem fields
+    # Inline tag is composed from ScoredItem fields on every list bucket
     assert "[explicit | e=5 r=5 | quote: verified]" in markdown
     assert "[derived | e=4 r=5 | quote: verified]" in markdown
+    assert "[inferred | e=1 r=5 | quote: unverified]" in markdown
     assert "quote: unverified" in markdown
 
 
 def test_convert_to_markdown_skips_empty_buckets() -> None:
     compressed = CompressedReportSection(
         section_summary="Section had only numbers worth keeping.",
-        numeric_values=[_nv("budget: 100 EUR — input to cash burn model")],
+        numeric_values=[_si("budget: 100 EUR — input to cash burn model")],
         load_bearing_assumptions=[],
         gates_and_thresholds=[],
         risks_and_shocks=[],

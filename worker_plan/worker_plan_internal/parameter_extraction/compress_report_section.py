@@ -191,6 +191,10 @@ CRITICAL response format rules:
   'The output is...', 'Here is the JSON...', or any other introduction.
 - Do NOT append any prose, explanation, or commentary after the closing '}'.
 - Do NOT emit a second JSON object — there must be exactly one.
+- Do NOT echo the JSON schema. Produce a response that contains the actual
+  VALUES, not the schema structure. Wrong: {"properties":{"section_summary":
+  {"type":"string"}}}. Right: {"section_summary":"<your actual answer>"}.
+  Wrong: {"type":"array","items":{...}}. Right: the field's value directly.
 """.strip()
 
 
@@ -209,10 +213,32 @@ class _SectionSummaryOnly(BaseModel):
     )
 
 
+class _NumericValueItem(BaseModel):
+    """A scored numeric_values entry. The downstream pipeline filters out
+    entries with low ``source_evidence`` to suppress hallucinated numbers
+    that the LLM invents to fill the soft cap.
+
+    Detailed instructions live in the numeric_values bucket prompt; the
+    schema field descriptions are kept short on purpose so the JSON-schema
+    overhead in the structured-output system message stays small.
+    """
+
+    line: str = Field(description="'label: value [unit] — modelling role'.")
+    modelling_relevance: int = Field(
+        description="1-5 Likert: usefulness for Monte Carlo / napkin-math modelling."
+    )
+    source_evidence: int = Field(
+        description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
+    )
+    source_quote: str = Field(
+        description="≤12 word verbatim fragment from the source, or 'NOT IN SOURCE'."
+    )
+
+
 class _NumericValuesOnly(BaseModel):
-    numeric_values: list[str] = Field(
+    numeric_values: list[_NumericValueItem] = Field(
         default_factory=list,
-        description="See system prompt for the required line format.",
+        description="See system prompt for the required line format and scoring.",
     )
 
 
@@ -263,7 +289,16 @@ handled in other calls.
 _NUMERIC_VALUES_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the numeric_values list.
 
-Each line MUST follow the form 'label: value [unit] — modelling role':
+Output exactly one JSON OBJECT, not a bare array. The top-level shape is:
+{"numeric_values":[ ...one or more scored items... ]}
+Do NOT emit any other top-level key (no section_summary, no
+load_bearing_assumptions, no gates_and_thresholds, no risks_and_shocks, no
+missing_data_to_estimate). Do NOT emit a bare top-level array.
+
+Each item is a scored object with four fields: line, modelling_relevance,
+source_evidence, source_quote.
+
+The 'line' field MUST follow the form 'label: value [unit] — modelling role':
 - label names what the number represents in 2-6 words
 - value [unit] is the literal value and unit from the source, preserved
   verbatim — never invent, translate, or substitute the currency, unit, or
@@ -285,13 +320,27 @@ If the source contains conflicting values for the same quantity, list each
 with a disambiguating label (e.g. 'minimum', 'aspirational') rather than
 picking one silently.
 
-Only include values that literally appear in the source section. Do not
-invent specific breakdowns of a total (e.g. if the source says '2M total
-budget' do not invent '1M for staff'). Do not introduce counts ('4
-instructors', '2 kilns', '100 members') unless the source states them.
-If the source does not give a number, leave it out.
+Scoring discipline:
+- modelling_relevance (1-5): how useful this number is for Monte Carlo /
+  napkin-math modelling. 5 = primary driver of viability; 1 = irrelevant
+  narrative number.
+- source_evidence (1-5): how directly the source text supports this exact
+  value AND label. 5 = near-verbatim quote present in the section; 1 = you
+  invented it. Be honest: low-evidence items are filtered out downstream,
+  so over-scoring just produces noise.
+- source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
+  the section containing this number. If the number is not in the section,
+  write 'NOT IN SOURCE' and set source_evidence to 1. Do not paste long
+  passages — a 5-10 word fragment is plenty.
 
-Skip numbers that only appear for narrative color. At most 12 items.
+Do not invent specific breakdowns of a total (e.g. if the source says '2M
+total budget' do not invent '1M for staff') and do not introduce counts
+('4 instructors', '2 kilns', '100 members') unless the source states them.
+When in doubt, lower the source_evidence score rather than skip the item.
+
+Skip numbers that only appear for narrative color. At most 6 items, sorted
+by the importance of the number for modelling — bring out the few highest-
+value numbers first. Fewer items is better than padding the cap.
 """.strip()
 
 
@@ -395,6 +444,39 @@ _BUCKET_SPECS: tuple[_BucketSpec, ...] = (
 )
 
 
+# Minimum source_evidence (1-5 Likert) for a numeric_values item to survive
+# the post-processing filter. Items scored below this threshold are treated
+# as low-confidence — typically hallucinated or weakly grounded — and dropped
+# from the public list while still being preserved in the per-bucket
+# metadata for inspection.
+_MIN_NUMERIC_VALUE_SOURCE_EVIDENCE = 3
+
+# Per-bucket call attempts before giving up. Small models like Llama 3.1 8B
+# occasionally emit malformed JSON, drop required fields, or truncate mid-
+# list; retrying the same chat history usually succeeds because each attempt
+# samples fresh.
+_PER_BUCKET_MAX_ATTEMPTS = 3
+
+
+def _filter_numeric_values(
+    items: list[_NumericValueItem],
+) -> tuple[list[str], list[dict]]:
+    """Sort numeric_values items by score, drop low-evidence ones, and
+    flatten survivors into the plain ``list[str]`` shape that
+    ``CompressedReportSection`` expects.
+
+    Returns ``(surviving_lines, all_scored_items)`` so the caller can keep
+    the raw scored items in metadata for diagnostics.
+    """
+    all_scored = [item.model_dump() for item in items]
+    survivors = [item for item in items if item.source_evidence >= _MIN_NUMERIC_VALUE_SOURCE_EVIDENCE]
+    survivors.sort(
+        key=lambda item: (item.source_evidence * item.modelling_relevance, item.source_evidence),
+        reverse=True,
+    )
+    return [item.line for item in survivors], all_scored
+
+
 def infer_section_type_from_path(file_path: str | Path) -> str:
     """Infer the report section type from a PlanExe intermediary filename."""
     stem = Path(file_path).stem
@@ -488,23 +570,55 @@ class CompressReportSection:
             )
 
             sllm = llm.as_structured_llm(spec.schema)
-            logger.debug(f"Bucket {spec.field_name}: starting LLM call (turn {i + 1})")
             bucket_start = time.perf_counter()
-            chat_response = sllm.chat(accumulated_chat)
+            obj = None
+            chat_response = None
+            last_error: Optional[Exception] = None
+            for retry in range(_PER_BUCKET_MAX_ATTEMPTS):
+                logger.debug(
+                    f"Bucket {spec.field_name}: starting LLM call "
+                    f"(turn {i + 1}, attempt {retry + 1}/{_PER_BUCKET_MAX_ATTEMPTS})"
+                )
+                try:
+                    chat_response = sllm.chat(accumulated_chat)
+                    obj = chat_response.raw
+                    if obj is None:
+                        raise ValueError(
+                            f"Structured LLM returned None for bucket {spec.field_name!r}."
+                        )
+                    break
+                except Exception as e:
+                    last_error = e
+                    logger.warning(
+                        f"Bucket {spec.field_name} attempt {retry + 1} failed: "
+                        f"{type(e).__name__}: {str(e)[:160]}"
+                    )
+            if obj is None:
+                raise ValueError(
+                    f"Bucket {spec.field_name!r} failed after "
+                    f"{_PER_BUCKET_MAX_ATTEMPTS} attempts. Last error: "
+                    f"{type(last_error).__name__}: {last_error}"
+                ) from last_error
             bucket_duration = int(ceil(time.perf_counter() - bucket_start))
             bucket_byte_count = len(chat_response.message.content.encode("utf-8"))
             logger.info(
                 f"Bucket {spec.field_name}: completed in {bucket_duration}s, "
                 f"{bucket_byte_count} bytes"
             )
-
-            obj = chat_response.raw
-            if obj is None:
-                raise ValueError(
-                    f"Structured LLM returned None for bucket {spec.field_name!r}. "
-                    "The model likely echoed the schema instead of producing values."
+            raw_field_value = getattr(obj, spec.field_name)
+            bucket_metadata: dict[str, Any] = {
+                "duration": bucket_duration,
+                "response_byte_count": bucket_byte_count,
+                "user_prompt": user_content,
+            }
+            if spec.field_name == "numeric_values":
+                bucket_values[spec.field_name], scored_items = _filter_numeric_values(
+                    raw_field_value
                 )
-            bucket_values[spec.field_name] = getattr(obj, spec.field_name)
+                bucket_metadata["scored_items"] = scored_items
+            else:
+                bucket_values[spec.field_name] = raw_field_value
+
             # Append the assistant turn as compact JSON so the next bucket call
             # can see what has already been produced and avoid duplicating it.
             assistant_content = json.dumps(obj.model_dump(), separators=(",", ":"))
@@ -512,11 +626,7 @@ class CompressReportSection:
                 ChatMessage(role=MessageRole.ASSISTANT, content=assistant_content)
             )
 
-            per_bucket_metadata[spec.field_name] = {
-                "duration": bucket_duration,
-                "response_byte_count": bucket_byte_count,
-                "user_prompt": user_content,
-            }
+            per_bucket_metadata[spec.field_name] = bucket_metadata
 
         total_duration = int(ceil(time.perf_counter() - total_start))
 

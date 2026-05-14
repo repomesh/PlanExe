@@ -81,7 +81,25 @@ class _ScoredItem(BaseModel):
     the structured-output system message stays small.
     """
 
-    line: str = Field(description="Bucket-specific content (see bucket prompt for the required format).")
+    line_english: str = Field(
+        description=(
+            "The bucket-specific content rendered in clean English. ALL "
+            "structural words must be English; a source-language term may "
+            "appear in parentheses only when no good English equivalent "
+            "exists. Never produce a hybrid sentence that mixes two "
+            "languages mid-clause."
+        )
+    )
+    line_original: str = Field(
+        description=(
+            "The same content in the source's primary language, preserving "
+            "the source's own terminology verbatim. If the source is fully "
+            "English, this is identical to ``line_english``. If the source "
+            "is in another language (Danish, Spanish, etc.), this is the "
+            "original-language version with native technical/legal terms "
+            "left intact."
+        )
+    )
     modelling_relevance: int = Field(
         description="1-5 Likert: usefulness for Monte Carlo / napkin-math modelling."
     )
@@ -338,8 +356,22 @@ handled in other calls.
 # per-bucket prompt below appends this block so the LLM sees the same
 # discipline regardless of which bucket it is currently producing.
 _SCORING_DISCIPLINE = """
-Every item in the list is a scored object with five fields: line,
-modelling_relevance, source_evidence, source_status, source_quote.
+Every item in the list is a scored object with six fields: line_english,
+line_original, modelling_relevance, source_evidence, source_status,
+source_quote.
+
+Language rule (apply to every item):
+- line_english: clean English version. ALL structural words must be in
+  English. A source-language term may appear in parentheses only when no
+  good English equivalent exists (e.g. 'kontingens (contingency)' is wrong
+  — write 'contingency'; 'utility variance approval' is fine even when
+  the source calls it 'forsyningsvariansgodkendelse'). Never produce a
+  hybrid sentence that mixes two languages mid-clause.
+- line_original: the same content in the source's primary language,
+  preserving the source's own terminology verbatim. If the source is
+  fully English, line_original is identical to line_english. If the
+  source contains non-English text, line_original keeps the native
+  spelling and technical terms intact.
 
 Scoring rules (identical across buckets):
 - modelling_relevance (1-5): how useful this item is for Monte Carlo /
@@ -625,15 +657,17 @@ def _annotate_scored_items(
 def _format_scored_item_line(item: ScoredItem) -> str:
     """Render one ScoredItem as a markdown bullet body.
 
-    Format mirrors the v10 inline-tag convention so the downstream
-    consumer's expectations do not change with the schema refactor.
+    The clean English version is the primary text. The native-language
+    version is kept in JSON only — downstream consumers that need verbatim
+    source terminology can read it from the raw output. Format mirrors the
+    v10 inline-tag convention.
     """
     tag = (
         f"[{item.source_status} | "
         f"e={item.source_evidence} r={item.modelling_relevance} | "
         f"quote: {'verified' if item.quote_verified else 'unverified'}]"
     )
-    return f"{item.line}  {tag}"
+    return f"{item.line_english}  {tag}"
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:

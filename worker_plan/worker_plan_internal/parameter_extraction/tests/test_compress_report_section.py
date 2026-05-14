@@ -76,6 +76,7 @@ def test_pydantic_schema_shape() -> None:
 def _si(
     line: str,
     *,
+    original: str | None = None,
     status: str = "explicit",
     e: int = 5,
     r: int = 5,
@@ -83,7 +84,8 @@ def _si(
     verified: bool = True,
 ) -> ScoredItem:
     return ScoredItem(
-        line=line,
+        line_english=line,
+        line_original=original if original is not None else line,
         modelling_relevance=r,
         source_evidence=e,
         source_status=status,
@@ -157,6 +159,34 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     assert "[derived | e=4 r=5 | quote: verified]" in markdown
     assert "[inferred | e=1 r=5 | quote: unverified]" in markdown
     assert "quote: unverified" in markdown
+
+
+def test_markdown_uses_english_keeps_original_in_json() -> None:
+    """Markdown renders the clean English version; line_original is
+    preserved only in the JSON shape (model_dump)."""
+    item = _si(
+        "Contingency reserve: 300,000 DKK — shock buffer",
+        original="Kontingensreserve: 300.000 DKK — stødpude",
+        quote="udrydde hele jeres 15% kontingens",
+    )
+    compressed = CompressedReportSection(
+        section_summary="Danish-source workshop plan.",
+        numeric_values=[item],
+        load_bearing_assumptions=[],
+        gates_and_thresholds=[],
+        risks_and_shocks=[],
+        missing_data_to_estimate=[],
+    )
+
+    markdown = CompressReportSection.convert_to_markdown(compressed)
+    assert "Contingency reserve: 300,000 DKK" in markdown
+    # The native-language string is NOT in markdown — markdown is the
+    # downstream-readable English digest.
+    assert "Kontingensreserve" not in markdown
+    # But the JSON shape carries both versions.
+    dumped = compressed.model_dump()
+    assert dumped["numeric_values"][0]["line_english"] == "Contingency reserve: 300,000 DKK — shock buffer"
+    assert dumped["numeric_values"][0]["line_original"] == "Kontingensreserve: 300.000 DKK — stødpude"
 
 
 def test_convert_to_markdown_skips_empty_buckets() -> None:

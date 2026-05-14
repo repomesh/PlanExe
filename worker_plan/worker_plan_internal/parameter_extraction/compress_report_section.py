@@ -176,6 +176,15 @@ General output discipline:
 - only include facts and numbers that appear in the section text between
   [START_SECTION_MARKDOWN] and [END_SECTION_MARKDOWN]; do NOT invent
   breakdowns, sub-categories, or specific values that are not in the source
+- SOURCE-FAITHFULNESS RULE (critical): do NOT create numeric values from
+  generic business intuition. Specifically, never invent: benchmark
+  percentages, generic shock sizes, utilization thresholds, salary shares,
+  equipment cost guesses, growth rates, churn rates, demand reductions,
+  cybersecurity/insurance/disaster impact percentages, or any "typical
+  business" filler. If a modelling variable is important but the source
+  does not state a number, that variable belongs in
+  missing_data_to_estimate — not in numeric_values, not as a hard gate,
+  and not as a quantified risk
 - this is a multi-turn conversation: on each turn you produce ONE field of
   the digest. Earlier turns are visible above as ASSISTANT JSON. Do NOT
   duplicate items already produced for a previous bucket — each bucket
@@ -356,8 +365,11 @@ your scores and source_status as guidance. So:
   source states them — mark such guesses 'inferred' with source_evidence 1
   if you include them at all.
 
-At most 6 items, sorted by your judgement of importance for modelling.
-Fewer items is fine; padding the cap with low-quality inferences is not.
+At most 8 items, sorted by your judgement of importance for modelling.
+Fewer items is fine. Cast a wide net — surface borderline candidates with
+honest low scores rather than self-censoring; the Python pipeline drops
+the lowest-scoring items after sorting, so the cost of including a weak
+candidate is small and the cost of missing a real one is large.
 Keep each source_quote to ≤8 words so the response stays within the
 small-LLM output budget.
 """.strip()
@@ -469,6 +481,13 @@ _BUCKET_SPECS: tuple[_BucketSpec, ...] = (
 # samples fresh.
 _PER_BUCKET_MAX_ATTEMPTS = 3
 
+# Public numeric_values list is capped to the top-N items after the
+# LLM-side cap, sorted by (modelling_relevance * source_evidence) with a
+# bonus for items whose quote was code-verified. The LLM is asked to
+# over-produce so the Python sort can drop the weakest candidates;
+# everything stays in metadata for inspection.
+_MAX_NUMERIC_VALUES_IN_OUTPUT = 6
+
 
 def _normalise_for_quote_match(text: str) -> str:
     """Lowercase, normalise unicode dashes, and collapse whitespace.
@@ -521,7 +540,8 @@ def _annotate_numeric_values(
         annotated_pairs.append((sort_key, f"{item.line}  {tag}"))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
-    return [line for _, line in annotated_pairs], scored_dicts
+    kept = [line for _, line in annotated_pairs[:_MAX_NUMERIC_VALUES_IN_OUTPUT]]
+    return kept, scored_dicts
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:

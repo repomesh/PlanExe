@@ -7,32 +7,33 @@ Carlo modelling.
 This is an alternative to ``distill_report_section.py``. The two files solve
 the same task; they differ in schema design and target LLM compatibility.
 
-Why a separate, simpler schema
-------------------------------
+Schema design: split, single-field calls
+----------------------------------------
 The sibling ``distill_report_section.py`` returns a deeply nested object: 8
-parallel lists (digest_items, numeric_anchors, model_drivers, gates,
-risk_shocks, missing_values, calculations, omitted_rationale), 8 enums, plus
-a cross-list ``depends_on`` ID graph the LLM must keep coherent. Frontier
-models (GPT-5, Sonnet 4.x, Gemini 2.5) handle that. Smaller, cheaper, or
-older models often:
+parallel lists, 8 enums, and a cross-list ``depends_on`` ID graph the LLM
+must keep coherent. Frontier models handle that. Smaller, cheaper, or older
+models often leave fields empty, pick the wrong enum, invent IDs, or echo
+the schema.
 
-- leave many of the fields empty,
-- pick the wrong enum value and fail schema validation,
-- invent ``depends_on`` IDs that point at things in another list,
-- or echo the schema instead of producing values.
+This module takes the opposite approach. Each compression call asks the LLM
+for ONE field. Six calls per section produce one ``CompressedReportSection``:
 
-The compression role itself does not need any of that complexity. The
-downstream parameter-extractor (see ``planexe_simulator/extract-parameters``)
-already builds the typed model. The only job of this module is to throw away
-narrative, persuasion, and repetition while keeping the *raw lines* that the
-extractor will turn into modelling variables.
+1. section_summary             — plain-English purpose of the section
+2. numeric_values              — labelled, role-tagged numbers
+3. load_bearing_assumptions    — foundational claims with modelling impact
+4. gates_and_thresholds        — pass/fail conditions with consequence
+5. risks_and_shocks            — triggers with quantitative impact
+6. missing_data_to_estimate    — primitive inputs not supplied by the section
 
-So this implementation uses a flat schema: one summary string plus five
-``list[str]`` buckets aligned with the digest layout recommended in
-``docs/proposals/done/137-section_filtering_for_parameter_extraction.md`` (or
-``docs/proposals/137-...`` if not yet moved). Each bullet is a self-contained
-short sentence. There are no nested objects, no enums, and no cross-list ID
-references — the structure that smaller LLMs trip on.
+Each call has a tiny single-field Pydantic schema, a dedicated system prompt
+focused on that bucket only, and a small expected response. This keeps each
+response well under any token cap and removes whole classes of small-model
+failure: no field-order confusion across buckets, no truncation of long
+combined responses, no need for the model to balance attention across six
+different extraction jobs in one shot.
+
+The cost is 6 LLM calls per section instead of 1. For the small models this
+module targets (Llama 3.1 8B etc.) those calls are cheap and fast.
 
 PROMPT> python -m worker_plan_internal.parameter_extraction.compress_report_section
 """
@@ -61,88 +62,47 @@ class ReportSectionTypeEnum(str, Enum):
 
 
 class CompressedReportSection(BaseModel):
-    """Flat, LLM-friendly compression of one report section.
+    """Assembled output of six single-field extraction calls.
 
-    Every field is either a string or a ``list[str]``. There are no nested
-    objects, no enums, and no foreign-key references. An older or smaller
-    model that struggles with elaborate schemas can still produce useful
-    output here.
+    Field descriptions here document the shape of the assembled object. The
+    detailed extraction instructions for each field live in the per-bucket
+    system prompts below — the LLM never sees this model directly.
     """
 
     section_summary: str = Field(
         description=(
-            "One to three sentences describing what this section contributes to "
-            "Monte Carlo / napkin-math modelling. Plain English, no markdown."
+            "One to three sentences describing what this section contributes "
+            "to Monte Carlo / napkin-math modelling. Plain English."
         )
     )
     numeric_values: list[str] = Field(
         default_factory=list,
         description=(
-            "Numbers worth preserving for modelling. Each line MUST follow the "
-            "form 'label: value [unit] — modelling role', where: "
-            "(a) label names what the number represents in 2-6 words; "
-            "(b) value [unit] is the literal value and unit from the source, "
-            "preserved verbatim — never invent, translate, or substitute the "
-            "currency, unit, or date; "
-            "(c) modelling role is a short phrase such as 'input to cash burn "
-            "model', 'gates launch readiness', 'sensitivity driver for revenue', "
-            "'capacity ceiling'. "
-            "Bare values are invalid: a percent on its own, an amount in any "
-            "currency on its own, or a date on its own, all with no label and "
-            "no role. "
-            "Template shape (substitute values from the source — DO NOT copy "
-            "these placeholders or any unit from them): "
-            "'<what the number is>: <amount> <currency-from-source> — "
-            "<modelling role>.', "
-            "'<what the number is>: <percent>% — <modelling role>.', "
-            "'<what the number is>: <date-from-source> — <modelling role>.'. "
-            "If the source contains conflicting values for the same quantity, "
-            "list each with a disambiguating label (e.g. 'minimum', "
-            "'aspirational') rather than picking one silently. "
-            "Skip numbers that only appear for narrative color. At most 12 items."
+            "Modelling-relevant numbers as 'label: value [unit] — modelling role'."
         ),
     )
     load_bearing_assumptions: list[str] = Field(
         default_factory=list,
         description=(
-            "Foundational claims that, if false, change the plan's viability. "
-            "Each line: the assumption itself, in 25 words or fewer. "
-            "Prefer assumptions that have an obvious modelling consequence — "
-            "regulatory permissions, demand assumptions, supply assumptions, "
-            "cost-stability assumptions, capacity assumptions. "
-            "At most 10 items."
+            "Foundational claims whose failure would change the plan's viability."
         ),
     )
     gates_and_thresholds: list[str] = Field(
         default_factory=list,
         description=(
-            "Pass/fail conditions, KPI cutoffs, validation gates, deadlines that "
-            "trigger a decision. Each line should state the condition and the "
-            "consequence if it fails. Template shape (substitute the actual "
-            "condition and consequence from the source): "
-            "'<metric> must <comparison> <threshold>, else <consequence>'. "
-            "At most 8 items."
+            "Pass/fail conditions with consequence on failure."
         ),
     )
     risks_and_shocks: list[str] = Field(
         default_factory=list,
         description=(
-            "Downside scenarios, failure paths, tripwires, shocks. Each line: "
-            "trigger plus modelling-relevant impact. Template shape (substitute "
-            "from the source): '<trigger>: <quantitative or operationally "
-            "specific impact>'. Skip purely qualitative risks. "
-            "At most 10 items."
+            "Downside triggers with quantitative or operationally specific impact."
         ),
     )
     missing_data_to_estimate: list[str] = Field(
         default_factory=list,
         description=(
-            "Primitive inputs the model would need but the section does not "
-            "supply. Each line: what is missing and how to estimate it. "
-            "Template shape: '<missing primitive quantity with unit> — "
-            "<how to estimate>'. Prefer primitives (single quantities with a "
-            "unit) over derived quantities. "
-            "At most 6 items."
+            "Primitive inputs the section does not supply, with an estimation hint."
         ),
     )
 
@@ -189,55 +149,250 @@ _SECTION_GUIDANCE = {
     ),
 }
 
+
 COMPRESS_REPORT_SECTION_SYSTEM_PROMPT = """
-You compress one verbose PlanExe report section into a short Markdown digest
-that a downstream parameter-extraction model will read for Monte Carlo and
-napkin-math purposes.
+You compress one verbose PlanExe report section so that a downstream
+parameter-extraction model can read it for Monte Carlo and napkin-math
+purposes.
 
-You are not summarising for a human reader. You are throwing away narrative
-so the extractor can find numbers, assumptions, gates, risks, and missing
-data without distraction.
+You are not summarising for a human reader. Throw away narrative and focus
+on the one class of signal this call asks for.
 
-Keep:
-- explicit numbers, percentages, dates, deadlines, budgets, capacities,
-  thresholds — preserve units verbatim
-- assumptions whose failure would change the plan's viability
-- pass/fail gates, KPI cutoffs, validation criteria
-- failure paths and shocks with a numeric or operationally specific impact
-- inputs the model would need but the section does not provide
-
-Drop:
+Drop in every call:
 - persuasive prose and rhetorical framing
 - repeated restatements of the same lever, decision, or risk
 - expert biographies, role descriptions, search terms
 - generic mitigations with no number, threshold, or specific action
 - synergy/conflict paragraphs unless they identify a hard dependency
 
-Output discipline:
-- each bullet is one short sentence, self-contained, understandable on its own
+General output discipline:
 - preserve numeric values exactly as written in the source (do not round, do
   not convert percentages to fractions, do not translate currency)
-- every numeric_values bullet uses the form 'label: value [unit] — modelling
-  role'. A bare percentage, bare amount in any currency, or bare date with no
-  label and no modelling role is INVALID. If you cannot supply a label and
-  role from the section, omit the number rather than emit a bare value
 - never copy units, currencies, or dates from this prompt's examples — always
   use what the source actually says
-- if the source contains two conflicting numbers for the same quantity, list
-  both with disambiguating labels (e.g. 'minimum', 'aspirational',
-  'optimistic') instead of picking one
-- if a number is implied but not stated, place it in missing_data_to_estimate
-  rather than inventing a value
-- soft caps: numeric_values <= 12, load_bearing_assumptions <= 10,
-  gates_and_thresholds <= 8, risks_and_shocks <= 10, missing_data_to_estimate
-  <= 6. Returning fewer is fine; padding to fill a cap is not
 - do not add commentary, headings, or markdown formatting inside any field
-- if the section genuinely contains nothing for a bucket, return an empty list
-  for that bucket
+- if the section genuinely contains nothing for this call's bucket, return
+  an empty list (or empty string for the summary)
+- only include facts and numbers that appear in the section text between
+  [START_SECTION_MARKDOWN] and [END_SECTION_MARKDOWN]; do NOT invent
+  breakdowns, sub-categories, or specific values that are not in the source
+- this is a multi-turn conversation: on each turn you produce ONE field of
+  the digest. Earlier turns are visible above as ASSISTANT JSON. Do NOT
+  duplicate items already produced for a previous bucket — each bucket
+  captures a distinct kind of signal
 
-Return only the structured object the schema requests. No prose before or
-after.
+CRITICAL response format rules:
+- Your entire response must be exactly one JSON object matching the
+  requested schema.
+- The very first character of your response MUST be '{' and the very last
+  character MUST be '}'.
+- Do NOT wrap the JSON in markdown code fences (no ```json, no ```).
+- Do NOT prefix the JSON with phrases like 'Here is...', 'Below is...',
+  'The output is...', 'Here is the JSON...', or any other introduction.
+- Do NOT append any prose, explanation, or commentary after the closing '}'.
+- Do NOT emit a second JSON object — there must be exactly one.
 """.strip()
+
+
+# ---------------------------------------------------------------------------
+# Per-bucket schemas. Each call uses a single-field Pydantic model so the LLM
+# never has to balance attention across multiple lists in one response.
+# ---------------------------------------------------------------------------
+
+
+class _SectionSummaryOnly(BaseModel):
+    section_summary: str = Field(
+        description=(
+            "One to three sentences describing what this section contributes "
+            "to Monte Carlo / napkin-math modelling. Plain English, no markdown."
+        )
+    )
+
+
+class _NumericValuesOnly(BaseModel):
+    numeric_values: list[str] = Field(
+        default_factory=list,
+        description="See system prompt for the required line format.",
+    )
+
+
+class _LoadBearingAssumptionsOnly(BaseModel):
+    load_bearing_assumptions: list[str] = Field(
+        default_factory=list,
+        description="See system prompt.",
+    )
+
+
+class _GatesAndThresholdsOnly(BaseModel):
+    gates_and_thresholds: list[str] = Field(
+        default_factory=list,
+        description="See system prompt.",
+    )
+
+
+class _RisksAndShocksOnly(BaseModel):
+    risks_and_shocks: list[str] = Field(
+        default_factory=list,
+        description="See system prompt.",
+    )
+
+
+class _MissingDataOnly(BaseModel):
+    missing_data_to_estimate: list[str] = Field(
+        default_factory=list,
+        description="See system prompt.",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Per-bucket system prompts. Each is concatenated with the shared preamble at
+# call time.
+# ---------------------------------------------------------------------------
+
+
+_SECTION_SUMMARY_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the section_summary.
+
+Write one to three sentences in plain English describing what this section
+contributes to Monte Carlo / napkin-math modelling. No markdown, no bullet
+points, no lists. Do not enumerate numbers or assumptions — those are
+handled in other calls.
+""".strip()
+
+
+_NUMERIC_VALUES_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the numeric_values list.
+
+Each line MUST follow the form 'label: value [unit] — modelling role':
+- label names what the number represents in 2-6 words
+- value [unit] is the literal value and unit from the source, preserved
+  verbatim — never invent, translate, or substitute the currency, unit, or
+  date
+- modelling role is a short phrase such as 'input to cash burn model',
+  'gates launch readiness', 'sensitivity driver for revenue', 'capacity
+  ceiling'
+
+Bare values are invalid: a percent on its own, an amount in any currency on
+its own, or a date on its own.
+
+Template shape (substitute values from the source — DO NOT copy these
+placeholders or any unit from them):
+- '<what the number is>: <amount> <currency-from-source> — <modelling role>.'
+- '<what the number is>: <percent>% — <modelling role>.'
+- '<what the number is>: <date-from-source> — <modelling role>.'
+
+If the source contains conflicting values for the same quantity, list each
+with a disambiguating label (e.g. 'minimum', 'aspirational') rather than
+picking one silently.
+
+Only include values that literally appear in the source section. Do not
+invent specific breakdowns of a total (e.g. if the source says '2M total
+budget' do not invent '1M for staff'). Do not introduce counts ('4
+instructors', '2 kilns', '100 members') unless the source states them.
+If the source does not give a number, leave it out.
+
+Skip numbers that only appear for narrative color. At most 12 items.
+""".strip()
+
+
+_LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the load_bearing_assumptions list.
+
+Each item is a foundational claim that, if false, changes the plan's
+viability. State the assumption itself in 25 words or fewer. Prefer
+assumptions that have an obvious modelling consequence — regulatory
+permissions, demand assumptions, supply assumptions, cost-stability
+assumptions, capacity assumptions.
+
+Each line should be a complete short sentence stating the assumption. Do
+not enumerate the supporting numbers here — they are handled in another
+call.
+
+At most 10 items.
+""".strip()
+
+
+_GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the gates_and_thresholds list.
+
+Each item is a pass/fail condition, KPI cutoff, validation gate, or deadline
+that triggers a decision. State the condition AND the consequence if it
+fails.
+
+Template shape (substitute the actual metric, comparison, threshold, and
+consequence from the source):
+- '<metric> must <comparison> <threshold>, else <consequence>'
+
+A gate must be expressible as a threshold, boolean, ratio, surplus, or
+deficit. If something is a qualitative trade-off without a pass/fail edge,
+do NOT list it here.
+
+At most 8 items.
+""".strip()
+
+
+_RISKS_AND_SHOCKS_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the risks_and_shocks list.
+
+Each item: trigger plus modelling-relevant impact. Template shape
+(substitute from the source):
+- '<trigger>: <quantitative or operationally specific impact>'
+
+A risk is a downside scenario that could happen — an external shock, a
+demand collapse, a supply disruption, a capacity overload, a regulatory
+rejection. It is NOT the same as a gate/threshold (which is a pass/fail
+condition you actively check). If you have already produced an item in
+gates_and_thresholds, do not restate it here.
+
+Skip purely qualitative risks that do not name a number, a date, a capacity,
+or an operationally specific failure mode.
+
+At most 10 items.
+""".strip()
+
+
+_MISSING_DATA_BUCKET_PROMPT = """
+Your job for THIS call: produce ONLY the missing_data_to_estimate list.
+
+Each item is a PRIMITIVE input the model would need but the section does
+not supply. A primitive is a single quantity with a unit (currency/month,
+kWh, hours, count, percent). State what is missing AND how to estimate it.
+
+Template shape:
+- '<missing primitive quantity with unit> — <how to estimate>'
+
+Prefer primitives over derived quantities. Avoid words like 'gap',
+'shortfall', 'surplus', 'versus', 'coverage', 'feasibility' unless you are
+naming a formula explicitly; if a derived quantity is missing, decompose
+it into the primitives that go into it.
+
+At most 6 items.
+""".strip()
+
+
+@dataclass(frozen=True)
+class _BucketSpec:
+    field_name: str
+    schema: type[BaseModel]
+    bucket_prompt: str
+
+
+_BUCKET_SPECS: tuple[_BucketSpec, ...] = (
+    _BucketSpec("section_summary", _SectionSummaryOnly, _SECTION_SUMMARY_BUCKET_PROMPT),
+    _BucketSpec("numeric_values", _NumericValuesOnly, _NUMERIC_VALUES_BUCKET_PROMPT),
+    _BucketSpec(
+        "load_bearing_assumptions",
+        _LoadBearingAssumptionsOnly,
+        _LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT,
+    ),
+    _BucketSpec(
+        "gates_and_thresholds",
+        _GatesAndThresholdsOnly,
+        _GATES_AND_THRESHOLDS_BUCKET_PROMPT,
+    ),
+    _BucketSpec("risks_and_shocks", _RisksAndShocksOnly, _RISKS_AND_SHOCKS_BUCKET_PROMPT),
+    _BucketSpec("missing_data_to_estimate", _MissingDataOnly, _MISSING_DATA_BUCKET_PROMPT),
+)
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:
@@ -263,9 +418,11 @@ def build_user_prompt(
     section_type: str,
     section_title: Optional[str] = None,
 ) -> str:
-    """Build the user-side prompt for one section."""
+    """Build the section-wrapper user prompt shared by all six bucket calls."""
     title = section_title or section_type.replace("_", " ").title()
-    guidance = _SECTION_GUIDANCE.get(section_type, _SECTION_GUIDANCE[ReportSectionTypeEnum.UNKNOWN.value])
+    guidance = _SECTION_GUIDANCE.get(
+        section_type, _SECTION_GUIDANCE[ReportSectionTypeEnum.UNKNOWN.value]
+    )
     return "\n".join(
         [
             f"Section type: {section_type}",
@@ -284,8 +441,6 @@ def build_user_prompt(
 
 @dataclass
 class CompressReportSection:
-    system_prompt: str
-    user_prompt: str
     response: dict
     metadata: dict
     markdown: str
@@ -297,7 +452,6 @@ class CompressReportSection:
         section_markdown: str,
         section_type: str | ReportSectionTypeEnum | None = None,
         section_title: Optional[str] = None,
-        **kwargs: Any,
     ) -> "CompressReportSection":
         if not isinstance(llm, LLM):
             raise ValueError("Invalid LLM instance.")
@@ -305,48 +459,75 @@ class CompressReportSection:
             raise ValueError("Invalid section_markdown.")
 
         normalized_section_type = normalize_section_type(section_type)
-        system_prompt = kwargs.get("system_prompt", COMPRESS_REPORT_SECTION_SYSTEM_PROMPT)
-        if not isinstance(system_prompt, str):
-            raise ValueError("Invalid system_prompt.")
-
-        user_prompt = build_user_prompt(
+        section_wrapper = build_user_prompt(
             section_markdown=section_markdown,
             section_type=normalized_section_type,
             section_title=section_title,
         )
-        logger.debug(f"System Prompt:\n{system_prompt}")
-        logger.debug(f"User Prompt:\n{user_prompt}")
+        logger.debug(f"Section wrapper user prompt:\n{section_wrapper}")
 
-        chat_message_list = [
-            ChatMessage(role=MessageRole.SYSTEM, content=system_prompt),
-            ChatMessage(role=MessageRole.USER, content=user_prompt),
+        accumulated_chat: list[ChatMessage] = [
+            ChatMessage(
+                role=MessageRole.SYSTEM,
+                content=COMPRESS_REPORT_SECTION_SYSTEM_PROMPT,
+            )
         ]
 
-        sllm = llm.as_structured_llm(CompressedReportSection)
+        bucket_values: dict[str, Any] = {}
+        per_bucket_metadata: dict[str, dict[str, Any]] = {}
+        total_start = time.perf_counter()
 
-        logger.debug("Starting LLM chat interaction.")
-        start_time = time.perf_counter()
-        chat_response = sllm.chat(chat_message_list)
-        end_time = time.perf_counter()
-        duration = int(ceil(end_time - start_time))
-        response_byte_count = len(chat_response.message.content.encode("utf-8"))
-        logger.info(
-            f"LLM chat interaction completed in {duration} seconds. "
-            f"Response byte count: {response_byte_count}"
-        )
+        for i, spec in enumerate(_BUCKET_SPECS):
+            if i == 0:
+                user_content = f"{section_wrapper}\n\n{spec.bucket_prompt}"
+            else:
+                user_content = spec.bucket_prompt
 
-        compressed: CompressedReportSection = chat_response.raw
-        if compressed is None:
-            raise ValueError(
-                "Structured LLM returned None for CompressedReportSection. "
-                "The model likely echoed the schema instead of producing values."
+            accumulated_chat.append(
+                ChatMessage(role=MessageRole.USER, content=user_content)
             )
+
+            sllm = llm.as_structured_llm(spec.schema)
+            logger.debug(f"Bucket {spec.field_name}: starting LLM call (turn {i + 1})")
+            bucket_start = time.perf_counter()
+            chat_response = sllm.chat(accumulated_chat)
+            bucket_duration = int(ceil(time.perf_counter() - bucket_start))
+            bucket_byte_count = len(chat_response.message.content.encode("utf-8"))
+            logger.info(
+                f"Bucket {spec.field_name}: completed in {bucket_duration}s, "
+                f"{bucket_byte_count} bytes"
+            )
+
+            obj = chat_response.raw
+            if obj is None:
+                raise ValueError(
+                    f"Structured LLM returned None for bucket {spec.field_name!r}. "
+                    "The model likely echoed the schema instead of producing values."
+                )
+            bucket_values[spec.field_name] = getattr(obj, spec.field_name)
+            # Append the assistant turn as compact JSON so the next bucket call
+            # can see what has already been produced and avoid duplicating it.
+            assistant_content = json.dumps(obj.model_dump(), separators=(",", ":"))
+            accumulated_chat.append(
+                ChatMessage(role=MessageRole.ASSISTANT, content=assistant_content)
+            )
+
+            per_bucket_metadata[spec.field_name] = {
+                "duration": bucket_duration,
+                "response_byte_count": bucket_byte_count,
+                "user_prompt": user_content,
+            }
+
+        total_duration = int(ceil(time.perf_counter() - total_start))
+
+        compressed = CompressedReportSection(**bucket_values)
 
         metadata = dict(llm.metadata)
         metadata["llm_classname"] = llm.class_name()
-        metadata["duration"] = duration
-        metadata["response_byte_count"] = response_byte_count
         metadata["section_type"] = normalized_section_type
+        metadata["total_duration"] = total_duration
+        metadata["per_bucket"] = per_bucket_metadata
+        metadata["system_prompt"] = COMPRESS_REPORT_SECTION_SYSTEM_PROMPT
 
         json_response = compressed.model_dump()
         markdown = cls.convert_to_markdown(
@@ -355,8 +536,6 @@ class CompressReportSection:
         )
 
         return CompressReportSection(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
             response=json_response,
             metadata=metadata,
             markdown=markdown,
@@ -369,7 +548,6 @@ class CompressReportSection:
         file_path: str | Path,
         section_type: str | ReportSectionTypeEnum | None = None,
         section_title: Optional[str] = None,
-        **kwargs: Any,
     ) -> "CompressReportSection":
         path = Path(file_path)
         markdown = path.read_text(encoding="utf-8")
@@ -382,22 +560,12 @@ class CompressReportSection:
             section_markdown=markdown,
             section_type=inferred_section_type,
             section_title=inferred_title,
-            **kwargs,
         )
 
-    def to_dict(
-        self,
-        include_metadata: bool = True,
-        include_system_prompt: bool = True,
-        include_user_prompt: bool = True,
-    ) -> dict:
+    def to_dict(self, include_metadata: bool = True) -> dict:
         d = self.response.copy()
         if include_metadata:
             d["metadata"] = self.metadata
-        if include_system_prompt:
-            d["system_prompt"] = self.system_prompt
-        if include_user_prompt:
-            d["user_prompt"] = self.user_prompt
         return d
 
     def save_raw(self, file_path: str | Path) -> None:
@@ -440,8 +608,6 @@ class CompressReportSection:
 
 
 if __name__ == "__main__":
-    # Smoke test against a sample report section. Requires an LLM that
-    # implements ``as_structured_llm``. Adjust the model name as needed.
     import os
     from worker_plan_internal.llm_factory import get_llm
 

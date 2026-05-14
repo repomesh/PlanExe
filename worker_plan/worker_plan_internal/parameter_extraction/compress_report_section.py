@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from enum import Enum
 from math import ceil
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
@@ -214,9 +214,11 @@ class _SectionSummaryOnly(BaseModel):
 
 
 class _NumericValueItem(BaseModel):
-    """A scored numeric_values entry. The downstream pipeline filters out
-    entries with low ``source_evidence`` to suppress hallucinated numbers
-    that the LLM invents to fill the soft cap.
+    """A scored numeric_values entry. The downstream consumer reads every
+    item — high- and low-confidence alike — and uses the per-item
+    annotations to weigh them. We do NOT drop items in this module; the
+    goal is to extract liberally and tag honestly so a cheap downstream
+    model does not need to reason about which numbers exist.
 
     Detailed instructions live in the numeric_values bucket prompt; the
     schema field descriptions are kept short on purpose so the JSON-schema
@@ -229,6 +231,14 @@ class _NumericValueItem(BaseModel):
     )
     source_evidence: int = Field(
         description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
+    )
+    source_status: Literal["explicit", "derived", "inferred"] = Field(
+        description=(
+            "'explicit' = literally stated in the source; "
+            "'derived' = computed from explicit source values; "
+            "'inferred' = a plausible business assumption you added that the "
+            "source does not state. When in doubt prefer 'inferred'."
+        )
     )
     source_quote: str = Field(
         description="≤12 word verbatim fragment from the source, or 'NOT IN SOURCE'."
@@ -295,8 +305,8 @@ Do NOT emit any other top-level key (no section_summary, no
 load_bearing_assumptions, no gates_and_thresholds, no risks_and_shocks, no
 missing_data_to_estimate). Do NOT emit a bare top-level array.
 
-Each item is a scored object with four fields: line, modelling_relevance,
-source_evidence, source_quote.
+Each item is a scored object with five fields: line, modelling_relevance,
+source_evidence, source_status, source_quote.
 
 The 'line' field MUST follow the form 'label: value [unit] — modelling role':
 - label names what the number represents in 2-6 words
@@ -326,21 +336,30 @@ Scoring discipline:
   narrative number.
 - source_evidence (1-5): how directly the source text supports this exact
   value AND label. 5 = near-verbatim quote present in the section; 1 = you
-  invented it. Be honest: low-evidence items are filtered out downstream,
-  so over-scoring just produces noise.
+  invented it. Be honest.
+- source_status: 'explicit' = literally stated in the source; 'derived' =
+  computed from explicit source values (note the computation in the
+  modelling role); 'inferred' = a plausible business assumption you added
+  that the source does not state. When in doubt prefer 'inferred'.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section containing this number. If the number is not in the section,
-  write 'NOT IN SOURCE' and set source_evidence to 1. Do not paste long
-  passages — a 5-10 word fragment is plenty.
+  write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to
+  'inferred'. Do not paste long passages — a 5-10 word fragment is plenty.
 
-Do not invent specific breakdowns of a total (e.g. if the source says '2M
-total budget' do not invent '1M for staff') and do not introduce counts
-('4 instructors', '2 kilns', '100 members') unless the source states them.
-When in doubt, lower the source_evidence score rather than skip the item.
+We DO NOT drop items downstream — the consumer reads everything and uses
+your scores and source_status as guidance. So:
+- prefer redundancy over conciseness. Include borderline items with honest
+  low scores rather than silently skipping them.
+- but never *invent* a specific value where the source is silent. If the
+  source says '2M total budget' you may report that. You may NOT then
+  report '1M for staff' or '40% admin markup' as separate items unless the
+  source states them — mark such guesses 'inferred' with source_evidence 1
+  if you include them at all.
 
-Skip numbers that only appear for narrative color. At most 6 items, sorted
-by the importance of the number for modelling — bring out the few highest-
-value numbers first. Fewer items is better than padding the cap.
+At most 6 items, sorted by your judgement of importance for modelling.
+Fewer items is fine; padding the cap with low-quality inferences is not.
+Keep each source_quote to ≤8 words so the response stays within the
+small-LLM output budget.
 """.strip()
 
 
@@ -444,13 +463,6 @@ _BUCKET_SPECS: tuple[_BucketSpec, ...] = (
 )
 
 
-# Minimum source_evidence (1-5 Likert) for a numeric_values item to survive
-# the post-processing filter. Items scored below this threshold are treated
-# as low-confidence — typically hallucinated or weakly grounded — and dropped
-# from the public list while still being preserved in the per-bucket
-# metadata for inspection.
-_MIN_NUMERIC_VALUE_SOURCE_EVIDENCE = 3
-
 # Per-bucket call attempts before giving up. Small models like Llama 3.1 8B
 # occasionally emit malformed JSON, drop required fields, or truncate mid-
 # list; retrying the same chat history usually succeeds because each attempt
@@ -458,23 +470,58 @@ _MIN_NUMERIC_VALUE_SOURCE_EVIDENCE = 3
 _PER_BUCKET_MAX_ATTEMPTS = 3
 
 
-def _filter_numeric_values(
-    items: list[_NumericValueItem],
-) -> tuple[list[str], list[dict]]:
-    """Sort numeric_values items by score, drop low-evidence ones, and
-    flatten survivors into the plain ``list[str]`` shape that
-    ``CompressedReportSection`` expects.
+def _normalise_for_quote_match(text: str) -> str:
+    """Lowercase, normalise unicode dashes, and collapse whitespace.
 
-    Returns ``(surviving_lines, all_scored_items)`` so the caller can keep
-    the raw scored items in metadata for diagnostics.
+    The LLM often paraphrases punctuation/whitespace when quoting (em-dash
+    vs hyphen, line wraps, extra spaces). A loose normalisation lets the
+    substring check accept those variations while still catching outright
+    inventions.
     """
-    all_scored = [item.model_dump() for item in items]
-    survivors = [item for item in items if item.source_evidence >= _MIN_NUMERIC_VALUE_SOURCE_EVIDENCE]
-    survivors.sort(
-        key=lambda item: (item.source_evidence * item.modelling_relevance, item.source_evidence),
-        reverse=True,
-    )
-    return [item.line for item in survivors], all_scored
+    text = text.lower()
+    for dash in ("–", "—", "−"):
+        text = text.replace(dash, "-")
+    return " ".join(text.split())
+
+
+def _quote_is_in_source(quote: str, section_markdown: str) -> bool:
+    if not quote:
+        return False
+    if quote.strip().upper() == "NOT IN SOURCE":
+        return False
+    return _normalise_for_quote_match(quote) in _normalise_for_quote_match(section_markdown)
+
+
+def _annotate_numeric_values(
+    items: list[_NumericValueItem],
+    section_markdown: str,
+) -> tuple[list[str], list[dict]]:
+    """Verify each item's quote against the source, sort by confidence, and
+    flatten into tagged strings.
+
+    No items are dropped — the consumer reads the full annotated list and
+    uses the inline tags ``[status | e=N r=N | quote: verified|unverified]``
+    to weigh each entry. Items the LLM scored low or whose quote does not
+    appear in the source remain in the output so a downstream model can
+    still see what was considered.
+    """
+    scored_dicts: list[dict] = []
+    annotated_pairs: list[tuple[int, str]] = []
+    for item in items:
+        verified = _quote_is_in_source(item.source_quote, section_markdown)
+        as_dict = item.model_dump()
+        as_dict["quote_verified"] = verified
+        scored_dicts.append(as_dict)
+        tag = (
+            f"[{item.source_status} | "
+            f"e={item.source_evidence} r={item.modelling_relevance} | "
+            f"quote: {'verified' if verified else 'unverified'}]"
+        )
+        sort_key = item.source_evidence * item.modelling_relevance + (10 if verified else 0)
+        annotated_pairs.append((sort_key, f"{item.line}  {tag}"))
+
+    annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
+    return [line for _, line in annotated_pairs], scored_dicts
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:
@@ -612,8 +659,8 @@ class CompressReportSection:
                 "user_prompt": user_content,
             }
             if spec.field_name == "numeric_values":
-                bucket_values[spec.field_name], scored_items = _filter_numeric_values(
-                    raw_field_value
+                bucket_values[spec.field_name], scored_items = _annotate_numeric_values(
+                    raw_field_value, section_markdown
                 )
                 bucket_metadata["scored_items"] = scored_items
             else:

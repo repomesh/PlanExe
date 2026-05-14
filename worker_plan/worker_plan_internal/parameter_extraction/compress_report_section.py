@@ -62,6 +62,54 @@ class ReportSectionTypeEnum(str, Enum):
     UNKNOWN = "unknown"
 
 
+class _NumericValueItem(BaseModel):
+    """LLM-facing per-item schema for the numeric_values bucket. Does NOT
+    include ``quote_verified`` — that field is computed in code from a
+    substring check against the source markdown, not by the LLM.
+
+    Detailed instructions live in the numeric_values bucket prompt; the
+    schema field descriptions are kept short on purpose so the JSON-schema
+    overhead in the structured-output system message stays small.
+    """
+
+    line: str = Field(description="'label: value [unit] — modelling role'.")
+    modelling_relevance: int = Field(
+        description="1-5 Likert: usefulness for Monte Carlo / napkin-math modelling."
+    )
+    source_evidence: int = Field(
+        description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
+    )
+    source_status: Literal["explicit", "derived", "inferred"] = Field(
+        description=(
+            "'explicit' = literally stated in the source; "
+            "'derived' = computed from explicit source values; "
+            "'inferred' = a plausible business assumption you added that the "
+            "source does not state. When in doubt prefer 'inferred'."
+        )
+    )
+    source_quote: str = Field(
+        description="≤12 word verbatim fragment from the source, or 'NOT IN SOURCE'."
+    )
+
+
+class NumericValueItem(_NumericValueItem):
+    """Public per-item shape for compressed numeric_values entries.
+
+    Inherits the LLM-populated fields from ``_NumericValueItem`` and adds
+    ``quote_verified``, which the pipeline sets after substring-checking the
+    model's ``source_quote`` against the section markdown.
+    """
+
+    quote_verified: bool = Field(
+        default=False,
+        description=(
+            "True if source_quote appears in the section markdown after "
+            "case-insensitive, unicode-dash-tolerant, whitespace-collapsed "
+            "normalisation. Set by code, not by the LLM."
+        ),
+    )
+
+
 class CompressedReportSection(BaseModel):
     """Assembled output of six single-field extraction calls.
 
@@ -76,10 +124,11 @@ class CompressedReportSection(BaseModel):
             "to Monte Carlo / napkin-math modelling. Plain English."
         )
     )
-    numeric_values: list[str] = Field(
+    numeric_values: list[NumericValueItem] = Field(
         default_factory=list,
         description=(
-            "Modelling-relevant numbers as 'label: value [unit] — modelling role'."
+            "Modelling-relevant numbers with per-item scoring, source-status, "
+            "quote, and code-verified flag. See NumericValueItem."
         ),
     )
     load_bearing_assumptions: list[str] = Field(
@@ -233,38 +282,6 @@ class _SectionSummaryOnly(BaseModel):
             "One to three sentences describing what this section contributes "
             "to Monte Carlo / napkin-math modelling. Plain English, no markdown."
         )
-    )
-
-
-class _NumericValueItem(BaseModel):
-    """A scored numeric_values entry. The downstream consumer reads every
-    item — high- and low-confidence alike — and uses the per-item
-    annotations to weigh them. We do NOT drop items in this module; the
-    goal is to extract liberally and tag honestly so a cheap downstream
-    model does not need to reason about which numbers exist.
-
-    Detailed instructions live in the numeric_values bucket prompt; the
-    schema field descriptions are kept short on purpose so the JSON-schema
-    overhead in the structured-output system message stays small.
-    """
-
-    line: str = Field(description="'label: value [unit] — modelling role'.")
-    modelling_relevance: int = Field(
-        description="1-5 Likert: usefulness for Monte Carlo / napkin-math modelling."
-    )
-    source_evidence: int = Field(
-        description="1-5 Likert: how directly the source supports this exact value+label (1 = invented)."
-    )
-    source_status: Literal["explicit", "derived", "inferred"] = Field(
-        description=(
-            "'explicit' = literally stated in the source; "
-            "'derived' = computed from explicit source values; "
-            "'inferred' = a plausible business assumption you added that the "
-            "source does not state. When in doubt prefer 'inferred'."
-        )
-    )
-    source_quote: str = Field(
-        description="≤12 word verbatim fragment from the source, or 'NOT IN SOURCE'."
     )
 
 
@@ -540,34 +557,50 @@ def _quote_is_in_source(quote: str, section_markdown: str) -> bool:
 def _annotate_numeric_values(
     items: list[_NumericValueItem],
     section_markdown: str,
-) -> tuple[list[str], list[dict]]:
-    """Verify each item's quote against the source, sort by confidence, and
-    flatten into tagged strings.
+) -> tuple[list[NumericValueItem], list[dict]]:
+    """Verify each item's quote, sort by composite confidence, and return
+    the top survivors as rich ``NumericValueItem`` objects.
 
-    No items are dropped — the consumer reads the full annotated list and
-    uses the inline tags ``[status | e=N r=N | quote: verified|unverified]``
-    to weigh each entry. Items the LLM scored low or whose quote does not
-    appear in the source remain in the output so a downstream model can
-    still see what was considered.
+    The LLM produces ``_NumericValueItem`` (line + scores + status + quote).
+    For each, we substring-check the quote against the source markdown,
+    build a ``NumericValueItem`` with ``quote_verified`` set accordingly,
+    sort by ``source_evidence * modelling_relevance`` (with a bonus for
+    verified items), and keep the top ``_MAX_NUMERIC_VALUES_IN_OUTPUT``.
+    The full set of scored items (including dropped ones) is returned as a
+    list of dicts so the caller can stash them in metadata for inspection.
     """
     scored_dicts: list[dict] = []
-    annotated_pairs: list[tuple[int, str]] = []
-    for item in items:
-        verified = _quote_is_in_source(item.source_quote, section_markdown)
-        as_dict = item.model_dump()
-        as_dict["quote_verified"] = verified
-        scored_dicts.append(as_dict)
-        tag = (
-            f"[{item.source_status} | "
-            f"e={item.source_evidence} r={item.modelling_relevance} | "
-            f"quote: {'verified' if verified else 'unverified'}]"
+    annotated_pairs: list[tuple[int, NumericValueItem]] = []
+    for llm_item in items:
+        verified = _quote_is_in_source(llm_item.source_quote, section_markdown)
+        public_item = NumericValueItem(
+            **llm_item.model_dump(),
+            quote_verified=verified,
         )
-        sort_key = item.source_evidence * item.modelling_relevance + (10 if verified else 0)
-        annotated_pairs.append((sort_key, f"{item.line}  {tag}"))
+        scored_dicts.append(public_item.model_dump())
+        sort_key = (
+            llm_item.source_evidence * llm_item.modelling_relevance
+            + (10 if verified else 0)
+        )
+        annotated_pairs.append((sort_key, public_item))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
-    kept = [line for _, line in annotated_pairs[:_MAX_NUMERIC_VALUES_IN_OUTPUT]]
+    kept = [item for _, item in annotated_pairs[:_MAX_NUMERIC_VALUES_IN_OUTPUT]]
     return kept, scored_dicts
+
+
+def _format_numeric_value_line(item: NumericValueItem) -> str:
+    """Render one NumericValueItem as a markdown bullet body.
+
+    Format mirrors the v10 inline-tag convention so the downstream
+    consumer's expectations do not change with the schema refactor.
+    """
+    tag = (
+        f"[{item.source_status} | "
+        f"e={item.source_evidence} r={item.modelling_relevance} | "
+        f"quote: {'verified' if item.quote_verified else 'unverified'}]"
+    )
+    return f"{item.line}  {tag}"
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:
@@ -791,14 +824,20 @@ class CompressReportSection:
         title = section_title or "Compressed Section"
         lines: list[str] = [f"# {title}", "", compressed.section_summary.strip(), ""]
 
-        sections: list[tuple[str, list[str]]] = [
-            ("Numeric values", compressed.numeric_values),
+        if compressed.numeric_values:
+            lines.append("## Numeric values")
+            for item in compressed.numeric_values:
+                rendered = _format_numeric_value_line(item).replace("\n", " ").strip()
+                lines.append(f"- {rendered}")
+            lines.append("")
+
+        string_sections: list[tuple[str, list[str]]] = [
             ("Load-bearing assumptions", compressed.load_bearing_assumptions),
             ("Gates and thresholds", compressed.gates_and_thresholds),
             ("Risks and shocks", compressed.risks_and_shocks),
             ("Missing data to estimate", compressed.missing_data_to_estimate),
         ]
-        for heading, items in sections:
+        for heading, items in string_sections:
             if not items:
                 continue
             lines.append(f"## {heading}")

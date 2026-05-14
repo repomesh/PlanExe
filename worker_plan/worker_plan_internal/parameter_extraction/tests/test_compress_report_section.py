@@ -2,6 +2,7 @@ from worker_plan_internal.parameter_extraction.compress_report_section import (
     COMPRESS_REPORT_SECTION_SYSTEM_PROMPT,
     CompressedReportSection,
     CompressReportSection,
+    NumericValueItem,
     build_user_prompt,
     infer_section_type_from_path,
     normalize_section_type,
@@ -48,13 +49,18 @@ def test_system_prompt_states_compression_role() -> None:
     assert "do not add commentary" in text
 
 
-def test_pydantic_schema_is_flat_only_strings_and_str_lists() -> None:
-    """The whole point of this implementation is a flat schema. Guard against
-    accidental drift back into nested objects or enums."""
+def test_pydantic_schema_shape() -> None:
+    """Guard against accidental drift in the assembled schema.
+
+    numeric_values carries the per-item ``NumericValueItem`` shape (line +
+    scoring + status + quote + code-computed quote_verified). The other
+    four list buckets remain ``list[str]`` for now; if their schemas grow
+    to rich items too, update this test.
+    """
     fields = CompressedReportSection.model_fields
     expected = {
         "section_summary": str,
-        "numeric_values": list[str],
+        "numeric_values": list[NumericValueItem],
         "load_bearing_assumptions": list[str],
         "gates_and_thresholds": list[str],
         "risks_and_shocks": list[str],
@@ -63,10 +69,28 @@ def test_pydantic_schema_is_flat_only_strings_and_str_lists() -> None:
     assert set(fields.keys()) == set(expected.keys())
     for name, expected_type in expected.items():
         assert fields[name].annotation == expected_type, (
-            f"Field {name!r} drifted to {fields[name].annotation!r}; "
-            f"expected {expected_type!r}. Keep the schema flat — older LLMs "
-            "depend on it."
+            f"Field {name!r} is {fields[name].annotation!r}; "
+            f"expected {expected_type!r}."
         )
+
+
+def _nv(
+    line: str,
+    *,
+    status: str = "explicit",
+    e: int = 5,
+    r: int = 5,
+    quote: str = "verbatim quote",
+    verified: bool = True,
+) -> NumericValueItem:
+    return NumericValueItem(
+        line=line,
+        modelling_relevance=r,
+        source_evidence=e,
+        source_status=status,
+        source_quote=quote,
+        quote_verified=verified,
+    )
 
 
 def test_convert_to_markdown_renders_each_populated_bucket() -> None:
@@ -76,16 +100,25 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
             "staffing model, revenue mix, and contingency sizing."
         ),
         numeric_values=[
-            "Year 1 budget: 2M DKK",
-            "Startup contingency: 15% of Year 1 budget = 300,000 DKK",
-            "Off-peak (Nov-Feb) is the low-utilisation season",
+            _nv("Year 1 budget: 2M DKK — input to cash burn model"),
+            _nv(
+                "Startup contingency: 15% of Year 1 budget = 300,000 DKK — shock buffer",
+                status="derived",
+                e=4,
+            ),
+            _nv(
+                "Off-peak (Nov-Feb) is the low-utilisation season — capacity ceiling",
+                e=3,
+                r=3,
+                verified=False,
+            ),
         ],
         load_bearing_assumptions=[
             "Greenlandic labor law allows contractor classification of instructors",
             "Tourist demand in Q3 is strong enough to subsidise local off-peak",
         ],
         gates_and_thresholds=[
-            "Off-peak revenue must cover >=75% of direct utility overhead",
+            "If off-peak revenue falls below 75% of direct utility overhead, then contingency funds operating costs",
         ],
         risks_and_shocks=[
             "Single-kiln overload during June-September: bookings exceed 24/7 capacity by >48h",
@@ -109,12 +142,16 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     # Verbatim numbers preserved (not converted to fractions or rounded)
     assert "300,000 DKK" in markdown
     assert "75%" in markdown
+    # Inline tag is composed from NumericValueItem fields
+    assert "[explicit | e=5 r=5 | quote: verified]" in markdown
+    assert "[derived | e=4 r=5 | quote: verified]" in markdown
+    assert "quote: unverified" in markdown
 
 
 def test_convert_to_markdown_skips_empty_buckets() -> None:
     compressed = CompressedReportSection(
         section_summary="Section had only numbers worth keeping.",
-        numeric_values=["budget: 100 EUR"],
+        numeric_values=[_nv("budget: 100 EUR — input to cash burn model")],
         load_bearing_assumptions=[],
         gates_and_thresholds=[],
         risks_and_shocks=[],

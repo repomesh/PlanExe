@@ -78,21 +78,38 @@ class CompressedReportSection(BaseModel):
     numeric_values: list[str] = Field(
         default_factory=list,
         description=(
-            "Numbers worth preserving for modelling, each on its own line with "
-            "enough context to be understandable in isolation. Include the value "
-            "and unit verbatim (e.g. '15% startup contingency = 300,000 DKK', "
-            "'utility variance approval deadline 2026-08-15', '60% target "
-            "outreach contact rate'). Skip numbers that only appear for narrative "
-            "color. At most 12 items."
+            "Numbers worth preserving for modelling. Each line MUST follow the "
+            "form 'label: value [unit] — modelling role', where: "
+            "(a) label names what the number represents in 2-6 words; "
+            "(b) value [unit] is the literal value and unit from the source, "
+            "preserved verbatim — never invent, translate, or substitute the "
+            "currency, unit, or date; "
+            "(c) modelling role is a short phrase such as 'input to cash burn "
+            "model', 'gates launch readiness', 'sensitivity driver for revenue', "
+            "'capacity ceiling'. "
+            "Bare values are invalid: a percent on its own, an amount in any "
+            "currency on its own, or a date on its own, all with no label and "
+            "no role. "
+            "Template shape (substitute values from the source — DO NOT copy "
+            "these placeholders or any unit from them): "
+            "'<what the number is>: <amount> <currency-from-source> — "
+            "<modelling role>.', "
+            "'<what the number is>: <percent>% — <modelling role>.', "
+            "'<what the number is>: <date-from-source> — <modelling role>.'. "
+            "If the source contains conflicting values for the same quantity, "
+            "list each with a disambiguating label (e.g. 'minimum', "
+            "'aspirational') rather than picking one silently. "
+            "Skip numbers that only appear for narrative color. At most 12 items."
         ),
     )
     load_bearing_assumptions: list[str] = Field(
         default_factory=list,
         description=(
             "Foundational claims that, if false, change the plan's viability. "
-            "Each line: the assumption itself, in 25 words or fewer (e.g. "
-            "'Greenlandic labor law lets us treat instructors as contractors'). "
-            "Prefer assumptions that have an obvious modelling consequence. "
+            "Each line: the assumption itself, in 25 words or fewer. "
+            "Prefer assumptions that have an obvious modelling consequence — "
+            "regulatory permissions, demand assumptions, supply assumptions, "
+            "cost-stability assumptions, capacity assumptions. "
             "At most 10 items."
         ),
     )
@@ -101,8 +118,9 @@ class CompressedReportSection(BaseModel):
         description=(
             "Pass/fail conditions, KPI cutoffs, validation gates, deadlines that "
             "trigger a decision. Each line should state the condition and the "
-            "consequence if it fails (e.g. 'Off-peak revenue must cover >=75% of "
-            "direct utility overhead, else contingency funds operating costs'). "
+            "consequence if it fails. Template shape (substitute the actual "
+            "condition and consequence from the source): "
+            "'<metric> must <comparison> <threshold>, else <consequence>'. "
             "At most 8 items."
         ),
     )
@@ -110,18 +128,20 @@ class CompressedReportSection(BaseModel):
         default_factory=list,
         description=(
             "Downside scenarios, failure paths, tripwires, shocks. Each line: "
-            "trigger plus modelling-relevant impact (e.g. 'Single-kiln overload "
-            "during June-September peak: bookings exceed 24/7 capacity by >48h, "
-            "causes seasonal revenue cap'). Skip purely qualitative risks. "
+            "trigger plus modelling-relevant impact. Template shape (substitute "
+            "from the source): '<trigger>: <quantitative or operationally "
+            "specific impact>'. Skip purely qualitative risks. "
             "At most 10 items."
         ),
     )
     missing_data_to_estimate: list[str] = Field(
         default_factory=list,
         description=(
-            "Inputs the model would need but the section does not supply. Each "
-            "line: what is missing and ideally how to estimate it (e.g. 'Direct "
-            "monthly utility overhead in DKK — derive from metered pricing trial'). "
+            "Primitive inputs the model would need but the section does not "
+            "supply. Each line: what is missing and how to estimate it. "
+            "Template shape: '<missing primitive quantity with unit> — "
+            "<how to estimate>'. Prefer primitives (single quantities with a "
+            "unit) over derived quantities. "
             "At most 6 items."
         ),
     )
@@ -197,6 +217,15 @@ Output discipline:
 - each bullet is one short sentence, self-contained, understandable on its own
 - preserve numeric values exactly as written in the source (do not round, do
   not convert percentages to fractions, do not translate currency)
+- every numeric_values bullet uses the form 'label: value [unit] — modelling
+  role'. A bare percentage, bare amount in any currency, or bare date with no
+  label and no modelling role is INVALID. If you cannot supply a label and
+  role from the section, omit the number rather than emit a bare value
+- never copy units, currencies, or dates from this prompt's examples — always
+  use what the source actually says
+- if the source contains two conflicting numbers for the same quantity, list
+  both with disambiguating labels (e.g. 'minimum', 'aspirational',
+  'optimistic') instead of picking one
 - if a number is implied but not stated, place it in missing_data_to_estimate
   rather than inventing a value
 - soft caps: numeric_values <= 12, load_bearing_assumptions <= 10,

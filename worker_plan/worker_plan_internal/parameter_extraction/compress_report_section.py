@@ -367,8 +367,16 @@ Scoring rules (identical across buckets):
       mix, contracted price, committed staff count.
     * 'derived' — a value the plan implies but does not state directly,
       computable from one or more 'explicit' values.
-    * 'inferred' — a plausible assumption you added that the source does
-      not state at all.
+    * 'inferred' — covers two cases: (a) a plausible assumption you
+      added that the source does not state at all; (b) an item the
+      source DOES state but only as an assumption, aspiration, expected
+      behaviour, or non-binding claim — anything the plan is not
+      binding itself to. "Local users will accept the high rental rate"
+      is 'inferred', even when the source contains that exact sentence,
+      because the plan does not bind users to accept it; it is a claim
+      the simulation should stress-test. Reserve 'explicit' for items
+      the plan binds itself to (committed budget, allocated reserve,
+      declared deadline, contracted price).
     * 'stress_test' — applies to lines that QUANTIFY THE DAMAGE of a
       failure outcome: the cost of a breakdown, the weeks of downtime,
       the lost revenue under a what-if, the deficit when an assumption
@@ -393,11 +401,20 @@ Scoring rules (identical across buckets):
       regardless of what you set. Do NOT use 'missing' in any other
       bucket: if the source does not supply a value for an assumption,
       gate, risk, or numeric_value, use 'inferred' instead.
-  Disambiguation test for explicit vs stress_test: ask "does the plan
-  COMMIT to this number, or is this a QUANTIFICATION OF WHAT COULD GO
-  WRONG?" If it is a quantification of failure, downside, or risk, the
-  answer is stress_test — even when the source states the number.
-  When in doubt elsewhere prefer 'inferred' over 'explicit'.
+  Disambiguation tests, in order of priority:
+  1. Is this a quantification of what could go wrong (failure cost,
+     downtime, lost revenue under a what-if, deficit when an assumption
+     breaks)? If yes → 'stress_test', even when the source states the
+     number.
+  2. Otherwise, is the plan BINDING itself to this — a committed
+     budget, allocated reserve, declared deadline, contracted rate,
+     committed staff count? If yes → 'explicit'.
+  3. Otherwise, does the source state this as an assumption,
+     aspiration, expected behaviour, or non-binding claim that the
+     simulation would want to stress-test? If yes → 'inferred'.
+  4. Otherwise it's something you added without source support →
+     'inferred' (and source_evidence should be 1).
+  When in doubt prefer 'inferred' over 'explicit'.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section that supports this item. If the item is not in the section,
   write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to

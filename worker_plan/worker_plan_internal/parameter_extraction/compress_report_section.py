@@ -352,6 +352,19 @@ Language rule (apply to every item):
   source contains non-English text, line_original keeps the native
   spelling and technical terms intact.
 
+Quantity annotation rule (apply to every item):
+- When the source states a count as a word (in any language: "two",
+  "twelve", "a dozen", "half a hundred", "to", "deux", "zwei", …),
+  annotate the digit form parenthetically in line_english after the
+  count word. Examples: "four (4) part-time instructors", "a dozen (12)
+  weekly drop-in sessions", "two (2) FTE equivalents". This applies to
+  the line_english field only; line_original keeps the source's native
+  phrasing without the digit annotation.
+- Do NOT digit-annotate vague quantifiers — "several", "a handful",
+  "many", "few", "some", "various", "a number of" are not counts and
+  must NOT be expanded into invented digits. If you do not know the
+  count, leave the word unannotated.
+
 Scoring rules (identical across buckets):
 - modelling_relevance (1-5): how useful this item is for Monte Carlo /
   napkin-math modelling. 5 = primary driver of viability; 1 = irrelevant

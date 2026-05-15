@@ -301,3 +301,83 @@ def test_convert_to_markdown_skips_empty_buckets() -> None:
     assert "## Gates and thresholds" not in markdown
     assert "## Risks and shocks" not in markdown
     assert "## Missing data to estimate" not in markdown
+
+
+def test_protected_term_bonus_matches_whole_words_only() -> None:
+    """The protected-term boost must be word-boundary aware so common
+    English words that happen to contain a protected substring (e.g.
+    'demonstrate' contains 'rate') do not trigger the bonus."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        protected_term_bonus,
+    )
+
+    assert protected_term_bonus("The team will demonstrate the prototype") == 0
+    assert protected_term_bonus("Hourly rate caps fixed cost") > 0
+    # Two distinct matches ("hourly", "rate") plus phrase "fixed cost" — 3
+    # protected matches, each worth 2.0, capped at 4.0.
+    assert protected_term_bonus("Hourly rate caps fixed cost") == 4.0
+
+
+def test_numeric_density_bonus_counts_numeric_tokens() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        numeric_density_bonus,
+    )
+
+    assert numeric_density_bonus("No numbers in this line") == 0
+    # One token: "165"
+    assert numeric_density_bonus("Rental rate is 165 per hour") == 1.0
+    # Three tokens: "2,000,000", "0.15", "300,000"
+    assert numeric_density_bonus("Budget 2,000,000 at 0.15 leaves 300,000") == 3.0
+    # Cap at 3.0 even with more numbers
+    assert numeric_density_bonus("1 2 3 4 5 6 7 8") == 3.0
+
+
+def test_formula_usefulness_bonus_rewards_formula_cues() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        formula_usefulness_bonus,
+    )
+
+    assert formula_usefulness_bonus("Plain narrative with no cues") == 0
+    # "ratio", " per ", "%" — 3 cues, capped at 3.0
+    assert formula_usefulness_bonus("Conversion ratio of 12% per attendee") == 3.0
+    # "denominator", "fraction" — 2 cues
+    assert formula_usefulness_bonus("Need the denominator fraction") == 2.0
+
+
+def test_composite_score_prefers_modelling_primitive_over_narrative() -> None:
+    """Two items with identical LLM self-ratings and quote-verification
+    status should still be ordered by content quality: the one carrying
+    protected modelling terms, numeric tokens, and formula cues outranks
+    the bare-narrative one."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        annotate_scored_items,
+    )
+
+    section = (
+        "Budget total 2,000,000 DKK with 15% contingency. "
+        "Some background prose about community values."
+    )
+    primitive = ScoredItem(
+        line_english="Contingency reserve fraction is 15% of total budget",
+        line_original="Contingency reserve fraction is 15% of total budget",
+        modelling_relevance=3,
+        source_evidence=3,
+        source_status="explicit",
+        source_quote="15% contingency",
+    )
+    narrative = ScoredItem(
+        line_english="The plan emphasizes community-focused values for residents",
+        line_original="The plan emphasizes community-focused values for residents",
+        modelling_relevance=3,
+        source_evidence=3,
+        source_status="explicit",
+        source_quote="community values",
+    )
+    kept, _ = annotate_scored_items(
+        [narrative, primitive], section_markdown=section, field_name="numeric_values"
+    )
+    # Same base score (3*3=9) and both quote-verified. The primitive item
+    # wins on the protected-term / numeric / formula-cue bonuses.
+    assert kept[0].line_english.startswith("Contingency reserve fraction")
+    assert kept[1].line_english.startswith("The plan emphasizes community")

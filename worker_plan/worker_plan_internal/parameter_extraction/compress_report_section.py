@@ -33,6 +33,7 @@ PROMPT> python -m worker_plan_internal.parameter_extraction.run_compress_full
 """
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -581,11 +582,55 @@ BUCKET_SPECS: tuple[BucketSpec, ...] = (
 PER_BUCKET_MAX_ATTEMPTS = 3
 
 # Public list buckets are capped to the top-N items after the LLM-side
-# cap, sorted by (modelling_relevance * source_evidence) with a bonus for
-# items whose quote was code-verified. The LLM is asked to over-produce so
-# the Python sort can drop the weakest candidates; everything stays in
-# metadata for inspection.
+# cap, sorted by a composite score combining the LLM's self-rated
+# source_evidence * modelling_relevance, a code-side quote-verification
+# bonus, and three content bonuses that boost items more likely to be
+# useful primitives for downstream Monte Carlo modelling:
+# protected-term, numeric-density, and formula-cue. The LLM is asked to
+# over-produce so the Python sort can drop the weakest candidates;
+# everything stays in metadata for inspection.
 MAX_ITEMS_PER_BUCKET = 6
+
+# Words and phrases that, when present in a candidate's line, signal it
+# is the kind of value Monte Carlo / napkin-math modelling depends on
+# (budgets, rates, capacities, denominators, fixed costs). Matched on
+# whole-word boundaries so "rate" does not accidentally match
+# "demonstrate". Domain-agnostic: a plan that does not use any of these
+# concepts simply gets no protected-term boost.
+PROTECTED_MODELLING_TERMS: frozenset[str] = frozenset({
+    "budget", "contingency", "conversion", "capacity", "deadline",
+    "fixed cost", "variable cost", "hourly", "rate", "utilization",
+    "break-even", "labor", "staff", "shock", "shortfall", "revenue",
+})
+
+PROTECTED_TERM_PATTERN: re.Pattern[str] = re.compile(
+    r"\b(?:" + "|".join(re.escape(t) for t in PROTECTED_MODELLING_TERMS) + r")\b",
+    re.IGNORECASE,
+)
+
+# Substring cues that indicate a line is likely to participate in a
+# downstream formula (denominator, ratio, threshold, etc.). Plain
+# substring match — these tokens rarely produce false positives, and the
+# bonus is small enough that occasional overshoot is acceptable.
+FORMULA_USEFULNESS_CUES: tuple[str, ...] = (
+    "ratio", "fraction", "share", " per ", "%",
+    "threshold", "denominator", "coverage", "margin",
+)
+
+NUMBER_PATTERN: re.Pattern[str] = re.compile(r"\d[\d,.]*")
+
+# Bonus weights for the composite score. The verified-quote bonus (10) is
+# the largest because code-verified provenance is the strongest single
+# trust signal. The content bonuses are smaller and capped so that a few
+# protected terms plus numeric density cannot overwhelm a well-evidenced
+# item.
+VERIFIED_QUOTE_BONUS: int = 10
+PROTECTED_TERM_BONUS_PER_MATCH: float = 2.0
+PROTECTED_TERM_BONUS_CAP: float = 4.0
+NUMERIC_DENSITY_BONUS_PER_TOKEN: float = 1.0
+NUMERIC_DENSITY_BONUS_CAP: float = 3.0
+FORMULA_USEFULNESS_BONUS_PER_CUE: float = 1.0
+FORMULA_USEFULNESS_BONUS_CAP: float = 3.0
 
 # Buckets whose schema is list[ScoredItem] (i.e. everything except
 # section_summary). The order matches BUCKET_SPECS below.
@@ -630,6 +675,61 @@ def quote_is_in_source(quote: str, section_markdown: str) -> bool:
     return normalise_for_quote_match(quote) in normalise_for_quote_match(section_markdown)
 
 
+def protected_term_bonus(text: str) -> float:
+    """Bonus for lines that mention modelling-primitive concepts (budgets,
+    rates, capacities, denominators, fixed costs). Caps so a line with
+    many matches cannot outweigh a well-evidenced item.
+    """
+    matches = len(PROTECTED_TERM_PATTERN.findall(text))
+    return min(matches * PROTECTED_TERM_BONUS_PER_MATCH, PROTECTED_TERM_BONUS_CAP)
+
+
+def numeric_density_bonus(text: str) -> float:
+    """Bonus for lines carrying numeric tokens (currency amounts, dates,
+    percentages, ratios). A bare-prose claim with no numbers is less
+    useful for napkin math than one with explicit quantities.
+    """
+    count = len(NUMBER_PATTERN.findall(text))
+    return min(count * NUMERIC_DENSITY_BONUS_PER_TOKEN, NUMERIC_DENSITY_BONUS_CAP)
+
+
+def formula_usefulness_bonus(text: str) -> float:
+    """Bonus for lines that read like a formula input or output
+    (denominators, ratios, thresholds, coverage). These are the items
+    the downstream extractor most often needs to wire executable
+    formulas.
+    """
+    lower = text.lower()
+    count = sum(1 for cue in FORMULA_USEFULNESS_CUES if cue in lower)
+    return min(count * FORMULA_USEFULNESS_BONUS_PER_CUE, FORMULA_USEFULNESS_BONUS_CAP)
+
+
+def composite_score(
+    item: "ScoredItem",
+    quote_verified: bool,
+) -> float:
+    """Combine the LLM-self-rated base score with code-side bonuses.
+
+    base = source_evidence * modelling_relevance  (range 1..25)
+    + verified-quote bonus                        (0 or 10)
+    + protected-term bonus                        (0..4)
+    + numeric-density bonus                       (0..3)
+    + formula-usefulness bonus                    (0..3)
+
+    Items with a code-verified quote always outrank otherwise-equivalent
+    unverified items. The three content bonuses then sort items at the
+    same evidence level toward those carrying primitive modelling inputs.
+    """
+    haystack = f"{item.line_english} {item.source_quote}"
+    return (
+        item.source_evidence * item.modelling_relevance
+        + (VERIFIED_QUOTE_BONUS if quote_verified else 0)
+        + protected_term_bonus(haystack)
+        + numeric_density_bonus(haystack)
+        + formula_usefulness_bonus(haystack)
+    )
+
+
 def annotate_scored_items(
     items: list[ScoredItem],
     section_markdown: str,
@@ -641,10 +741,12 @@ def annotate_scored_items(
     The LLM produces ``ScoredItem`` (line + scores + status + quote). For
     each, we substring-check the quote against the source markdown, build
     a ``PublicScoredItem`` with ``quote_verified`` set accordingly, sort by
-    ``source_evidence * modelling_relevance`` (with a bonus for verified
-    items), and keep the top ``MAX_ITEMS_PER_BUCKET``. The full set of
-    scored items (including dropped ones) is returned as a list of dicts
-    so the caller can stash them in metadata for inspection.
+    ``composite_score`` (LLM-self-rated evidence × relevance plus
+    code-side bonuses for verified quote, protected modelling terms,
+    numeric density, and formula-cue presence), and keep the top
+    ``MAX_ITEMS_PER_BUCKET``. The full set of scored items (including
+    dropped ones) is returned as a list of dicts so the caller can stash
+    them in metadata for inspection.
 
     For buckets listed in ``FORCED_STATUS_BY_BUCKET`` (currently just
     ``missing_data_to_estimate``), the ``source_status`` is overwritten
@@ -653,7 +755,7 @@ def annotate_scored_items(
     """
     forced_status = FORCED_STATUS_BY_BUCKET.get(field_name)
     scored_dicts: list[dict] = []
-    annotated_pairs: list[tuple[int, PublicScoredItem]] = []
+    annotated_pairs: list[tuple[float, PublicScoredItem]] = []
     for llm_item in items:
         verified = quote_is_in_source(llm_item.source_quote, section_markdown)
         item_dict = llm_item.model_dump()
@@ -664,11 +766,7 @@ def annotate_scored_items(
             quote_verified=verified,
         )
         scored_dicts.append(public_item.model_dump())
-        sort_key = (
-            llm_item.source_evidence * llm_item.modelling_relevance
-            + (10 if verified else 0)
-        )
-        annotated_pairs.append((sort_key, public_item))
+        annotated_pairs.append((composite_score(llm_item, verified), public_item))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
     kept = [item for _, item in annotated_pairs[:MAX_ITEMS_PER_BUCKET]]

@@ -243,7 +243,7 @@ SECTION_GUIDANCE = {
 
 
 COMPRESS_REPORT_SECTION_SYSTEM_PROMPT = """
-You compress one verbose PlanExe report section so that a downstream
+You compress one verbose project-plan section so that a downstream
 parameter-extraction model can read it for Monte Carlo and napkin-math
 purposes.
 

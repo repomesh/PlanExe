@@ -23,10 +23,13 @@ failure: no field-order confusion across buckets, no truncation of long
 combined responses, no need for the model to balance attention across six
 different extraction jobs in one shot.
 
-There are 4 sections getting compressed, with 6 LLM calls per section. 
+There are 4 sections getting compressed, with 6 LLM calls per section.
 In total 24 (4 x 6) LLM calls.
 
-PROMPT> python -m worker_plan_internal.parameter_extraction.compress_report_section
+To actually run the pipeline against PlanExe sample artifacts, use the
+driver:
+
+PROMPT> python -m worker_plan_internal.parameter_extraction.run_compress_full
 """
 import json
 import logging
@@ -133,39 +136,21 @@ class PublicScoredItem(ScoredItem):
 
 
 class CompressedReportSection(BaseModel):
-    """Assembled output of six single-field extraction calls.
+    """Assembled output of the six per-bucket extraction calls.
 
-    Field descriptions here document the shape of the assembled object. The
-    detailed extraction instructions for each field live in the per-bucket
-    system prompts below — the LLM never sees this model directly.
+    This model is the host-side container that ``execute()`` returns; it is
+    never used as a structured-output target for an LLM call, so its fields
+    carry no ``description`` (which would be dead documentation aimed at no
+    audience). The per-bucket meaning lives in the bucket prompts and in
+    ``PublicScoredItem``.
     """
 
-    section_summary: str = Field(
-        description=(
-            "One to three sentences describing what this section contributes "
-            "to Monte Carlo / napkin-math modelling. Plain English."
-        )
-    )
-    numeric_values: list[PublicScoredItem] = Field(
-        default_factory=list,
-        description="Modelling-relevant numbers — see PublicScoredItem and the numeric_values bucket prompt.",
-    )
-    load_bearing_assumptions: list[PublicScoredItem] = Field(
-        default_factory=list,
-        description="Foundational claims whose failure would change the plan's viability.",
-    )
-    gates_and_thresholds: list[PublicScoredItem] = Field(
-        default_factory=list,
-        description="Pass/fail conditions with consequence on failure (if/then form).",
-    )
-    risks_and_shocks: list[PublicScoredItem] = Field(
-        default_factory=list,
-        description="Downside triggers with quantitative or operationally specific impact.",
-    )
-    missing_data_to_estimate: list[PublicScoredItem] = Field(
-        default_factory=list,
-        description="Primitive inputs the section does not supply, with an estimation hint.",
-    )
+    section_summary: str
+    numeric_values: list[PublicScoredItem] = Field(default_factory=list)
+    load_bearing_assumptions: list[PublicScoredItem] = Field(default_factory=list)
+    gates_and_thresholds: list[PublicScoredItem] = Field(default_factory=list)
+    risks_and_shocks: list[PublicScoredItem] = Field(default_factory=list)
+    missing_data_to_estimate: list[PublicScoredItem] = Field(default_factory=list)
 
 
 SECTION_TYPE_BY_STEM = {
@@ -294,47 +279,40 @@ CRITICAL response format rules:
 # ---------------------------------------------------------------------------
 
 
+_BUCKET_FIELD_DESC = "See the bucket prompt in the user message for the expected content."
+
+
 class SectionSummaryOnly(BaseModel):
-    section_summary: str = Field(
-        description=(
-            "One to three sentences describing what this section contributes "
-            "to Monte Carlo / napkin-math modelling. Plain English, no markdown."
-        )
-    )
+    section_summary: str = Field(description=_BUCKET_FIELD_DESC)
 
 
 class NumericValuesOnly(BaseModel):
     numeric_values: list[ScoredItem] = Field(
-        default_factory=list,
-        description="See system prompt for the required line format and scoring.",
+        default_factory=list, description=_BUCKET_FIELD_DESC,
     )
 
 
 class LoadBearingAssumptionsOnly(BaseModel):
     load_bearing_assumptions: list[ScoredItem] = Field(
-        default_factory=list,
-        description="See system prompt.",
+        default_factory=list, description=_BUCKET_FIELD_DESC,
     )
 
 
 class GatesAndThresholdsOnly(BaseModel):
     gates_and_thresholds: list[ScoredItem] = Field(
-        default_factory=list,
-        description="See system prompt.",
+        default_factory=list, description=_BUCKET_FIELD_DESC,
     )
 
 
 class RisksAndShocksOnly(BaseModel):
     risks_and_shocks: list[ScoredItem] = Field(
-        default_factory=list,
-        description="See system prompt.",
+        default_factory=list, description=_BUCKET_FIELD_DESC,
     )
 
 
 class MissingDataOnly(BaseModel):
     missing_data_to_estimate: list[ScoredItem] = Field(
-        default_factory=list,
-        description="See system prompt.",
+        default_factory=list, description=_BUCKET_FIELD_DESC,
     )
 
 
@@ -432,18 +410,12 @@ cost of missing a real one is large. But never *invent* a specific value
 where the source is silent — mark such guesses 'inferred' with
 source_evidence 1 if you include them at all.
 
-Keep each source_quote to ≤8 words so the response stays within the output
-budget.
+Keep each source_quote to ≤12 words so the response stays within the
+output budget.
 """.strip()
 
 
 NUMERIC_VALUES_BUCKET_PROMPT = """
-Output exactly one JSON OBJECT, not a bare array. The top-level shape is:
-{"numeric_values":[ ...one or more scored items... ]}
-Do NOT emit any other top-level key (no section_summary, no
-load_bearing_assumptions, no gates_and_thresholds, no risks_and_shocks, no
-missing_data_to_estimate). Do NOT emit a bare top-level array.
-
 The 'line' field for this bucket MUST follow the form
 'label: value [unit] — modelling role':
 - label names what the number represents in 2-6 words
@@ -473,10 +445,6 @@ by your judgement of importance for modelling. Fewer items is fine.
 
 
 LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
-Output exactly one JSON OBJECT with key 'load_bearing_assumptions' whose
-value is a list of scored items. Do NOT emit any other top-level key. Do
-NOT emit a bare top-level array.
-
 The 'line' field for this bucket is a complete short sentence stating the
 assumption itself, in 25 words or fewer. Prefer assumptions that have an
 obvious modelling consequence — regulatory permissions, demand
@@ -489,10 +457,6 @@ At most 8 items.
 
 
 GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
-Output exactly one JSON OBJECT with key 'gates_and_thresholds' whose value
-is a list of scored items. Do NOT emit any other top-level key. Do NOT
-emit a bare top-level array.
-
 The 'line' field for this bucket is a pass/fail condition, KPI cutoff,
 validation gate, or deadline that triggers a decision. Write each gate as
 an if/then sentence so the condition AND the consequence read in the
@@ -523,10 +487,6 @@ At most 8 items.
 
 
 RISKS_AND_SHOCKS_BUCKET_PROMPT = """
-Output exactly one JSON OBJECT with key 'risks_and_shocks' whose value is
-a list of scored items. Do NOT emit any other top-level key. Do NOT emit
-a bare top-level array.
-
 The 'line' field for this bucket is a trigger plus modelling-relevant
 impact. Template shape (substitute from the source):
 - '<trigger>: <quantitative or operationally specific impact>'
@@ -548,10 +508,6 @@ At most 8 items.
 
 
 MISSING_DATA_BUCKET_PROMPT = """
-Output exactly one JSON OBJECT with key 'missing_data_to_estimate' whose
-value is a list of scored items. Do NOT emit any other top-level key. Do
-NOT emit a bare top-level array.
-
 The 'line' field for this bucket names a PRIMITIVE input the model would
 need but the section does not supply. A primitive is a single quantity
 with a unit (currency/month, kWh, hours, count, percent). State what is
@@ -566,14 +522,11 @@ naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
 Note: by definition these items are absent from the source. Always set
-source_status to 'missing' for items in this bucket (the status for items
-in this bucket is overwritten to 'missing' regardless, but setting it
-correctly upfront keeps the assistant turn the model sees in the chat
-history honest). When the source has no value, source_quote is 'NOT IN
-SOURCE' and source_evidence is 1. When the section EXPLICITLY says 'we
-need to estimate X', you may quote that phrase and raise source_evidence
-accordingly — but source_status still stays 'missing' because the value
-itself is what's absent.
+source_status to 'missing' for items in this bucket. When the source has
+no value, source_quote is 'NOT IN SOURCE' and source_evidence is 1. When
+the section EXPLICITLY says 'we need to estimate X', you may quote that
+phrase and raise source_evidence accordingly — but source_status still
+stays 'missing' because the value itself is what's absent.
 
 At most 6 items.
 """.strip() + "\n\n" + SCORING_DISCIPLINE
@@ -710,8 +663,10 @@ def format_scored_item_line(item: PublicScoredItem) -> str:
 
     The clean English version is the primary text. The native-language
     version is kept in JSON only — downstream consumers that need verbatim
-    source terminology can read it from the raw output. Format mirrors the
-    v10 inline-tag convention.
+    source terminology can read it from the raw output. The inline tag
+    surfaces source_status, the two scores, and the code-side quote
+    verification so a downstream LLM can weigh the item by epistemic
+    confidence without parsing JSON.
     """
     tag = (
         f"[{item.source_status} | "
@@ -722,7 +677,9 @@ def format_scored_item_line(item: PublicScoredItem) -> str:
 
 
 def infer_section_type_from_path(file_path: str | Path) -> str:
-    """Infer the report section type from a PlanExe intermediary filename."""
+    """Infer the section type from a filename whose stem matches one of the
+    known section names. Returns ``"unknown"`` if the stem is not recognised.
+    """
     stem = Path(file_path).stem
     return SECTION_TYPE_BY_STEM.get(stem, ReportSectionTypeEnum.UNKNOWN.value)
 
@@ -803,8 +760,15 @@ class CompressReportSection:
         per_bucket_metadata: dict[str, dict[str, Any]] = {}
         total_start = time.perf_counter()
 
-        for i, spec in enumerate(BUCKET_SPECS):
-            if i == 0:
+        for turn_index, spec in enumerate(BUCKET_SPECS):
+            # The section context (the [START_SECTION_MARKDOWN]...
+            # [END_SECTION_MARKDOWN] wrapper) is established on the very
+            # first user turn and then reused implicitly by every later
+            # turn via the accumulated chat history. Whichever bucket
+            # happens to be first in BUCKET_SPECS gets the section
+            # wrapper prepended to its own prompt.
+            is_first_turn = turn_index == 0
+            if is_first_turn:
                 user_content = f"{section_wrapper}\n\n{spec.bucket_prompt}"
             else:
                 user_content = spec.bucket_prompt
@@ -821,7 +785,7 @@ class CompressReportSection:
             for retry in range(PER_BUCKET_MAX_ATTEMPTS):
                 logger.debug(
                     f"Bucket {spec.field_name}: starting LLM call "
-                    f"(turn {i + 1}, attempt {retry + 1}/{PER_BUCKET_MAX_ATTEMPTS})"
+                    f"(turn {turn_index + 1}, attempt {retry + 1}/{PER_BUCKET_MAX_ATTEMPTS})"
                 )
                 try:
                     chat_response = sllm.chat(accumulated_chat)
@@ -908,7 +872,19 @@ class CompressReportSection:
         inferred_section_type = (
             normalize_section_type(section_type) if section_type else infer_section_type_from_path(path)
         )
-        inferred_title = section_title or path.stem.replace("_", " ").title()
+        # The section title gets shown to the LLM as 'Section title: …'.
+        # Falling back to a path-derived title would produce nonsense for
+        # non-section files (e.g. 'compress_premortem_raw.json' becomes
+        # 'Compress Premortem Raw Json'). If no title is supplied and the
+        # stem is a recognised section, derive from the stem; otherwise
+        # fall back to the section type name, which always at least
+        # describes the intent of the call.
+        if section_title is not None:
+            inferred_title = section_title
+        elif inferred_section_type != ReportSectionTypeEnum.UNKNOWN.value:
+            inferred_title = inferred_section_type.replace("_", " ").title()
+        else:
+            inferred_title = "Compressed Section"
         return cls.execute(
             llm=llm,
             section_markdown=markdown,
@@ -962,30 +938,8 @@ class CompressReportSection:
 
 
 if __name__ == "__main__":
-    import os
-    from worker_plan_internal.llm_factory import get_llm
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    raise SystemExit(
+        "compress_report_section.py is a library module. To run the "
+        "compression pipeline, use:\n\n"
+        "    python -m worker_plan_internal.parameter_extraction.run_compress_full\n"
     )
-
-    sample_path = Path(
-        os.environ.get(
-            "COMPRESS_REPORT_SECTION_SAMPLE",
-            "/Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop/premortem.md",
-        )
-    )
-    if not sample_path.exists():
-        raise SystemExit(
-            f"Sample report not found at {sample_path}. "
-            "Set COMPRESS_REPORT_SECTION_SAMPLE to a real path."
-        )
-
-    llm = get_llm("ollama-llama3.1")
-    result = CompressReportSection.execute_from_file(llm=llm, file_path=sample_path)
-
-    print("\n--- JSON ---")
-    print(json.dumps(result.response, indent=2))
-    print("\n--- Markdown ---")
-    print(result.markdown)

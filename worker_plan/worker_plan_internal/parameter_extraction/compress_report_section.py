@@ -277,10 +277,8 @@ General output discipline:
   does not state a number, that variable belongs in
   missing_data_to_estimate — not in numeric_values, not as a hard gate,
   and not as a quantified risk
-- this is a multi-turn conversation: on each turn you produce ONE field of
-  the digest. Earlier turns are visible above as ASSISTANT JSON. Do NOT
-  duplicate items already produced for a previous bucket — each bucket
-  captures a distinct kind of signal
+- do not duplicate items you have already produced in another bucket; each
+  bucket captures a distinct kind of signal
 
 CRITICAL response format rules:
 - Your entire response must be exactly one JSON object matching the

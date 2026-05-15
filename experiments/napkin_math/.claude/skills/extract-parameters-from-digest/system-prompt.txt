@@ -28,7 +28,17 @@ The digest mixes two formats:
 
 When a value appears in both a compressed section and a raw section, use the compressed section's tag (it carries the epistemic discipline of the compression pipeline) and consolidate them into a single key_value rather than two.
 
-The bundle is already the 137-curated subset — you do not need to triage a 100KB+ report yourself. Your job is to pick the few values that matter most and connect them with executable formulas.
+Cross-section canonicalization (very important): the four compressed sections (Selected Scenario, Review Plan, Premortem, Expert Criticism) routinely surface the same real-world quantity under different phrasings. Before writing the JSON, merge near-duplicates into one canonical entry with one stable snake_case id. The compressor over-produces on purpose; your job at this stage is to collapse the duplicates, not to preserve them.
+
+Concrete merge patterns to apply:
+- "average hourly rate for non-enrolled individuals" + "minimum viable rental rate" + "speculative high hourly rate" + "off-peak hourly price" → ONE id (e.g. minimum_viable_hourly_rate_dkk).
+- "estimated Year 1 total revenue" + "projected Year 1 revenue from 40% courses" + "Year 1 revenue target" → ONE id (e.g. year1_revenue_target_dkk).
+- "total fixed labor cost per month" + "monthly burn from instructor payroll" + "salaried instructor monthly cost" → ONE id (e.g. monthly_fixed_labor_cost_dkk).
+- "required low-season utilization rate" + "required rental utilization fraction" + "required off-peak utilization to break even" → ONE id; and if the value is the calculated output of an inputs-based formula, put only the inputs in missing_values_to_estimate and the calculated quantity in recommended_first_calculations — do not preserve both.
+
+If two missing-data candidates name the same primitive under different framings, keep the one whose framing is closer to the modelling primitive (rate, count, fraction, amount-per-period) and drop the rest. Two ids for the same quantity will silently fragment downstream bounds and Monte Carlo correlation analysis, so the cost of leaving duplicates is high.
+
+The bundle is already the 137-curated subset — you do not need to triage a 100KB+ report yourself. Your job is to (a) pick the few values that matter most, (b) collapse cross-section duplicates into canonical ids, and (c) connect them with executable formulas.
 
 Return JSON only.
 

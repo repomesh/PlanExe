@@ -53,14 +53,22 @@ For plain PlanExe HTML/text reports, use `extract-parameters` instead.
    HTML report. Compressed sections (Selected Scenario, Review Plan,
    Premortem, Expert Criticism) carry inline tags; raw sections (Executive
    Summary, Project Plan, Assumptions, Data Collection) do not.
-4. **Produce the JSON** following the schema at the end of `system-prompt.txt`.
+4. **Canonicalize across sections.** The four compressed sections often
+   surface the same real-world quantity under different phrasings
+   ("minimum viable rental rate" / "off-peak hourly price" / "speculative
+   high hourly rate" all name one rate). Merge near-duplicates into a
+   single canonical snake_case id before writing the JSON. Prefer
+   framings closest to a modelling primitive (rate, count, fraction,
+   amount-per-period). Two ids for the same quantity will silently
+   fragment downstream bounds and Monte Carlo correlations.
+5. **Produce the JSON** following the schema at the end of `system-prompt.txt`.
    For compressed sections, map the inline `source_status` tags to the JSON
    `value_type` field: `[explicit]` → `explicit`, `[derived]` → `derived`,
    `[inferred]` → `inferred`, `[missing]` items belong in
    `missing_values_to_estimate`, `[stress_test]` items are
    scenario-stress inputs (not baseline `key_values`). For raw sections,
    apply general parameter-extraction triage.
-5. **Output destination.** Default: print JSON to the chat. If the user
+6. **Output destination.** Default: print JSON to the chat. If the user
    asks for a file, write to the path they specify. Default suggestion:
    `<digest-basename>.parameters.json` next to the digest.
 
@@ -75,6 +83,10 @@ For plain PlanExe HTML/text reports, use `extract-parameters` instead.
 - **For raw sections** (Executive Summary, Project Plan, Assumptions,
   Data Collection), apply general triage: prefer numeric anchors,
   deadlines, denominators, and explicit gate criteria.
+- **Canonicalize across sections.** The compressor over-produces on
+  purpose; collapsing cross-section near-duplicates into one canonical
+  id is your job at this stage, not its job. Never preserve two ids for
+  the same real-world quantity.
 - **Percentages as fractions** between 0 and 1 with `unit: "fraction"`.
 - **No invented ids in `formula_hint`** — every variable must be declared
   in `key_values`, `missing_values_to_estimate`, or the object's own

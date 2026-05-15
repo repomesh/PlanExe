@@ -354,8 +354,6 @@ class MissingDataOnly(BaseModel):
 
 
 SECTION_SUMMARY_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the section_summary.
-
 Write one to three sentences in plain English describing what this section
 contributes to Monte Carlo / napkin-math modelling. No markdown, no bullet
 points, no lists. Do not enumerate numbers or assumptions — those are
@@ -420,8 +418,6 @@ budget.
 
 
 NUMERIC_VALUES_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the numeric_values list.
-
 Output exactly one JSON OBJECT, not a bare array. The top-level shape is:
 {"numeric_values":[ ...one or more scored items... ]}
 Do NOT emit any other top-level key (no section_summary, no
@@ -457,8 +453,6 @@ by your judgement of importance for modelling. Fewer items is fine.
 
 
 LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the load_bearing_assumptions list.
-
 Output exactly one JSON OBJECT with key 'load_bearing_assumptions' whose
 value is a list of scored items. Do NOT emit any other top-level key. Do
 NOT emit a bare top-level array.
@@ -475,8 +469,6 @@ At most 8 items.
 
 
 GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the gates_and_thresholds list.
-
 Output exactly one JSON OBJECT with key 'gates_and_thresholds' whose value
 is a list of scored items. Do NOT emit any other top-level key. Do NOT
 emit a bare top-level array.
@@ -511,8 +503,6 @@ At most 8 items.
 
 
 RISKS_AND_SHOCKS_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the risks_and_shocks list.
-
 Output exactly one JSON OBJECT with key 'risks_and_shocks' whose value is
 a list of scored items. Do NOT emit any other top-level key. Do NOT emit
 a bare top-level array.
@@ -538,8 +528,6 @@ At most 8 items.
 
 
 MISSING_DATA_BUCKET_PROMPT = """
-Your job for THIS call: produce ONLY the missing_data_to_estimate list.
-
 Output exactly one JSON OBJECT with key 'missing_data_to_estimate' whose
 value is a list of scored items. Do NOT emit any other top-level key. Do
 NOT emit a bare top-level array.

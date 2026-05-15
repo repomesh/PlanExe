@@ -406,20 +406,20 @@ Scoring rules (identical across buckets):
   revenue under a failure mode) — never a plan fact. Premortem shock
   magnitudes are 'stress_test' by default. 'missing' = a primitive input
   the plan needs but the source does not supply — used for every item in
-  the missing_data_to_estimate bucket; the pipeline will overwrite the
-  status to 'missing' there regardless of what you set, so do not try to
-  game it. When in doubt prefer 'inferred' over 'explicit', and
-  'stress_test' over 'inferred' for shock magnitudes.
+  the missing_data_to_estimate bucket; the status for items in that bucket
+  will be overwritten to 'missing' regardless of what you set. When in
+  doubt prefer 'inferred' over 'explicit', and 'stress_test' over
+  'inferred' for shock magnitudes.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section that supports this item. If the item is not in the section,
   write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to
   'inferred'.
 
 Cast a wide net — surface borderline candidates with honest low scores
-rather than self-censoring; the Python pipeline drops the lowest-scoring
-items after sorting, so the cost of including a weak candidate is small
-and the cost of missing a real one is large. But never *invent* a specific
-value where the source is silent — mark such guesses 'inferred' with
+rather than self-censoring; the lowest-scoring items will be dropped
+after ranking, so the cost of including a weak candidate is small and the
+cost of missing a real one is large. But never *invent* a specific value
+where the source is silent — mark such guesses 'inferred' with
 source_evidence 1 if you include them at all.
 
 Keep each source_quote to ≤8 words so the response stays within the output
@@ -566,13 +566,14 @@ naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
 Note: by definition these items are absent from the source. Always set
-source_status to 'missing' for items in this bucket (the pipeline will
-overwrite it to 'missing' anyway, but setting it correctly upfront keeps
-the assistant turn the model sees in the chat history honest). When the
-source has no value, source_quote is 'NOT IN SOURCE' and source_evidence
-is 1. When the section EXPLICITLY says 'we need to estimate X', you may
-quote that phrase and raise source_evidence accordingly — but source_status
-still stays 'missing' because the value itself is what's absent.
+source_status to 'missing' for items in this bucket (the status for items
+in this bucket is overwritten to 'missing' regardless, but setting it
+correctly upfront keeps the assistant turn the model sees in the chat
+history honest). When the source has no value, source_quote is 'NOT IN
+SOURCE' and source_evidence is 1. When the section EXPLICITLY says 'we
+need to estimate X', you may quote that phrase and raise source_evidence
+accordingly — but source_status still stays 'missing' because the value
+itself is what's absent.
 
 At most 6 items.
 """.strip() + "\n\n" + SCORING_DISCIPLINE

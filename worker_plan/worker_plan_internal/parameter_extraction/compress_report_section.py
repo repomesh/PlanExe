@@ -279,40 +279,40 @@ CRITICAL response format rules:
 # ---------------------------------------------------------------------------
 
 
-_BUCKET_FIELD_DESC = "See the bucket prompt in the user message for the expected content."
+BUCKET_FIELD_DESC = "See the bucket prompt in the user message for the expected content."
 
 
 class SectionSummaryOnly(BaseModel):
-    section_summary: str = Field(description=_BUCKET_FIELD_DESC)
+    section_summary: str = Field(description=BUCKET_FIELD_DESC)
 
 
 class NumericValuesOnly(BaseModel):
     numeric_values: list[ScoredItem] = Field(
-        default_factory=list, description=_BUCKET_FIELD_DESC,
+        default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
 class LoadBearingAssumptionsOnly(BaseModel):
     load_bearing_assumptions: list[ScoredItem] = Field(
-        default_factory=list, description=_BUCKET_FIELD_DESC,
+        default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
 class GatesAndThresholdsOnly(BaseModel):
     gates_and_thresholds: list[ScoredItem] = Field(
-        default_factory=list, description=_BUCKET_FIELD_DESC,
+        default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
 class RisksAndShocksOnly(BaseModel):
     risks_and_shocks: list[ScoredItem] = Field(
-        default_factory=list, description=_BUCKET_FIELD_DESC,
+        default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
 class MissingDataOnly(BaseModel):
     missing_data_to_estimate: list[ScoredItem] = Field(
-        default_factory=list, description=_BUCKET_FIELD_DESC,
+        default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 

@@ -74,7 +74,7 @@ class CompressJob:
 _SELECTED_SCENARIO_JOB = CompressJob(
     name="selected_scenario",
     section_type=ReportSectionTypeEnum.SELECTED_SCENARIO,
-    title="Selected Scenario (full Luigi input + output)",
+    title="Selected Scenario",
     files=[
         ("plan.txt", "plan.txt", False, None),
         ("purpose.md", "identify_purpose.md", False, None),
@@ -89,7 +89,7 @@ _SELECTED_SCENARIO_JOB = CompressJob(
 _REVIEW_PLAN_JOB = CompressJob(
     name="review_plan",
     section_type=ReportSectionTypeEnum.REVIEW_PLAN,
-    title="Review Plan (full Luigi input + output)",
+    title="Review Plan",
     files=[
         ("strategic_decisions.md", "strategic_decisions.md", False, None),
         ("scenarios.md", "scenarios.md", False, None),
@@ -110,7 +110,7 @@ _REVIEW_PLAN_JOB = CompressJob(
 _PREMORTEM_JOB = CompressJob(
     name="premortem",
     section_type=ReportSectionTypeEnum.PREMORTEM,
-    title="Premortem (full Luigi input + output)",
+    title="Premortem",
     files=[
         ("strategic_decisions.md", "strategic_decisions.md", False, None),
         ("scenarios.md", "scenarios.md", False, None),
@@ -135,7 +135,7 @@ _PREMORTEM_JOB = CompressJob(
 _EXPERT_CRITICISM_JOB = CompressJob(
     name="expert_criticism",
     section_type=ReportSectionTypeEnum.EXPERT_CRITICISM,
-    title="Expert Criticism (full Luigi input + output)",
+    title="Expert Criticism",
     files=[
         ("initial-plan.txt", "plan.txt", False, None),
         ("strategic_decisions.md", "strategic_decisions.md", False, None),

@@ -12,3 +12,8 @@ __pycache__/
 
 # Git worktrees
 .worktrees/
+
+# compress_report_section scratch dirs (output/v1, output/v2, ...).
+# The run_compress_full driver writes here by default; the contents are
+# experiment artifacts that are not checked in.
+output/

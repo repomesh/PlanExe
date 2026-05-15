@@ -2,7 +2,7 @@
 Check connectivity to OpenRouter. No external dependencies.
 
 PROMPT> export OPENROUTER_API_KEY=sk-or-v1-your-openrouter-api-key-here
-PROMPT> python experiments/run_ping_simple.py
+PROMPT> python experiments/standalone_experiments/run_ping_simple.py
 """
 import requests
 import json

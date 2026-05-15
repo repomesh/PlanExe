@@ -19,7 +19,12 @@ from llama_index.core.llms import ChatMessage
 
 llm = get_llm("deepseek-chat")
 
-path_csv = os.path.join(os.path.dirname(__file__), '..', 'wbs_table_for_cost_estimation', 'test_data', 'wbs_table.csv')
+path_csv = os.path.join(
+    os.path.dirname(__file__),
+    '..', '..',
+    'worker_plan', 'worker_plan_internal',
+    'wbs_table_for_cost_estimation', 'test_data', 'wbs_table.csv',
+)
 with open(path_csv, 'r') as f:
     data_csv = f.read()
 

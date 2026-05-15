@@ -1,5 +1,5 @@
 """
-python experiments/run_extract_one_user.py
+python experiments/standalone_experiments/run_extract_one_user.py
 """
 import json
 from pydantic import BaseModel

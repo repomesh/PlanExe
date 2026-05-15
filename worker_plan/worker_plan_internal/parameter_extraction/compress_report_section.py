@@ -4,19 +4,10 @@ Premortem, Expert Criticism) into a small Markdown digest that preserves the
 signal a downstream parameter-extraction LLM needs for napkin math and Monte
 Carlo modelling.
 
-This is an alternative to ``distill_report_section.py``. The two files solve
-the same task; they differ in schema design and target LLM compatibility.
-
 Schema design: split, single-field calls
 ----------------------------------------
-The sibling ``distill_report_section.py`` returns a deeply nested object: 8
-parallel lists, 8 enums, and a cross-list ``depends_on`` ID graph the LLM
-must keep coherent. Frontier models handle that. Smaller, cheaper, or older
-models often leave fields empty, pick the wrong enum, invent IDs, or echo
-the schema.
-
-This module takes the opposite approach. Each compression call asks the LLM
-for ONE field. Six calls per section produce one ``CompressedReportSection``:
+Each compression call asks the LLM for ONE field. Six calls per section
+produce one ``CompressedReportSection``:
 
 1. section_summary             — plain-English purpose of the section
 2. numeric_values              — labelled, role-tagged numbers

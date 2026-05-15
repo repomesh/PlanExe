@@ -1,5 +1,5 @@
 """
-Compress one verbose PlanExe report section (Strategic Decisions, Review Plan,
+Compress one verbose PlanExe report section (Selected Scenario, Review Plan,
 Premortem, Expert Criticism) into a small Markdown digest that preserves the
 signal a downstream parameter-extraction LLM needs for napkin math and Monte
 Carlo modelling.
@@ -23,8 +23,8 @@ failure: no field-order confusion across buckets, no truncation of long
 combined responses, no need for the model to balance attention across six
 different extraction jobs in one shot.
 
-The cost is 6 LLM calls per section instead of 1. For the small models this
-module targets (Llama 3.1 8B etc.) those calls are cheap and fast.
+There are 4 sections getting compressed, with 6 LLM calls per section. 
+In total 24 (4 x 6) LLM calls.
 
 PROMPT> python -m worker_plan_internal.parameter_extraction.compress_report_section
 """

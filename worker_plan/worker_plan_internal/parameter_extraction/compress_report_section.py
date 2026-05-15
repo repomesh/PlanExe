@@ -264,7 +264,7 @@ General output discipline:
   use what the source actually says
 - do not add commentary, headings, or markdown formatting inside any field
 - if the section genuinely contains nothing for this call's bucket, return
-  an empty list (or empty string for the summary)
+  an empty list
 - only include facts and numbers that appear in the section text between
   [START_SECTION_MARKDOWN] and [END_SECTION_MARKDOWN]; do NOT invent
   breakdowns, sub-categories, or specific values that are not in the source
@@ -291,8 +291,8 @@ CRITICAL response format rules:
 - Do NOT append any prose, explanation, or commentary after the closing '}'.
 - Do NOT emit a second JSON object — there must be exactly one.
 - Do NOT echo the JSON schema. Produce a response that contains the actual
-  VALUES, not the schema structure. Wrong: {"properties":{"section_summary":
-  {"type":"string"}}}. Right: {"section_summary":"<your actual answer>"}.
+  VALUES, not the schema structure. Wrong: {"properties":{"<field>":
+  {"type":"string"}}}. Right: {"<field>":"<your actual answer>"}.
   Wrong: {"type":"array","items":{...}}. Right: the field's value directly.
 """.strip()
 

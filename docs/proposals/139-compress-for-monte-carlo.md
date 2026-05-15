@@ -85,7 +85,10 @@ not lost — only the standalone compression path is removed.
 
 ## The per-item schema
 
-Every entry in every list bucket is a `ScoredItem`:
+The LLM produces `ScoredItem` for each entry in each list bucket. The
+pipeline then attaches a code-computed `quote_verified` flag and exposes
+the result as `PublicScoredItem`. The public list buckets on
+`CompressedReportSection` contain `PublicScoredItem` values.
 
 | Field | Set by | Purpose |
 |---|---|---|
@@ -93,19 +96,26 @@ Every entry in every list bucket is a `ScoredItem`:
 | `line_original` | LLM | Same content in the source's primary language (identical to `line_english` for English-only sources; preserves native technical and legal terminology for multilingual sources) |
 | `modelling_relevance` | LLM | 1–5 Likert: how useful for Monte Carlo / napkin-math modelling |
 | `source_evidence` | LLM | 1–5 Likert: how directly the source supports this exact line |
-| `source_status` | LLM (with a code-side override on missing_data) | epistemic tag |
+| `source_status` | LLM (with a code-side override on `missing_data_to_estimate`) | Epistemic tag — see taxonomy below |
 | `source_quote` | LLM | ≤12-word fragment from the source backing the line |
-| `quote_verified` | Code | `True` if `source_quote` appears in the section markdown after normalisation |
+| `quote_verified` | Code | `True` if `source_quote` appears in the section markdown after normalisation. Lives on `PublicScoredItem`, not on `ScoredItem` — the LLM never sees this field. |
 
 ### Source-status taxonomy
 
 | Value | Meaning |
 |---|---|
-| `explicit` | Literally stated in the source |
-| `derived` | Computed from explicit source values |
-| `inferred` | A plausible assumption the model added that the source does not state |
-| `stress_test` | A downside scenario magnitude (cost of failure, duration of disruption) — never a plan fact. Premortem shock magnitudes default to this. |
+| `explicit` | A plan commitment the source states directly: a committed budget, an allocated reserve, a declared deadline, a contracted rate, a committed staff count. Reserved for items the plan is *binding itself to*. |
+| `derived` | A value the plan implies but does not state directly, computable from one or more `explicit` values. |
+| `inferred` | Covers two cases: (a) a plausible assumption the model added that the source does not state at all, and (b) an item the source *does* state but only as an assumption, aspiration, expected behaviour, or non-binding claim that the simulation should stress-test. "Local users will accept the high rental rate" is `inferred`, even when the source contains that exact sentence. |
+| `stress_test` | A downside scenario magnitude (cost of failure, duration of disruption, lost revenue under a what-if). Never a plan fact. Premortem shock magnitudes default to this. |
 | `missing` | A primitive input the plan needs but the source does not supply. Code-forced on every item in `missing_data_to_estimate`. |
+
+The disambiguation order the LLM applies when picking a tag: stress_test
+beats explicit when the item quantifies a failure outcome (even if the
+source states the number); explicit requires that the plan is binding
+itself, not merely mentioning the value; inferred covers both
+model-added guesses and source-stated non-binding claims; missing is
+forced on the missing-data bucket.
 
 ## Robustness mechanisms
 
@@ -195,45 +205,83 @@ output directories use `COMPRESS_FULL_SAMPLE_DIR` and
 ## Status
 
 The current bundle (`selected_scenario` + `review_plan` + `premortem` +
-`expert_criticism`) is good enough for serious pipeline testing.
+`expert_criticism`) is graded usable for serious pipeline testing.
+Recent external review (ChatGPT) put all four files at **B+** overall:
+
+- Selected scenario: no rejected-alternative leakage; staffing-model
+  description is unambiguous; missing-data items are primitive
+  (electricity DKK/kWh, monthly shipping cost, FTE salary burden, etc.).
+- Review plan: clean executable gates with deadlines and numeric
+  thresholds; consistent `if/then` form; baseline anchors clearly
+  separated from `stress_test` shocks.
+- Premortem: stress magnitudes consistently tagged `stress_test`
+  (reliably 6/6 on the risks bucket in repeated runs after the
+  three-iteration robustness fix to the source_status definitions);
+  baseline plan facts kept separate.
+- Expert criticism: useful quantified estimates with the right epistemic
+  tags; mixed-language fragments eliminated.
 
 Per-section runtime is ~12–20 s for the six chained LLM calls. Each
-`numeric_values` call typically produces 6–8 candidates of which 5–8 pass
-substring verification; the top 6 reach the public list. Selected
-scenario contains no rejected-alternative leakage. Premortem shock
-magnitudes carry `stress_test` tags. Missing-data items carry `missing`
-tags. Gates use the `If <X>, then <Y>` form consistently. The Danish/
-English mishmash that earlier compression attempts produced is
-eliminated.
+`numeric_values` call typically produces 6–8 candidates, of which 5–8
+pass substring verification; the top 6 reach the public list. Gates use
+the `If <condition>, then <consequence>` form consistently. The
+Danish/English hybrid sentences that earlier attempts produced are gone.
 
 ### Known remaining issues
 
-- **Occasional over-confident tagging.** The LLM sometimes tags a
-  borderline value as `explicit` when `inferred` or `stress_test` would be
-  more honest. The score-pair (`r=N e=N`) and the code-side
-  `quote_verified` flag partially de-risk this, but a strict downstream
-  consumer should weight unverified items lower regardless of the LLM's
+- **`explicit` is still occasionally over-applied to load-bearing
+  assumptions.** The `inferred` definition was broadened to cover
+  source-stated non-binding claims (assumptions, aspirations, expected
+  user behaviour), which reduced the over-spill substantially (total
+  `inferred` count across the four files roughly 5× in side-by-side
+  runs), but the LLM does not always catch every case. Items like
+  "the chosen staffing model requires instructor absence not causing
+  session cancellations" still sometimes land in `explicit` even
+  though they are claims the simulation should stress-test. The
+  external reviewer's suggested split — `explicit_numeric` vs
+  `load_bearing_assumption` — would address this completely, at the
+  cost of one more enum value.
+- **Trade-off statements occasionally surface as gates.** A line like
+  `"If Katuaq partnership is formalized, then administrative overhead
+  increases"` reads as a trade-off, not an executable pass/fail gate.
+  These belong in `missing_data_to_estimate` (the missing quantified
+  overhead) rather than `gates_and_thresholds`.
+- **Per-run quality variance.** Occasional unit-mismatch phrasings,
+  one-off hallucinated artifacts (e.g. "material buffer lease
+  agreement"), and non-sequitur gate consequences appear sporadically.
+  These are per-LLM-run noise rather than systemic prompt failures.
+  Quote-substring verification catches a fraction of them via the
+  `quote: unverified` tag, but a strict downstream consumer should
+  always weight unverified items lower regardless of the LLM's
   self-rated `source_evidence`.
-- **Per-run quality variance.** Occasional unit-mismatch phrasings
-  ("revenue falls below hourly rate"), one-off hallucinated artifacts
-  ("material buffer lease agreement"), and non-sequitur gate consequences
-  appear sporadically. These are per-LLM-run noise rather than systemic
-  prompt failures; they are not reliably reproducible across runs.
-- **Currency-unit consistency.** A "dollar amount" phrasing occasionally
-  slips into a DKK plan. Low downstream impact but worth catching.
+- **Missing-data items occasionally drift into derived quantities.**
+  An item like "Required percentage of operating contingency that must
+  be consumed by labor reclassification" is a derived ratio, not a
+  primitive. The prompt asks for primitives but the model still
+  occasionally emits derived ones.
+- **Currency-unit consistency.** "Dollar amount" phrasing still
+  occasionally slips into a DKK plan.
 
 ### Future work, ordered by probable value
 
-- Tighten the `inferred` vs `stress_test` distinction outside the
-  premortem bucket — expert-criticism risks especially. ChatGPT's
-  suggestion of a separate `expert_estimate` status would slot in here.
+- Split `explicit` into `explicit_numeric` (binding numeric commitments)
+  and `load_bearing_assumption` (source-stated non-binding claims to
+  stress-test). This is the cleanest fix for the residual
+  over-confident-explicit pattern; the cost is one more value for the
+  LLM to disambiguate across.
+- Sharpen the `gates_and_thresholds` prompt to reject lines that read as
+  qualitative trade-offs without a pass/fail edge, and route the missing
+  threshold into `missing_data_to_estimate`.
 - Add a currency-consistency rule keyed off the source's dominant
-  currency.
+  currency to catch the "dollar amount in a DKK plan" pattern.
 - Extend the scoring/tagging pattern to additional Luigi outputs
   (`data_collection`, `consolidate_assumptions`) if downstream extraction
   needs them as inputs.
 - Consider a dedup / merge step for risks and assumptions when a section
   paraphrases the same shock multiple times.
+- Optionally: a separate `expert_estimate` source_status for
+  critic-proposed quantified impacts, distinguishing them from
+  premortem-style `stress_test` numbers.
 
 ## Insights from iterating with reviewer feedback
 

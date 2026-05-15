@@ -303,70 +303,49 @@ def test_convert_to_markdown_skips_empty_buckets() -> None:
     assert "## Missing data to estimate" not in markdown
 
 
-def test_protected_term_bonus_matches_whole_words_only() -> None:
-    """The protected-term boost must be word-boundary aware so common
-    English words that happen to contain a protected substring (e.g.
-    'demonstrate' contains 'rate') do not trigger the bonus."""
-    from worker_plan_internal.parameter_extraction.compress_report_section import (
-        protected_term_bonus,
-    )
-
-    assert protected_term_bonus("The team will demonstrate the prototype") == 0
-    assert protected_term_bonus("Hourly rate caps fixed cost") > 0
-    # Two distinct matches ("hourly", "rate") plus phrase "fixed cost" — 3
-    # protected matches, each worth 2.0, capped at 4.0.
-    assert protected_term_bonus("Hourly rate caps fixed cost") == 4.0
-
-
 def test_numeric_density_bonus_counts_numeric_tokens() -> None:
+    """Numeric density is the only content-bonus the scorer applies and it
+    must be language- and domain-neutral. Digits are digits regardless of
+    whether the surrounding text is English, Danish, French, or domain-
+    specific (commercial, public-health, renovation, hobby)."""
     from worker_plan_internal.parameter_extraction.compress_report_section import (
         numeric_density_bonus,
     )
 
     assert numeric_density_bonus("No numbers in this line") == 0
-    # One token: "165"
     assert numeric_density_bonus("Rental rate is 165 per hour") == 1.0
     # Three tokens: "2,000,000", "0.15", "300,000"
     assert numeric_density_bonus("Budget 2,000,000 at 0.15 leaves 300,000") == 3.0
     # Cap at 3.0 even with more numbers
     assert numeric_density_bonus("1 2 3 4 5 6 7 8") == 3.0
+    # Same scorer regardless of input language. The Danish phrase below
+    # has two numeric tokens ("2.000.000" and "15"), so the bonus is 2.0
+    # — no English keyword is required for the count to work.
+    assert numeric_density_bonus("Budgettet er 2.000.000 DKK med 15 procent reserve") == 2.0
 
 
-def test_formula_usefulness_bonus_rewards_formula_cues() -> None:
-    from worker_plan_internal.parameter_extraction.compress_report_section import (
-        formula_usefulness_bonus,
-    )
-
-    assert formula_usefulness_bonus("Plain narrative with no cues") == 0
-    # "ratio", " per ", "%" — 3 cues, capped at 3.0
-    assert formula_usefulness_bonus("Conversion ratio of 12% per attendee") == 3.0
-    # "denominator", "fraction" — 2 cues
-    assert formula_usefulness_bonus("Need the denominator fraction") == 2.0
-
-
-def test_composite_score_prefers_modelling_primitive_over_narrative() -> None:
+def test_composite_score_prefers_quantified_over_prose() -> None:
     """Two items with identical LLM self-ratings and quote-verification
-    status should still be ordered by content quality: the one carrying
-    protected modelling terms, numeric tokens, and formula cues outranks
-    the bare-narrative one."""
+    status should be ordered by quantification: numeric content outranks
+    bare prose. No language- or domain-specific keyword check involved."""
     from worker_plan_internal.parameter_extraction.compress_report_section import (
         ScoredItem,
         annotate_scored_items,
     )
 
     section = (
-        "Budget total 2,000,000 DKK with 15% contingency. "
+        "Total commitment 2,000,000 with 15% buffer. "
         "Some background prose about community values."
     )
-    primitive = ScoredItem(
-        line_english="Contingency reserve fraction is 15% of total budget",
-        line_original="Contingency reserve fraction is 15% of total budget",
+    quantified = ScoredItem(
+        line_english="Reserve buffer is 15% of the 2,000,000 total",
+        line_original="Reserve buffer is 15% of the 2,000,000 total",
         modelling_relevance=3,
         source_evidence=3,
         source_status="explicit",
-        source_quote="15% contingency",
+        source_quote="15% buffer",
     )
-    narrative = ScoredItem(
+    prose = ScoredItem(
         line_english="The plan emphasizes community-focused values for residents",
         line_original="The plan emphasizes community-focused values for residents",
         modelling_relevance=3,
@@ -375,9 +354,9 @@ def test_composite_score_prefers_modelling_primitive_over_narrative() -> None:
         source_quote="community values",
     )
     kept, _ = annotate_scored_items(
-        [narrative, primitive], section_markdown=section, field_name="numeric_values"
+        [prose, quantified], section_markdown=section, field_name="numeric_values"
     )
-    # Same base score (3*3=9) and both quote-verified. The primitive item
-    # wins on the protected-term / numeric / formula-cue bonuses.
-    assert kept[0].line_english.startswith("Contingency reserve fraction")
+    # Same base (3*3=9) and both verified. The quantified item wins on the
+    # numeric-density bonus alone.
+    assert kept[0].line_english.startswith("Reserve buffer is 15%")
     assert kept[1].line_english.startswith("The plan emphasizes community")

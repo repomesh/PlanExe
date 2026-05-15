@@ -584,53 +584,27 @@ PER_BUCKET_MAX_ATTEMPTS = 3
 # Public list buckets are capped to the top-N items after the LLM-side
 # cap, sorted by a composite score combining the LLM's self-rated
 # source_evidence * modelling_relevance, a code-side quote-verification
-# bonus, and three content bonuses that boost items more likely to be
-# useful primitives for downstream Monte Carlo modelling:
-# protected-term, numeric-density, and formula-cue. The LLM is asked to
-# over-produce so the Python sort can drop the weakest candidates;
-# everything stays in metadata for inspection.
+# bonus, and a numeric-density bonus. The LLM is asked to over-produce so
+# the Python sort can drop the weakest candidates; everything stays in
+# metadata for inspection.
 MAX_ITEMS_PER_BUCKET = 6
 
-# Words and phrases that, when present in a candidate's line, signal it
-# is the kind of value Monte Carlo / napkin-math modelling depends on
-# (budgets, rates, capacities, denominators, fixed costs). Matched on
-# whole-word boundaries so "rate" does not accidentally match
-# "demonstrate". Domain-agnostic: a plan that does not use any of these
-# concepts simply gets no protected-term boost.
-PROTECTED_MODELLING_TERMS: frozenset[str] = frozenset({
-    "budget", "contingency", "conversion", "capacity", "deadline",
-    "fixed cost", "variable cost", "hourly", "rate", "utilization",
-    "break-even", "labor", "staff", "shock", "shortfall", "revenue",
-})
-
-PROTECTED_TERM_PATTERN: re.Pattern[str] = re.compile(
-    r"\b(?:" + "|".join(re.escape(t) for t in PROTECTED_MODELLING_TERMS) + r")\b",
-    re.IGNORECASE,
-)
-
-# Substring cues that indicate a line is likely to participate in a
-# downstream formula (denominator, ratio, threshold, etc.). Plain
-# substring match — these tokens rarely produce false positives, and the
-# bonus is small enough that occasional overshoot is acceptable.
-FORMULA_USEFULNESS_CUES: tuple[str, ...] = (
-    "ratio", "fraction", "share", " per ", "%",
-    "threshold", "denominator", "coverage", "margin",
-)
-
+# Digit-led tokens, used to count numeric content in a candidate line.
+# Numbers are universal across languages and across plan domains
+# (commercial budgets, renovation square-metre counts, public-health
+# coverage rates, …), so a numeric-density bonus does not bias the
+# ranking toward any one input language or plan type. Matches things
+# like ``2,000,000``, ``0.15``, ``2026-09-15``.
 NUMBER_PATTERN: re.Pattern[str] = re.compile(r"\d[\d,.]*")
 
-# Bonus weights for the composite score. The verified-quote bonus (10) is
-# the largest because code-verified provenance is the strongest single
-# trust signal. The content bonuses are smaller and capped so that a few
-# protected terms plus numeric density cannot overwhelm a well-evidenced
-# item.
+# Bonus weights for the composite score. The verified-quote bonus (10)
+# is the largest because code-verified provenance is the strongest single
+# trust signal. The numeric-density bonus is smaller and capped so a
+# heavily-quantified item cannot overwhelm a well-evidenced qualitative
+# one.
 VERIFIED_QUOTE_BONUS: int = 10
-PROTECTED_TERM_BONUS_PER_MATCH: float = 2.0
-PROTECTED_TERM_BONUS_CAP: float = 4.0
 NUMERIC_DENSITY_BONUS_PER_TOKEN: float = 1.0
 NUMERIC_DENSITY_BONUS_CAP: float = 3.0
-FORMULA_USEFULNESS_BONUS_PER_CUE: float = 1.0
-FORMULA_USEFULNESS_BONUS_CAP: float = 3.0
 
 # Buckets whose schema is list[ScoredItem] (i.e. everything except
 # section_summary). The order matches BUCKET_SPECS below.
@@ -675,33 +649,14 @@ def quote_is_in_source(quote: str, section_markdown: str) -> bool:
     return normalise_for_quote_match(quote) in normalise_for_quote_match(section_markdown)
 
 
-def protected_term_bonus(text: str) -> float:
-    """Bonus for lines that mention modelling-primitive concepts (budgets,
-    rates, capacities, denominators, fixed costs). Caps so a line with
-    many matches cannot outweigh a well-evidenced item.
-    """
-    matches = len(PROTECTED_TERM_PATTERN.findall(text))
-    return min(matches * PROTECTED_TERM_BONUS_PER_MATCH, PROTECTED_TERM_BONUS_CAP)
-
-
 def numeric_density_bonus(text: str) -> float:
     """Bonus for lines carrying numeric tokens (currency amounts, dates,
-    percentages, ratios). A bare-prose claim with no numbers is less
-    useful for napkin math than one with explicit quantities.
+    percentages, square metres). A bare-prose claim with no numbers is
+    less useful for napkin math than one with explicit quantities.
+    Language- and domain-neutral: digits are digits in any plan.
     """
     count = len(NUMBER_PATTERN.findall(text))
     return min(count * NUMERIC_DENSITY_BONUS_PER_TOKEN, NUMERIC_DENSITY_BONUS_CAP)
-
-
-def formula_usefulness_bonus(text: str) -> float:
-    """Bonus for lines that read like a formula input or output
-    (denominators, ratios, thresholds, coverage). These are the items
-    the downstream extractor most often needs to wire executable
-    formulas.
-    """
-    lower = text.lower()
-    count = sum(1 for cue in FORMULA_USEFULNESS_CUES if cue in lower)
-    return min(count * FORMULA_USEFULNESS_BONUS_PER_CUE, FORMULA_USEFULNESS_BONUS_CAP)
 
 
 def composite_score(
@@ -712,21 +667,17 @@ def composite_score(
 
     base = source_evidence * modelling_relevance  (range 1..25)
     + verified-quote bonus                        (0 or 10)
-    + protected-term bonus                        (0..4)
     + numeric-density bonus                       (0..3)
-    + formula-usefulness bonus                    (0..3)
 
     Items with a code-verified quote always outrank otherwise-equivalent
-    unverified items. The three content bonuses then sort items at the
-    same evidence level toward those carrying primitive modelling inputs.
+    unverified items. The numeric-density bonus then breaks ties toward
+    quantified content. Both signals are language- and domain-neutral.
     """
     haystack = f"{item.line_english} {item.source_quote}"
     return (
         item.source_evidence * item.modelling_relevance
         + (VERIFIED_QUOTE_BONUS if quote_verified else 0)
-        + protected_term_bonus(haystack)
         + numeric_density_bonus(haystack)
-        + formula_usefulness_bonus(haystack)
     )
 
 

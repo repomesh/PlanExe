@@ -1,5 +1,6 @@
 """
-Prepare compressed input for the future extract-parameters-compress skill.
+Prepare the parameter-extraction input bundle for the
+extract-parameters-compress skill.
 
 Given a PlanExe sample directory (e.g.
 ``/Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop``), this script:
@@ -11,11 +12,19 @@ Given a PlanExe sample directory (e.g.
    rationale.
 2. Writes the four per-section markdown digests and raw JSON to the output
    directory.
-3. Concatenates the four markdown digests into ``extract_parameters_input.md``
-   with a small legend block at the top. That single file is the input you
-   point the future ``extract-parameters-compress`` skill at, to compare
-   against the existing ``extract-parameters`` skill which reads the full
-   PlanExe HTML report.
+3. Concatenates the 137-recommended extraction bundle into
+   ``extract_parameters_input.md`` — Executive Summary, Project Plan,
+   Selected Scenario, Assumptions, Review Plan, Premortem, Expert Criticism,
+   Data Collection — in that order. The four sections marked "Keep or
+   compress" in 137 use the compressed digests above; the four sections
+   marked plain "Keep" (Executive Summary, Project Plan, Assumptions, Data
+   Collection) are passed through raw. Strategic Decisions is replaced by
+   Selected Scenario per proposal 139 to avoid feeding rejected alternatives
+   into the parameter extractor.
+
+That combined file is the input you point the extract-parameters-compress
+skill at, to compare head-to-head with the extract-parameters skill (which
+reads the full PlanExe HTML report).
 
 Defaults to a sibling ``output/<planexe-dir-name>/`` directory next to this
 script. Override with ``--output-dir`` or ``--llm``.
@@ -33,30 +42,62 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKER_PLAN_DIR = REPO_ROOT / "worker_plan"
 NAPKIN_MATH_DIR = Path(__file__).resolve().parent
 
-SECTION_NAMES = ("selected_scenario", "review_plan", "premortem", "expert_criticism")
+# Section bundle and order per docs/proposals/137-section_filtering_for_parameter_extraction.md,
+# with the substitution from docs/proposals/139-compress-for-monte-carlo.md: Strategic
+# Decisions is replaced by Selected Scenario to avoid feeding rejected alternatives into
+# parameter extraction. Each entry is (display_title, kind, source) where kind is either
+# "compressed" (source is the name of a compress_<name>.md file produced by
+# run_compress_full) or "raw" (source is the filename inside the PlanExe sample dir to
+# pass through unchanged).
+BUNDLE: tuple[tuple[str, str, str], ...] = (
+    ("Executive Summary",  "raw",        "executive_summary.md"),
+    ("Project Plan",       "raw",        "project_plan.md"),
+    ("Selected Scenario",  "compressed", "selected_scenario"),
+    ("Assumptions",        "raw",        "consolidate_assumptions_short.md"),
+    ("Review Plan",        "compressed", "review_plan"),
+    ("Premortem",          "compressed", "premortem"),
+    ("Expert Criticism",   "compressed", "expert_criticism"),
+    ("Data Collection",    "raw",        "data_collection.md"),
+)
 
-LEGEND = """# Compressed PlanExe digest for extract-parameters
+LEGEND = """# PlanExe digest for extract-parameters
 
-Each section below is a structured digest of one PlanExe report section,
-produced by the ``compress_report_section`` pipeline. Inline tags on each
-bullet have the form ``[<source_status> | e=N r=N | quote: verified|unverified]``:
+This file is the 137-recommended extraction bundle (executive summary,
+project plan, selected scenario, assumptions, review plan, premortem,
+expert criticism, data collection), with Strategic Decisions replaced by
+Selected Scenario per proposal 139 to avoid feeding rejected alternatives
+into parameter extraction.
 
-- ``explicit``    — the plan commits directly to this value
-- ``derived``     — calculable from one or more ``explicit`` values
-- ``inferred``    — source-stated non-binding claim, or a model-added
-                    plausible guess
-- ``stress_test`` — a downside-scenario magnitude, not a plan fact
-- ``missing``     — a primitive input the source does not supply
+Sections come in two forms:
 
-- ``e=N`` — LLM-rated source evidence (1-5)
-- ``r=N`` — LLM-rated modelling relevance (1-5)
-- ``quote: verified|unverified`` — code-side substring check of the
-  LLM-supplied ``source_quote`` against the original section text
+- **Compressed sections** (Selected Scenario, Review Plan, Premortem,
+  Expert Criticism) — produced by the ``compress_report_section``
+  pipeline. Each bullet carries an inline tag of the form
+  ``[<source_status> | e=N r=N | quote: verified|unverified]``:
 
-When extracting parameters: prefer ``explicit`` and ``derived`` items with
-``quote: verified``. Treat ``stress_test`` items as downside-scenario inputs
-rather than baseline plan facts. Items in ``Missing data to estimate`` are
-the ones to surface as ``missing_values_to_estimate`` in the output.
+  - ``explicit``    — the plan commits directly to this value
+  - ``derived``     — calculable from one or more ``explicit`` values
+  - ``inferred``    — source-stated non-binding claim, or a model-added
+                      plausible guess
+  - ``stress_test`` — a downside-scenario magnitude, not a plan fact
+  - ``missing``     — a primitive input the source does not supply
+
+  - ``e=N`` — LLM-rated source evidence (1-5)
+  - ``r=N`` — LLM-rated modelling relevance (1-5)
+  - ``quote: verified|unverified`` — code-side substring check of the
+    LLM-supplied ``source_quote`` against the original section text
+
+- **Raw sections** (Executive Summary, Project Plan, Assumptions, Data
+  Collection) — passed through unchanged from the PlanExe sample
+  directory. They carry no inline tags. Apply general parameter-extraction
+  triage to them: prefer plan commitments, numeric anchors, denominators,
+  and missing inputs over narrative framing.
+
+When extracting parameters from the compressed sections, prefer
+``explicit`` and ``derived`` items with ``quote: verified``. Treat
+``stress_test`` items as downside-scenario inputs rather than baseline
+plan facts. Items in ``Missing data to estimate`` are the ones to surface
+as ``missing_values_to_estimate`` in the output.
 """
 
 
@@ -87,27 +128,40 @@ def run_compress(planexe_dir: Path, output_dir: Path, llm: str | None) -> None:
     subprocess.run(cmd, env=env, cwd=str(WORKER_PLAN_DIR), check=True)
 
 
-def build_combined_digest(output_dir: Path) -> Path:
-    """Concatenate the four per-section markdown digests with a legend at the
-    top. Missing sections are skipped with a warning rather than aborting,
-    so partial output is still usable.
+def build_combined_digest(planexe_dir: Path, output_dir: Path) -> Path:
+    """Concatenate the 137-recommended extraction bundle, in 137's order, with
+    a legend at the top. Compressed sections come from ``output_dir/compress_*.md``;
+    raw sections come straight from ``planexe_dir``. Missing sections are
+    skipped with a warning rather than aborting, so partial output is still
+    usable.
     """
     parts: list[str] = [LEGEND.rstrip(), "", "---", ""]
     found_any = False
-    for name in SECTION_NAMES:
-        md_path = output_dir / f"compress_{name}.md"
-        if not md_path.exists():
-            print(f"WARNING: {md_path.name} not produced; skipping in combined digest")
-            continue
-        parts.append(md_path.read_text(encoding="utf-8").strip())
+    for title, kind, source in BUNDLE:
+        if kind == "compressed":
+            path = output_dir / f"compress_{source}.md"
+            if not path.exists():
+                print(f"WARNING: compressed section {source!r} not produced ({path.name}); skipping")
+                continue
+            body = path.read_text(encoding="utf-8").strip()
+            # The compressed .md files already carry their own H1 title; use them as-is.
+        else:
+            path = planexe_dir / source
+            if not path.exists():
+                print(f"WARNING: raw section file {source!r} not found in {planexe_dir}; skipping")
+                continue
+            raw = path.read_text(encoding="utf-8").strip()
+            body = f"# {title}\n\n{raw}"
+        parts.append(body)
         parts.append("")
         parts.append("---")
         parts.append("")
         found_any = True
     if not found_any:
         raise SystemExit(
-            f"No compress_<section>.md files were produced under {output_dir}. "
-            "Check the run_compress_full output above for the underlying error."
+            f"No sections were produced for the combined digest. Check the "
+            f"run_compress_full output above for compression errors, and verify "
+            f"that the raw section files exist under {planexe_dir}."
         )
     combined = output_dir / "extract_parameters_input.md"
     combined.write_text("\n".join(parts).rstrip() + "\n", encoding="utf-8")
@@ -156,10 +210,10 @@ def main() -> None:
     print(f"LLM         : {args.llm or '(run_compress_full default)'}\n")
 
     run_compress(planexe_dir, output_dir, args.llm)
-    combined = build_combined_digest(output_dir)
+    combined = build_combined_digest(planexe_dir, output_dir)
 
     print(f"\nWrote combined digest: {combined}")
-    print("Feed this file to the future extract-parameters-compress skill.")
+    print("Feed this file to the extract-parameters-compress skill.")
 
 
 if __name__ == "__main__":

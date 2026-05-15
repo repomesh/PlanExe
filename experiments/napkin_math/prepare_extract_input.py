@@ -60,38 +60,28 @@ BUNDLE: tuple[tuple[str, str, str], ...] = (
     ("Data Collection",    "raw",        "data_collection.md"),
 )
 
-LEGEND = """# PlanExe digest for extract-parameters
+LEGEND = """Sections come in two forms.
 
-This file is the 137-recommended extraction bundle (executive summary,
-project plan, selected scenario, assumptions, review plan, premortem,
-expert criticism, data collection), with Strategic Decisions replaced by
-Selected Scenario per proposal 139 to avoid feeding rejected alternatives
-into parameter extraction.
+Compressed sections (Selected Scenario, Review Plan, Premortem, Expert
+Criticism). Each bullet carries an inline tag of the form
+``[<source_status> | e=N r=N | quote: verified|unverified]``:
 
-Sections come in two forms:
+- ``explicit``    — the plan commits directly to this value
+- ``derived``     — calculable from one or more ``explicit`` values
+- ``inferred``    — source-stated non-binding claim, or a model-added
+                    plausible guess
+- ``stress_test`` — a downside-scenario magnitude, not a plan fact
+- ``missing``     — a primitive input the source does not supply
 
-- **Compressed sections** (Selected Scenario, Review Plan, Premortem,
-  Expert Criticism) — produced by the ``compress_report_section``
-  pipeline. Each bullet carries an inline tag of the form
-  ``[<source_status> | e=N r=N | quote: verified|unverified]``:
+- ``e=N`` — source evidence (1-5)
+- ``r=N`` — modelling relevance (1-5)
+- ``quote: verified|unverified`` — independent substring check of the
+  source_quote against the original section text
 
-  - ``explicit``    — the plan commits directly to this value
-  - ``derived``     — calculable from one or more ``explicit`` values
-  - ``inferred``    — source-stated non-binding claim, or a model-added
-                      plausible guess
-  - ``stress_test`` — a downside-scenario magnitude, not a plan fact
-  - ``missing``     — a primitive input the source does not supply
-
-  - ``e=N`` — LLM-rated source evidence (1-5)
-  - ``r=N`` — LLM-rated modelling relevance (1-5)
-  - ``quote: verified|unverified`` — code-side substring check of the
-    LLM-supplied ``source_quote`` against the original section text
-
-- **Raw sections** (Executive Summary, Project Plan, Assumptions, Data
-  Collection) — passed through unchanged from the PlanExe sample
-  directory. They carry no inline tags. Apply general parameter-extraction
-  triage to them: prefer plan commitments, numeric anchors, denominators,
-  and missing inputs over narrative framing.
+Raw sections (Executive Summary, Project Plan, Assumptions, Data
+Collection). These carry no inline tags. Apply general parameter-extraction
+triage to them: prefer plan commitments, numeric anchors, denominators,
+and missing inputs over narrative framing.
 
 When extracting parameters from the compressed sections, prefer
 ``explicit`` and ``derived`` items with ``quote: verified``. Treat

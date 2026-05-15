@@ -389,17 +389,46 @@ Scoring rules (identical across buckets):
 - source_evidence (1-5): how directly the source text supports this exact
   item. 5 = near-verbatim quote present in the section; 1 = you invented
   it. Be honest.
-- source_status: 'explicit' = literally stated in the source; 'derived' =
-  computed from explicit source values; 'inferred' = a plausible assumption
-  you added that the source does not state; 'stress_test' = a downside
-  scenario magnitude (cost of a failure, duration of a disruption, lost
-  revenue under a failure mode) — never a plan fact. Premortem shock
-  magnitudes are 'stress_test' by default. 'missing' = a primitive input
-  the plan needs but the source does not supply — used for every item in
-  the missing_data_to_estimate bucket; the status for items in that bucket
-  will be overwritten to 'missing' regardless of what you set. When in
-  doubt prefer 'inferred' over 'explicit', and 'stress_test' over
-  'inferred' for shock magnitudes.
+- source_status: pick exactly one of these five values. The distinction is
+  about what KIND of statement the line makes, not whether the source
+  quantifies it.
+    * 'explicit' — a PLAN COMMITMENT the source states directly. The plan
+      is binding itself to this number, date, ratio, or condition. Total
+      budget, allocated contingency, target deadline, declared revenue
+      mix, contracted price, committed staff count.
+    * 'derived' — a value the plan implies but does not state directly,
+      computable from one or more 'explicit' values.
+    * 'inferred' — a plausible assumption you added that the source does
+      not state at all.
+    * 'stress_test' — applies to lines that QUANTIFY THE DAMAGE of a
+      failure outcome: the cost of a breakdown, the weeks of downtime,
+      the lost revenue under a what-if, the deficit when an assumption
+      breaks, the capacity shortfall during a shock. The defining trait
+      is that the number measures *how bad it gets if something goes
+      wrong*. Use this tag EVEN WHEN the source states the damage
+      magnitude — a quantified failure outcome is still a stress test,
+      not a plan commitment.
+      Do NOT confuse the damage magnitude with the trigger threshold
+      inside a gate. "If revenue falls below 70% of target, then pivot"
+      is a gate: the 70% is the trigger threshold, not damage. The
+      stress_test number, if there were one, would be a separate item
+      naming what the pivot costs or how much revenue is lost. Gates
+      stay 'explicit'/'derived'/'inferred' according to how the source
+      establishes the threshold; assumptions and load-bearing claims do
+      the same. stress_test belongs almost entirely in risks_and_shocks
+      and in numeric_values lines that name a failure-outcome
+      magnitude.
+    * 'missing' — a primitive input the plan needs but the source does
+      not supply. Used in the missing_data_to_estimate bucket; the
+      status for items in that bucket will be overwritten to 'missing'
+      regardless of what you set. Do NOT use 'missing' in any other
+      bucket: if the source does not supply a value for an assumption,
+      gate, risk, or numeric_value, use 'inferred' instead.
+  Disambiguation test for explicit vs stress_test: ask "does the plan
+  COMMIT to this number, or is this a QUANTIFICATION OF WHAT COULD GO
+  WRONG?" If it is a quantification of failure, downside, or risk, the
+  answer is stress_test — even when the source states the number.
+  When in doubt elsewhere prefer 'inferred' over 'explicit'.
 - source_quote: a SHORT (≤12 word) verbatim or near-verbatim fragment from
   the section that supports this item. If the item is not in the section,
   write 'NOT IN SOURCE' and set source_evidence to 1 and source_status to

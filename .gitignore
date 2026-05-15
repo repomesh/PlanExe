@@ -7,8 +7,8 @@ __pycache__/
 .mcpregistry_github_token
 .mcpregistry_registry_token
 
-# Claude Code
-.claude/
+# Claude Code (root only — per-experiment .claude/ skill bundles are tracked)
+/.claude/
 
 # Git worktrees
 .worktrees/

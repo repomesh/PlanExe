@@ -61,24 +61,16 @@ class ReportSectionTypeEnum(str, Enum):
     UNKNOWN = "unknown"
 
 
+# ScoredItem is the LLM-facing per-item schema shared by every list bucket
+# (numeric_values, load_bearing_assumptions, gates_and_thresholds,
+# risks_and_shocks, missing_data_to_estimate). The class docstring is
+# emitted into the structured-output schema and shown to the LLM, so it is
+# kept minimal — the bucket prompts carry the actual per-bucket instructions
+# and the field descriptions below carry the per-field meaning. Anything
+# the LLM does not need to know (quote_verified is computed post-call, etc.)
+# belongs in this comment, not the docstring.
 class ScoredItem(BaseModel):
-    """LLM-facing per-item schema shared by all of the list buckets in
-    ``CompressedReportSection`` (numeric_values, load_bearing_assumptions,
-    gates_and_thresholds, risks_and_shocks, missing_data_to_estimate).
-
-    The ``line`` field carries the bucket-specific content (a labelled
-    number, an if/then gate, a primitive missing input, etc.) — the bucket
-    prompt defines what shape ``line`` should take in that context. The
-    other fields (scores, source_status, source_quote) have the same
-    meaning everywhere.
-
-    Does NOT include ``quote_verified`` — that field is computed in code
-    from a substring check against the source markdown, not by the LLM.
-
-    Detailed instructions live in each bucket prompt; the schema field
-    descriptions are kept short on purpose so the JSON-schema overhead in
-    the structured-output system message stays small.
-    """
+    """One scored entry produced for a single compressed-section bucket."""
 
     line_english: str = Field(
         description=(

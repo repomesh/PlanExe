@@ -61,7 +61,7 @@ class ReportSectionTypeEnum(str, Enum):
     UNKNOWN = "unknown"
 
 
-class _ScoredItem(BaseModel):
+class ScoredItem(BaseModel):
     """LLM-facing per-item schema shared by all of the list buckets in
     ``CompressedReportSection`` (numeric_values, load_bearing_assumptions,
     gates_and_thresholds, risks_and_shocks, missing_data_to_estimate).
@@ -131,10 +131,10 @@ class _ScoredItem(BaseModel):
     )
 
 
-class ScoredItem(_ScoredItem):
+class PublicScoredItem(ScoredItem):
     """Public per-item shape for compressed list-bucket entries.
 
-    Inherits the LLM-populated fields from ``_ScoredItem`` and adds
+    Inherits the LLM-populated fields from ``ScoredItem`` and adds
     ``quote_verified``, which the pipeline sets after substring-checking the
     model's ``source_quote`` against the section markdown.
     """
@@ -163,36 +163,36 @@ class CompressedReportSection(BaseModel):
             "to Monte Carlo / napkin-math modelling. Plain English."
         )
     )
-    numeric_values: list[ScoredItem] = Field(
+    numeric_values: list[PublicScoredItem] = Field(
         default_factory=list,
-        description="Modelling-relevant numbers — see ScoredItem and the numeric_values bucket prompt.",
+        description="Modelling-relevant numbers — see PublicScoredItem and the numeric_values bucket prompt.",
     )
-    load_bearing_assumptions: list[ScoredItem] = Field(
+    load_bearing_assumptions: list[PublicScoredItem] = Field(
         default_factory=list,
         description="Foundational claims whose failure would change the plan's viability.",
     )
-    gates_and_thresholds: list[ScoredItem] = Field(
+    gates_and_thresholds: list[PublicScoredItem] = Field(
         default_factory=list,
         description="Pass/fail conditions with consequence on failure (if/then form).",
     )
-    risks_and_shocks: list[ScoredItem] = Field(
+    risks_and_shocks: list[PublicScoredItem] = Field(
         default_factory=list,
         description="Downside triggers with quantitative or operationally specific impact.",
     )
-    missing_data_to_estimate: list[ScoredItem] = Field(
+    missing_data_to_estimate: list[PublicScoredItem] = Field(
         default_factory=list,
         description="Primitive inputs the section does not supply, with an estimation hint.",
     )
 
 
-_SECTION_TYPE_BY_STEM = {
+SECTION_TYPE_BY_STEM = {
     "selected_scenario": ReportSectionTypeEnum.SELECTED_SCENARIO.value,
     "review_plan": ReportSectionTypeEnum.REVIEW_PLAN.value,
     "premortem": ReportSectionTypeEnum.PREMORTEM.value,
     "expert_criticism": ReportSectionTypeEnum.EXPERT_CRITICISM.value,
 }
 
-_SECTION_GUIDANCE = {
+SECTION_GUIDANCE = {
     ReportSectionTypeEnum.SELECTED_SCENARIO.value: (
         "This is the Selected (picked) Scenario — the actual plan to model, not the "
         "menu of options. The signal is in what the plan *committed to*. "
@@ -311,7 +311,7 @@ CRITICAL response format rules:
 # ---------------------------------------------------------------------------
 
 
-class _SectionSummaryOnly(BaseModel):
+class SectionSummaryOnly(BaseModel):
     section_summary: str = Field(
         description=(
             "One to three sentences describing what this section contributes "
@@ -320,36 +320,36 @@ class _SectionSummaryOnly(BaseModel):
     )
 
 
-class _NumericValuesOnly(BaseModel):
-    numeric_values: list[_ScoredItem] = Field(
+class NumericValuesOnly(BaseModel):
+    numeric_values: list[ScoredItem] = Field(
         default_factory=list,
         description="See system prompt for the required line format and scoring.",
     )
 
 
-class _LoadBearingAssumptionsOnly(BaseModel):
-    load_bearing_assumptions: list[_ScoredItem] = Field(
+class LoadBearingAssumptionsOnly(BaseModel):
+    load_bearing_assumptions: list[ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
-class _GatesAndThresholdsOnly(BaseModel):
-    gates_and_thresholds: list[_ScoredItem] = Field(
+class GatesAndThresholdsOnly(BaseModel):
+    gates_and_thresholds: list[ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
-class _RisksAndShocksOnly(BaseModel):
-    risks_and_shocks: list[_ScoredItem] = Field(
+class RisksAndShocksOnly(BaseModel):
+    risks_and_shocks: list[ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
 
 
-class _MissingDataOnly(BaseModel):
-    missing_data_to_estimate: list[_ScoredItem] = Field(
+class MissingDataOnly(BaseModel):
+    missing_data_to_estimate: list[ScoredItem] = Field(
         default_factory=list,
         description="See system prompt.",
     )
@@ -361,7 +361,7 @@ class _MissingDataOnly(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-_SECTION_SUMMARY_BUCKET_PROMPT = """
+SECTION_SUMMARY_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the section_summary.
 
 Write one to three sentences in plain English describing what this section
@@ -374,7 +374,7 @@ handled in other calls.
 # Shared scoring rules that apply identically to every list bucket. Each
 # per-bucket prompt below appends this block so the LLM sees the same
 # discipline regardless of which bucket it is currently producing.
-_SCORING_DISCIPLINE = """
+SCORING_DISCIPLINE = """
 Every item in the list is a scored object with six fields: line_english,
 line_original, modelling_relevance, source_evidence, source_status,
 source_quote.
@@ -427,7 +427,7 @@ budget.
 """.strip()
 
 
-_NUMERIC_VALUES_BUCKET_PROMPT = """
+NUMERIC_VALUES_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the numeric_values list.
 
 Output exactly one JSON OBJECT, not a bare array. The top-level shape is:
@@ -461,10 +461,10 @@ picking one silently.
 
 Skip numbers that only appear for narrative color. At most 8 items, sorted
 by your judgement of importance for modelling. Fewer items is fine.
-""".strip() + "\n\n" + _SCORING_DISCIPLINE
+""".strip() + "\n\n" + SCORING_DISCIPLINE
 
 
-_LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
+LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the load_bearing_assumptions list.
 
 Output exactly one JSON OBJECT with key 'load_bearing_assumptions' whose
@@ -479,10 +479,10 @@ assumptions. Do not enumerate supporting numbers in the line — numbers
 belong in numeric_values.
 
 At most 8 items.
-""".strip() + "\n\n" + _SCORING_DISCIPLINE
+""".strip() + "\n\n" + SCORING_DISCIPLINE
 
 
-_GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
+GATES_AND_THRESHOLDS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the gates_and_thresholds list.
 
 Output exactly one JSON OBJECT with key 'gates_and_thresholds' whose value
@@ -515,10 +515,10 @@ the source, put the missing threshold in missing_data_to_estimate rather
 than emitting a vague gate like 'must meet a threshold'.
 
 At most 8 items.
-""".strip() + "\n\n" + _SCORING_DISCIPLINE
+""".strip() + "\n\n" + SCORING_DISCIPLINE
 
 
-_RISKS_AND_SHOCKS_BUCKET_PROMPT = """
+RISKS_AND_SHOCKS_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the risks_and_shocks list.
 
 Output exactly one JSON OBJECT with key 'risks_and_shocks' whose value is
@@ -542,10 +542,10 @@ shock whose magnitude the source does not state, set source_status to
 magnitudes as if they were plan facts.
 
 At most 8 items.
-""".strip() + "\n\n" + _SCORING_DISCIPLINE
+""".strip() + "\n\n" + SCORING_DISCIPLINE
 
 
-_MISSING_DATA_BUCKET_PROMPT = """
+MISSING_DATA_BUCKET_PROMPT = """
 Your job for THIS call: produce ONLY the missing_data_to_estimate list.
 
 Output exactly one JSON OBJECT with key 'missing_data_to_estimate' whose
@@ -575,31 +575,31 @@ quote that phrase and raise source_evidence accordingly — but source_status
 still stays 'missing' because the value itself is what's absent.
 
 At most 6 items.
-""".strip() + "\n\n" + _SCORING_DISCIPLINE
+""".strip() + "\n\n" + SCORING_DISCIPLINE
 
 
 @dataclass(frozen=True)
-class _BucketSpec:
+class BucketSpec:
     field_name: str
     schema: type[BaseModel]
     bucket_prompt: str
 
 
-_BUCKET_SPECS: tuple[_BucketSpec, ...] = (
-    _BucketSpec("section_summary", _SectionSummaryOnly, _SECTION_SUMMARY_BUCKET_PROMPT),
-    _BucketSpec("numeric_values", _NumericValuesOnly, _NUMERIC_VALUES_BUCKET_PROMPT),
-    _BucketSpec(
+BUCKET_SPECS: tuple[BucketSpec, ...] = (
+    BucketSpec("section_summary", SectionSummaryOnly, SECTION_SUMMARY_BUCKET_PROMPT),
+    BucketSpec("numeric_values", NumericValuesOnly, NUMERIC_VALUES_BUCKET_PROMPT),
+    BucketSpec(
         "load_bearing_assumptions",
-        _LoadBearingAssumptionsOnly,
-        _LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT,
+        LoadBearingAssumptionsOnly,
+        LOAD_BEARING_ASSUMPTIONS_BUCKET_PROMPT,
     ),
-    _BucketSpec(
+    BucketSpec(
         "gates_and_thresholds",
-        _GatesAndThresholdsOnly,
-        _GATES_AND_THRESHOLDS_BUCKET_PROMPT,
+        GatesAndThresholdsOnly,
+        GATES_AND_THRESHOLDS_BUCKET_PROMPT,
     ),
-    _BucketSpec("risks_and_shocks", _RisksAndShocksOnly, _RISKS_AND_SHOCKS_BUCKET_PROMPT),
-    _BucketSpec("missing_data_to_estimate", _MissingDataOnly, _MISSING_DATA_BUCKET_PROMPT),
+    BucketSpec("risks_and_shocks", RisksAndShocksOnly, RISKS_AND_SHOCKS_BUCKET_PROMPT),
+    BucketSpec("missing_data_to_estimate", MissingDataOnly, MISSING_DATA_BUCKET_PROMPT),
 )
 
 
@@ -607,18 +607,18 @@ _BUCKET_SPECS: tuple[_BucketSpec, ...] = (
 # occasionally emit malformed JSON, drop required fields, or truncate mid-
 # list; retrying the same chat history usually succeeds because each attempt
 # samples fresh.
-_PER_BUCKET_MAX_ATTEMPTS = 3
+PER_BUCKET_MAX_ATTEMPTS = 3
 
 # Public list buckets are capped to the top-N items after the LLM-side
 # cap, sorted by (modelling_relevance * source_evidence) with a bonus for
 # items whose quote was code-verified. The LLM is asked to over-produce so
 # the Python sort can drop the weakest candidates; everything stays in
 # metadata for inspection.
-_MAX_ITEMS_PER_BUCKET = 6
+MAX_ITEMS_PER_BUCKET = 6
 
-# Buckets whose schema is list[_ScoredItem] (i.e. everything except
-# section_summary). The order matches _BUCKET_SPECS below.
-_SCORED_LIST_FIELDS: tuple[str, ...] = (
+# Buckets whose schema is list[ScoredItem] (i.e. everything except
+# section_summary). The order matches BUCKET_SPECS below.
+SCORED_LIST_FIELDS: tuple[str, ...] = (
     "numeric_values",
     "load_bearing_assumptions",
     "gates_and_thresholds",
@@ -632,12 +632,12 @@ _SCORED_LIST_FIELDS: tuple[str, ...] = (
 # every entry there is 'missing' — the LLM occasionally tags them
 # 'explicit' because the NEED was explicit in the source, which confuses
 # the downstream consumer.
-_FORCED_STATUS_BY_BUCKET: dict[str, str] = {
+FORCED_STATUS_BY_BUCKET: dict[str, str] = {
     "missing_data_to_estimate": "missing",
 }
 
 
-def _normalise_for_quote_match(text: str) -> str:
+def normalise_for_quote_match(text: str) -> str:
     """Lowercase, normalise unicode dashes, and collapse whitespace.
 
     The LLM often paraphrases punctuation/whitespace when quoting (em-dash
@@ -651,44 +651,44 @@ def _normalise_for_quote_match(text: str) -> str:
     return " ".join(text.split())
 
 
-def _quote_is_in_source(quote: str, section_markdown: str) -> bool:
+def quote_is_in_source(quote: str, section_markdown: str) -> bool:
     if not quote:
         return False
     if quote.strip().upper() == "NOT IN SOURCE":
         return False
-    return _normalise_for_quote_match(quote) in _normalise_for_quote_match(section_markdown)
+    return normalise_for_quote_match(quote) in normalise_for_quote_match(section_markdown)
 
 
-def _annotate_scored_items(
-    items: list[_ScoredItem],
+def annotate_scored_items(
+    items: list[ScoredItem],
     section_markdown: str,
     field_name: str,
-) -> tuple[list[ScoredItem], list[dict]]:
+) -> tuple[list[PublicScoredItem], list[dict]]:
     """Verify each item's quote, sort by composite confidence, and return
-    the top survivors as rich ``ScoredItem`` objects.
+    the top survivors as rich ``PublicScoredItem`` objects.
 
-    The LLM produces ``_ScoredItem`` (line + scores + status + quote). For
+    The LLM produces ``ScoredItem`` (line + scores + status + quote). For
     each, we substring-check the quote against the source markdown, build
-    a ``ScoredItem`` with ``quote_verified`` set accordingly, sort by
+    a ``PublicScoredItem`` with ``quote_verified`` set accordingly, sort by
     ``source_evidence * modelling_relevance`` (with a bonus for verified
-    items), and keep the top ``_MAX_ITEMS_PER_BUCKET``. The full set of
+    items), and keep the top ``MAX_ITEMS_PER_BUCKET``. The full set of
     scored items (including dropped ones) is returned as a list of dicts
     so the caller can stash them in metadata for inspection.
 
-    For buckets listed in ``_FORCED_STATUS_BY_BUCKET`` (currently just
+    For buckets listed in ``FORCED_STATUS_BY_BUCKET`` (currently just
     ``missing_data_to_estimate``), the ``source_status`` is overwritten
     after the LLM call — the bucket name already determines the right
     status and we should not let the LLM disagree.
     """
-    forced_status = _FORCED_STATUS_BY_BUCKET.get(field_name)
+    forced_status = FORCED_STATUS_BY_BUCKET.get(field_name)
     scored_dicts: list[dict] = []
-    annotated_pairs: list[tuple[int, ScoredItem]] = []
+    annotated_pairs: list[tuple[int, PublicScoredItem]] = []
     for llm_item in items:
-        verified = _quote_is_in_source(llm_item.source_quote, section_markdown)
+        verified = quote_is_in_source(llm_item.source_quote, section_markdown)
         item_dict = llm_item.model_dump()
         if forced_status is not None:
             item_dict["source_status"] = forced_status
-        public_item = ScoredItem(
+        public_item = PublicScoredItem(
             **item_dict,
             quote_verified=verified,
         )
@@ -700,12 +700,12 @@ def _annotate_scored_items(
         annotated_pairs.append((sort_key, public_item))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
-    kept = [item for _, item in annotated_pairs[:_MAX_ITEMS_PER_BUCKET]]
+    kept = [item for _, item in annotated_pairs[:MAX_ITEMS_PER_BUCKET]]
     return kept, scored_dicts
 
 
-def _format_scored_item_line(item: ScoredItem) -> str:
-    """Render one ScoredItem as a markdown bullet body.
+def format_scored_item_line(item: PublicScoredItem) -> str:
+    """Render one PublicScoredItem as a markdown bullet body.
 
     The clean English version is the primary text. The native-language
     version is kept in JSON only — downstream consumers that need verbatim
@@ -723,7 +723,7 @@ def _format_scored_item_line(item: ScoredItem) -> str:
 def infer_section_type_from_path(file_path: str | Path) -> str:
     """Infer the report section type from a PlanExe intermediary filename."""
     stem = Path(file_path).stem
-    return _SECTION_TYPE_BY_STEM.get(stem, ReportSectionTypeEnum.UNKNOWN.value)
+    return SECTION_TYPE_BY_STEM.get(stem, ReportSectionTypeEnum.UNKNOWN.value)
 
 
 def normalize_section_type(section_type: str | ReportSectionTypeEnum | None) -> str:
@@ -733,9 +733,9 @@ def normalize_section_type(section_type: str | ReportSectionTypeEnum | None) -> 
     if isinstance(section_type, ReportSectionTypeEnum):
         return section_type.value
     text = str(section_type).strip().lower().replace("-", "_").replace(" ", "_")
-    if text in _SECTION_GUIDANCE:
+    if text in SECTION_GUIDANCE:
         return text
-    return _SECTION_TYPE_BY_STEM.get(text, ReportSectionTypeEnum.UNKNOWN.value)
+    return SECTION_TYPE_BY_STEM.get(text, ReportSectionTypeEnum.UNKNOWN.value)
 
 
 def build_user_prompt(
@@ -745,8 +745,8 @@ def build_user_prompt(
 ) -> str:
     """Build the section-wrapper user prompt shared by all six bucket calls."""
     title = section_title or section_type.replace("_", " ").title()
-    guidance = _SECTION_GUIDANCE.get(
-        section_type, _SECTION_GUIDANCE[ReportSectionTypeEnum.UNKNOWN.value]
+    guidance = SECTION_GUIDANCE.get(
+        section_type, SECTION_GUIDANCE[ReportSectionTypeEnum.UNKNOWN.value]
     )
     return "\n".join(
         [
@@ -802,7 +802,7 @@ class CompressReportSection:
         per_bucket_metadata: dict[str, dict[str, Any]] = {}
         total_start = time.perf_counter()
 
-        for i, spec in enumerate(_BUCKET_SPECS):
+        for i, spec in enumerate(BUCKET_SPECS):
             if i == 0:
                 user_content = f"{section_wrapper}\n\n{spec.bucket_prompt}"
             else:
@@ -817,10 +817,10 @@ class CompressReportSection:
             obj = None
             chat_response = None
             last_error: Optional[Exception] = None
-            for retry in range(_PER_BUCKET_MAX_ATTEMPTS):
+            for retry in range(PER_BUCKET_MAX_ATTEMPTS):
                 logger.debug(
                     f"Bucket {spec.field_name}: starting LLM call "
-                    f"(turn {i + 1}, attempt {retry + 1}/{_PER_BUCKET_MAX_ATTEMPTS})"
+                    f"(turn {i + 1}, attempt {retry + 1}/{PER_BUCKET_MAX_ATTEMPTS})"
                 )
                 try:
                     chat_response = sllm.chat(accumulated_chat)
@@ -839,7 +839,7 @@ class CompressReportSection:
             if obj is None:
                 raise ValueError(
                     f"Bucket {spec.field_name!r} failed after "
-                    f"{_PER_BUCKET_MAX_ATTEMPTS} attempts. Last error: "
+                    f"{PER_BUCKET_MAX_ATTEMPTS} attempts. Last error: "
                     f"{type(last_error).__name__}: {last_error}"
                 ) from last_error
             bucket_duration = int(ceil(time.perf_counter() - bucket_start))
@@ -854,8 +854,8 @@ class CompressReportSection:
                 "response_byte_count": bucket_byte_count,
                 "user_prompt": user_content,
             }
-            if spec.field_name in _SCORED_LIST_FIELDS:
-                bucket_values[spec.field_name], scored_items = _annotate_scored_items(
+            if spec.field_name in SCORED_LIST_FIELDS:
+                bucket_values[spec.field_name], scored_items = annotate_scored_items(
                     raw_field_value, section_markdown, spec.field_name
                 )
                 bucket_metadata["scored_items"] = scored_items
@@ -941,7 +941,7 @@ class CompressReportSection:
         title = section_title or "Compressed Section"
         lines: list[str] = [f"# {title}", "", compressed.section_summary.strip(), ""]
 
-        sections: list[tuple[str, list[ScoredItem]]] = [
+        sections: list[tuple[str, list[PublicScoredItem]]] = [
             ("Numeric values", compressed.numeric_values),
             ("Load-bearing assumptions", compressed.load_bearing_assumptions),
             ("Gates and thresholds", compressed.gates_and_thresholds),
@@ -953,7 +953,7 @@ class CompressReportSection:
                 continue
             lines.append(f"## {heading}")
             for item in items:
-                rendered = _format_scored_item_line(item).replace("\n", " ").strip()
+                rendered = format_scored_item_line(item).replace("\n", " ").strip()
                 lines.append(f"- {rendered}")
             lines.append("")
 

@@ -2,7 +2,7 @@ from worker_plan_internal.parameter_extraction.compress_report_section import (
     COMPRESS_REPORT_SECTION_SYSTEM_PROMPT,
     CompressedReportSection,
     CompressReportSection,
-    ScoredItem,
+    PublicScoredItem,
     build_user_prompt,
     infer_section_type_from_path,
     normalize_section_type,
@@ -60,18 +60,18 @@ def test_system_prompt_states_compression_role() -> None:
 def test_pydantic_schema_shape() -> None:
     """Guard against accidental drift in the assembled schema.
 
-    All four list buckets carry the per-item ``ScoredItem`` shape
+    All four list buckets carry the per-item ``PublicScoredItem`` shape
     (line + scoring + status + quote + code-computed quote_verified). The
     bucket prompts define what ``line`` should contain for each bucket.
     """
     fields = CompressedReportSection.model_fields
     expected = {
         "section_summary": str,
-        "numeric_values": list[ScoredItem],
-        "load_bearing_assumptions": list[ScoredItem],
-        "gates_and_thresholds": list[ScoredItem],
-        "risks_and_shocks": list[ScoredItem],
-        "missing_data_to_estimate": list[ScoredItem],
+        "numeric_values": list[PublicScoredItem],
+        "load_bearing_assumptions": list[PublicScoredItem],
+        "gates_and_thresholds": list[PublicScoredItem],
+        "risks_and_shocks": list[PublicScoredItem],
+        "missing_data_to_estimate": list[PublicScoredItem],
     }
     assert set(fields.keys()) == set(expected.keys())
     for name, expected_type in expected.items():
@@ -90,8 +90,8 @@ def _si(
     r: int = 5,
     quote: str = "verbatim quote",
     verified: bool = True,
-) -> ScoredItem:
-    return ScoredItem(
+) -> PublicScoredItem:
+    return PublicScoredItem(
         line_english=line,
         line_original=original if original is not None else line,
         modelling_relevance=r,
@@ -162,7 +162,7 @@ def test_convert_to_markdown_renders_each_populated_bucket() -> None:
     # Verbatim numbers preserved (not converted to fractions or rounded)
     assert "300,000 DKK" in markdown
     assert "75%" in markdown
-    # Inline tag is composed from ScoredItem fields on every list bucket
+    # Inline tag is composed from PublicScoredItem fields on every list bucket
     assert "[explicit | e=5 r=5 | quote: verified]" in markdown
     assert "[derived | e=4 r=5 | quote: verified]" in markdown
     assert "[inferred | e=1 r=5 | quote: unverified]" in markdown
@@ -174,12 +174,12 @@ def test_annotate_forces_missing_status_for_missing_data_bucket() -> None:
     missing_data_to_estimate bucket, regardless of what the LLM said. The
     bucket name already determines the right status."""
     from worker_plan_internal.parameter_extraction.compress_report_section import (
-        _annotate_scored_items,
-        _ScoredItem,
+        annotate_scored_items,
+        ScoredItem,
     )
 
     llm_items = [
-        _ScoredItem(
+        ScoredItem(
             line_english="Year 1 fixed labor cost in DKK/month — needed for cash burn model",
             line_original="Year 1 fixed labor cost in DKK/month — needed for cash burn model",
             modelling_relevance=5,
@@ -187,7 +187,7 @@ def test_annotate_forces_missing_status_for_missing_data_bucket() -> None:
             source_status="explicit",  # LLM got this wrong
             source_quote="exact fixed annualized cost",
         ),
-        _ScoredItem(
+        ScoredItem(
             line_english="Direct utility overhead in DKK/month — estimate from metered trial",
             line_original="Direct utility overhead in DKK/month — estimate from metered trial",
             modelling_relevance=5,
@@ -197,7 +197,7 @@ def test_annotate_forces_missing_status_for_missing_data_bucket() -> None:
         ),
     ]
 
-    kept, scored = _annotate_scored_items(
+    kept, scored = annotate_scored_items(
         llm_items, section_markdown="", field_name="missing_data_to_estimate"
     )
 
@@ -213,12 +213,12 @@ def test_annotate_does_not_force_status_for_other_buckets() -> None:
     """The forced-status override only applies to missing_data_to_estimate.
     Other buckets pass the LLM's source_status through untouched."""
     from worker_plan_internal.parameter_extraction.compress_report_section import (
-        _annotate_scored_items,
-        _ScoredItem,
+        annotate_scored_items,
+        ScoredItem,
     )
 
     llm_items = [
-        _ScoredItem(
+        ScoredItem(
             line_english="Single kiln breakdown: 4-8 weeks production stoppage",
             line_original="Single kiln breakdown: 4-8 weeks production stoppage",
             modelling_relevance=5,
@@ -227,7 +227,7 @@ def test_annotate_does_not_force_status_for_other_buckets() -> None:
             source_quote="4-8 weeks total production stop",
         ),
     ]
-    kept, _ = _annotate_scored_items(
+    kept, _ = annotate_scored_items(
         llm_items, section_markdown="", field_name="risks_and_shocks"
     )
     assert kept[0].source_status == "stress_test"

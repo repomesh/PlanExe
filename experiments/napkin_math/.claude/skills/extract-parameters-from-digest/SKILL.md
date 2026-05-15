@@ -1,5 +1,5 @@
 ---
-name: extract-parameters-compress
+name: extract-parameters-from-digest
 description: Use when the user wants to extract parameters from a PlanExe extraction-input digest (the markdown produced by experiments/napkin_math/prepare_extract_input.py — the 137-recommended section bundle, with the four "Keep or compress" sections compressed) instead of the full PlanExe HTML report
 ---
 

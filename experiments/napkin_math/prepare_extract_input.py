@@ -1,6 +1,6 @@
 """
 Prepare the parameter-extraction input bundle for the
-extract-parameters-compress skill.
+extract-parameters-from-digest skill.
 
 Given a PlanExe sample directory (e.g.
 ``/Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop``), this script:
@@ -22,7 +22,7 @@ Given a PlanExe sample directory (e.g.
    Selected Scenario per proposal 139 to avoid feeding rejected alternatives
    into the parameter extractor.
 
-That combined file is the input you point the extract-parameters-compress
+That combined file is the input you point the extract-parameters-from-digest
 skill at, to compare head-to-head with the extract-parameters skill (which
 reads the full PlanExe HTML report).
 
@@ -203,7 +203,7 @@ def main() -> None:
     combined = build_combined_digest(planexe_dir, output_dir)
 
     print(f"\nWrote combined digest: {combined}")
-    print("Feed this file to the extract-parameters-compress skill.")
+    print("Feed this file to the extract-parameters-from-digest skill.")
 
 
 if __name__ == "__main__":

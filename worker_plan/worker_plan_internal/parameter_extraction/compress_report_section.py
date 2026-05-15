@@ -552,6 +552,28 @@ Prefer primitives over derived quantities. Avoid words like 'gap',
 naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
+Denominator-pairing rule (important): the earlier buckets already
+captured rates, shares, percentages, per-unit prices, conversion rates,
+utilization targets, FTE counts, and failure-duration magnitudes. Each
+of those needs a matching denominator or scaling input to become an
+executable formula. For every such rate-like or per-unit item in the
+prior buckets that the section does NOT otherwise quantify, surface its
+missing counterpart here. Patterns to look for:
+- A share-of-revenue percentage needs the absolute period-revenue
+  target.
+- A per-hour, per-day, or per-unit price needs the billable hours, days,
+  or units per period the price will be applied to.
+- A conversion or adoption rate needs the count of attendees,
+  candidates, or eligible people the rate operates on.
+- An FTE or headcount value needs the per-head monthly or annual cost.
+- A failure-duration magnitude (weeks of downtime, days of disruption)
+  needs the per-week or per-day revenue exposure the failure interrupts.
+- An overhead coverage threshold ('cover 75% of X') needs the absolute
+  X amount per period.
+Do not invent a value; just name the missing primitive and how it
+would be estimated. Skip this pairing only when the section already
+supplies the denominator elsewhere.
+
 Note: by definition these items are absent from the source. Always set
 source_status to 'missing' for items in this bucket. When the source has
 no value, source_quote is 'NOT IN SOURCE' and source_evidence is 1. When

@@ -330,6 +330,10 @@ If the model is not explicitly modelling that channel, omit the discount.
 
 Additional modelling rules:
 
+Budget vs revenue denominator rule: a share, percentage, or mix described as "X% of revenue", "revenue mix", "Y% from courses/memberships/rentals", "Z% of turnover", or "share of revenue" is a fraction of total revenue, NOT a fraction of budget. Budget (allocated capital, spend ceiling) and revenue (incoming sales / income / receipts) can differ substantially in commercial plans — a 2,000,000 DKK budget may target very different total revenue. When you build a formula like channel_revenue = revenue_target * channel_share, do NOT substitute budget_total for revenue_target. The same discipline applies to cost-share, margin-share, contribution-share, and channel-share percentages — identify the correct denominator (revenue, cost base, cash inflow, …) from the source's own framing and declare it.
+
+If the digest provides a budget but no explicit revenue target while a revenue-mix share is present, add the revenue target to missing_values_to_estimate with id `year1_revenue_target_dkk` (or the period-appropriate equivalent) and reference it from any revenue-share formula. Do not silently fall back to the budget value — that conflates two distinct quantities and distorts every downstream coverage and utilization ratio derived from the formula.
+
 Represent all percentages as fractions between 0 and 1. For example, 60% must be value: 0.6 and unit: "fraction". Do not use value: 60 for percentages.
 
 When choosing between a generic timeline value and a gate criterion, prefer the gate criterion if it affects funding, approval, operational viability, or continuation.

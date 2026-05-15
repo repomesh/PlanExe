@@ -54,14 +54,6 @@ logger = logging.getLogger(__name__)
 
 
 class ReportSectionTypeEnum(str, Enum):
-    # No STRATEGIC_DECISIONS entry on purpose: the full Strategic Decisions
-    # section also contains rejected alternatives whose numbers should not be
-    # extracted as parameters. SELECTED_SCENARIO is the upstream of "what
-    # plan are we modelling"; strategic_decisions.md still arrives via the
-    # multi-file Luigi blobs that feed review_plan / premortem /
-    # expert_criticism, so its content is not lost — only the standalone
-    # compression path is removed to prevent double-compression and
-    # rejected-alternative leakage.
     SELECTED_SCENARIO = "selected_scenario"
     REVIEW_PLAN = "review_plan"
     PREMORTEM = "premortem"

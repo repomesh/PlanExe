@@ -1,0 +1,57 @@
+{
+  "taster_conversion_rate": {
+    "unit": "fraction",
+    "low": 0.05,
+    "base": 0.15,
+    "high": 0.25,
+    "rationale": "Free-trial-to-paid conversion typically clusters 5-25 percent within 90 days.",
+    "source": "data",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
+  },
+  "month4_gate_release_inr": {
+    "unit": "INR",
+    "low": 0,
+    "base": 250000,
+    "high": 250000,
+    "rationale": "Binary gate-dependent release: 0 if Month-3 review fails, full tranche if it passes.",
+    "source": "data",
+    "sampling_discipline": "bernoulli_gate",
+    "non_negative": true,
+    "default_pass_probability": 0.6
+  },
+  "operating_weeks_per_year": {
+    "unit": "weeks_per_year",
+    "low": 48,
+    "base": 48,
+    "high": 48,
+    "rationale": "Pinned by published operating calendar.",
+    "source": "data",
+    "sampling_discipline": "fixed",
+    "non_negative": true,
+    "default_pass_probability": null
+  },
+  "taster_attendees_year1": {
+    "unit": "people",
+    "low": 100,
+    "base": 300,
+    "high": 600,
+    "rationale": "Capacity-driven; bounded by community reach.",
+    "source": "assumption",
+    "sampling_discipline": "integer",
+    "non_negative": true,
+    "default_pass_probability": null
+  },
+  "instructor_hourly_rate_inr": {
+    "unit": "INR_per_hour",
+    "low": 400,
+    "base": 600,
+    "high": 900,
+    "rationale": "Local benchmarks for part-time creative instructors.",
+    "source": "data",
+    "sampling_discipline": "continuous",
+    "non_negative": true,
+    "default_pass_probability": null
+  }
+}

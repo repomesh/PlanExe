@@ -1,6 +1,6 @@
 ---
 name: run-scenarios
-description: Use when the user wants to compute deterministic low/base/high scenario outputs for a PlanExe model — given an extract-parameters JSON, a generate-bounds JSON, and a generate-calculations Python module — producing a scenario result JSON with inputs, outputs, comparison spread, and warnings
+description: Use when the user wants to compute deterministic low/base/high scenario outputs for a PlanExe model — given an extract-parameters-from-full JSON, a generate-bounds JSON, and a generate-calculations Python module — producing a scenario result JSON with inputs, outputs, comparison spread, and warnings
 ---
 
 # Run Low/Base/High Scenarios
@@ -94,7 +94,7 @@ Numeric JSON rules: no `NaN`, no `Infinity` — write `null` and add a warning. 
 
 - System prompt (authoritative): `system-prompt.txt`
 - Pipeline overview and "scenario purpose" list: `../../README.md`, Stage 6
-- Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`
+- Companion skills: `../extract-parameters-from-full/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`
 - Example input set for testing (all from the same run):
   - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v12/parameters.json`
   - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v12/bounds.json`

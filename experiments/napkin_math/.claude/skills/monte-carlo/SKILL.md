@@ -1,15 +1,15 @@
 ---
 name: monte-carlo
-description: Use when the user wants Monte Carlo simulation of a PlanExe model — sampling from bounds to produce output distributions (mean/std/percentiles), threshold pass probabilities, and Pearson-correlation sensitivity rankings — given an extract-parameters JSON, a generate-bounds JSON, a generate-calculations Python module, and optional run settings
+description: Use when the user wants Monte Carlo simulation of a PlanExe model — sampling from bounds to produce output distributions (mean/std/percentiles), threshold pass probabilities, and Pearson-correlation sensitivity rankings — given an extract-parameters-from-full JSON, a generate-bounds JSON, a generate-calculations Python module, and optional run settings
 ---
 
 # Monte Carlo Simulation
 
 ## Overview
 
-Wraps the Monte Carlo system prompt at `system-prompt.txt` (next to this file) and applies it to the same trio of artifacts that `run-scenarios` consumes, plus an optional settings object. Output is a strict JSON document with per-output summary statistics, threshold pass probabilities, and a sensitivity ranking of input drivers.
-
 This stage is **stochastic** — it samples from bounds many times. Contrast with `run-scenarios`, which evaluates the model deterministically at three points only.
+
+The simulation itself is performed by a Python script (`experiments/napkin_math/run_monte_carlo.py`), not by the LLM. The script imports `calculations.py`, draws samples with a seeded NumPy RNG, runs the loop, and writes `montecarlo.json`. The script is authoritative; this skill is a thin wrapper that locates inputs, builds an optional settings file, and invokes the runner.
 
 Stage 7 of the pipeline described in `planexe_simulator/README.md`.
 
@@ -29,45 +29,56 @@ Not for: regenerating any prior artifact, replacing the deterministic scenario t
    - calculations Python module (e.g. `output/v12/calculations.py`)
    - **settings JSON** (optional — `n_runs`, `seed`, `distribution_default`, `outputs_of_interest`, `thresholds`, `gate_probabilities`, `correlation_groups`)
 
-   If any required input is missing, ask. Defaults for settings are listed below.
+   If any required input is missing, ask. If the user wants thresholds or non-default settings, write them to a small JSON file and pass `--settings`.
 
-2. **Read `system-prompt.txt`** (sibling of this SKILL.md). Sampling rules, distribution choices, threshold semantics, and sensitivity computation are authoritative.
+2. **Invoke the runner.** Requires Python 3.11+ with NumPy:
 
-3. **Read all three required artifacts** plus the settings if provided.
+   ```
+   /opt/homebrew/bin/python3.11 experiments/napkin_math/run_monte_carlo.py \
+     --parameters   <path>/parameters.json \
+     --bounds       <path>/bounds.json \
+     --calculations <path>/calculations.py \
+     [--settings   <path>/settings.json] \
+     [--output     <path>/montecarlo.json]
+   ```
 
-4. **Build sampled input pools** per the system prompt's selection rules. For each variable with bounds, choose a distribution (triangular default; uniform if requested; Bernoulli for binary gate-dependent monetary variables; clamp/round for fraction and integer-count units).
+   Default output path is `<dir-of-parameters>/montecarlo.json`. The script prints a one-line summary (n_runs, output count, threshold count, warning count) on stdout.
 
-5. **Run the simulation** for `n_runs`. Execute calculation functions in the same order as `run-scenarios` (recommended_first then derived_questions). Record finite results; count and warn (in aggregate) on `NaN`/`Infinity`/exceptions/missing dependencies.
+3. **Report back.** Tell the user the output path and the one-line summary. If the user asks for interpretation, read the JSON, then explain — but never replace running the script with hand-computed numbers.
 
-6. **Compute summary stats, threshold probabilities, sensitivity** — emit per the output shape.
+## What the runner does (so the LLM can describe results accurately)
 
-7. **Output destination.** Default: write to `<dir-of-parameters>/montecarlo.json` next to the inputs. Print the file path back, plus a one-line summary (n_runs, output count, threshold count, warning count).
+The runner does **no** lexical pattern-matching on id strings, unit strings, or rationale text. Every semantic classification it needs is read verbatim from upstream-declared fields. If a required field is missing, the runner exits with `SCHEMA ERROR` and names which upstream stage to re-run.
 
-## Settings defaults (re-stated for emphasis)
+- **Distributions per bounded variable** — driven by the bound's `sampling_discipline` field (required, declared by `generate-bounds`):
+  - `"fixed"` — always returns the single pinned value
+  - `"bernoulli_gate"` — Bernoulli draw with probability from `settings.gate_probabilities[id]` if set, else the bound's `default_pass_probability` (required, in `[0, 1]`). Returns `high` on pass, `low` on fail. Works for any unit — currency tranches, permit toggles, regulatory pass/fail.
+  - `"integer"` — sample triangular/uniform, round to nearest integer, re-clamp to `[low, high]`
+  - `"fraction"` — sample triangular/uniform, clamp to `[0, 1]`
+  - `"continuous"` — sample triangular/uniform with no extra rounding or clamping beyond `[low, high]`
+  - Default base distribution: triangular `(low, mode=base, high)`. `distribution_default: "uniform"` switches to uniform.
+  - The bound's `non_negative: bool` (required) drives whether draws are clamped to `>= 0`.
 
-| Setting | Default | Bounds |
-|---|---|---|
-| `n_runs` | 10000 | int in [100, 100000] |
-| `seed` | 12345 | int |
-| `distribution_default` | `"triangular"` | `triangular` or `uniform` |
-| `outputs_of_interest` | `[]` (= summarize all computed outputs) | list of output ids |
-| `thresholds` | `{}` | id → `{operator, value}` with operator in `> >= < <= == !=` |
-| `gate_probabilities` | `{}` | id → pass-probability for binary gate-dependent monetary variables; default 0.5 if absent (with warning) |
-| `correlation_groups` | `[]` | list of `{ids, direction: positive | negative}` |
+- **Output names and units:** the runner uses `entry.output_name` and `entry.output_unit` from each `recommended_first_calculations` / `derived_questions` entry, declared by `extract-parameters-from-full`. The runner does **not** parse `formula_hint` to recover the name, and does **not** infer units from id tokens. The LLM is the single authority for both.
 
-## Distribution rules (the most important ones)
+- **Calculation execution:** uses `inspect.signature` on each generated function to pull args from the run's input pool. Order: `recommended_first_calculations` first, then `derived_questions`. Outputs are added to the pool so later functions can depend on them. Missing dependencies / non-finite results / exceptions skip the run for that output (one aggregated warning, not per-run noise).
 
-- **Default**: triangular `(low, mode=base, high)`
-- **Fixed** (`low == base == high`): always return that value
-- **Binary gate-dependent monetary** (unit is monetary, `low == 0`, `base == high`, rationale mentions binary/gate/release/etc.): Bernoulli with pass-probability from `gate_probabilities` (default 0.5 + warning)
-- **Integer counts** (people, kits, centers, days, etc.): sample continuously then round
-- **Fractions**: clamp to `[0, 1]`
-- **Non-negative quantities** (people, money, counts, rates, events, capacities): clamp to `≥ 0`
-- Never sample outside `[low, high]`
+- **Sensitivity:** Pearson correlation between each sampled input and each summarized output, top 5 by `|correlation|`. Only inputs that vary AND are used directly or indirectly by the output AND have ≥20 finite paired samples are considered. `NaN` correlations become `null` + warning.
 
-By default variables are **independent**. Don't invent correlations.
+- **Thresholds:** operators `>  >=  <  <=  ==  !=` only. Probability = success_count / valid_count. `valid_count == 0` → probability `null`.
 
-## Output Shape (re-stated for emphasis — see system prompt for full detail)
+- **By default variables are independent.** `correlation_groups` is currently parsed but not yet implemented in the runner; if the user passes them, the script will accept the setting and ignore correlation enforcement. Update the runner if correlation is actually needed.
+
+## Required upstream schema
+
+For the runner to accept the artifacts, the upstream LLM stages must have emitted:
+
+- **Each `bounds.json` entry** — `sampling_discipline` (string, one of `fixed | bernoulli_gate | integer | fraction | continuous`), `non_negative` (bool), `default_pass_probability` (number in `[0, 1]` when `sampling_discipline == "bernoulli_gate"`, otherwise `null`).
+- **Each `recommended_first_calculations` and `derived_questions` entry with non-null `formula_hint`** — `output_name` (snake_case id of the computed value) and `output_unit` (unit string).
+
+If any required field is missing, the runner exits with `SCHEMA ERROR: <message>. Re-run <stage>.` and exit code 2. Fix the upstream artifact and re-run; the runner has no fallback path that re-guesses any of these.
+
+## Output Shape
 
 ```json
 {
@@ -94,29 +105,24 @@ By default variables are **independent**. Don't invent correlations.
 }
 ```
 
-Sensitivity = Pearson correlation between each sampled input and each summarized output, top 5 by `|correlation|`. JSON forbids `NaN`/`Infinity` — write `null` and warn.
+JSON forbids `NaN`/`Infinity` — the runner writes `null` and adds a warning. Identical inputs + identical seed produce a byte-identical output file.
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---|---|
-| Wrapping output in ```` ```json ```` fences | Raw JSON only |
-| Outputting per-run sampled rows | Spec forbids it; only summary stats are emitted |
-| Producing low/base/high tables instead of distributions | Wrong stage — that's `run-scenarios`. This one samples |
-| One warning per failed run instead of one aggregated | Aggregate by failure type; the spec explicitly forbids per-run noise |
-| Sampling outside `[low, high]` | All distributions must respect the bounds |
-| Defaulting binary gate variables to 0.5 silently | Use 0.5, but emit a warning naming the variable |
-| Inventing correlation between variables not in `correlation_groups` | Independence is the default; never invent |
-| Claiming causality from a high Pearson correlation | Sensitivity ≠ causation; spec forbids the claim |
-| Computing sensitivity for inputs that don't vary (e.g. fixed values, constants) | Drop them from the ranking |
-| Writing `Infinity` / `NaN` into JSON | Write `null` and warn — JSON forbids both |
+| Hand-rolling stats inside the LLM response | Run the script. Never produce summary numbers without it. |
+| Producing low/base/high tables instead of distributions | Wrong stage — that's `run-scenarios`. This one samples. |
+| Claiming causality from a high Pearson correlation | Sensitivity ≠ causation; only describe directional strength. |
+| Treating "0% probability" as impossible | It means 0 of `valid_count` samples passed; widen bounds or revisit the model. |
+| Running with `python3` when only `python3.11` has NumPy | Use the explicit interpreter path. |
 
 ## Reference
 
-- System prompt (authoritative): `system-prompt.txt`
+- Runner (authoritative implementation): `experiments/napkin_math/run_monte_carlo.py`
 - Pipeline overview: `../../README.md`, Stage 7
-- Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
-- Example input set for testing (all from the same run):
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v12/parameters.json`
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v12/bounds.json`
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v12/calculations.py`
+- Companion skills: `../extract-parameters-from-full/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
+- Synthetic fixture exercising every `sampling_discipline` (used as the runner smoke test):
+  - `experiments/napkin_math/tests/fixtures/smoke/parameters.json`
+  - `experiments/napkin_math/tests/fixtures/smoke/bounds.json`
+  - `experiments/napkin_math/tests/fixtures/smoke/calculations.py`

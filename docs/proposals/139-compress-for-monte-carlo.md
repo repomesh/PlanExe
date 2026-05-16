@@ -559,7 +559,7 @@ The first downstream consumer lives in
   bundle (four compressed + four raw), with Strategic Decisions
   replaced by Selected Scenario per this proposal
 - `.claude/skills/extract-parameters-from-digest/` — sibling of
-  `extract-parameters` that reads the assembled bundle and emits a
+  `extract-parameters-from-full` that reads the assembled bundle and emits a
   parameter-extraction JSON; system prompt carries the
   cross-section canonicalisation rule and the budget-vs-revenue
   denominator rule

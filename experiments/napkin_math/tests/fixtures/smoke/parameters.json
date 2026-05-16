@@ -1,0 +1,111 @@
+{
+  "plan_summary": {
+    "plan_name": "Synthetic Workshop",
+    "plan_type": "test",
+    "primary_goal": "Exercise every sampling discipline.",
+    "modelling_frame": "Year-1 viability with one gate."
+  },
+  "key_values": [
+    {
+      "id": "year1_budget_inr",
+      "label": "Year 1 total budget",
+      "category": "budget",
+      "value_type": "explicit",
+      "unit": "INR",
+      "value": 1000000,
+      "comment": "Pinned by sponsor; no uncertainty.",
+      "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
+      "depends_on": [],
+      "modelling_priority": "critical",
+      "uncertainty": "low",
+      "source_text": "1,000,000 INR Year 1 envelope"
+    },
+    {
+      "id": "operating_weeks_per_year",
+      "label": "Operating weeks per year",
+      "category": "time",
+      "value_type": "explicit",
+      "unit": "weeks_per_year",
+      "value": 48,
+      "comment": "Fixed schedule.",
+      "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
+      "depends_on": [],
+      "modelling_priority": "high",
+      "uncertainty": "low",
+      "source_text": "Operates 48 weeks per year"
+    },
+    {
+      "id": "taster_conversion_rate",
+      "label": "Taster conversion rate",
+      "category": "conversion",
+      "value_type": "explicit",
+      "unit": "fraction",
+      "value": 0.15,
+      "comment": "Share of taster attendees who sign up.",
+      "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
+      "depends_on": [],
+      "modelling_priority": "high",
+      "uncertainty": "high",
+      "source_text": "Target 15% taster conversion"
+    },
+    {
+      "id": "month4_gate_release_inr",
+      "label": "Month-4 gated tranche",
+      "category": "funding_gate",
+      "value_type": "explicit",
+      "unit": "INR",
+      "value": 250000,
+      "comment": "Released only if month-3 milestones met.",
+      "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
+      "depends_on": [],
+      "modelling_priority": "critical",
+      "uncertainty": "high",
+      "source_text": "250,000 INR conditional on Month-3 review"
+    }
+  ],
+  "derived_questions": [],
+  "missing_values_to_estimate": [
+    {
+      "id": "taster_attendees_year1",
+      "label": "Taster attendees year 1",
+      "unit": "people",
+      "why_needed": "Denominator for conversion calculation.",
+      "suggested_estimation_method": "Capacity per session times planned session count, bounded by reach."
+    },
+    {
+      "id": "instructor_hourly_rate_inr",
+      "label": "Instructor hourly rate",
+      "unit": "INR_per_hour",
+      "why_needed": "Drives total staffing cost.",
+      "suggested_estimation_method": "Market rate for part-time instructors."
+    }
+  ],
+  "recommended_first_calculations": [
+    {
+      "id": "calc_taster_converted_members",
+      "label": "Members converted from tasters",
+      "formula_hint": "taster_converted_members = taster_attendees_year1 * taster_conversion_rate",
+      "output_name": "taster_converted_members",
+      "output_unit": "people",
+      "depends_on": ["taster_attendees_year1", "taster_conversion_rate"],
+      "why_first": "Quantifies the local-member pipeline."
+    },
+    {
+      "id": "calc_total_budget_with_gate_inr",
+      "label": "Total budget including gated tranche",
+      "formula_hint": "total_budget_with_gate_inr = year1_budget_inr + month4_gate_release_inr",
+      "output_name": "total_budget_with_gate_inr",
+      "output_unit": "INR",
+      "depends_on": ["year1_budget_inr", "month4_gate_release_inr"],
+      "why_first": "Establishes the post-gate spending envelope."
+    }
+  ]
+}

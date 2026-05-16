@@ -23,7 +23,7 @@ Given a PlanExe sample directory (e.g.
    into the parameter extractor.
 
 That combined file is the input you point the extract-parameters-from-digest
-skill at, to compare head-to-head with the extract-parameters skill (which
+skill at, to compare head-to-head with the extract-parameters-from-full skill (which
 reads the full PlanExe HTML report).
 
 Defaults to a sibling ``output/<planexe-dir-name>/`` directory next to this

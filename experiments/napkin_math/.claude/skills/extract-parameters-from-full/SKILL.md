@@ -1,5 +1,5 @@
 ---
-name: extract-parameters
+name: extract-parameters-from-full
 description: Use when the user wants to extract parameters, modelling values, or key variables from a PlanExe report (HTML or text) for napkin math, triage, or Monte Carlo simulation
 ---
 
@@ -30,6 +30,7 @@ Not for: full report summarisation, narrative analysis, code generation. The sys
 - **JSON only.** No markdown fences, no prose, no explanation before or after.
 - **Percentages as fractions** between 0 and 1 with `unit: "fraction"`. Never `value: 60` for 60%.
 - **No invented ids in `formula_hint`** — every variable must be declared in `key_values`, `missing_values_to_estimate`, or the object's own `depends_on`.
+- **Every entry with a non-null `formula_hint` MUST also declare `output_name` (snake_case id of the computed value) and `output_unit`** (e.g. `"DKK"`, `"people"`, `"fraction"`). Downstream consumers — generate-calculations, run-scenarios, monte-carlo — read these directly and do not parse `formula_hint` or pattern-match on tokens. The LLM is the single authority for both fields.
 - **Prefer missing-but-needed values over minor explicit values.** Don't dump every budget line.
 - **Clean `source_text`** — strip citations, footnote markers, replacement chars, UI artifacts.
 

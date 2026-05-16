@@ -71,23 +71,13 @@ If depends_on contains an id that does not appear on the formula RHS, still incl
 FUNCTION NAME SELECTION
 ====================
 
-If formula_hint is assignment form:
+The function name is the entry's "output_name" field — extract-parameters-from-full emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name.
 
-output_id = expression
-
-then use output_id as the function name.
-
-If formula_hint is expression-only form:
-
-expression
-
-then use the current entry's id as the function name.
+Do not parse formula_hint to recover the function name. If output_name is missing for an entry whose formula_hint is non-null, treat the entry as malformed and emit a skipped comment naming the entry id and the missing field.
 
 The function name must be valid snake_case Python.
 
-If the chosen function name would duplicate a previously emitted function name, use the current entry's id as the function name instead.
-
-If the entry id also collides with a previously emitted function name, emit a skipped comment.
+If output_name would duplicate a previously emitted function name, fall back to the entry's id. If the entry id also collides, emit a skipped comment.
 
 Example:
 

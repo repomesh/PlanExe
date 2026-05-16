@@ -204,22 +204,29 @@ output directories use `COMPRESS_FULL_SAMPLE_DIR` and
 
 ## Status
 
-The current bundle (`selected_scenario` + `review_plan` + `premortem` +
-`expert_criticism`) is graded usable for serious pipeline testing.
-Recent external review (ChatGPT) put all four files at **B+** overall:
+The compressor is now consumed by a first downstream reader: the
+`extract-parameters-from-digest` skill in
+`experiments/napkin_math/.claude/skills/`, driven by
+`experiments/napkin_math/prepare_extract_input.py` which assembles the
+137-recommended bundle (the four compressed sections + four raw
+"Keep" sections). External review of the v26 head-to-head run rated
+the bundle as the best version produced so far and accepted the
+resulting `parameters.json` after one prompt-side fix (budget vs
+revenue denominator, recorded below).
+
+Per-section quality after the v26 iteration:
 
 - Selected scenario: no rejected-alternative leakage; staffing-model
-  description is unambiguous; missing-data items are primitive
+  description unambiguous; missing-data items are primitives
   (electricity DKK/kWh, monthly shipping cost, FTE salary burden, etc.).
 - Review plan: clean executable gates with deadlines and numeric
   thresholds; consistent `if/then` form; baseline anchors clearly
   separated from `stress_test` shocks.
 - Premortem: stress magnitudes consistently tagged `stress_test`
-  (reliably 6/6 on the risks bucket in repeated runs after the
-  three-iteration robustness fix to the source_status definitions);
-  baseline plan facts kept separate.
-- Expert criticism: useful quantified estimates with the right epistemic
-  tags; mixed-language fragments eliminated.
+  (reliably 6/6 on the risks bucket after the three-iteration
+  source_status robustness fix); baseline plan facts kept separate.
+- Expert criticism: useful quantified estimates with the right
+  epistemic tags; mixed-language fragments eliminated.
 
 Per-section runtime is ~12–20 s for the six chained LLM calls. Each
 `numeric_values` call typically produces 6–8 candidates, of which 5–8
@@ -274,14 +281,34 @@ Danish/English hybrid sentences that earlier attempts produced are gone.
   threshold into `missing_data_to_estimate`.
 - Add a currency-consistency rule keyed off the source's dominant
   currency to catch the "dollar amount in a DKK plan" pattern.
-- Extend the scoring/tagging pattern to additional Luigi outputs
-  (`data_collection`, `consolidate_assumptions`) if downstream extraction
-  needs them as inputs.
-- Consider a dedup / merge step for risks and assumptions when a section
-  paraphrases the same shock multiple times.
 - Optionally: a separate `expert_estimate` source_status for
   critic-proposed quantified impacts, distinguishing them from
   premortem-style `stress_test` numbers.
+- Investigate whether the section-by-section over-production rate
+  (currently 8 candidates per bucket, top-6 kept) should adapt to the
+  section's role — premortem might justify more risk candidates,
+  selected_scenario fewer.
+- Evaluate a deterministic validator + cheap-model repair loop on
+  `parameters.json` (the downstream consumer's output) rather than
+  growing the extractor prompt with more invariant rules. The
+  compressor's job is mostly done; the next wins are in the
+  extract→validate→repair stage.
+
+### Done (since first writing this proposal)
+
+- Denominator-pairing rule added to the `missing_data_to_estimate`
+  bucket prompt so every rate, share, conversion rate, FTE count, and
+  failure-duration magnitude in earlier buckets gets its matching
+  denominator surfaced as a `[missing]` item.
+- Number-word digit annotation in `line_english` (the LLM writes
+  "four (4) part-time instructors") so the numeric-density scoring
+  bonus picks up source phrases that state quantities as words.
+- Numeric-density bonus added to the composite ranking score
+  (language- and domain-neutral, unlike the rejected
+  `PROTECTED_MODELLING_TERMS` experiment).
+- Cross-section canonicalisation moved out of the compressor and into
+  the downstream `extract-parameters-from-digest` skill prompt, where
+  it belongs.
 
 ## Insights from iterating with reviewer feedback
 
@@ -417,19 +444,125 @@ correct content or non-existent. A two-minute substring check or content
 inspection before making a prompt change saved chasing ghosts. Treat
 external feedback as a candidate signal, not a directive.
 
+### Scoring code must stay language- and domain-neutral
+
+A v24-era iteration added a `PROTECTED_MODELLING_TERMS` boost to the
+ranker: lines containing words like "budget", "contingency", "revenue",
+"labor", "rate", "break-even", "hourly" were given a score bonus on the
+theory that those concepts are modelling-relevant. The list was
+English-only and commercial-finance-biased. PlanExe inputs are
+multilingual — prompts arrive in Danish, French, German, Greenlandic —
+and domain-spanning: house renovations, hobby projects, public-health
+interventions, civic plans. A protected-term list silently downranks
+Danish phrasing and non-commercial plans without any signal in the
+output that the bias exists. The current ranker keeps only
+language- and domain-neutral signals: numeric token density (digits are
+digits in any language) plus the code-verified quote bonus. If lexical
+cues are useful, they belong in the prompt, where the LLM can apply
+them across languages — not in substring-match code.
+
+### Annotate number-words in the prompt, not in code
+
+A source phrase like "four part-time instructors" carries the same
+modelling signal as "4 part-time instructors", but a digit-only ranker
+misses the first form. The wrong fix is a multilingual number-word
+table in the ranker — that reintroduces the language-bias problem
+above. The right fix is a prompt rule: the compression LLM annotates
+count-words inline with their digit form (`four (4) part-time
+instructors`) in `line_english`, while keeping the native phrasing in
+`line_original`. The numeric-density bonus then picks up the digit
+form naturally, and the LLM handles the multilingual recognition
+where it has the training to do so. Vague quantifiers ("several", "a
+handful", "some") are explicitly excluded from the rule — the prompt
+forbids inventing digits for them.
+
+### Pair every rate-like value with its missing denominator
+
+For Monte Carlo, a rate is useful only when paired with the scaling
+input it operates on. The compressor over-produces on purpose: when
+earlier buckets capture a rate, share, per-unit price, conversion
+rate, FTE count, or failure-duration magnitude, the
+`missing_data_to_estimate` bucket emits the matching denominator —
+revenue target for a revenue-mix share, billable hours for an hourly
+rate, attendee count for a conversion rate, per-head cost for a
+headcount, per-period revenue exposure for a downtime duration. This
+rule produced one of the largest single improvements to downstream
+extraction quality after the multi-call architecture itself, because
+it stops the extractor from inventing arbitrary denominators.
+
+### Canonicalisation belongs to the consumer, not the compressor
+
+Each compressed section is fed a different multi-file Luigi blob and
+asked to be locally complete. As a result the four sections routinely
+surface the same primitive ("minimum viable rental rate", "off-peak
+hourly price", "speculative high hourly rate") under different
+phrasings. The redundancy is a feature: it gives the downstream
+consumer enough hooks to canonicalise correctly. Pushing
+canonicalisation upstream into the compressor would couple it to
+extractor schema decisions and lose the per-section provenance trail.
+The downstream `extract-parameters-from-digest` skill prompt carries
+the canonicalisation rule with concrete merge patterns ("collapse all
+hourly-rate phrasings to one `*_hourly_rate_dkk` id, drop the rest").
+
+### Fix prompts, not outputs
+
+When external review (ChatGPT and similar) flags a flaw in a generated
+artifact — a compressed digest, a `parameters.json` — the fix belongs
+in the prompt or code that produced it, not in the artifact itself.
+Hand-patching the output is a local one-shot fix; the underlying
+generator still has the bug, so the next run reproduces it. The cost
+of a real prompt fix is one edit plus a re-run; the cost of repeated
+hand-patches is unbounded. This applies equally to bucket-prompt
+issues in `compress_report_section.py` and to schema/canonicalisation
+issues in the downstream extract-skill prompt.
+
+### Budget and revenue are not the same denominator
+
+A v26-era extract bug computed `rental_revenue = budget * rental_share`
+because the prompt did not draw the distinction explicitly. The plan's
+25% rental share is a fraction of Year 1 *revenue*, not of Year 1
+budget — those are different quantities in any commercial plan.
+Without an explicit rule, the LLM substituted budget for revenue
+because budget was the only absolute amount available in the digest.
+The fix lives downstream in
+`extract-parameters-from-digest/system-prompt.txt` (the "Budget vs
+revenue denominator rule"), but the compressor should be aware: when
+a section quotes a revenue-mix percentage *and* a budget total, the
+compressor should not let the language collapse the two — keep
+budget and revenue framings distinct in `line_english` so downstream
+canonicalisation has clean signal to work from.
+
 ## Implementation
 
 The compressor lives in `worker_plan/worker_plan_internal/parameter_extraction/`:
 
 - `compress_report_section.py` — schemas, system and per-bucket prompts,
   six-call chained orchestration, code-side annotation and forced-status
-  override, markdown render
+  override, markdown render. The composite ranking score combines
+  `source_evidence * modelling_relevance`, a code-verified quote bonus,
+  and a language-neutral numeric-density bonus. The
+  `missing_data_to_estimate` bucket prompt carries the denominator-pairing
+  rule. The shared `line_english` prompt carries the number-word
+  digit-annotation rule.
 - `run_compress_full.py` — driver that builds each job's multi-file blob
   in the same shape the corresponding Luigi task uses, then runs all four
   compress jobs
 - `tests/test_compress_report_section.py` — schema shape, section-type
-  normalisation, markdown render, forced-status override, and
-  English/original-language split
+  normalisation, markdown render, forced-status override,
+  English/original-language split, language-neutral numeric-density
+  bonus, and composite-score head-to-head ordering
+
+The first downstream consumer lives in
+`experiments/napkin_math/`:
+
+- `prepare_extract_input.py` — assembles the 137-recommended 8-section
+  bundle (four compressed + four raw), with Strategic Decisions
+  replaced by Selected Scenario per this proposal
+- `.claude/skills/extract-parameters-from-digest/` — sibling of
+  `extract-parameters` that reads the assembled bundle and emits a
+  parameter-extraction JSON; system prompt carries the
+  cross-section canonicalisation rule and the budget-vs-revenue
+  denominator rule
 
 Invoke as:
 

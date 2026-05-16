@@ -227,9 +227,9 @@ def render_scenarios(scenarios: dict | None) -> list[str]:
         "input set to the **high** end. It is a sanity check, not a full picture.",
         "",
         "The labels refer to **inputs**, not to whether the outcome is good or bad. A high-cost input "
-        "is bad news; a high-effectiveness input is good news. The honest read is: if a number that the "
-        "plan needs to stay positive is already negative in the middle column, the plan is in trouble at "
-        "its own central assumptions — never mind the worst case.",
+        "is bad news; a high-effectiveness input is good news. If a number that the plan needs to stay "
+        "positive is already negative in the middle column, the plan is in trouble at its own central "
+        "assumptions — never mind the worst case.",
         "",
         "| Number | Unit | Low inputs | Middle inputs | High inputs | Range |",
         "|---|---|---:|---:|---:|---:|",

@@ -22,17 +22,23 @@ For example, in a public-health plan, the key values may be vulnerable populatio
 ## Pipeline overview
 
 ```text
-PlanExe report
-  -> extract-parameters
+PlanExe report (HTML or extracted text)
+  -> [optional] compress_report_section + prepare_extract_input.py
+       (produces extract_parameters_input.md, the "digest")
+  -> extract-parameters                  (full HTML input)
+        OR
+     extract-parameters-from-digest      (digest input — same output schema)
   -> validate-parameters
   -> repair-parameters, optional
   -> generate-bounds
   -> generate-calculations
   -> run-scenarios
-  -> monte-carlo
+  -> monte-carlo                          (Python runner: experiments/napkin_math/run_monte_carlo.py)
 ```
 
-Each stage has a narrow responsibility. This keeps the system easier to debug and prevents a single prompt from trying to do everything.
+Each stage has a narrow responsibility. Stages 1-6 are LLM-driven skills under `.claude/skills/`. Stage 7 (Monte Carlo) is the Python script `run_monte_carlo.py`, invoked by the `monte-carlo` skill — the LLM cannot actually sample distributions in-prompt, so the simulation is deterministic Python with a seeded RNG.
+
+There are two extractor skills because PlanExe reports can be very large. `extract-parameters` reads the raw HTML. `extract-parameters-from-digest` reads the much smaller pre-compressed digest produced by `prepare_extract_input.py`. They emit the same JSON shape, so downstream stages do not care which one ran.
 
 ---
 
@@ -98,12 +104,18 @@ Each key value has this shape:
   "value": 0.6,
   "comment": "Pass/fail KPI of the Month 4 gate; share of registered vulnerable residents successfully contacted.",
   "formula_hint": "people_contacted = registered_vulnerable_population * outreach_contact_rate_target",
+  "output_name": "people_contacted",
+  "output_unit": "people",
   "depends_on": ["registered_vulnerable_population", "outreach_contact_rate_target"],
   "modelling_priority": "critical",
   "uncertainty": "medium",
   "source_text": "60% proactive outreach contact rate to the registered vulnerable population"
 }
 ```
+
+`output_name` and `output_unit` are required whenever `formula_hint` is non-null (and `null` when `formula_hint` is `null`). Downstream consumers — `generate-calculations`, `run-scenarios`, `monte-carlo` — read these directly and do not parse `formula_hint` or pattern-match on tokens. The LLM is the single authority for both fields.
+
+When you want the same calculation to live in `recommended_first_calculations` rather than embedded in a key_value, leave `formula_hint` (and `output_name`/`output_unit`) `null` on the key_value and declare the calculation there. Duplicating the formula in both places is a structural error caught by validation.
 
 ## Value types
 
@@ -219,6 +231,8 @@ recommended_first_calculations
 ```
 
 `depends_on` must not introduce new variables.
+
+When a formula depends on the output of another computed entry (e.g. `combined_viability_surplus_dkk` depends on `contingency_reserve_dkk`, which is itself the `output_name` of an entry in `recommended_first_calculations`), the **`id` of that producing entry must equal its `output_name`** so the dependency resolves. In other words, for entries in `recommended_first_calculations` and for `derived_questions`, prefer `id == output_name` so cross-stage references work.
 
 If a formula needs an input that is not declared, the extractor should either:
 
@@ -444,17 +458,39 @@ Example:
     "low": 0.10,
     "base": 0.20,
     "high": 0.30,
-    "rationale": "Approximate range for 65+, chronic illness, social isolation, and housing-risk overlap."
+    "rationale": "Approximate range for 65+, chronic illness, social isolation, and housing-risk overlap.",
+    "source": "assumption",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   },
-  "protection_conversion_rate": {
-    "unit": "fraction",
-    "low": 0.30,
-    "base": 0.55,
-    "high": 0.75,
-    "rationale": "Reflects delivery leakage between contact and usable protection."
+  "month4_gate_release_eur": {
+    "unit": "EUR",
+    "low": 0,
+    "base": 1500000,
+    "high": 1500000,
+    "rationale": "Binary gate-dependent release: 0 if Month 4 gate fails, 1.5M if it passes.",
+    "source": "data",
+    "sampling_discipline": "bernoulli_gate",
+    "non_negative": true,
+    "default_pass_probability": 0.7
   }
 }
 ```
+
+Required fields per bound entry:
+
+| Field | Meaning |
+|---|---|
+| `unit` | unit string (e.g. `"fraction"`, `"DKK"`, `"people"`, `"hours_per_year"`) |
+| `low`, `base`, `high` | the three numbers, with `low ≤ base ≤ high` |
+| `rationale` | ≤30 words explaining the range |
+| `source` | `"data"` (anchored in a real reference) or `"assumption"` |
+| `sampling_discipline` | one of `fixed | bernoulli_gate | integer | fraction | continuous` — read directly by the Monte Carlo runner; no pattern-matching on unit strings |
+| `non_negative` | boolean; when `true`, the runner clamps draws to `≥ 0` |
+| `default_pass_probability` | required number in `[0, 1]` when `sampling_discipline == "bernoulli_gate"`; otherwise must be `null` |
+
+Choose `sampling_discipline` by the variable's nature (people/units → `integer`, share/rate → `fraction`, currency → `continuous`, binary tranche/permit → `bernoulli_gate`, pinned constant → `fixed`). The runner does not infer this; missing or invalid values cause a `SCHEMA ERROR` exit.
 
 ## What needs bounds
 
@@ -584,6 +620,8 @@ Which assumption dominates the result?
 `monte-carlo` samples uncertain inputs and estimates distributions of outputs.
 
 Monte Carlo should come after deterministic calculations and bounds are working.
+
+Unlike Stages 1-6, this stage is **not** LLM-driven. The simulation runs in `experiments/napkin_math/run_monte_carlo.py` — a deterministic Python script with a seeded NumPy RNG. The `monte-carlo` skill is a thin wrapper that locates the inputs, builds optional settings, invokes the runner, and reports back. The LLM cannot actually draw 10k correlated samples in-prompt, so this stage was lifted out of the prompt.
 
 ## Input
 
@@ -742,32 +780,36 @@ The extractor should adapt the modelling frame to the plan's purpose.
 
 # Current status
 
-All six active pipeline stages are implemented as skills under
-`.claude/skills/` and have been tested end-to-end on two unrelated
-PlanExe reports:
+All seven active pipeline stages have been tested end-to-end on three
+unrelated PlanExe reports:
 
 - a public-health resilience plan (Leipzig Heat Response)
 - a commercial consumer-electronics plan (Estonian Faraday enclosure)
+- a commercial community-arts plan (Nuuk Community Clay Workshop — DKK-denominated)
 
-Both reports round-trip cleanly through the full chain — extract,
+All three reports round-trip cleanly through the full chain — extract,
 validate (`valid: true`), bound, calculate, scenario, monte-carlo —
 into versioned output directories under
 `output/<version>/<report-name>/`:
 
 ```text
-parameters.json     extract-parameters
+parameters.json     extract-parameters (or extract-parameters-from-digest)
 validation.json     validate-parameters
 bounds.json         generate-bounds
 calculations.py     generate-calculations
-scenarios.json      run-scenarios
-montecarlo.json     monte-carlo
+scenarios.json      run-scenarios          (LLM-driven)
+montecarlo.json     monte-carlo            (Python runner)
 ```
 
-The same skills handle both domains without per-domain customisation,
-so the pipeline is not plan-type-specific.
+The same skills handle all three domains without per-domain customisation,
+so the pipeline is not plan-type-specific or currency-specific.
 
 `repair-parameters` (Stage 3) remains optional and unbuilt. The
 extractor has so far produced JSON that passes validation cleanly on
 its own; the repair stage will be built if/when an extraction reliably
 fails in a way local schema fixes can resolve.
+
+## Smoke tests
+
+A pytest-style suite at `experiments/napkin_math/tests/test_run_monte_carlo.py` (44 cases) covers the runner's edge cases: sampling-discipline semantics, schema validation for every required field, calculation execution failures, sensitivity ranking, threshold operators, determinism. These tests run in CI via `python test.py` and locally via the `test-napkin-math` skill, which also re-runs the `compress_report_section` pytest suite and the end-to-end smoke fixture under `tests/fixtures/smoke/`.
 

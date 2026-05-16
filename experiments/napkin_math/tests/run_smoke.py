@@ -168,9 +168,9 @@ def check_schema_errors(tmpdir: Path) -> None:
            "output_unit" in cp.stderr)
 
 
-def check_summarize_insights_end_to_end(tmpdir: Path) -> None:
+def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
     """Run the runner against the smoke fixture, then feed both into
-    summarize_insights.py and verify the doom-verdict pipeline works.
+    summarize_assessment.py and verify the doom-verdict pipeline works.
     """
     settings = tmpdir / "summarize_settings.json"
     settings.write_text(json.dumps({
@@ -193,28 +193,30 @@ def check_summarize_insights_end_to_end(tmpdir: Path) -> None:
     if cp.returncode != 0:
         raise CheckFailed(f"runner failed: {cp.stderr}")
 
-    insights = tmpdir / "summarize_insights.md"
-    summarizer = NAPKIN_DIR / "summarize_insights.py"
+    assessment = tmpdir / "summarize_assessment.md"
+    summarizer = NAPKIN_DIR / "summarize_assessment.py"
     cp = subprocess.run(
         [PY, str(summarizer),
          "--parameters", str(FIXTURE_DIR / "parameters.json"),
          "--bounds", str(FIXTURE_DIR / "bounds.json"),
          "--montecarlo", str(mc_out),
-         "--output", str(insights)],
+         "--output", str(assessment)],
         capture_output=True, text=True,
     )
     if cp.returncode != 0:
         raise CheckFailed(f"summarizer failed: {cp.stderr}")
-    body = insights.read_text()
-    _check("insights.md was produced", insights.exists())
-    _check("insights.md contains plan name", "Synthetic Workshop" in body)
-    _check("insights.md contains the gate verdicts section",
+    body = assessment.read_text()
+    _check("assessment.md was produced", assessment.exists())
+    _check("assessment.md contains plan name", "Synthetic Workshop" in body)
+    _check("assessment.md contains the gate verdicts section",
            "## Gate verdicts" in body)
-    _check("insights.md contains the machine summary JSON block",
+    _check("assessment.md contains the machine summary JSON block",
            "## Machine summary" in body and "\"artifact_type\": \"interpretation_layer\"" in body)
-    _check("insights.md contains the artifact contract and provenance map",
+    _check("assessment.md contains the artifact contract and provenance map",
            "## Artifact contract" in body and "## Provenance map" in body)
-    _check("insights.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
+    _check("assessment.md schema version field is present",
+           "\"assessment_schema_version\": 4" in body)
+    _check("assessment.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
            "ROBUST" in body or "MARGINAL" in body)
 
 
@@ -261,7 +263,7 @@ def main() -> int:
         ("bernoulli_arithmetic", check_bernoulli_arithmetic),
         ("sensitivity_ranking", check_sensitivity_ranking),
         ("schema_errors", check_schema_errors),
-        ("summarize_insights_end_to_end", check_summarize_insights_end_to_end),
+        ("summarize_assessment_end_to_end", check_summarize_assessment_end_to_end),
     ]
     failures: list[str] = []
     with tempfile.TemporaryDirectory() as td:

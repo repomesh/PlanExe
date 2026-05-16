@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Summarize napkin_math pipeline outputs into a thin interpretation layer.
+"""Summarize napkin_math pipeline outputs into a plan assessment.
 
-The output (`insights.md`) is a navigation and judgment file over the
-intermediary artifacts (`parameters.json`, `bounds.json`, `calculations.py`,
-`scenarios.json`, `montecarlo_settings.json`, `montecarlo.json`,
-`validation.json`). It does not reproduce the raw simulation tables — those
-live in the JSON files and are referenced via the provenance map.
+The output (`assessment.md`) is a thin interpretation layer — a navigation
+and judgment file over the intermediary artifacts (`parameters.json`,
+`bounds.json`, `calculations.py`, `scenarios.json`,
+`montecarlo_settings.json`, `montecarlo.json`, `validation.json`). It does
+not reproduce the raw simulation tables — those live in the JSON files and
+are referenced via the provenance map.
 
 It declares:
 - what this artifact is and isn't (artifact contract)
@@ -36,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 
-INSIGHTS_SCHEMA_VERSION = 3
+ASSESSMENT_SCHEMA_VERSION = 4
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -209,11 +210,11 @@ def threshold_entries(mc: dict | None, params: dict | None) -> list[dict]:
 
 def render_title_and_frontmatter(params: dict | None) -> list[str]:
     if not params:
-        return ["# Insights", "", "_(parameters.json not available)_", ""]
+        return ["# Assessment", "", "_(parameters.json not available)_", ""]
     summary = params.get("plan_summary", {})
     name = summary.get("plan_name") or "unnamed"
     return [
-        f"# Insights: {name}",
+        f"# Assessment: {name}",
         "",
         f"**Type:** {summary.get('plan_type', 'unknown')}  ",
         f"**Primary goal:** {summary.get('primary_goal', '—')}",
@@ -347,7 +348,7 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         validation_status = "valid" if validation.get("valid") else "invalid"
 
     manifest = {
-        "insights_schema_version": INSIGHTS_SCHEMA_VERSION,
+        "assessment_schema_version": ASSESSMENT_SCHEMA_VERSION,
         "artifact_type": "interpretation_layer",
         "plan_name": plan_summary.get("plan_name"),
         "artifact_set": derive_artifact_set(params_path),
@@ -841,7 +842,7 @@ def render_open_questions() -> list[str]:
 
 # ─── build ─────────────────────────────────────────────────────────────────
 
-def build_insights(params: dict | None, bounds: dict | None,
+def build_assessment(params: dict | None, bounds: dict | None,
                    scenarios: dict | None, mc: dict | None,
                    validation: dict | None,
                    params_path: Path | None, bounds_path: Path | None,
@@ -903,8 +904,8 @@ def main() -> int:
     calculations_path = args.calculations or (base / "calculations.py")
     scenario_outputs_path = args.scenario_outputs or (base / "scenario_outputs.json")
 
-    output = args.output or (base / "insights.md")
-    md = build_insights(
+    output = args.output or (base / "assessment.md")
+    md = build_assessment(
         params=load_json(args.parameters),
         bounds=load_json(args.bounds) if args.bounds else None,
         scenarios=load_json(args.scenarios) if args.scenarios else None,

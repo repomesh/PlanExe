@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 
-INSIGHTS_SCHEMA_VERSION = 2
+INSIGHTS_SCHEMA_VERSION = 3
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -82,7 +82,20 @@ VALUE_TYPE_TO_THRESHOLD_BASIS = {
 SCHEMA_NOTES = {
     "overall_risk_band_enum": ["viable", "marginal", "fragile", "doom", "unknown"],
     "verdict_enum": ["ROBUST", "MARGINAL", "FRAGILE", "DOOM", "UNKNOWN"],
-    "basis_enum": ["report_derived", "model_assumption"],
+    # basis_enum is the union of values that may appear in the `Basis` column
+    # of "Missing inputs ranked by impact" once the pipeline grows. The current
+    # pipeline only emits `report_derived` and `model_assumption`; the rest
+    # are reserved for future provenance types (external research, manual
+    # overrides, etc.).
+    "basis_enum": [
+        "report_explicit",
+        "report_inferred",
+        "report_derived",
+        "model_assumption",
+        "external_reference",
+        "manual_override",
+        "unknown",
+    ],
     "threshold_basis_enum": ["report_explicit", "report_inferred", "model_defined", "unknown"],
     "primary_model_result_semantics": (
         "overall_risk_band reflects the worst declared gate's pass-rate band; "
@@ -481,14 +494,14 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
     for r in doom:
         fail_pct = (1 - (r["probability"] or 0)) * 100
         rows.append(
-            f"- **DOOM** — `{r['id']}` misses {r['operator']} {fmt_number(r['value'])} "
-            f"in {fail_pct:.1f}% of runs. The plan depends on this holding; the math says it almost never does."
+            f"- **DOOM** — `{r['id']}` fails {r['operator']} {fmt_number(r['value'])} "
+            f"in {fail_pct:.1f}% of simulated runs under the current input bounds."
         )
     for r in fragile:
         pass_pct = (r["probability"] or 0) * 100
         rows.append(
-            f"- **FRAGILE** — `{r['id']}` holds in only {pass_pct:.1f}% of runs. "
-            f"The assumptions behind it need a hard review before the plan moves forward."
+            f"- **FRAGILE** — `{r['id']}` holds in only {pass_pct:.1f}% of simulated runs "
+            f"under the current input bounds (fails in the majority)."
         )
     for w in scenario_warns:
         scope = w.get("scenario") or "all"
@@ -565,9 +578,9 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
     rows = [
         "## Decision implications",
         "",
-        "Bridge from gate result to planning consequence. **Structural lever** names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). **Plan-specific revision hint** surfaces the gate's own rationale lifted verbatim from `parameters.recommended_first_calculations[].why_first` (or `derived_questions[].why_it_matters`) plus the threshold parameter the formula tests against — it points at the plan's own framing, not invented tactical advice. The kind of plan revision (cut capacity, change a contract clause, relax a target) is for human or LLM interpretation against the source report.",
+        "Bridge from gate result to planning consequence. **Structural lever** names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). **Gate meaning** surfaces the gate's own rationale lifted verbatim from `parameters.recommended_first_calculations[].why_first` (or `derived_questions[].why_it_matters`) plus the threshold parameter the formula tests against — it points at the plan's own framing, not invented tactical advice. The actual plan revision (cut capacity, change a contract clause, relax a target) is for human or LLM interpretation against the source report.",
         "",
-        "| Gate | Verdict | Planning consequence | Structural lever | Plan-specific revision hint |",
+        "| Gate | Verdict | Planning consequence | Structural lever | Gate meaning |",
         "|---|---|---|---|---|",
     ]
     for r in interpreted:
@@ -734,7 +747,7 @@ def render_confidence_and_trust(mc: dict | None, validation: dict | None) -> lis
     if mc and mc.get("model_confidence"):
         rows.append("### Per-output confidence")
         rows.append("")
-        rows.append("| Output | Grade | Data-sourced inputs | Bound-width / base |")
+        rows.append("| Output | Grade | Declared-source inputs | Bound-width / base |")
         rows.append("|---|:---:|---:|---:|")
         for output_id, info in mc["model_confidence"].items():
             if "data_source_fraction" not in info:
@@ -745,7 +758,10 @@ def render_confidence_and_trust(mc: dict | None, validation: dict | None) -> lis
                 f"| `{output_id}` | **{info['grade']}** | {data_pct:.0f}% | {width:.2f} |"
             )
         rows.append("")
-        rows.append("Per-output reasons are in `montecarlo.json` under `model_confidence`.")
+        rows.append(
+            "Per-output reasons are in `montecarlo.json` under `model_confidence`. "
+            "`Declared-source inputs` is the share of input bounds anchored in the source report's narrative (`bounds.source == data`); the remainder are modelling assumptions. **Neither is empirically observed real-world data.**"
+        )
         rows.append("")
     return rows
 

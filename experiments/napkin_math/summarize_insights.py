@@ -87,6 +87,28 @@ def render_plan_summary(params: dict | None) -> list[str]:
     return lines
 
 
+def aggregate_output_ids(params: dict | None) -> set[str]:
+    """Return output_ids whose formula uses min() over other gates.
+
+    Those magnitudes are not a usual monetary surplus — they pick the worst
+    of several independent gates. The verdict pass/fail is meaningful, the
+    raw number is not. Report them after the individual gates.
+
+    Additive aggregates (Nuuk-style: pool - shock_a - shock_b) are NOT
+    demoted: when the source explicitly names one pool absorbing every
+    pressure, the magnitude is a real depletion of that pool.
+    """
+    if not params:
+        return set()
+    ids: set[str] = set()
+    for src in ("recommended_first_calculations", "derived_questions"):
+        for entry in params.get(src, []):
+            hint = entry.get("formula_hint") or ""
+            if "min(" in hint and entry.get("output_name"):
+                ids.add(entry["output_name"])
+    return ids
+
+
 def classify_thresholds(mc: dict | None) -> dict[str, list[tuple[str, dict, str]]]:
     """Bucket thresholds by verdict severity. Returns {verdict: [(id, threshold, note)]}."""
     buckets: dict[str, list[tuple[str, dict, str]]] = {}
@@ -98,14 +120,20 @@ def classify_thresholds(mc: dict | None) -> dict[str, list[tuple[str, dict, str]
     return buckets
 
 
+def sort_aggregates_last(entries, output_id_index, aggregates):
+    """Stable sort: non-aggregates first, then aggregates."""
+    return sorted(entries, key=lambda e: 1 if e[output_id_index] in aggregates else 0)
+
+
 def render_bad_news_first(mc: dict | None, scenarios: dict | None,
                           params: dict | None, bounds: dict | None) -> list[str]:
     """Consolidate every signal that the plan is in trouble into a single
     top-of-report block. If nothing qualifies, emit nothing."""
     rows: list[str] = []
     buckets = classify_thresholds(mc)
-    doom = buckets.get("DOOM", [])
-    fragile = buckets.get("FRAGILE", [])
+    aggregates = aggregate_output_ids(params)
+    doom = sort_aggregates_last(buckets.get("DOOM", []), 0, aggregates)
+    fragile = sort_aggregates_last(buckets.get("FRAGILE", []), 0, aggregates)
 
     scenario_warns = (scenarios or {}).get("warnings", []) if scenarios else []
     collapses: list[tuple[str, float]] = []
@@ -190,31 +218,36 @@ def render_bad_news_first(mc: dict | None, scenarios: dict | None,
     return rows
 
 
-def render_threshold_verdicts(mc: dict | None) -> list[str]:
+def render_threshold_verdicts(mc: dict | None, params: dict | None = None) -> list[str]:
     if not mc or not mc.get("thresholds"):
         return []
     n_runs = mc.get("settings", {}).get("n_runs")
     runs_phrase = f"{n_runs:,} simulated runs" if isinstance(n_runs, int) else "the simulated runs"
+    aggregates = aggregate_output_ids(params)
     rows = [
-        "## Verdict table (all thresholds, worst first)",
+        "## Verdict table (all thresholds, worst first; min() aggregates after individual gates)",
         "",
         f"For each success condition the plan needs to meet, this is how often it actually meets it across {runs_phrase} that vary every uncertain input within its plausible range.",
         "",
         "Bands: at least 80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, under 20% **DOOM**.",
         "",
-        "| What we wanted | Condition | How often it holds | Verdict | What that means |",
-        "|---|---|---:|---|---|",
+        "Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools. Their verdict (pass/fail) is meaningful; their raw magnitude picks the worst gate's number and is not a real monetary surplus. Individual gates are listed first within each severity band, then the aggregates.",
+        "",
+        "| | What we wanted | Condition | How often it holds | Verdict | What that means |",
+        "|---|---|---|---:|---|---|",
     ]
-    entries: list[tuple[int, str, dict, str, str]] = []
+    entries: list[tuple[int, int, str, dict, str, str]] = []
     for output_id, t in mc["thresholds"].items():
         verdict, note = verdict_for(t.get("probability"))
-        entries.append((VERDICT_SEVERITY.get(verdict, 99), output_id, t, verdict, note))
-    entries.sort(key=lambda x: x[0])
-    for _sev, output_id, t, verdict, note in entries:
+        is_agg = 1 if output_id in aggregates else 0
+        entries.append((VERDICT_SEVERITY.get(verdict, 99), is_agg, output_id, t, verdict, note))
+    entries.sort(key=lambda x: (x[0], x[1]))
+    for _sev, is_agg, output_id, t, verdict, note in entries:
         prob = t.get("probability")
         prob_str = f"{prob * 100:.1f}%" if prob is not None else "n/a"
+        marker = "min" if is_agg else ""
         rows.append(
-            f"| `{output_id}` | {t['operator']} {fmt_number(t['value'])} | {prob_str} | "
+            f"| {marker} | `{output_id}` | {t['operator']} {fmt_number(t['value'])} | {prob_str} | "
             f"**{verdict}** | {note} |"
         )
     rows.append("")
@@ -359,7 +392,7 @@ def build_insights(params: dict | None, bounds: dict | None,
     sections: list[list[str]] = [
         render_plan_summary(params),
         render_bad_news_first(mc, scenarios, params, bounds),
-        render_threshold_verdicts(mc),
+        render_threshold_verdicts(mc, params),
         render_distributions(mc),
         render_sensitivity(mc),
         render_scenarios(scenarios),

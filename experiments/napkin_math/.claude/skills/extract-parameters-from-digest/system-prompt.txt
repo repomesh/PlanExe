@@ -269,6 +269,37 @@ modelling_frame describes the scope of what the calculations actually evaluate, 
 
 Concrete pattern: if the frame says "buffers against A, B, and C shocks" and you only retained calculations that test A and B, the frame must say "buffers against A and B shocks". Do not paper over the gap by keeping the dropped concept in the prose.
 
+Shared-pool legitimacy check for combined surplus tests:
+
+When an aggregate test (combined_viability_surplus, program_viability_surplus, total_capacity_surplus, …) subtracts multiple pressures from one reserve, verify those pressures actually draw from the same pool. The source has to say it — the same named buffer, the same line item, the same budget envelope. If they do, additive netting is correct. If they don't, do not pretend they are fungible: use min() over the individual surplus calculations instead.
+
+Correct additive form (single pool absorbs every pressure):
+
+combined_viability_surplus = pool_reserve - pressure_a - pressure_b - pressure_c
+
+Use this when the source explicitly names one reserve that all pressures debit (example: a 15% contingency that the plan's risk register repeatedly says absorbs labor-law shocks AND revenue shortfalls AND utility overruns).
+
+Correct min() form (separate pools, separate pressures):
+
+combined_viability_surplus = min(surplus_a, surplus_b, surplus_c)
+  where surplus_a = pool_a_reserve - pressure_a
+        surplus_b = pool_b_reserve - pressure_b
+        surplus_c = pool_c_reserve - pressure_c
+
+Use this when each pressure draws on a different pool — settlement liquidity vs revenue economics vs operator cost recovery, for instance. The aggregate threshold "all gates pass" remains meaningful (min >= 0 iff every individual surplus >= 0), but the formula no longer assumes one pool can absorb every shock.
+
+Signs the additive form is wrong (and you should use min()):
+- the pressures are different in kind: liquidity vs revenue vs cost vs capacity vs schedule;
+- different stakeholders own each pool (a clearing-house bank account vs an annual revenue stream vs each operator's IT budget);
+- the source describes each pressure as drawing on a different reserve, even when the absolute numbers are similar.
+
+Signs the additive form is correct:
+- the source explicitly names one buffer that absorbs all of the listed pressures;
+- the pressures are denominated against the same envelope;
+- the risk register repeatedly debits the same pool for each scenario.
+
+The aggregate name should match the form. "combined_viability_surplus" without qualification reads as additive; if you must use min(), prefer a name like "weakest_gate_surplus" or "worst_case_pool_surplus" to signal to a reader that the test is "every gate independently", not "one buffer absorbs everything".
+
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
 If space limits prevent adding the missing input, omit the derived question rather than emitting formula_hint: null.

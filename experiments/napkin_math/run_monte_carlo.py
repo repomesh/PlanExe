@@ -240,7 +240,7 @@ def percentiles(arr: np.ndarray) -> dict:
 def safe_pearson(x: np.ndarray, y: np.ndarray) -> float | None:
     if x.size < 20 or y.size < 20 or x.size != y.size:
         return None
-    if np.std(x) == 0 or np.std(y) == 0:
+    if np.ptp(x) == 0 or np.ptp(y) == 0:
         return None
     r = float(np.corrcoef(x, y)[0, 1])
     if not math.isfinite(r):
@@ -380,7 +380,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
         for vid, arr in input_arrays.items():
             if vid not in all_used:
                 continue
-            if np.std(arr) == 0:
+            if np.ptp(arr) == 0:
                 continue
             mask = finite_mask & np.isfinite(arr)
             if mask.sum() < 20:

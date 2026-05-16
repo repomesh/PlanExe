@@ -168,6 +168,52 @@ def check_schema_errors(tmpdir: Path) -> None:
            "output_unit" in cp.stderr)
 
 
+def check_summarize_insights_end_to_end(tmpdir: Path) -> None:
+    """Run the runner against the smoke fixture, then feed both into
+    summarize_insights.py and verify the doom-verdict pipeline works.
+    """
+    settings = tmpdir / "summarize_settings.json"
+    settings.write_text(json.dumps({
+        "n_runs": 1000, "seed": 7,
+        "thresholds": {
+            "total_budget_with_gate_inr": {"operator": ">=", "value": 1_100_000},
+            "taster_converted_members": {"operator": ">=", "value": 100},
+        },
+    }))
+    mc_out = tmpdir / "summarize_mc.json"
+    cp = subprocess.run(
+        [PY, str(RUNNER),
+         "--parameters", str(FIXTURE_DIR / "parameters.json"),
+         "--bounds", str(FIXTURE_DIR / "bounds.json"),
+         "--calculations", str(FIXTURE_DIR / "calculations.py"),
+         "--settings", str(settings),
+         "--output", str(mc_out)],
+        capture_output=True, text=True,
+    )
+    if cp.returncode != 0:
+        raise CheckFailed(f"runner failed: {cp.stderr}")
+
+    insights = tmpdir / "summarize_insights.md"
+    summarizer = NAPKIN_DIR / "summarize_insights.py"
+    cp = subprocess.run(
+        [PY, str(summarizer),
+         "--parameters", str(FIXTURE_DIR / "parameters.json"),
+         "--bounds", str(FIXTURE_DIR / "bounds.json"),
+         "--montecarlo", str(mc_out),
+         "--output", str(insights)],
+        capture_output=True, text=True,
+    )
+    if cp.returncode != 0:
+        raise CheckFailed(f"summarizer failed: {cp.stderr}")
+    body = insights.read_text()
+    _check("insights.md was produced", insights.exists())
+    _check("insights.md contains plan name", "Synthetic Workshop" in body)
+    _check("insights.md contains the verdict table",
+           "Threshold verdicts" in body and "Verdict" in body)
+    _check("insights.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
+           "ROBUST" in body or "MARGINAL" in body)
+
+
 def check_prepare_extract_input_imports() -> None:
     cp = subprocess.run(
         [PY, "-c", "import importlib.util, sys, pathlib; "
@@ -211,6 +257,7 @@ def main() -> int:
         ("bernoulli_arithmetic", check_bernoulli_arithmetic),
         ("sensitivity_ranking", check_sensitivity_ranking),
         ("schema_errors", check_schema_errors),
+        ("summarize_insights_end_to_end", check_summarize_insights_end_to_end),
     ]
     failures: list[str] = []
     with tempfile.TemporaryDirectory() as td:

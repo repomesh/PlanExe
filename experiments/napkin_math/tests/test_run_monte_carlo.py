@@ -420,6 +420,42 @@ class TestSensitivity(unittest.TestCase):
             )
         self.assertEqual(result["sensitivity"]["out"]["top_inputs"], [])
 
+    def test_fixed_input_with_fp_artifact_value_excluded_from_sensitivity(self):
+        """A fixed input whose numeric value triggers np.std floating-point
+        artifacts (e.g. 0.15 yields std ~2.8e-17 even when the array is
+        constant) must still be filtered. Use np.ptp, not np.std, for the
+        constant-array check.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            calc = "def out(constant_fp_artifact: float, x: float) -> float:\n    return constant_fp_artifact + x\n"
+            result = run_with_fixture(
+                tmpdir,
+                key_values=[{
+                    "id": "constant_fp_artifact", "label": "k", "category": "x",
+                    "value_type": "explicit", "unit": "fraction", "value": 0.15,
+                    "comment": "x", "formula_hint": None,
+                    "output_name": None, "output_unit": None,
+                    "depends_on": [], "modelling_priority": "low",
+                    "uncertainty": "low", "source_text": "x",
+                }],
+                missing_values=[{"id": "x", "label": "x", "unit": "fraction",
+                                 "why_needed": "x", "suggested_estimation_method": "x"}],
+                recommended=[{
+                    "id": "c", "label": "c",
+                    "formula_hint": "out = constant_fp_artifact + x",
+                    "output_name": "out", "output_unit": "fraction",
+                    "depends_on": ["constant_fp_artifact", "x"], "why_first": "x",
+                }],
+                bounds={"x": make_bound(low=0.0, base=0.5, high=1.0)},
+                calc_source=calc,
+                _settings={"n_runs": 500, "seed": 1},
+            )
+        ids = [t["id"] for t in result["sensitivity"]["out"]["top_inputs"]]
+        self.assertNotIn("constant_fp_artifact", ids,
+                         "fixed input whose value triggers FP artifact in np.std "
+                         "was not filtered; use np.ptp instead")
+
     def test_unrelated_input_excluded_from_sensitivity(self):
         """An input that varies but doesn't feed the output should not appear."""
         with tempfile.TemporaryDirectory() as td:

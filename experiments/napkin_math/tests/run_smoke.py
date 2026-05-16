@@ -209,7 +209,7 @@ def check_summarize_insights_end_to_end(tmpdir: Path) -> None:
     _check("insights.md was produced", insights.exists())
     _check("insights.md contains plan name", "Synthetic Workshop" in body)
     _check("insights.md contains the verdict table",
-           "Threshold verdicts" in body and "Verdict" in body)
+           "Headline verdicts" in body and "Verdict" in body)
     _check("insights.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
            "ROBUST" in body or "MARGINAL" in body)
 

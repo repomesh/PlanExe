@@ -88,13 +88,16 @@ def render_plan_summary(params: dict | None) -> list[str]:
 def render_threshold_verdicts(mc: dict | None) -> list[str]:
     if not mc or not mc.get("thresholds"):
         return []
+    n_runs = mc.get("settings", {}).get("n_runs")
+    runs_phrase = f"{n_runs:,} simulated runs" if isinstance(n_runs, int) else "the simulated runs"
     rows = [
-        "## Threshold verdicts",
+        "## Headline verdicts",
         "",
-        "Probability that each user-declared threshold passes across the Monte Carlo runs.",
-        "Verdict cutoffs: ≥80% ROBUST, ≥50% MARGINAL, ≥20% FRAGILE, <20% DOOM.",
+        f"For each success condition the plan needs to meet, this is how often it actually meets it across {runs_phrase} that vary every uncertain input within its plausible range.",
         "",
-        "| Output | Condition | Pass probability | Verdict | Note |",
+        "Bands: at least 80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, under 20% **DOOM**.",
+        "",
+        "| What we wanted | Condition | How often it holds | Verdict | What that means |",
         "|---|---|---:|---|---|",
     ]
     doom = []
@@ -114,25 +117,27 @@ def render_threshold_verdicts(mc: dict | None) -> list[str]:
             fragile.append(output_id)
     rows.append("")
     if doom:
-        rows.append("### Bottom line: doom signals")
+        rows.append("### Bottom line — likely deal-breakers")
         rows.append("")
         for o in doom:
             t = mc["thresholds"][o]
+            fail_pct = (1 - (t.get("probability") or 0)) * 100
             rows.append(
-                f"- **`{o}`** fails ({t['operator']} {fmt_number(t['value'])}) in "
-                f"{(1 - (t.get('probability') or 0)) * 100:.1f}% of runs. This is the "
-                f"condition the plan needs to meet; it does not."
+                f"- **`{o}`** misses its target ({t['operator']} {fmt_number(t['value'])}) "
+                f"in {fail_pct:.1f}% of simulated futures. The plan depends on this holding; "
+                f"the math says it almost never does."
             )
         rows.append("")
     if fragile:
-        rows.append("### Caution: fragile signals")
+        rows.append("### Caution — coin-flip territory")
         rows.append("")
         for o in fragile:
             t = mc["thresholds"][o]
+            pass_pct = (t.get("probability") or 0) * 100
             rows.append(
-                f"- **`{o}`** passes in only "
-                f"{(t.get('probability') or 0) * 100:.1f}% of runs. Below half — review the "
-                f"driving assumptions before proceeding."
+                f"- **`{o}`** holds in only {pass_pct:.1f}% of simulated futures. That is "
+                f"below half — the assumptions behind it deserve a hard review before the "
+                f"plan moves forward."
             )
         rows.append("")
     return rows
@@ -142,13 +147,19 @@ def render_distributions(mc: dict | None) -> list[str]:
     if not mc or not mc.get("outputs"):
         return []
     rows = [
-        "## Monte Carlo distributions",
+        "## Range of outcomes",
         "",
-        "Per-output summary across all runs. `missing_count` > 0 signals a calculation "
-        "that produced NaN/Infinity in some runs — usually a divide-by-zero or an "
-        "unresolved dependency.",
+        "Each row is one of the numbers the plan needs to track. Reading across, you get a sense of the "
+        "**worst-case** (5th percentile — only 5% of futures are this bad or worse), the **typical case** "
+        "(median), the **best-case** (95th percentile — only 5% of futures are this good or better), and "
+        "the **average** across all simulated futures.",
         "",
-        "| Output | Unit | p05 | p50 | p95 | mean | std | missing |",
+        "The **uncertainty** column is the standard deviation — bigger numbers mean the outcome swings more "
+        "widely between futures. The **blank runs** column counts simulated futures where the number could "
+        "not be calculated at all (typically an input the plan never specified, or a formula trying to "
+        "divide by a value that landed at zero).",
+        "",
+        "| Number | Unit | Worst (5%) | Typical | Best (95%) | Average | Uncertainty | Blank runs |",
         "|---|---|---:|---:|---:|---:|---:|---:|",
     ]
     collapses = []
@@ -166,13 +177,15 @@ def render_distributions(mc: dict | None) -> list[str]:
             collapses.append((name, 1.0))
     rows.append("")
     if collapses:
-        rows.append("### Model instability")
+        rows.append("### Numbers the model could not compute")
         rows.append("")
         for name, rate in collapses:
-            severity = "**SEVERE**" if rate >= 0.5 else "noteworthy"
+            severity = "**most of the time**" if rate >= 0.5 else "noticeably often"
             rows.append(
-                f"- {severity}: `{name}` was non-finite in {rate * 100:.1f}% of runs. "
-                f"A dependency is likely unresolved or a divisor goes to zero."
+                f"- `{name}` was blank in {rate * 100:.1f}% of simulated futures ({severity}). "
+                f"The plan is probably missing an input the formula needs, or one of the inputs "
+                f"can legitimately land at zero, which breaks the division. Fix the inputs and "
+                f"re-run."
             )
         rows.append("")
     return rows
@@ -182,21 +195,23 @@ def render_sensitivity(mc: dict | None) -> list[str]:
     if not mc or not mc.get("sensitivity"):
         return []
     rows = [
-        "## What drives the uncertainty",
+        "## Which inputs move the outcome the most",
         "",
-        "Pearson correlation between each sampled input and each output. "
-        "Positive r means moving the input up moves the output up; negative the opposite. "
-        "Sensitivity is **not** causation — it only ranks how tightly outputs track inputs in the sample.",
+        "For each number above, this is the short list of inputs that most strongly move it. "
+        "The score next to each driver runs from 0 (no relationship) to ±1 (lock-step). "
+        "**↑** means the output goes up when this input goes up; **↓** means the opposite. "
+        "Treat this as \"these are the levers worth getting right\" — it ranks how closely outputs "
+        "track inputs in the simulation, not strict cause-and-effect.",
         "",
     ]
     for output_id, s in mc["sensitivity"].items():
         if not s.get("top_inputs"):
             continue
-        rows.append(f"**`{output_id}`** — top drivers:")
+        rows.append(f"**`{output_id}`** — strongest drivers:")
         rows.append("")
         for t in s["top_inputs"][:3]:
             sign = "↑" if t["correlation"] >= 0 else "↓"
-            rows.append(f"- `{t['id']}` ({sign} r = {t['correlation']:+.3f})")
+            rows.append(f"- `{t['id']}` ({sign} score {t['correlation']:+.2f})")
         rows.append("")
     return rows
 
@@ -205,14 +220,18 @@ def render_scenarios(scenarios: dict | None) -> list[str]:
     if not scenarios or not scenarios.get("comparison"):
         return []
     rows = [
-        "## Deterministic scenarios (low / base / high)",
+        "## Three hand-picked scenarios",
         "",
-        "Single-point evaluation at each scenario's bounds. The `low / base / high` "
-        "labels refer to **input bounds**, not outcomes — a `high` cost scenario is "
-        "bad, a `high` effectiveness scenario is good. Watch for outputs that go "
-        "negative at base.",
+        "Instead of simulating thousands of futures, this section picks exactly three: every uncertain "
+        "input set to the **low** end of its range, every input set to its **middle** value, and every "
+        "input set to the **high** end. It is a sanity check, not a full picture.",
         "",
-        "| Output | Unit | low | base | high | spread |",
+        "The labels refer to **inputs**, not to whether the outcome is good or bad. A high-cost input "
+        "is bad news; a high-effectiveness input is good news. The honest read is: if a number that the "
+        "plan needs to stay positive is already negative in the middle column, the plan is in trouble at "
+        "its own central assumptions — never mind the worst case.",
+        "",
+        "| Number | Unit | Low inputs | Middle inputs | High inputs | Range |",
         "|---|---|---:|---:|---:|---:|",
     ]
     for name, o in scenarios["comparison"]["outputs"].items():
@@ -225,12 +244,12 @@ def render_scenarios(scenarios: dict | None) -> list[str]:
     rows.append("")
     warns = scenarios.get("warnings", [])
     if warns:
-        rows.append("### Scenario warnings")
+        rows.append("### Things flagged in the three-scenario check")
         rows.append("")
         for w in warns:
             scope = w.get("scenario") or "all"
             calc = w.get("calculation") or "—"
-            rows.append(f"- **{scope}** / `{calc}`: {w['message']}")
+            rows.append(f"- **{scope}** scenario, `{calc}`: {w['message']}")
         rows.append("")
     return rows
 
@@ -242,17 +261,18 @@ def render_missing_data(params: dict | None, bounds: dict | None) -> list[str]:
     if not declared:
         return []
     rows = [
-        "## Missing data flagged by extract-parameters",
+        "## Inputs the plan did not supply",
         "",
-        "The extractor identified inputs the plan does not supply. Bounded entries "
-        "carry an assumed low/base/high; unbounded entries propagate as unresolved "
-        "dependencies into Monte Carlo, where they will show up as model collapse.",
+        "Things the plan needs to be modelled but does not state directly. Entries marked "
+        "**estimated** have been given a plausible low/middle/high range; entries marked "
+        "**still missing** have no value at all, so any number that depends on them will "
+        "show up as a blank run in the section above.",
         "",
     ]
     bound_ids = set(bounds or {})
     for mv in declared:
         vid = mv["id"]
-        status = "bounded" if vid in bound_ids else "**unbounded**"
+        status = "estimated" if vid in bound_ids else "**still missing**"
         rows.append(f"- `{vid}` ({status}) — {mv.get('why_needed', '')}")
     rows.append("")
     return rows
@@ -260,15 +280,24 @@ def render_missing_data(params: dict | None, bounds: dict | None) -> list[str]:
 
 def render_inputs_footer(params_path: Path | None, bounds_path: Path | None,
                         scenarios_path: Path | None, mc_path: Path | None) -> list[str]:
-    rows = ["## Inputs", ""]
-    for label, p in [
+    rows = ["## Source files", "",
+            "This summary was generated from the following machine-readable files. "
+            "Open them if you want to see every number, not just the headlines.",
+            ""]
+    labels = {
+        "parameters": "extracted plan parameters",
+        "bounds": "plausible low/middle/high ranges for each input",
+        "scenarios": "three hand-picked scenarios",
+        "montecarlo": "thousands of simulated futures",
+    }
+    for key, p in [
         ("parameters", params_path),
         ("bounds", bounds_path),
         ("scenarios", scenarios_path),
         ("montecarlo", mc_path),
     ]:
         if p and p.exists():
-            rows.append(f"- `{p.name}`: {label}")
+            rows.append(f"- `{p.name}` — {labels[key]}")
     rows.append("")
     return rows
 

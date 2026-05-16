@@ -55,12 +55,15 @@ The script does **not** invent thresholds for outputs the user did not declare. 
 
 ## Sections in the generated insights.md
 
+The output is written for project managers and non-developers. Section names and language avoid statistics/engineering jargon (no "NaN", "Infinity", "Pearson", "non-finite", "model collapse", "p05/p50/p95" in the body text):
+
 - **Plan summary** — name, type, primary goal, modelling frame.
-- **Threshold verdicts** — table + bottom-line doom/fragile callouts.
-- **Monte Carlo distributions** — p05/p50/p95/mean/std/missing per output, with a model-collapse callout for outputs with ≥5% non-finite runs.
-- **Sensitivity drivers** — Pearson top 3 per output, with direction arrows (↑ / ↓).
-- **Deterministic scenarios** — low/base/high table from `scenarios.json`, plus any scenario warnings.
-- **Missing data** — entries `extract-parameters` flagged as missing, marked bounded or unbounded.
+- **Headline verdicts** — pass-probability table plus a "Bottom line — likely deal-breakers" callout for DOOM thresholds and "Caution — coin-flip territory" for FRAGILE.
+- **Range of outcomes** — worst-case / typical / best-case / average / uncertainty / blank-runs columns. The "blank runs" plus a separate "Numbers the model could not compute" callout replace the previous NaN/Infinity wording.
+- **Which inputs move the outcome the most** — top-3 drivers per output with ↑/↓ direction and a 0-to-±1 score.
+- **Three hand-picked scenarios** — the low/middle/high deterministic table, with a "things flagged in the three-scenario check" sub-section for scenario warnings.
+- **Inputs the plan did not supply** — `extract-parameters` missing-data entries, marked **estimated** when bounded or **still missing** when not.
+- **Source files** — pointers to the underlying machine-readable JSON for anyone who wants every number.
 
 ## Common Mistakes
 

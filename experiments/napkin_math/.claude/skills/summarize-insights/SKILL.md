@@ -47,7 +47,7 @@ Each threshold has an operator (`>=`, `<=`, etc.) and a value. The user wrote th
 | ≥ 80% | strong majority | **ROBUST** | passes in the strong majority of runs |
 | 50–80% | uncomfortable | **MARGINAL** | passes more often than not but uncomfortably close |
 | 20–50% | minority pass | **FRAGILE** | fails in the majority of runs |
-| < 20% | rarely passes | **DOOM** | almost certainly fails |
+| < 20% | rarely passes | **DOOM** | rarely passes under current bounds |
 
 Any output classified DOOM or FRAGILE also gets a "bottom line" callout at the top of the report.
 
@@ -72,7 +72,7 @@ These are not stylistic preferences. They are how this skill is meant to communi
 
 1. **Critical findings first.** After the artifact contract, machine summary, provenance map, modelling frame, and simulation settings, the first interpretation section is `## Critical findings`. It consolidates every signal that the plan does not survive its own assumptions: DOOM and FRAGILE thresholds, scenario warnings, numbers the model could not compute, and inputs the plan does not supply at all. If nothing qualifies, the section is omitted entirely — silence is the only acceptable form of good news.
 
-2. **No sugar-coating.** A 5% pass probability is "almost certainly fails", not "shows some challenges". A negative base-scenario number is "the plan is in trouble at its own central assumptions", not "may warrant further attention". Use the strongest accurate language; if the script's wording softens a result, fix the script.
+2. **No sugar-coating.** A 5% pass probability is "rarely passes under current bounds", not "shows some challenges". A base-scenario value on the wrong side of a declared threshold is "the gate fails at the plan's own central assumptions", not "may warrant further attention". Use the strongest accurate language without overclaiming epistemic certainty — never "the math says it certainly will" — but never soften the result either; if the script's wording softens a result, fix the script.
 
 3. **No sycophancy.** Never start a paragraph with "Great plan, but..." or "The team has done strong work; one concern is...". The downstream consumer has the plan available. It does not need praise from the report.
 
@@ -84,7 +84,7 @@ These are not stylistic preferences. They are how this skill is meant to communi
 
 5. **Hedges about data vs hedges about the speaker.** Hedges that point at the underlying simulation are fine: "the simulation shows", "based on the bounds we have", "within the assumed ranges". Hedges that point at the writer's posture are not.
 
-6. **Quote the verdicts; don't paraphrase.** When the script emits `**DOOM** — almost certainly fails`, report it as `DOOM — almost certainly fails`. Don't summarise it as "this one is concerning". The verdict bands are precise and load-bearing.
+6. **Quote the verdicts; don't paraphrase.** When the script emits `**DOOM** — rarely passes under current bounds`, report it as `DOOM — rarely passes under current bounds`. Don't summarise it as "this one is concerning". The verdict bands are precise and load-bearing.
 
 ## Sections in the generated insights.md
 

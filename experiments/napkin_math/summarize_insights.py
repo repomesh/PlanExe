@@ -42,7 +42,7 @@ VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
     (0.50, "MARGINAL", "passes more often than not but uncomfortably close"),
     (0.20, "FRAGILE",  "fails in the majority of runs"),
-    (0.00, "DOOM",     "almost certainly fails"),
+    (0.00, "DOOM",     "rarely passes under current bounds"),
 ]
 
 VERDICT_SEVERITY = {"DOOM": 0, "FRAGILE": 1, "MARGINAL": 2, "ROBUST": 3, "UNKNOWN": 4}
@@ -157,7 +157,7 @@ def verdict_for(probability: float | None) -> tuple[str, str]:
     for cutoff, label, note in VERDICT_BANDS:
         if probability >= cutoff:
             return label, note
-    return "DOOM", "almost certainly fails"
+    return "DOOM", "rarely passes under current bounds"
 
 
 def aggregate_output_ids(params: dict | None) -> set[str]:
@@ -578,7 +578,7 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
     rows = [
         "## Decision implications",
         "",
-        "Bridge from gate result to planning consequence. **Structural lever** names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). **Gate meaning** surfaces the gate's own rationale lifted verbatim from `parameters.recommended_first_calculations[].why_first` (or `derived_questions[].why_it_matters`) plus the threshold parameter the formula tests against — it points at the plan's own framing, not invented tactical advice. The actual plan revision (cut capacity, change a contract clause, relax a target) is for human or LLM interpretation against the source report.",
+        "Bridge from gate result to planning consequence. **Structural lever** names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). **Gate meaning** surfaces the gate's own rationale lifted verbatim from `parameters.recommended_first_calculations[].why_first` (or `derived_questions[].why_it_matters`) plus the threshold parameter the formula tests against. This section identifies the affected planning lever; concrete revisions should be derived by reading the source report and the relevant intermediary artifacts.",
         "",
         "| Gate | Verdict | Planning consequence | Structural lever | Gate meaning |",
         "|---|---|---|---|---|",

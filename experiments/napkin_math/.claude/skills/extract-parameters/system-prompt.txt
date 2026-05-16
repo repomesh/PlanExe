@@ -69,6 +69,8 @@ For each key value, return:
 - value: number if known, otherwise null
 - comment: what this value is about and why it matters
 - formula_hint: simple formula if obvious, otherwise null
+- output_name: snake_case identifier of the value the formula computes; null when formula_hint is null
+- output_unit: unit string of the computed value; null when formula_hint is null
 - depends_on: list of declared value ids
 - modelling_priority: critical, high, medium, or low
 - uncertainty: low, medium, or high
@@ -135,6 +137,18 @@ If the plan is commercial, product-launch, event, or revenue-oriented, prefer:
 - funding gate or runway
 - market penetration required
 
+
+Output-name and output-unit rule (required schema fields):
+
+Every entry that has a non-null, non-empty formula_hint MUST also declare:
+- output_name: the snake_case identifier of the value the formula computes (i.e. the assignment LHS). Downstream consumers — generate-calculations, run-scenarios, monte-carlo — use this as the function name and the output id. The LLM is the single authority for this name; downstream code does not parse formula_hint to recover it.
+- output_unit: the unit string of the computed value (e.g. "DKK", "people", "fraction", "hours_per_year", or whatever currency the plan declares). Downstream consumers read this directly and do not guess from token patterns in the id.
+
+For entries where formula_hint is null (purely diagnostic key_values or qualitative derived_questions), set output_name and output_unit to null.
+
+For recommended_first_calculations (where formula_hint is required), output_name and output_unit are also required strings — not null.
+
+When the formula is of the form "lhs = rhs", output_name is "lhs". When the formula is an expression with no assignment, output_name should be the entry id. Either way the LLM emits the name explicitly so the runner does not have to recover it.
 
 Executable gate rule:
 
@@ -701,6 +715,8 @@ Return this exact JSON shape:
       "value": null,
       "comment": "",
       "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
       "depends_on": [],
       "modelling_priority": "",
       "uncertainty": "",
@@ -713,6 +729,8 @@ Return this exact JSON shape:
       "question": "",
       "why_it_matters": "",
       "formula_hint": null,
+      "output_name": null,
+      "output_unit": null,
       "depends_on": []
     }
   ],
@@ -730,6 +748,8 @@ Return this exact JSON shape:
       "id": "",
       "label": "",
       "formula_hint": "",
+      "output_name": "",
+      "output_unit": "",
       "depends_on": [],
       "why_first": ""
     }

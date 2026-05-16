@@ -59,12 +59,31 @@ Always `low ≤ base ≤ high`. Fractions stay in `[0, 1]`. Counts of discrete t
     "base": 0.20,
     "high": 0.30,
     "rationale": "Short, ≤30 words, one or two sentences.",
-    "source": "data" | "assumption"
+    "source": "data" | "assumption",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   }
 }
 ```
 
 Top-level is a single object keyed by variable id. Order keys roughly by importance (critical → high → medium → remaining missing values). Use `"source": "data"` only when the range is anchored in a citable real-world reference for similar programs; otherwise `"assumption"`.
+
+### Sampling-discipline tag
+
+Each entry MUST carry a `sampling_discipline` chosen by the LLM based on the variable's nature. Downstream consumers (run-scenarios, monte-carlo runner) read this tag directly and do not pattern-match on unit strings — so the LLM is the single authority for this classification.
+
+| Value | Meaning | Downstream behavior |
+|---|---|---|
+| `"fixed"` | `low == base == high`; genuinely pinned | Always return that value |
+| `"bernoulli_gate"` | Binary pass/fail (staged funding, permit toggle, regulatory pass, conditional release). Requires `default_pass_probability` ∈ [0, 1] | Bernoulli draw; low on fail, high on pass |
+| `"integer"` | Countable units — people, households, sites, kits, days, … | Sample continuously, round, re-clamp to `[low, high]` |
+| `"fraction"` | Bounded fraction in `[0, 1]` | Clamp draws to `[0, 1]` |
+| `"continuous"` | Real-valued; no rounding, no extra clamping beyond `[low, high]` | Plain triangular/uniform draw |
+
+`non_negative` is independent of discipline: set `true` when the variable cannot legitimately go below zero (continuous monetary amounts, counts, capacities); set `false` only when negative values are physically meaningful (a delta or net change variable).
+
+`default_pass_probability` is required (a number in `[0, 1]`) when `sampling_discipline == "bernoulli_gate"` and MUST be `null` for every other discipline.
 
 If no variable needs bounds, return `{}`.
 

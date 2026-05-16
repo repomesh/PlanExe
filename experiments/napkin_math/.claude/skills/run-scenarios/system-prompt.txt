@@ -176,13 +176,11 @@ If calculations.py is not executable in the current environment, infer calculati
 
 Prefer using the generated Python functions when available.
 
-Map formulas to outputs as follows:
+Map formulas to outputs by reading the entry's "output_name" field — extract-parameters emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name and the output id.
 
-- If formula_hint is assignment form "x = expression", output id is x.
-- If formula_hint is expression-only, output id is the entry id.
-- If generate_calculations used a fallback function name because of collision, use the actual generated function name.
+Do not parse formula_hint to recover the output name. If output_name is missing for an entry whose formula_hint is non-null, treat the entry as malformed: skip it and add a warning naming the entry id and the missing field.
 
-The final output should use calculation output names, not question ids, unless the generated function name is the question id.
+The final output should use the declared output_name, not question ids, unless they are the same value.
 
 ====================
 OUTPUT SHAPE
@@ -273,84 +271,14 @@ If spread_absolute is negative or spread_ratio is less than 1.0, keep it as-is. 
 Do not force spread values to be positive.
 
 ====================
-UNIT INFERENCE FOR OUTPUTS
+UNIT FOR OUTPUTS
 ====================
 
-Infer output units using simple rules.
+For every computed output, copy the unit verbatim from the producing entry's "output_unit" field. extract-parameters declares output_unit on every entry with a non-null formula_hint; downstream code does not pattern-match on token strings.
 
-If the output id exactly matches a known key_value or missing_values_to_estimate id, copy that unit.
+If output_unit is missing for an entry whose formula_hint is non-null, treat the entry as malformed: emit a warning naming the entry id and the missing field, and set the output's unit to "unknown".
 
-Singular and plural forms both count.
-
-Prefer explicit currency suffixes before all other substring rules.
-
-Use token-like matching where possible:
-- Treat underscores as token separators.
-- Match whole tokens such as ratio, rate, fraction, share, probability.
-- Do not match ratio inside operation or operations.
-- Do not match rate inside separate unrelated words.
-- Do not match unit words inside longer unrelated words unless the suffix is explicit, such as _eur.
-
-Rules, in priority order:
-
-1. If output id ends with _eur or contains _eur:
-   unit = "EUR"
-
-2. If output id contains whole-token fraction, ratio, rate, share, probability, effectiveness, or percent:
-   unit = "fraction"
-
-3. If output id contains gap and one dependency has unit people, residents, population, contacted, or protected while another dependency is a capacity or count:
-   infer the unit from the demand-side dependency, usually "people"
-
-4. If output id contains whole-token cost, budget, reserve, tranche, funding, revenue, spend, cash, profit, margin, arpu, or price:
-   unit = "EUR" if the plan uses EUR, otherwise the known currency or "money"
-
-5. If output id contains whole-token buyer, buyers, customer, customers, attendee, attendees, person, people, resident, residents, population, contacted, protected:
-   unit = "people"
-
-6. If output id contains whole-token unit, units, sku, skus, item, items:
-   unit = "units"
-
-7. If output id contains whole-token kit or kits:
-   unit = "kits"
-
-8. If output id contains whole-token household, households, home, homes:
-   unit = "households"
-
-9. If output id contains whole-token event, events, death, deaths, harm, mortality, illness:
-   unit = "events"
-
-10. If output id contains whole-token day or days:
-   unit = "days"
-
-11. If output id contains whole-token hour or hours:
-   unit = "hours"
-
-12. If output id contains whole-token fte or staffing:
-   unit = "people"
-
-13. Otherwise:
-   unit = "unknown"
-
-Examples:
-
-net_cash_from_operations_eur -> EUR, not fraction.
-
-kit_coverage_fraction -> fraction, not kits.
-
-required_market_penetration -> fraction.
-
-expected_buyers -> people.
-
-units_sold -> units.
-
-breakeven_units -> units.
-
-cost_per_protected_person -> EUR if the numerator is monetary, otherwise unknown if formula context is unavailable.
-
-mcr_runway_days -> days.
-
-avoided_deaths_estimate -> events.
+For inputs (key_values, missing_values_to_estimate) the unit is the entry's declared "unit" field.
 
 ====================
 WARNING SHAPE

@@ -91,6 +91,12 @@ For plain PlanExe HTML/text reports, use `extract-parameters` instead.
 - **No invented ids in `formula_hint`** — every variable must be declared
   in `key_values`, `missing_values_to_estimate`, or the object's own
   `depends_on`.
+- **Every entry with a non-null `formula_hint` MUST also declare `output_name`
+  (snake_case id of the computed value) and `output_unit`** (e.g. `"DKK"`,
+  `"people"`, `"fraction"`). Downstream consumers — generate-calculations,
+  run-scenarios, monte-carlo — read these directly and do not parse
+  `formula_hint` or pattern-match on tokens. The LLM is the single authority
+  for both fields.
 
 ## Reference
 

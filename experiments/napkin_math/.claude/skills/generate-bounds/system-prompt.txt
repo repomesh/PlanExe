@@ -77,7 +77,7 @@ When in doubt, give a real range.
 DISCRETE OR GATE-DEPENDENT VARIABLES
 ====================
 
-Some variables are not continuous ranges. For binary gates, staged funding, approval decisions, or pass/fail releases, represent the downside as low and the passed-gate value as base/high.
+Some variables are not continuous ranges. For binary gates, staged funding, approval decisions, or pass/fail releases, represent the downside as low and the passed-gate value as base/high, and set sampling_discipline to "bernoulli_gate" with a default_pass_probability in [0, 1].
 
 Example:
 
@@ -88,12 +88,13 @@ Use:
 low = 0
 base = 1500000
 high = 1500000
-
-Mention in the rationale that this is a binary or gate-dependent value.
+sampling_discipline = "bernoulli_gate"
+default_pass_probability = 0.7   (or whatever the plan / your judgement supports)
+non_negative = true
 
 This is allowed and does not violate the normal preference for non-collapsed ranges.
 
-For count variables that are discrete but not binary, use integer low/base/high values.
+For count variables that are discrete but not binary, use integer low/base/high values AND set sampling_discipline to "integer". For fraction-bounded variables, use sampling_discipline "fraction". Do not rely on the unit string to communicate this; downstream consumers read sampling_discipline only.
 
 ====================
 UNIT HANDLING
@@ -138,12 +139,30 @@ Each bounds entry must contain exactly these fields:
   "base": 0,
   "high": 0,
   "rationale": "",
-  "source": "data"
+  "source": "data",
+  "sampling_discipline": "continuous",
+  "non_negative": true,
+  "default_pass_probability": null
 }
 
 source must be one of:
 - data
 - assumption
+
+sampling_discipline must be one of:
+- "fixed"           — low == base == high; downstream samplers return that single value
+- "bernoulli_gate"  — binary pass/fail draw; downstream samplers return low on fail, high on pass. Requires default_pass_probability to be a number in [0, 1]
+- "integer"         — countable units (people, households, days, kits, sites, …); downstream samplers round draws to the nearest integer and re-clamp to [low, high]
+- "fraction"        — bounded in [0, 1]; downstream samplers clamp draws to that interval
+- "continuous"      — real-valued; downstream samplers do not round or clamp beyond the [low, high] range
+
+Choose sampling_discipline by the variable's nature, not by lexical tokens in its id or unit. The downstream Monte Carlo runner does not pattern-match on unit strings; it reads sampling_discipline directly. There must be no fallback path that re-guesses the discipline.
+
+non_negative is a boolean. When true, draws are clamped to >= 0. This is independent of sampling_discipline (e.g., a continuous monetary variable that cannot go negative still needs non_negative: true; a continuous "delta" variable that can legitimately be negative gets non_negative: false).
+
+default_pass_probability:
+- For sampling_discipline "bernoulli_gate": must be a number in [0, 1]; this is the assumed pass probability when the caller does not override it
+- For every other sampling_discipline: must be null
 
 Rules for the output:
 
@@ -184,7 +203,10 @@ A valid output:
     "base": 1500000,
     "high": 1500000,
     "rationale": "Binary gate-dependent release: 0 if Month 4 gate fails, 1.5M if it passes.",
-    "source": "data"
+    "source": "data",
+    "sampling_discipline": "bernoulli_gate",
+    "non_negative": true,
+    "default_pass_probability": 0.7
   },
   "outreach_contact_rate_target": {
     "unit": "fraction",
@@ -192,7 +214,10 @@ A valid output:
     "base": 0.60,
     "high": 0.75,
     "rationale": "Plan KPI is 0.6; comparable proactive door-to-door outreach programs in European cities reach 0.4-0.75 depending on canvasser density and trust.",
-    "source": "data"
+    "source": "data",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   },
   "cooling_center_utilization_target": {
     "unit": "fraction",
@@ -200,7 +225,10 @@ A valid output:
     "base": 0.80,
     "high": 0.90,
     "rationale": "Plan target is 0.8; weather-dependent demand and commute distance commonly drag utilization to 0.55-0.7 in pilot summers.",
-    "source": "assumption"
+    "source": "assumption",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   },
   "vulnerable_population_share": {
     "unit": "fraction",
@@ -208,7 +236,10 @@ A valid output:
     "base": 0.20,
     "high": 0.30,
     "rationale": "Approximate share of residents combining 65+, chronic illness, social isolation, or housing risk in mid-size European cities.",
-    "source": "assumption"
+    "source": "assumption",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   },
   "protection_conversion_rate": {
     "unit": "fraction",
@@ -216,7 +247,10 @@ A valid output:
     "base": 0.55,
     "high": 0.75,
     "rationale": "Reflects delivery leakage between contact and a usable installed intervention; comparable retrofit programs cluster in this band.",
-    "source": "data"
+    "source": "data",
+    "sampling_discipline": "fraction",
+    "non_negative": true,
+    "default_pass_probability": null
   },
   "baseline_heat_mortality_rate": {
     "unit": "deaths_per_1000_vulnerable_per_season",
@@ -224,6 +258,9 @@ A valid output:
     "base": 1.5,
     "high": 4.0,
     "rationale": "Range across European heatwave studies for vulnerable subpopulations during typical-to-severe summers.",
-    "source": "data"
+    "source": "data",
+    "sampling_discipline": "continuous",
+    "non_negative": true,
+    "default_pass_probability": null
   }
 }

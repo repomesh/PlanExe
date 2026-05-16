@@ -3,8 +3,12 @@
 
 Consumes parameters.json + bounds.json + calculations.py (the same trio as
 run-scenarios) and an optional settings JSON. Emits montecarlo.json next to
-the parameters file. Replaces the prior LLM-driven skill, whose sampling and
-correlation steps could not actually be performed in-prompt.
+the parameters file.
+
+Every classification that depends on the meaning of a variable
+(sampling distribution, integer/fraction/Bernoulli discipline, non-negativity,
+output name, output unit) is declared by the upstream LLM stages and read
+verbatim here. The runner does no pattern-matching on id or unit strings.
 """
 from __future__ import annotations
 
@@ -13,7 +17,6 @@ import importlib.util
 import inspect
 import json
 import math
-import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,15 +34,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "correlation_groups": [],
 }
 
-INTEGER_UNIT_TOKENS = {
-    "people", "buyers", "customers", "households", "units", "kits",
-    "centers", "sites", "months", "days", "hours", "events", "staff",
-    "attendees", "residents", "kits",
-}
-
-GATE_RATIONALE_KEYWORDS = (
-    "binary", "gate", "release", "tranche", "pass", "fail", "withheld", "conditional",
-)
+VALID_DISCIPLINES = {"fixed", "bernoulli_gate", "integer", "fraction", "continuous"}
 
 THRESHOLD_OPS = {
     ">":  lambda a, b: a >  b,
@@ -51,6 +46,10 @@ THRESHOLD_OPS = {
 }
 
 
+class SchemaError(RuntimeError):
+    """Raised when an upstream artifact is missing a required field. Re-run the upstream stage."""
+
+
 def load_json(path: Path) -> dict:
     with path.open() as f:
         return json.load(f)
@@ -59,7 +58,7 @@ def load_json(path: Path) -> dict:
 def load_calculations_module(path: Path):
     spec = importlib.util.spec_from_file_location("calculations", path)
     if spec is None or spec.loader is None:
-        raise RuntimeError(f"cannot load calculations module from {path}")
+        raise SchemaError(f"cannot load calculations module from {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -95,50 +94,50 @@ def merge_settings(user: dict | None) -> tuple[dict, list[str]]:
     return out, warnings
 
 
-def unit_tokens(unit: str) -> set[str]:
-    if not unit:
-        return set()
-    return set(re.split(r"[^a-zA-Z0-9]+", unit.lower()))
-
-
-def is_integer_unit(unit: str) -> bool:
-    if not unit:
-        return False
-    low = unit.lower()
-    if "_per_" in low or low.startswith("per_") or "_rate" in low:
-        return False
-    return bool(unit_tokens(unit) & INTEGER_UNIT_TOKENS)
-
-
-def is_fraction_unit(unit: str) -> bool:
-    return (unit or "").lower() == "fraction"
-
-
-def is_bernoulli_gate(bound: dict) -> bool:
-    low, base, high = bound.get("low"), bound.get("base"), bound.get("high")
-    if not (isinstance(low, (int, float)) and low == 0 and base == high):
-        return False
-    rationale = (bound.get("rationale") or "").lower()
-    return any(k in rationale for k in GATE_RATIONALE_KEYWORDS)
+def validate_bound(var_id: str, bound: dict) -> None:
+    discipline = bound.get("sampling_discipline")
+    if discipline not in VALID_DISCIPLINES:
+        raise SchemaError(
+            f"bound '{var_id}' is missing 'sampling_discipline' or has unknown value {discipline!r}; "
+            f"expected one of {sorted(VALID_DISCIPLINES)}. Re-run generate-bounds."
+        )
+    if "non_negative" not in bound or not isinstance(bound["non_negative"], bool):
+        raise SchemaError(
+            f"bound '{var_id}' is missing required boolean 'non_negative'. Re-run generate-bounds."
+        )
+    if discipline == "bernoulli_gate":
+        prob = bound.get("default_pass_probability")
+        if not isinstance(prob, (int, float)) or not (0.0 <= prob <= 1.0):
+            raise SchemaError(
+                f"bound '{var_id}' has sampling_discipline 'bernoulli_gate' but "
+                f"default_pass_probability is {prob!r}; expected a number in [0, 1]."
+            )
+    else:
+        if "default_pass_probability" not in bound or bound["default_pass_probability"] is not None:
+            raise SchemaError(
+                f"bound '{var_id}' has sampling_discipline {discipline!r} but "
+                f"default_pass_probability is not null."
+            )
+    for k in ("low", "base", "high"):
+        if not isinstance(bound.get(k), (int, float)):
+            raise SchemaError(
+                f"bound '{var_id}' has non-numeric '{k}' = {bound.get(k)!r}."
+            )
 
 
 def sample_one(rng: np.random.Generator, bound: dict, distribution_default: str,
-               gate_probabilities: dict, var_id: str, warnings_out: list[str]) -> float:
-    unit = bound.get("unit", "")
-    low, base, high = bound.get("low"), bound.get("base"), bound.get("high")
-    if not all(isinstance(x, (int, float)) for x in (low, base, high)):
-        return math.nan
-    if low == base == high:
-        return float(low)
-    if is_bernoulli_gate(bound):
-        if var_id not in gate_probabilities:
-            msg = f"binary gate '{var_id}' has no explicit gate_probability; defaulted to 0.5."
-            if msg not in warnings_out:
-                warnings_out.append(msg)
-            p = 0.5
-        else:
-            p = float(gate_probabilities[var_id])
-        return float(high) if rng.random() < p else float(low)
+               gate_probabilities: dict, var_id: str) -> float:
+    discipline = bound["sampling_discipline"]
+    low, base, high = float(bound["low"]), float(bound["base"]), float(bound["high"])
+    non_negative = bound["non_negative"]
+
+    if discipline == "fixed":
+        return low
+
+    if discipline == "bernoulli_gate":
+        p = gate_probabilities.get(var_id, bound["default_pass_probability"])
+        return high if rng.random() < p else low
+
     if distribution_default == "uniform":
         val = rng.uniform(low, high)
     else:
@@ -148,118 +147,79 @@ def sample_one(rng: np.random.Generator, bound: dict, distribution_default: str,
             lo, hi = min(low, high), max(low, high)
             mode = min(max(base, lo), hi)
             val = rng.triangular(lo, mode, hi)
+
     val = float(min(max(val, low), high))
-    if is_fraction_unit(unit):
+    if discipline == "fraction":
         val = min(max(val, 0.0), 1.0)
-    if is_integer_unit(unit):
+    elif discipline == "integer":
         val = float(round(val))
         val = min(max(val, low), high)
-    elif val < 0 and not is_bernoulli_gate(bound):
-        val = max(val, 0.0)
+    if non_negative and val < 0:
+        val = 0.0
     return val
 
 
-FORMULA_LHS_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=")
+def collect_calculation_entries(params: dict) -> list[dict]:
+    """All entries that produce a computed output, in execution order."""
+    out: list[dict] = []
+    for entry in params.get("recommended_first_calculations", []):
+        if entry.get("formula_hint"):
+            out.append(entry)
+    for entry in params.get("derived_questions", []):
+        if entry.get("formula_hint"):
+            out.append(entry)
+    return out
 
 
-def parse_function_name(entry: dict) -> str | None:
-    hint = entry.get("formula_hint") or ""
-    m = FORMULA_LHS_RE.match(hint)
-    if m:
-        return m.group(1)
-    if hint.strip():
-        return entry.get("id")
-    return None
+def validate_calculation_entry(entry: dict) -> None:
+    if not entry.get("output_name"):
+        raise SchemaError(
+            f"calculation entry '{entry.get('id')}' has non-null formula_hint but no 'output_name'. "
+            f"Re-run extract-parameters (or extract-parameters-from-digest)."
+        )
+    if not entry.get("output_unit"):
+        raise SchemaError(
+            f"calculation entry '{entry.get('id')}' has non-null formula_hint but no 'output_unit'. "
+            f"Re-run extract-parameters (or extract-parameters-from-digest)."
+        )
 
 
-def build_calculation_plan(params: dict, module) -> tuple[list[tuple[str, Any]], list[str]]:
-    """Return ordered [(output_name, function), ...] and warnings."""
-    plan: list[tuple[str, Any]] = []
+def build_calculation_plan(params: dict, module) -> tuple[list[tuple[str, str, Any]], list[str]]:
+    """Return [(output_name, output_unit, function), ...] in execution order."""
+    plan: list[tuple[str, str, Any]] = []
     warnings: list[str] = []
     seen: set[str] = set()
-    for entry in params.get("recommended_first_calculations", []):
-        fn_name = parse_function_name(entry)
-        if not fn_name:
-            warnings.append(f"recommended_first_calculations entry '{entry.get('id')}' has no formula_hint; skipped.")
+    for entry in collect_calculation_entries(params):
+        validate_calculation_entry(entry)
+        name = entry["output_name"]
+        unit = entry["output_unit"]
+        if name in seen:
             continue
-        fn = getattr(module, fn_name, None)
+        fn = getattr(module, name, None)
         if fn is None:
-            warnings.append(f"function '{fn_name}' not found in calculations.py; skipped.")
+            warnings.append(f"function '{name}' not found in calculations.py; skipped.")
             continue
-        if fn_name in seen:
-            continue
-        seen.add(fn_name)
-        plan.append((fn_name, fn))
-    for entry in params.get("derived_questions", []):
-        fn_name = parse_function_name(entry)
-        if not fn_name:
-            warnings.append(f"derived_question '{entry.get('id')}' has no formula_hint; skipped.")
-            continue
-        fn = getattr(module, fn_name, None)
-        if fn is None:
-            warnings.append(f"function '{fn_name}' not found in calculations.py; skipped.")
-            continue
-        if fn_name in seen:
-            continue
-        seen.add(fn_name)
-        plan.append((fn_name, fn))
+        seen.add(name)
+        plan.append((name, unit, fn))
     return plan, warnings
 
 
 def collect_input_specs(params: dict, bounds: dict) -> dict[str, dict]:
-    """Map var_id -> spec with 'fixed' or 'bound' key."""
+    """Map var_id -> {'fixed': float} or {'bound': bound_dict}."""
     specs: dict[str, dict] = {}
     for kv in params.get("key_values", []):
         vid = kv["id"]
         if vid in bounds:
+            validate_bound(vid, bounds[vid])
             specs[vid] = {"bound": bounds[vid]}
         elif kv.get("value") is not None and isinstance(kv["value"], (int, float)):
             specs[vid] = {"fixed": float(kv["value"])}
     for mv in params.get("missing_values_to_estimate", []):
         vid = mv["id"]
         if vid in bounds:
+            validate_bound(vid, bounds[vid])
             specs[vid] = {"bound": bounds[vid]}
     return specs
-
-
-CURRENCY_TOKEN_RE = re.compile(r"(?:^|_)([A-Z]{3})(?:$|_)")
-
-NON_CURRENCY_UNIT_RULES = [
-    (re.compile(r"(?:^|_)(?:fraction|ratio|rate|share|probability|effectiveness|penetration|percent)(?:$|_)"), "fraction"),
-    (re.compile(r"(?:^|_)(?:buyer|buyers|customer|customers|attendee|attendees|person|people|resident|residents|population|contacted|protected|members?)(?:$|_)"), "people"),
-    (re.compile(r"(?:^|_)(?:unit|units|sku|skus|item|items)(?:$|_)"), "units"),
-    (re.compile(r"(?:^|_)(?:kit|kits)(?:$|_)"), "kits"),
-    (re.compile(r"(?:^|_)(?:household|households|home|homes)(?:$|_)"), "households"),
-    (re.compile(r"(?:^|_)(?:event|events|death|deaths|harm|mortality|illness)(?:$|_)"), "events"),
-    (re.compile(r"(?:^|_)(?:month|months)(?:$|_)"), "months"),
-    (re.compile(r"(?:^|_)(?:day|days)(?:$|_)"), "days"),
-    (re.compile(r"(?:^|_)(?:hour|hours)(?:$|_)"), "hours"),
-    (re.compile(r"(?:^|_)(?:fte|staffing)(?:$|_)"), "people"),
-]
-
-
-def discover_currency_codes(params: dict) -> set[str]:
-    """Pull currency tokens (3-letter uppercase ISO-4217-style codes) from declared input units."""
-    codes: set[str] = set()
-    for src in ("key_values", "missing_values_to_estimate"):
-        for entry in params.get(src, []):
-            unit = entry.get("unit") or ""
-            for m in CURRENCY_TOKEN_RE.finditer(unit):
-                codes.add(m.group(1))
-    return codes
-
-
-def infer_unit(output_id: str, known_units: dict[str, str], currency_codes: set[str]) -> str:
-    if output_id in known_units:
-        return known_units[output_id]
-    low = output_id.lower()
-    for code in currency_codes:
-        if re.search(rf"(?:^|_){code.lower()}(?:$|_)", low):
-            return code
-    for pat, label in NON_CURRENCY_UNIT_RULES:
-        if pat.search(low):
-            return label
-    return "unknown"
 
 
 def percentiles(arr: np.ndarray) -> dict:
@@ -301,27 +261,27 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
     rng = np.random.default_rng(settings["seed"])
 
     warnings_text: list[str] = list(setting_warnings)
-    sample_warnings: list[str] = []
 
     input_specs = collect_input_specs(params, bounds)
     plan, plan_warnings = build_calculation_plan(params, module)
     warnings_text.extend(plan_warnings)
 
-    currency_codes = discover_currency_codes(params)
-    known_units: dict[str, str] = {}
+    input_units: dict[str, str] = {}
     for kv in params.get("key_values", []):
         if kv.get("unit"):
-            known_units[kv["id"]] = kv["unit"]
+            input_units[kv["id"]] = kv["unit"]
     for mv in params.get("missing_values_to_estimate", []):
         if mv.get("unit"):
-            known_units[mv["id"]] = mv["unit"]
+            input_units[mv["id"]] = mv["unit"]
+    output_units = {name: unit for name, unit, _ in plan}
 
     input_arrays: dict[str, np.ndarray] = {vid: np.empty(n_runs) for vid in input_specs}
-    output_arrays: dict[str, np.ndarray] = {name: np.full(n_runs, np.nan) for name, _ in plan}
-    exception_counts: dict[str, dict[str, int]] = {name: {} for name, _ in plan}
+    output_arrays: dict[str, np.ndarray] = {name: np.full(n_runs, np.nan) for name, _, _ in plan}
+    exception_counts: dict[str, dict[str, int]] = {name: {} for name, _, _ in plan}
     fn_signatures: dict[str, list[str]] = {
-        name: list(inspect.signature(fn).parameters) for name, fn in plan
+        name: list(inspect.signature(fn).parameters) for name, _, fn in plan
     }
+    fn_lookup: dict[str, Any] = {name: fn for name, _, fn in plan}
 
     for vid, spec in input_specs.items():
         if "fixed" in spec:
@@ -331,20 +291,20 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
             for i in range(n_runs):
                 arr[i] = sample_one(
                     rng, spec["bound"], settings["distribution_default"],
-                    settings["gate_probabilities"], vid, sample_warnings,
+                    settings["gate_probabilities"], vid,
                 )
 
     for i in range(n_runs):
         pool: dict[str, float] = {vid: float(input_arrays[vid][i]) for vid in input_specs
                                   if math.isfinite(input_arrays[vid][i])}
-        for name, fn in plan:
+        for name, _, _ in plan:
             args = fn_signatures[name]
             try:
                 kwargs = {a: pool[a] for a in args}
             except KeyError:
                 continue
             try:
-                val = fn(**kwargs)
+                val = fn_lookup[name](**kwargs)
             except Exception as exc:
                 exception_counts[name][type(exc).__name__] = (
                     exception_counts[name].get(type(exc).__name__, 0) + 1
@@ -355,12 +315,11 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
             output_arrays[name][i] = val
             pool[name] = float(val)
 
-    warnings_text.extend(sample_warnings)
     for name, counts in exception_counts.items():
         for exc_name, count in counts.items():
             warnings_text.append(f"output '{name}' raised {exc_name} on {count} of {n_runs} runs.")
 
-    outputs_of_interest = settings["outputs_of_interest"] or [name for name, _ in plan]
+    outputs_of_interest = settings["outputs_of_interest"] or [name for name, _, _ in plan]
     outputs_section: dict[str, dict] = {}
     for name in outputs_of_interest:
         arr_full = output_arrays.get(name)
@@ -372,7 +331,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
         missing_count = int(n_runs - finite.size)
         stats = percentiles(finite)
         outputs_section[name] = {
-            "unit": infer_unit(name, known_units, currency_codes),
+            "unit": output_units.get(name, "unknown"),
             "count": int(finite.size),
             "missing_count": missing_count,
             **stats,
@@ -387,7 +346,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
     for output_id, spec in (settings["thresholds"] or {}).items():
         op = spec.get("operator")
         if op not in THRESHOLD_OPS:
-            warnings_text.append(f"threshold '{output_id}' has unsupported operator '{op}'; ignored.")
+            warnings_text.append(f"threshold '{output_id}' has unsupported operator {op!r}; ignored.")
             continue
         arr = output_arrays.get(output_id)
         if arr is None:
@@ -409,8 +368,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
     sensitivity_section: dict[str, dict] = {}
     for name in outputs_section:
         out_arr = output_arrays[name]
-        used_args = set(fn_signatures.get(name, []))
-        all_used = set(used_args)
+        all_used = set(fn_signatures.get(name, []))
         changed = True
         while changed:
             changed = False
@@ -472,7 +430,11 @@ def main() -> int:
     args = p.parse_args()
 
     output_path = args.output or (args.parameters.parent / "montecarlo.json")
-    result = run(args.parameters, args.bounds, args.calculations, args.settings, output_path)
+    try:
+        result = run(args.parameters, args.bounds, args.calculations, args.settings, output_path)
+    except SchemaError as exc:
+        print(f"SCHEMA ERROR: {exc}", file=sys.stderr)
+        return 2
     summary = (
         f"{output_path} "
         f"n_runs={result['settings']['n_runs']} "

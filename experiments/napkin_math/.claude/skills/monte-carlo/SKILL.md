@@ -48,25 +48,35 @@ Not for: regenerating any prior artifact, replacing the deterministic scenario t
 
 ## What the runner does (so the LLM can describe results accurately)
 
-- **Distributions per bounded variable:**
-  - Default: triangular `(low, mode=base, high)`
-  - `distribution_default: "uniform"` switches to uniform
-  - **Fixed** (`low == base == high`): always returns that value
-  - **Binary gate** (`low == 0`, `base == high`, rationale mentions `binary | gate | release | tranche | pass | fail | withheld | conditional`): Bernoulli — use `gate_probabilities[id]` if set, else 0.5 with a warning. The runner does not restrict this to monetary variables — any unit can be a gate (currency tranches, permit toggles, regulatory pass/fail, etc.).
-  - **Integer counts** (unit token in `people | buyers | customers | households | units | kits | months | days | hours | events | …`, but NOT `_per_` / `per_` / `_rate`): sample continuously, then round, then re-clamp to bounds
-  - **Fractions** (`unit == "fraction"`): clamp to `[0, 1]`
-  - **Non-negative**: clamp to `≥ 0`
-  - Never samples outside `[low, high]`
+The runner does **no** lexical pattern-matching on id strings, unit strings, or rationale text. Every semantic classification it needs is read verbatim from upstream-declared fields. If a required field is missing, the runner exits with `SCHEMA ERROR` and names which upstream stage to re-run.
 
-- **Unit inference for derived outputs:** the runner does NOT carry a hardcoded currency allowlist. It scans `key_values` and `missing_values_to_estimate` for 3-letter uppercase tokens (ISO-4217-style codes such as `DKK`, `INR`, `BRL`, `KES`, `ZAR`, `IDR`, ...) and uses whatever currency codes the project actually declared. Output names containing one of those codes inherit that currency unit.
+- **Distributions per bounded variable** — driven by the bound's `sampling_discipline` field (required, declared by `generate-bounds`):
+  - `"fixed"` — always returns the single pinned value
+  - `"bernoulli_gate"` — Bernoulli draw with probability from `settings.gate_probabilities[id]` if set, else the bound's `default_pass_probability` (required, in `[0, 1]`). Returns `high` on pass, `low` on fail. Works for any unit — currency tranches, permit toggles, regulatory pass/fail.
+  - `"integer"` — sample triangular/uniform, round to nearest integer, re-clamp to `[low, high]`
+  - `"fraction"` — sample triangular/uniform, clamp to `[0, 1]`
+  - `"continuous"` — sample triangular/uniform with no extra rounding or clamping beyond `[low, high]`
+  - Default base distribution: triangular `(low, mode=base, high)`. `distribution_default: "uniform"` switches to uniform.
+  - The bound's `non_negative: bool` (required) drives whether draws are clamped to `>= 0`.
 
-- **Calculation execution:** uses `inspect.signature` on each generated function to pull args from the run's input pool. Order: `recommended_first_calculations` first, then `derived_questions`. Output name is the LHS of `formula_hint`, falling back to entry `id`. Outputs are added to the pool so later functions can depend on them. Missing dependencies / non-finite results / exceptions skip the run for that output (one aggregated warning, not per-run noise).
+- **Output names and units:** the runner uses `entry.output_name` and `entry.output_unit` from each `recommended_first_calculations` / `derived_questions` entry, declared by `extract-parameters`. The runner does **not** parse `formula_hint` to recover the name, and does **not** infer units from id tokens. The LLM is the single authority for both.
+
+- **Calculation execution:** uses `inspect.signature` on each generated function to pull args from the run's input pool. Order: `recommended_first_calculations` first, then `derived_questions`. Outputs are added to the pool so later functions can depend on them. Missing dependencies / non-finite results / exceptions skip the run for that output (one aggregated warning, not per-run noise).
 
 - **Sensitivity:** Pearson correlation between each sampled input and each summarized output, top 5 by `|correlation|`. Only inputs that vary AND are used directly or indirectly by the output AND have ≥20 finite paired samples are considered. `NaN` correlations become `null` + warning.
 
 - **Thresholds:** operators `>  >=  <  <=  ==  !=` only. Probability = success_count / valid_count. `valid_count == 0` → probability `null`.
 
 - **By default variables are independent.** `correlation_groups` is currently parsed but not yet implemented in the runner; if the user passes them, the script will accept the setting and ignore correlation enforcement. Update the runner if correlation is actually needed.
+
+## Required upstream schema
+
+For the runner to accept the artifacts, the upstream LLM stages must have emitted:
+
+- **Each `bounds.json` entry** — `sampling_discipline` (string, one of `fixed | bernoulli_gate | integer | fraction | continuous`), `non_negative` (bool), `default_pass_probability` (number in `[0, 1]` when `sampling_discipline == "bernoulli_gate"`, otherwise `null`).
+- **Each `recommended_first_calculations` and `derived_questions` entry with non-null `formula_hint`** — `output_name` (snake_case id of the computed value) and `output_unit` (unit string).
+
+If any required field is missing, the runner exits with `SCHEMA ERROR: <message>. Re-run <stage>.` and exit code 2. Fix the upstream artifact and re-run; the runner has no fallback path that re-guesses any of these.
 
 ## Output Shape
 
@@ -112,7 +122,7 @@ JSON forbids `NaN`/`Infinity` — the runner writes `null` and adds a warning. I
 - Runner (authoritative implementation): `experiments/napkin_math/run_monte_carlo.py`
 - Pipeline overview: `../../README.md`, Stage 7
 - Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
-- Example input set for testing:
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v23/20260215_nuuk_clay_workshop/parameters.json`
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v23/20260215_nuuk_clay_workshop/bounds.json`
-  - `/Users/neoneye/git/neoneye_lab/planexe_simulator/output/v23/20260215_nuuk_clay_workshop/calculations.py`
+- Synthetic fixture exercising every `sampling_discipline` (used as the runner smoke test):
+  - `experiments/napkin_math/tests/fixtures/smoke_v2/parameters.json`
+  - `experiments/napkin_math/tests/fixtures/smoke_v2/bounds.json`
+  - `experiments/napkin_math/tests/fixtures/smoke_v2/calculations.py`

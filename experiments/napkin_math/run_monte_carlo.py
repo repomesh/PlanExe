@@ -138,15 +138,14 @@ def sample_one(rng: np.random.Generator, bound: dict, distribution_default: str,
         p = gate_probabilities.get(var_id, bound["default_pass_probability"])
         return high if rng.random() < p else low
 
-    if distribution_default == "uniform":
+    if low == high:
+        val = low
+    elif distribution_default == "uniform":
         val = rng.uniform(low, high)
     else:
-        try:
-            val = rng.triangular(low, base, high)
-        except ValueError:
-            lo, hi = min(low, high), max(low, high)
-            mode = min(max(base, lo), hi)
-            val = rng.triangular(lo, mode, hi)
+        lo, hi = min(low, high), max(low, high)
+        mode = min(max(base, lo), hi)
+        val = rng.triangular(lo, mode, hi)
 
     val = float(min(max(val, low), high))
     if discipline == "fraction":

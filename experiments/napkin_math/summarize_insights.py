@@ -36,7 +36,7 @@ from pathlib import Path
 from typing import Any
 
 
-INSIGHTS_SCHEMA_VERSION = 1
+INSIGHTS_SCHEMA_VERSION = 2
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -70,6 +70,24 @@ PRIMARY_RESULT_REASON = {
 BASIS_FROM_SOURCE = {
     "data": "report_derived",
     "assumption": "model_assumption",
+}
+
+# Translate the `value_type` on a key_value into a `threshold_basis` label.
+# Mirrors the bounds.json `source` translation, but for the threshold side.
+VALUE_TYPE_TO_THRESHOLD_BASIS = {
+    "explicit": "report_explicit",
+    "inferred": "report_inferred",
+}
+
+SCHEMA_NOTES = {
+    "overall_risk_band_enum": ["viable", "marginal", "fragile", "doom", "unknown"],
+    "verdict_enum": ["ROBUST", "MARGINAL", "FRAGILE", "DOOM", "UNKNOWN"],
+    "basis_enum": ["report_derived", "model_assumption"],
+    "threshold_basis_enum": ["report_explicit", "report_inferred", "model_defined", "unknown"],
+    "primary_model_result_semantics": (
+        "overall_risk_band reflects the worst declared gate's pass-rate band; "
+        "it is not a calibrated whole-plan probability and does not mean the plan is impossible."
+    ),
 }
 
 OPEN_QUESTIONS = [
@@ -204,30 +222,75 @@ def render_artifact_contract() -> list[str]:
 # ─── machine summary (JSON) ────────────────────────────────────────────────
 
 def derive_primary_model_result(thresholds: list[dict]) -> dict:
-    """Structured headline result. label + reason + worst gate + its pass rate."""
+    """Structured headline result. The field name is `overall_risk_band` rather
+    than `label` so downstream consumers don't read it as a whole-plan
+    feasibility verdict — it is the worst declared gate's pass-rate band.
+    """
+    base = {
+        "basis": "worst declared gate's pass-rate band; not a calibrated whole-plan probability",
+    }
     if not thresholds:
         return {
-            "label": "unknown",
+            **base,
+            "overall_risk_band": "unknown",
             "reason": PRIMARY_RESULT_REASON["unknown"],
             "worst_gate": None,
             "worst_gate_pass_rate": None,
         }
     worst_severity = min(VERDICT_SEVERITY.get(r["verdict"], 99) for r in thresholds)
-    worst_label = next(
+    worst_verdict = next(
         (k for k, v in VERDICT_SEVERITY.items() if v == worst_severity),
         "UNKNOWN",
     )
-    label = PRIMARY_MODEL_RESULT_FROM_WORST.get(worst_label, "unknown")
-    # Worst gate = the one with the lowest pass rate among the worst-severity rows.
-    worst_band = [r for r in thresholds if r["verdict"] == worst_label]
-    worst_band.sort(key=lambda r: r["probability"] if r["probability"] is not None else 1.0)
-    worst_gate = worst_band[0] if worst_band else None
+    band = PRIMARY_MODEL_RESULT_FROM_WORST.get(worst_verdict, "unknown")
+    worst_band_rows = [r for r in thresholds if r["verdict"] == worst_verdict]
+    worst_band_rows.sort(key=lambda r: r["probability"] if r["probability"] is not None else 1.0)
+    worst_gate = worst_band_rows[0] if worst_band_rows else None
     return {
-        "label": label,
-        "reason": PRIMARY_RESULT_REASON.get(label, PRIMARY_RESULT_REASON["unknown"]),
+        **base,
+        "overall_risk_band": band,
+        "reason": PRIMARY_RESULT_REASON.get(band, PRIMARY_RESULT_REASON["unknown"]),
         "worst_gate": worst_gate["id"] if worst_gate else None,
         "worst_gate_pass_rate": worst_gate["probability"] if worst_gate else None,
     }
+
+
+def lookup_gate_metadata(params: dict | None, gate_id: str) -> dict:
+    """Find the gate's own rationale and its threshold parameter, from parameters.json.
+
+    The recommended_first_calculations / derived_questions entries carry a
+    `why_first` / `why_it_matters` line written by the extractor for THIS plan;
+    surfacing it lets the insights file include plan-specific framing without
+    inventing tactical advice. The threshold parameter (the key_value the
+    formula tests against) carries a `value_type` (explicit/inferred) — that
+    distinguishes thresholds the plan states directly from those the
+    extractor inferred.
+    """
+    if not params:
+        return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+    key_values_by_id = {kv["id"]: kv for kv in params.get("key_values", [])}
+    for src in ("recommended_first_calculations", "derived_questions"):
+        for entry in params.get(src, []):
+            if entry.get("output_name") != gate_id:
+                continue
+            why = entry.get("why_first") or entry.get("why_it_matters")
+            threshold_param = None
+            for d in entry.get("depends_on", []):
+                if d in key_values_by_id:
+                    threshold_param = key_values_by_id[d]
+                    break
+            return {
+                "why": why,
+                "threshold_param_id": threshold_param["id"] if threshold_param else None,
+                "threshold_value_type": threshold_param.get("value_type") if threshold_param else None,
+            }
+    return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+
+
+def threshold_basis_for(value_type: str | None) -> str:
+    if not value_type:
+        return "unknown"
+    return VALUE_TYPE_TO_THRESHOLD_BASIS.get(value_type, "model_defined")
 
 
 def derive_artifact_set(params_path: Path | None) -> dict:
@@ -286,6 +349,7 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         "primary_failed_gates": failed,
         "primary_uncertainty_drivers": drivers,
         "do_not_treat_as": DO_NOT_TREAT_AS,
+        "schema_notes": SCHEMA_NOTES,
     }
     block = json.dumps(manifest, indent=2)
     return [
@@ -452,18 +516,20 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
     rows = [
         "## Gate verdicts",
         "",
-        f"Pass rate for every declared threshold over {runs_phrase}. Bands: ≥80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, <20% **DOOM**. Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools — their verdict is meaningful, their raw magnitude is not.",
+        f"Pass rate for every declared threshold over {runs_phrase}. Bands: ≥80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, <20% **DOOM**. The `Threshold basis` column reports whether the threshold value came from the source report explicitly (`report_explicit`), was inferred from the report (`report_inferred`), or has no narrative anchor (`model_defined` / `unknown`). Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools — their verdict is meaningful, their raw magnitude is not.",
         "",
-        "| | Output | Condition | Pass rate | Verdict | Meaning |",
-        "|---|---|---|---:|---|---|",
+        "| | Output | Condition | Threshold basis | Pass rate | Verdict | Meaning |",
+        "|---|---|---|---|---:|---|---|",
     ]
     for r in thresholds:
         prob = r["probability"]
         prob_str = f"{prob * 100:.1f}%" if prob is not None else "n/a"
         marker = "min" if r["is_aggregate"] else ""
+        meta = lookup_gate_metadata(params, r["id"])
+        tbasis = threshold_basis_for(meta["threshold_value_type"])
         rows.append(
             f"| {marker} | `{r['id']}` | {r['operator']} {fmt_number(r['value'])} | "
-            f"{prob_str} | **{r['verdict']}** | {r['note']} |"
+            f"{tbasis} | {prob_str} | **{r['verdict']}** | {r['note']} |"
         )
     rows.append("")
 
@@ -499,55 +565,54 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
     rows = [
         "## Decision implications",
         "",
-        "Bridge from gate result to planning consequence to revision direction. The consequence column is a generic template keyed on the verdict; the revision-direction column names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). Plan-specific tactical revisions (which capacity to cut, which contract clause to change, which campus to split) require human or LLM interpretation — this table only points at the structural lever.",
+        "Bridge from gate result to planning consequence. **Structural lever** names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). **Plan-specific revision hint** surfaces the gate's own rationale lifted verbatim from `parameters.recommended_first_calculations[].why_first` (or `derived_questions[].why_it_matters`) plus the threshold parameter the formula tests against — it points at the plan's own framing, not invented tactical advice. The kind of plan revision (cut capacity, change a contract clause, relax a target) is for human or LLM interpretation against the source report.",
         "",
-        "| Gate | Verdict | Planning consequence | Likely revision direction |",
-        "|---|---|---|---|",
+        "| Gate | Verdict | Planning consequence | Structural lever | Plan-specific revision hint |",
+        "|---|---|---|---|---|",
     ]
     for r in interpreted:
         prob = r["probability"] or 0
         cond = f"{r['operator']} {fmt_number(r['value'])}"
         if r["verdict"] == "DOOM":
             consequence = (
-                f"The plan's `{cond}` requirement is not credible under current "
-                f"bounds: only {prob * 100:.1f}% of runs hold. Commitments that "
-                f"depend on this should not be made without revision."
+                f"The `{cond}` requirement is not credible under current bounds: "
+                f"only {prob * 100:.1f}% of runs hold. Commitments that depend on "
+                f"this should not be made without revision."
             )
         elif r["verdict"] == "FRAGILE":
             consequence = (
-                f"The plan's `{cond}` requirement fails in the majority of runs "
+                f"The `{cond}` requirement fails in the majority of runs "
                 f"({(1 - prob) * 100:.1f}%). External commitments built on this "
                 f"gate are exposed."
             )
         else:  # MARGINAL
             consequence = (
-                f"The plan's `{cond}` requirement passes {prob * 100:.1f}% of "
-                f"runs — close enough to coin-flip that downstream commitments "
-                f"should not assume it holds."
+                f"The `{cond}` requirement passes {prob * 100:.1f}% of runs — "
+                f"close enough to coin-flip that downstream commitments should "
+                f"not assume it holds."
             )
         drivers = quartile.get(r["id"]) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
         if top is None:
-            revision = (
-                "No single driver dominates in `quartile_analysis`. Audit the "
-                "cluster of inputs feeding this gate, or revisit the threshold "
-                "definition."
-            )
+            lever = "No single driver dominates — audit the cluster of inputs feeding this gate."
         else:
             delta = top.get("delta_pp", 0)
-            if delta >= 0:
-                revision = (
-                    f"Improve `{top['id']}` (tighten its low bound or shift the "
-                    f"base value upward), revisit the threshold definition, or "
-                    f"remove the commitment that depends on this gate."
-                )
-            else:
-                revision = (
-                    f"Reduce `{top['id']}` (tighten its high bound or shift the "
-                    f"base value downward), revisit the threshold definition, or "
-                    f"remove the commitment that depends on this gate."
-                )
-        rows.append(f"| `{r['id']}` | **{r['verdict']}** | {consequence} | {revision} |")
+            direction = "improve toward its high bound" if delta >= 0 else "reduce toward its low bound"
+            lever = f"`{top['id']}` ({direction}; quartile Δ-pp {delta:+.1f})"
+
+        meta = lookup_gate_metadata(params, r["id"])
+        why = meta["why"] or ""
+        if meta["threshold_param_id"]:
+            tref = f"Threshold parameter: `{meta['threshold_param_id']}`."
+            hint = (why + " " + tref).strip() if why else tref
+        elif why:
+            hint = why
+        else:
+            hint = "No gate rationale in `parameters.json`; revisit the threshold definition."
+
+        rows.append(
+            f"| `{r['id']}` | **{r['verdict']}** | {consequence} | {lever} | {hint} |"
+        )
     rows.append("")
     return rows
 

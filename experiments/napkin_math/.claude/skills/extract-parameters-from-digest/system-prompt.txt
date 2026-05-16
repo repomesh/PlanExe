@@ -197,10 +197,77 @@ Preferred patterns:
 - gate_surplus = available_amount - required_amount
 - coverage_ratio = available_capacity / required_capacity
 - contingency_after_shock = contingency_reserve - shock_cost
-- revenue_gap = required_revenue - expected_revenue
+- revenue_capacity_surplus = expected_revenue - required_revenue
 - breakeven_surplus = expected_units - breakeven_units
 - runway_days = available_cash / daily_burn_rate
 - required_share = required_count / denominator_count
+
+Threshold-friendly output naming (apply to every output that will be tested against a pass/fail threshold):
+
+When the calculation produces a number meant to be compared against a threshold, name it so that "positive = pass" is the obvious read. Set up the formula so the threshold direction is ">= 0" rather than "<= 0". This removes the need for a reader to re-derive "which sign is good" every time they look at the report.
+
+Preferred suffixes for threshold-tested calculations:
+- _surplus      — available minus required; positive = healthy
+- _buffer       — reserve minus draw; positive = room remaining
+- _margin       — achieved minus required; positive = clears the bar
+- _coverage     — available divided by required, or the surplus form
+
+Avoid for threshold-tested calculations:
+- _gap          — the direction is ambiguous; the reader has to guess which sign is the good one
+- _deficit      — implies "always bad", but invites the same threshold confusion
+- _shortfall    — only use when the formula matches the name (required minus achieved); even then prefer the surplus framing
+
+If you would naturally write "x_gap = expected - capacity" with threshold "<= 0", instead write "x_capacity_surplus = capacity - expected" with threshold ">= 0". The sign flips; the name explains itself.
+
+Apply this rule even when the underlying source phrasing is "the gap is X". The source text is allowed to use "gap"; the calculation output id is not.
+
+Derive coupled stressors instead of sampling them independently:
+
+If a stressor variable (a shortfall, deficit, overrun, drain, leakage) is mechanically derivable from quantities the model already covers, declare it as a calculation. Do not put it in missing_values_to_estimate as if it were an independent input. Sampling a derived stressor independently:
+- double-counts the same underlying risk in the simulation;
+- lets the simulation produce physically incoherent combinations (e.g., a large rental shortfall in a scenario where the capacity surplus is positive — there should not be a shortfall there at all);
+- weakens the sensitivity analysis, because two outputs that share a cause look like they have independent drivers.
+
+Concrete signs of this anti-pattern in your draft:
+- a missing_values_to_estimate entry whose why_needed text references another modelled variable by name ("when X underperforms");
+- a suggested_estimation_method that is effectively a formula ("expected_X * (1 - realized_share)", "expected_X - achievable_X");
+- an aggregate test (combined_viability_surplus, runway, etc.) that subtracts both an independent stressor AND the inputs the stressor logically depends on.
+
+Fix: convert the entry into a recommended_first_calculation or derived_question. Use a non-negative guard when the stressor can only be a one-sided shortfall:
+
+rental_revenue_shortfall = max(0, expected_revenue - achievable_revenue)
+labor_law_cost_overrun   = max(0, salaried_cost - contractor_cost)
+runway_burn_overrun      = max(0, actual_burn_rate - planned_burn_rate)
+
+When the underlying surplus calculation already exists, derive the stressor from its negative side rather than recomputing the difference. Example:
+
+drop_in_capacity_surplus_dkk = (rate * hours) - expected_revenue          (already declared)
+rental_revenue_shortfall_dkk = max(0, -drop_in_capacity_surplus_dkk)      (the stressor)
+
+Then any aggregate test that consumes the stressor reads from this derived value, and the simulation respects the causal link.
+
+No dead-end variables:
+
+Every entry in key_values and missing_values_to_estimate must feed at least one calculation — either directly (it appears in another entry's depends_on or formula_hint RHS) or transitively (it feeds a calculation whose output is used by another calculation). Before emitting the JSON, walk every variable and confirm it reaches a recommended_first_calculation or derived_question output.
+
+A variable extracted "for context" but never used by a calculation is dead weight. It pollutes the bounds (forcing generate-bounds to assign a range you never sample meaningfully), shows up as a non-driver in sensitivity reports, and clutters the insights without adding signal.
+
+Common dead-end patterns to watch for:
+- a threshold or trigger value (e.g., "surcharge activates when X exceeds 30%") extracted without also extracting X and the margin calculation that tests it;
+- a capacity, FTE, or staffing constant extracted as background detail but never multiplied into a throughput, cost, or revenue formula;
+- a percentage target or "operational goal" the plan mentions but the model has no way to evaluate.
+
+Fix in priority order:
+1. If you can model the variable cheaply, add a calculation that uses it. For triggers, the natural form is "<x>_margin = actual_share - threshold_share" — and you must also add `actual_share` to missing_values_to_estimate if absent from the source. Both the trigger and the actual share must connect to the margin calculation.
+2. If you cannot model it, drop the variable. Do not extract it and leave it stranded.
+
+It is better to return six well-connected key_values than eight where two are dead-ends. The caps are a ceiling, not a target.
+
+Keep plan_summary.modelling_frame consistent with the executable model:
+
+modelling_frame describes the scope of what the calculations actually evaluate, not the full plan as written. If you drop a risk concept (utility shock, supplier shock, regulatory shock, etc.) under the No-dead-end rule because no calculation tests it, also drop that concept from the modelling_frame text. A frame that names risks the model has no way to evaluate reads as overstating what the simulation covers and misleads downstream readers of the insights report.
+
+Concrete pattern: if the frame says "buffers against A, B, and C shocks" and you only retained calculations that test A and B, the frame must say "buffers against A and B shocks". Do not paper over the gap by keeping the dropped concept in the prose.
 
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
@@ -282,7 +349,7 @@ gross_profit = revenue * gross_margin
 
 5. Gate, runway, or funding:
 total_available_funding = initial_budget + conditional_funding_gate
-funding_gap = required_cost - available_profit
+funding_surplus = available_profit - required_cost
 
 6. Break-even:
 contribution_margin_per_unit = arpu * gross_margin - cac_per_unit - warranty_reserve_per_unit
@@ -324,7 +391,7 @@ Examples:
 net_cash_from_operations = gross_profit - fixed_cost
 gate_surplus = net_cash_from_operations - gate_threshold
 units_surplus = units_sold - required_units
-funding_gap = required_funding - available_cash
+funding_surplus = available_cash - required_funding
 
 Do not extract a conditional funding amount unless either:
 - it feeds total_available_funding, or

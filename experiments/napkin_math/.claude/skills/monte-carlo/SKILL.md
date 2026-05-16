@@ -52,11 +52,13 @@ Not for: regenerating any prior artifact, replacing the deterministic scenario t
   - Default: triangular `(low, mode=base, high)`
   - `distribution_default: "uniform"` switches to uniform
   - **Fixed** (`low == base == high`): always returns that value
-  - **Binary gate-dependent monetary** (currency unit, `low == 0`, `base == high`, rationale mentions `binary | gate | release | tranche | pass | fail | withheld | conditional`): Bernoulli — use `gate_probabilities[id]` if set, else 0.5 with a warning
+  - **Binary gate** (`low == 0`, `base == high`, rationale mentions `binary | gate | release | tranche | pass | fail | withheld | conditional`): Bernoulli — use `gate_probabilities[id]` if set, else 0.5 with a warning. The runner does not restrict this to monetary variables — any unit can be a gate (currency tranches, permit toggles, regulatory pass/fail, etc.).
   - **Integer counts** (unit token in `people | buyers | customers | households | units | kits | months | days | hours | events | …`, but NOT `_per_` / `per_` / `_rate`): sample continuously, then round, then re-clamp to bounds
   - **Fractions** (`unit == "fraction"`): clamp to `[0, 1]`
   - **Non-negative**: clamp to `≥ 0`
   - Never samples outside `[low, high]`
+
+- **Unit inference for derived outputs:** the runner does NOT carry a hardcoded currency allowlist. It scans `key_values` and `missing_values_to_estimate` for 3-letter uppercase tokens (ISO-4217-style codes such as `DKK`, `INR`, `BRL`, `KES`, `ZAR`, `IDR`, ...) and uses whatever currency codes the project actually declared. Output names containing one of those codes inherit that currency unit.
 
 - **Calculation execution:** uses `inspect.signature` on each generated function to pull args from the run's input pool. Order: `recommended_first_calculations` first, then `derived_questions`. Output name is the LHS of `formula_hint`, falling back to entry `id`. Outputs are added to the pool so later functions can depend on them. Missing dependencies / non-finite results / exceptions skip the run for that output (one aggregated warning, not per-run noise).
 

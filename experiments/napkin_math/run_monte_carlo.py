@@ -114,13 +114,7 @@ def is_fraction_unit(unit: str) -> bool:
     return (unit or "").lower() == "fraction"
 
 
-def is_monetary_unit(unit: str) -> bool:
-    return bool(re.search(r"(?:^|_)(eur|usd|gbp|dkk|nok|sek|isk|chf|jpy|cny|inr)(?:$|_)", (unit or "").lower()))
-
-
 def is_bernoulli_gate(bound: dict) -> bool:
-    if not is_monetary_unit(bound.get("unit", "")):
-        return False
     low, base, high = bound.get("low"), bound.get("base"), bound.get("high")
     if not (isinstance(low, (int, float)) and low == 0 and base == high):
         return False
@@ -228,10 +222,10 @@ def collect_input_specs(params: dict, bounds: dict) -> dict[str, dict]:
     return specs
 
 
-UNIT_INFERENCE_RULES = [
-    (re.compile(r"_eur(?:$|_)|_dkk(?:$|_)|_usd(?:$|_)|_gbp(?:$|_)|_nok(?:$|_)|_sek(?:$|_)"), "currency"),
+CURRENCY_TOKEN_RE = re.compile(r"(?:^|_)([A-Z]{3})(?:$|_)")
+
+NON_CURRENCY_UNIT_RULES = [
     (re.compile(r"(?:^|_)(?:fraction|ratio|rate|share|probability|effectiveness|penetration|percent)(?:$|_)"), "fraction"),
-    (re.compile(r"(?:^|_)(?:cost|budget|reserve|tranche|funding|revenue|spend|cash|profit|margin|arpu|price)(?:$|_)"), "currency"),
     (re.compile(r"(?:^|_)(?:buyer|buyers|customer|customers|attendee|attendees|person|people|resident|residents|population|contacted|protected|members?)(?:$|_)"), "people"),
     (re.compile(r"(?:^|_)(?:unit|units|sku|skus|item|items)(?:$|_)"), "units"),
     (re.compile(r"(?:^|_)(?:kit|kits)(?:$|_)"), "kits"),
@@ -244,15 +238,26 @@ UNIT_INFERENCE_RULES = [
 ]
 
 
-def infer_unit(output_id: str, known_units: dict[str, str]) -> str:
+def discover_currency_codes(params: dict) -> set[str]:
+    """Pull currency tokens (3-letter uppercase ISO-4217-style codes) from declared input units."""
+    codes: set[str] = set()
+    for src in ("key_values", "missing_values_to_estimate"):
+        for entry in params.get(src, []):
+            unit = entry.get("unit") or ""
+            for m in CURRENCY_TOKEN_RE.finditer(unit):
+                codes.add(m.group(1))
+    return codes
+
+
+def infer_unit(output_id: str, known_units: dict[str, str], currency_codes: set[str]) -> str:
     if output_id in known_units:
         return known_units[output_id]
     low = output_id.lower()
-    for pat, label in UNIT_INFERENCE_RULES:
+    for code in currency_codes:
+        if re.search(rf"(?:^|_){code.lower()}(?:$|_)", low):
+            return code
+    for pat, label in NON_CURRENCY_UNIT_RULES:
         if pat.search(low):
-            if label == "currency":
-                m = re.search(r"_(eur|dkk|usd|gbp|nok|sek)(?:$|_)", low)
-                return m.group(1).upper() if m else "money"
             return label
     return "unknown"
 
@@ -302,6 +307,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
     plan, plan_warnings = build_calculation_plan(params, module)
     warnings_text.extend(plan_warnings)
 
+    currency_codes = discover_currency_codes(params)
     known_units: dict[str, str] = {}
     for kv in params.get("key_values", []):
         if kv.get("unit"):
@@ -366,7 +372,7 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
         missing_count = int(n_runs - finite.size)
         stats = percentiles(finite)
         outputs_section[name] = {
-            "unit": infer_unit(name, known_units),
+            "unit": infer_unit(name, known_units, currency_codes),
             "count": int(finite.size),
             "missing_count": missing_count,
             **stats,

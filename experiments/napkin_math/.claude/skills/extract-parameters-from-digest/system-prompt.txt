@@ -221,6 +221,31 @@ If you would naturally write "x_gap = expected - capacity" with threshold "<= 0"
 
 Apply this rule even when the underlying source phrasing is "the gap is X". The source text is allowed to use "gap"; the calculation output id is not.
 
+Derive coupled stressors instead of sampling them independently:
+
+If a stressor variable (a shortfall, deficit, overrun, drain, leakage) is mechanically derivable from quantities the model already covers, declare it as a calculation. Do not put it in missing_values_to_estimate as if it were an independent input. Sampling a derived stressor independently:
+- double-counts the same underlying risk in the simulation;
+- lets the simulation produce physically incoherent combinations (e.g., a large rental shortfall in a scenario where the capacity surplus is positive — there should not be a shortfall there at all);
+- weakens the sensitivity analysis, because two outputs that share a cause look like they have independent drivers.
+
+Concrete signs of this anti-pattern in your draft:
+- a missing_values_to_estimate entry whose why_needed text references another modelled variable by name ("when X underperforms");
+- a suggested_estimation_method that is effectively a formula ("expected_X * (1 - realized_share)", "expected_X - achievable_X");
+- an aggregate test (combined_viability_surplus, runway, etc.) that subtracts both an independent stressor AND the inputs the stressor logically depends on.
+
+Fix: convert the entry into a recommended_first_calculation or derived_question. Use a non-negative guard when the stressor can only be a one-sided shortfall:
+
+rental_revenue_shortfall = max(0, expected_revenue - achievable_revenue)
+labor_law_cost_overrun   = max(0, salaried_cost - contractor_cost)
+runway_burn_overrun      = max(0, actual_burn_rate - planned_burn_rate)
+
+When the underlying surplus calculation already exists, derive the stressor from its negative side rather than recomputing the difference. Example:
+
+drop_in_capacity_surplus_dkk = (rate * hours) - expected_revenue          (already declared)
+rental_revenue_shortfall_dkk = max(0, -drop_in_capacity_surplus_dkk)      (the stressor)
+
+Then any aggregate test that consumes the stressor reads from this derived value, and the simulation respects the causal link.
+
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
 If space limits prevent adding the missing input, omit the derived question rather than emitting formula_hint: null.

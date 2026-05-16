@@ -92,17 +92,19 @@ Order is deliberate. Stable section names — programmatic consumers retrieve by
 
 - **`# Insights: <plan name>`** — title plus a 2-line frontmatter (type, primary goal).
 - **`## Artifact contract`** — declares what this file is (an interpretation layer over the simulation artifacts) and what it is not (a copy of the raw simulation data, an external feasibility proof, a probability calibration).
-- **`## Machine summary`** — a JSON code block with the compact manifest: `artifact_type`, `plan_name`, `source_plan_dir`, `primary_model_result` (doom/fragile/marginal/viable), `validation_status`, `simulation` (n_runs/seed/distribution_default), `primary_failed_gates`, `primary_uncertainty_drivers`, `do_not_treat_as`. JSON, not YAML — that is intentional.
+- **`## Machine summary`** — a JSON code block with the compact manifest: `insights_schema_version` (currently `1`), `artifact_type`, `plan_name`, `artifact_set` (`version` / `plan_slug` / `relative_dir` — the portable identifier), `source_plan_dir` (absolute path; local-only), `primary_model_result` (a structured object: `label` ∈ doom/fragile/marginal/viable, `reason`, `worst_gate`, `worst_gate_pass_rate`), `validation_status`, `simulation` (n_runs/seed/distribution_default), `primary_failed_gates`, `primary_uncertainty_drivers`, `do_not_treat_as`. JSON, not YAML — that is intentional.
 - **`## Provenance map`** — table listing every intermediary file with its role and "open when" guidance. The first row points at `extract_parameters_input.md`, then parameters/bounds/calculations/scenarios/scenario_outputs/montecarlo_settings/montecarlo/validation.
 - **`## Modelling frame`** — the source plan's own statement of what the model is testing, lifted verbatim from `parameters.plan_summary.modelling_frame`.
 - **`## Simulation settings`** — n_runs, seed, distribution_default, validation status.
 - **`## Critical findings`** — bullets in severity order: DOOM gates, FRAGILE gates, scenario warnings, numbers the model could not compute (≥5% blank runs), still-missing inputs. Section omitted entirely when nothing qualifies.
 - **`## Gate verdicts`** — every declared threshold, worst-first, with the `min` marker on aggregate gates. Includes an `### Aggregation warning` sub-section when the thresholds use incompatible units and the plan declares no `min()` aggregate.
+- **`## Decision implications`** — one row per gate with verdict in DOOM/FRAGILE/MARGINAL: the structural consequence of the result (templated by verdict) and the revision direction implied by the top driver in `quartile_analysis`. Deliberately generic — plan-specific tactical revisions require human or LLM interpretation; this table only names the structural lever.
 - **`## Failure drivers`** — one row per failing gate (DOOM or FRAGILE): top driver from `quartile_analysis` (max abs Δ-pp) and the conditional input restriction from `required_input_thresholds` that would lift the gate to 80%. Binding-gate frequencies for aggregates appear as bullets below the table.
-- **`## Missing inputs ranked by impact`** — the `missing_value_priority` table.
+- **`## Missing inputs ranked by impact`** — the `missing_value_priority` table. The `Basis` column translates the bounds.json `source` label (`data` → `report_derived`, `assumption` → `model_assumption`) so it isn't mistaken for empirically observed real-world data.
 - **`## Confidence and trust boundaries`** — Validated (a one-line list of `validation.json` checks_performed), Not validated (a canonical list: real-world accuracy of bounds, independence assumptions, external feasibility, factual truth of source claims), Per-output confidence (HIGH/MEDIUM/LOW grade table from `model_confidence`).
-- **`## Scenario sanity check`** — short low/middle/high deterministic comparison table.
-- **`## Suggested next actions`** — five imperatives for whatever consumes this file next. No "AI" in the heading or body; phrased as "To answer X, lead with Y; to audit Z, open W".
+- **`## Scenario sanity check`** — short low/base/high deterministic comparison table. Columns: `Low inputs` / `Base inputs` / `High inputs`, matching the keys in `scenarios.json`.
+- **`## Suggested next actions`** — five imperatives for whatever consumes this file next. Phrased as "To answer X, lead with Y; to audit Z, open W".
+- **`## Open questions for next analysis pass`** — five standing audit questions the simulation can't answer on its own (bound width/bias, gate independence, hard vs soft gates, missing-input remediation, unmodelled gates).
 
 ## Common Mistakes
 

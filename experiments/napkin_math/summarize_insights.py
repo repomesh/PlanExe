@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import Any
 
 
+INSIGHTS_SCHEMA_VERSION = 1
+
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
     (0.50, "MARGINAL", "passes more often than not but uncomfortably close"),
@@ -52,6 +54,31 @@ PRIMARY_MODEL_RESULT_FROM_WORST = {
     "ROBUST": "viable",
     "UNKNOWN": "unknown",
 }
+
+PRIMARY_RESULT_REASON = {
+    "doom": "at least one declared gate has pass rate < 20% (DOOM band)",
+    "fragile": "at least one declared gate has pass rate in 20–50% (FRAGILE band)",
+    "marginal": "at least one declared gate has pass rate in 50–80% (MARGINAL band)",
+    "viable": "every declared gate has pass rate ≥ 80% (ROBUST band)",
+    "unknown": "no threshold pass rates available",
+}
+
+# Translate the bounds.json `source` label into a less misleading "basis" value.
+# `source: data` in this pipeline means "anchored in the source report's
+# narrative", NOT externally observed real-world data. Renaming the value
+# avoids that confusion downstream.
+BASIS_FROM_SOURCE = {
+    "data": "report_derived",
+    "assumption": "model_assumption",
+}
+
+OPEN_QUESTIONS = [
+    "Are the current input bounds too narrow, too wide, or directionally biased?",
+    "Which failed gates are truly independent, and which are correlated?",
+    "Which gates are hard stop/go gates versus soft optimisation targets?",
+    "Which missing inputs can be replaced by external research or user-supplied facts?",
+    "Does the source report contain unmodelled gates that should be added?",
+]
 
 DO_NOT_TREAT_AS = [
     "an external feasibility proof for the plan's claims",
@@ -176,15 +203,57 @@ def render_artifact_contract() -> list[str]:
 
 # ─── machine summary (JSON) ────────────────────────────────────────────────
 
-def derive_primary_model_result(thresholds: list[dict]) -> str:
+def derive_primary_model_result(thresholds: list[dict]) -> dict:
+    """Structured headline result. label + reason + worst gate + its pass rate."""
     if not thresholds:
-        return "unknown"
+        return {
+            "label": "unknown",
+            "reason": PRIMARY_RESULT_REASON["unknown"],
+            "worst_gate": None,
+            "worst_gate_pass_rate": None,
+        }
     worst_severity = min(VERDICT_SEVERITY.get(r["verdict"], 99) for r in thresholds)
-    label = next(
+    worst_label = next(
         (k for k, v in VERDICT_SEVERITY.items() if v == worst_severity),
         "UNKNOWN",
     )
-    return PRIMARY_MODEL_RESULT_FROM_WORST.get(label, "unknown")
+    label = PRIMARY_MODEL_RESULT_FROM_WORST.get(worst_label, "unknown")
+    # Worst gate = the one with the lowest pass rate among the worst-severity rows.
+    worst_band = [r for r in thresholds if r["verdict"] == worst_label]
+    worst_band.sort(key=lambda r: r["probability"] if r["probability"] is not None else 1.0)
+    worst_gate = worst_band[0] if worst_band else None
+    return {
+        "label": label,
+        "reason": PRIMARY_RESULT_REASON.get(label, PRIMARY_RESULT_REASON["unknown"]),
+        "worst_gate": worst_gate["id"] if worst_gate else None,
+        "worst_gate_pass_rate": worst_gate["probability"] if worst_gate else None,
+    }
+
+
+def derive_artifact_set(params_path: Path | None) -> dict:
+    """Best-effort portable identifier parsed from the source directory.
+
+    Looks for an `output/<version>/<plan_slug>/` suffix on the resolved path.
+    If the layout doesn't match, version and plan_slug are null and the
+    relative_dir falls back to the immediate parent directory name.
+    """
+    if params_path is None:
+        return {"version": None, "plan_slug": None, "relative_dir": None}
+    parts = params_path.parent.resolve().parts
+    try:
+        idx = len(parts) - 1 - parts[::-1].index("output")
+    except ValueError:
+        return {
+            "version": None,
+            "plan_slug": params_path.parent.name or None,
+            "relative_dir": params_path.parent.name or None,
+        }
+    relative_parts = parts[idx:]
+    return {
+        "version": relative_parts[1] if len(relative_parts) > 1 else None,
+        "plan_slug": relative_parts[2] if len(relative_parts) > 2 else None,
+        "relative_dir": "/".join(relative_parts),
+    }
 
 
 def render_machine_summary(params: dict | None, mc: dict | None,
@@ -202,8 +271,10 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         validation_status = "valid" if validation.get("valid") else "invalid"
 
     manifest = {
+        "insights_schema_version": INSIGHTS_SCHEMA_VERSION,
         "artifact_type": "interpretation_layer",
         "plan_name": plan_summary.get("plan_name"),
+        "artifact_set": derive_artifact_set(params_path),
         "source_plan_dir": str(params_path.parent.resolve()) if params_path else None,
         "primary_model_result": derive_primary_model_result(thresholds),
         "validation_status": validation_status,
@@ -220,7 +291,7 @@ def render_machine_summary(params: dict | None, mc: dict | None,
     return [
         "## Machine summary",
         "",
-        "Compact manifest for programmatic consumers. The fields below are the structured form of the prose verdicts that follow.",
+        "Compact manifest for programmatic consumers. The fields below are the structured form of the prose verdicts that follow. `artifact_set.relative_dir` is the portable identifier; `source_plan_dir` is the absolute path on the generating machine.",
         "",
         "```json",
         block,
@@ -409,6 +480,78 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
     return rows
 
 
+# ─── decision implications ─────────────────────────────────────────────────
+
+def render_decision_implications(mc: dict | None, params: dict | None) -> list[str]:
+    """Bridge: gate result → planning consequence → revision direction.
+
+    Templates are deliberately generic. Plan-specific tactical revisions
+    require human or LLM interpretation; what we can emit deterministically
+    is the *type* of consequence and the *direction* of repair given the top
+    driver from quartile_analysis.
+    """
+    thresholds = threshold_entries(mc, params)
+    interpreted = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE", "MARGINAL")]
+    if not interpreted:
+        return []
+    quartile = (mc or {}).get("quartile_analysis") or {}
+
+    rows = [
+        "## Decision implications",
+        "",
+        "Bridge from gate result to planning consequence to revision direction. The consequence column is a generic template keyed on the verdict; the revision-direction column names the input whose quartile movement has the largest effect on this gate (from `quartile_analysis` in `montecarlo.json`). Plan-specific tactical revisions (which capacity to cut, which contract clause to change, which campus to split) require human or LLM interpretation — this table only points at the structural lever.",
+        "",
+        "| Gate | Verdict | Planning consequence | Likely revision direction |",
+        "|---|---|---|---|",
+    ]
+    for r in interpreted:
+        prob = r["probability"] or 0
+        cond = f"{r['operator']} {fmt_number(r['value'])}"
+        if r["verdict"] == "DOOM":
+            consequence = (
+                f"The plan's `{cond}` requirement is not credible under current "
+                f"bounds: only {prob * 100:.1f}% of runs hold. Commitments that "
+                f"depend on this should not be made without revision."
+            )
+        elif r["verdict"] == "FRAGILE":
+            consequence = (
+                f"The plan's `{cond}` requirement fails in the majority of runs "
+                f"({(1 - prob) * 100:.1f}%). External commitments built on this "
+                f"gate are exposed."
+            )
+        else:  # MARGINAL
+            consequence = (
+                f"The plan's `{cond}` requirement passes {prob * 100:.1f}% of "
+                f"runs — close enough to coin-flip that downstream commitments "
+                f"should not assume it holds."
+            )
+        drivers = quartile.get(r["id"]) or []
+        top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
+        if top is None:
+            revision = (
+                "No single driver dominates in `quartile_analysis`. Audit the "
+                "cluster of inputs feeding this gate, or revisit the threshold "
+                "definition."
+            )
+        else:
+            delta = top.get("delta_pp", 0)
+            if delta >= 0:
+                revision = (
+                    f"Improve `{top['id']}` (tighten its low bound or shift the "
+                    f"base value upward), revisit the threshold definition, or "
+                    f"remove the commitment that depends on this gate."
+                )
+            else:
+                revision = (
+                    f"Reduce `{top['id']}` (tighten its high bound or shift the "
+                    f"base value downward), revisit the threshold definition, or "
+                    f"remove the commitment that depends on this gate."
+                )
+        rows.append(f"| `{r['id']}` | **{r['verdict']}** | {consequence} | {revision} |")
+    rows.append("")
+    return rows
+
+
 # ─── failure drivers (one row per failing gate) ────────────────────────────
 
 def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
@@ -481,14 +624,20 @@ def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
         "",
         "The plan does not state these values; the model assumed bounds. Rank by `|Δ-pp on the worst-affected gate| × (1 − that gate's pass rate) × bound-width-ratio` — the higher, the more decision-value in pinning this input down.",
         "",
-        "| Rank | Input | Worst-affected gate | Score | Bound width / base | Source |",
+        "| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |",
         "|---:|---|---|---:|---:|---|",
     ]
     for i, e in enumerate(mc["missing_value_priority"], 1):
+        basis = BASIS_FROM_SOURCE.get(e["source"], e["source"])
         rows.append(
             f"| {i} | `{e['id']}` | `{e['worst_gate']}` | {e['score']:.2f} | "
-            f"{e['bound_width_ratio']:.2f} | {e['source']} |"
+            f"{e['bound_width_ratio']:.2f} | {basis} |"
         )
+    rows.append("")
+    rows.append(
+        "`Basis` values: `report_derived` = bound anchored in the source report's narrative (not externally verified); "
+        "`model_assumption` = bound is a modelling assumption with no narrative anchor. Neither value is empirical ground truth."
+    )
     rows.append("")
     return rows
 
@@ -544,9 +693,9 @@ def render_scenario_sanity_check(scenarios: dict | None) -> list[str]:
     rows = [
         "## Scenario sanity check",
         "",
-        "Three deterministic scenarios: every uncertain input at the **low** end of its range, every input at its **middle** value, every input at the **high** end. The labels refer to **inputs**, not to whether the outcome is good or bad. A negative middle column on a gate the plan needs to pass means the plan is already in trouble at its own central assumptions.",
+        "Three deterministic scenarios: every uncertain input at the **low** end of its range, every input at its **base** value, every input at the **high** end. The column labels refer to **inputs**, not to whether the outcome is good or bad. Column names match the `low`/`base`/`high` keys in `scenarios.json`. A negative `base inputs` column on a gate the plan needs to pass means the plan is already in trouble at its own central assumptions.",
         "",
-        "| Output | Unit | Low | Middle | High |",
+        "| Output | Unit | Low inputs | Base inputs | High inputs |",
         "|---|---|---:|---:|---:|",
     ]
     for name, o in scenarios["comparison"]["outputs"].items():
@@ -582,7 +731,7 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
         "2. To prioritise data-gathering, inspect `missing_value_priority` in `montecarlo.json`. The top-scored entries are the cheapest improvements to the simulation's predictive value."
     )
     rows.append(
-        "3. To audit whether the simulation is trustworthy, open `bounds.json` (range rationales and `source: data|assumption` labels), `montecarlo_settings.json` (n_runs, seed, distribution_default, threshold definitions), and `validation.json` (which structural checks passed)."
+        "3. To audit whether the simulation is trustworthy, open `bounds.json` (range rationales and the `source` label per bound, surfaced here as the `Basis` column in `Missing inputs ranked by impact`), `montecarlo_settings.json` (n_runs, seed, distribution_default, threshold definitions), and `validation.json` (which structural checks passed). Neither `report_derived` nor `model_assumption` constitutes externally observed ground truth."
     )
     rows.append(
         "4. To improve the plan, target the gates with the lowest pass rates first. Failure-driver rows above name the single input whose quartile movement has the largest effect on each failing gate."
@@ -590,6 +739,21 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
     rows.append(
         "5. For exact formulas and the executable model, use `parameters.json` (declared formula hints) and `calculations.py` (implementation). Do not infer formulas from prose elsewhere in this file."
     )
+    rows.append("")
+    return rows
+
+
+# ─── open questions for next analysis pass ────────────────────────────────
+
+def render_open_questions() -> list[str]:
+    rows = [
+        "## Open questions for next analysis pass",
+        "",
+        "Standing questions for whoever picks this directory up next. These are not gate verdicts; they are the audit checks the simulation can't answer on its own.",
+        "",
+    ]
+    for i, q in enumerate(OPEN_QUESTIONS, 1):
+        rows.append(f"{i}. {q}")
     rows.append("")
     return rows
 
@@ -622,11 +786,13 @@ def build_insights(params: dict | None, bounds: dict | None,
         render_simulation_settings(mc, validation),
         render_critical_findings(mc, scenarios, params, bounds),
         render_gate_verdicts(mc, params),
+        render_decision_implications(mc, params),
         render_failure_drivers(mc, params),
         render_missing_inputs_ranked(mc),
         render_confidence_and_trust(mc, validation),
         render_scenario_sanity_check(scenarios),
         render_suggested_next_actions(mc, params),
+        render_open_questions(),
     ]
     out: list[str] = []
     for section in sections:

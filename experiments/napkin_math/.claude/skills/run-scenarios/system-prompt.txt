@@ -176,7 +176,7 @@ If calculations.py is not executable in the current environment, infer calculati
 
 Prefer using the generated Python functions when available.
 
-Map formulas to outputs by reading the entry's "output_name" field — extract-parameters emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name and the output id.
+Map formulas to outputs by reading the entry's "output_name" field — extract-parameters-from-full emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name and the output id.
 
 Do not parse formula_hint to recover the output name. If output_name is missing for an entry whose formula_hint is non-null, treat the entry as malformed: skip it and add a warning naming the entry id and the missing field.
 
@@ -274,7 +274,7 @@ Do not force spread values to be positive.
 UNIT FOR OUTPUTS
 ====================
 
-For every computed output, copy the unit verbatim from the producing entry's "output_unit" field. extract-parameters declares output_unit on every entry with a non-null formula_hint; downstream code does not pattern-match on token strings.
+For every computed output, copy the unit verbatim from the producing entry's "output_unit" field. extract-parameters-from-full declares output_unit on every entry with a non-null formula_hint; downstream code does not pattern-match on token strings.
 
 If output_unit is missing for an entry whose formula_hint is non-null, treat the entry as malformed: emit a warning naming the entry id and the missing field, and set the output's unit to "unknown".
 

@@ -813,7 +813,7 @@ The bundle is mixed-format:
 - The four sections 137 marks "Keep or compress" (Selected Scenario, Review Plan, Premortem, Expert Criticism) are compressed via `compress_report_section`. Each bullet carries an inline epistemic tag of the form `[<source_status> | e=N r=N | quote: verified|unverified]`.
 - The four sections marked plain "Keep" (Executive Summary, Project Plan, Assumptions, Data Collection) are passed through raw from the PlanExe sample. They are already short and primarily numeric; further compression risks dropping modelling primitives.
 
-The companion skill `experiments/napkin_math/.claude/skills/extract-parameters-from-digest/` consumes the assembled file and produces a JSON parameter set with the same schema as the `extract-parameters` skill that reads the full PlanExe HTML. The two skills are head-to-head comparable on the same source plan.
+The companion skill `experiments/napkin_math/.claude/skills/extract-parameters-from-digest/` consumes the assembled file and produces a JSON parameter set with the same schema as the `extract-parameters-from-full` skill that reads the full PlanExe HTML. The two skills are head-to-head comparable on the same source plan.
 
 ---
 

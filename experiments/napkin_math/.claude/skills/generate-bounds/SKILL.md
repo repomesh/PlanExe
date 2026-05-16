@@ -1,23 +1,23 @@
 ---
 name: generate-bounds
-description: Use when the user wants to generate low/base/high assumption ranges (bounds) for missing or uncertain variables in a validated extract-parameters JSON, in preparation for deterministic scenarios or Monte Carlo
+description: Use when the user wants to generate low/base/high assumption ranges (bounds) for missing or uncertain variables in a validated extract-parameters-from-full JSON, in preparation for deterministic scenarios or Monte Carlo
 ---
 
 # Generate Bounds for Extracted Parameters
 
 ## Overview
 
-Wraps the bounds-estimator system prompt at `system-prompt.txt` (next to this file) and applies it to a parameter JSON produced by `extract-parameters` (and ideally already passed `validate-parameters`). Output is a strict JSON object keyed by variable id, with `low / base / high / unit / rationale / source` for every variable that needs an assumption range.
+Wraps the bounds-estimator system prompt at `system-prompt.txt` (next to this file) and applies it to a parameter JSON produced by `extract-parameters-from-full` (and ideally already passed `validate-parameters`). Output is a strict JSON object keyed by variable id, with `low / base / high / unit / rationale / source` for every variable that needs an assumption range.
 
 Stage 4 of the pipeline described in `planexe_simulator/README.md`.
 
 ## When to Use
 
-- User asks to "generate bounds", "estimate ranges", "add low/base/high", or "prepare for scenarios" given an extract-parameters JSON
+- User asks to "generate bounds", "estimate ranges", "add low/base/high", or "prepare for scenarios" given an extract-parameters-from-full JSON
 - User wants to fill in assumptions for `missing_values_to_estimate` and uncertain `key_values` before running deterministic scenarios or Monte Carlo
 - Pipeline step between `validate-parameters` (passes clean) and `generate-calculations` / `run-scenarios`
 
-Not for: regenerating the parameter JSON (use `extract-parameters`), validating the JSON (use `validate-parameters`), or producing Python code (use `generate-calculations`).
+Not for: regenerating the parameter JSON (use `extract-parameters-from-full`), validating the JSON (use `validate-parameters`), or producing Python code (use `generate-calculations`).
 
 ## Workflow
 
@@ -103,5 +103,5 @@ If no variable needs bounds, return `{}`.
 
 - System prompt (authoritative): `system-prompt.txt`
 - Pipeline overview and "what needs bounds" list: `../../README.md`, Stage 4
-- Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`
+- Companion skills: `../extract-parameters-from-full/SKILL.md`, `../validate-parameters/SKILL.md`
 - Example input for testing: `/tmp/extract-params-heatwave-v8.json` (passes validate-parameters with `valid: true`)

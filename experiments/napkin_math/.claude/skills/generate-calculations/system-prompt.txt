@@ -71,7 +71,7 @@ If depends_on contains an id that does not appear on the formula RHS, still incl
 FUNCTION NAME SELECTION
 ====================
 
-The function name is the entry's "output_name" field — extract-parameters emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name.
+The function name is the entry's "output_name" field — extract-parameters-from-full emits this explicitly on every entry with a non-null formula_hint. Use it verbatim as the function name.
 
 Do not parse formula_hint to recover the function name. If output_name is missing for an entry whose formula_hint is non-null, treat the entry as malformed and emit a skipped comment naming the entry id and the missing field.
 

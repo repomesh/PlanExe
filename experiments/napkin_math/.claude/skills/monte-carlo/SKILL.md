@@ -1,6 +1,6 @@
 ---
 name: monte-carlo
-description: Use when the user wants Monte Carlo simulation of a PlanExe model — sampling from bounds to produce output distributions (mean/std/percentiles), threshold pass probabilities, and Pearson-correlation sensitivity rankings — given an extract-parameters JSON, a generate-bounds JSON, a generate-calculations Python module, and optional run settings
+description: Use when the user wants Monte Carlo simulation of a PlanExe model — sampling from bounds to produce output distributions (mean/std/percentiles), threshold pass probabilities, and Pearson-correlation sensitivity rankings — given an extract-parameters-from-full JSON, a generate-bounds JSON, a generate-calculations Python module, and optional run settings
 ---
 
 # Monte Carlo Simulation
@@ -59,7 +59,7 @@ The runner does **no** lexical pattern-matching on id strings, unit strings, or 
   - Default base distribution: triangular `(low, mode=base, high)`. `distribution_default: "uniform"` switches to uniform.
   - The bound's `non_negative: bool` (required) drives whether draws are clamped to `>= 0`.
 
-- **Output names and units:** the runner uses `entry.output_name` and `entry.output_unit` from each `recommended_first_calculations` / `derived_questions` entry, declared by `extract-parameters`. The runner does **not** parse `formula_hint` to recover the name, and does **not** infer units from id tokens. The LLM is the single authority for both.
+- **Output names and units:** the runner uses `entry.output_name` and `entry.output_unit` from each `recommended_first_calculations` / `derived_questions` entry, declared by `extract-parameters-from-full`. The runner does **not** parse `formula_hint` to recover the name, and does **not** infer units from id tokens. The LLM is the single authority for both.
 
 - **Calculation execution:** uses `inspect.signature` on each generated function to pull args from the run's input pool. Order: `recommended_first_calculations` first, then `derived_questions`. Outputs are added to the pool so later functions can depend on them. Missing dependencies / non-finite results / exceptions skip the run for that output (one aggregated warning, not per-run noise).
 
@@ -121,7 +121,7 @@ JSON forbids `NaN`/`Infinity` — the runner writes `null` and adds a warning. I
 
 - Runner (authoritative implementation): `experiments/napkin_math/run_monte_carlo.py`
 - Pipeline overview: `../../README.md`, Stage 7
-- Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
+- Companion skills: `../extract-parameters-from-full/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
 - Synthetic fixture exercising every `sampling_discipline` (used as the runner smoke test):
   - `experiments/napkin_math/tests/fixtures/smoke/parameters.json`
   - `experiments/napkin_math/tests/fixtures/smoke/bounds.json`

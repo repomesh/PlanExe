@@ -25,7 +25,7 @@ For example, in a public-health plan, the key values may be vulnerable populatio
 PlanExe report (HTML or extracted text)
   -> [optional] compress_report_section + prepare_extract_input.py
        (produces extract_parameters_input.md, the "digest")
-  -> extract-parameters                  (full HTML input)
+  -> extract-parameters-from-full                  (full HTML input)
         OR
      extract-parameters-from-digest      (digest input — same output schema)
   -> validate-parameters
@@ -38,15 +38,15 @@ PlanExe report (HTML or extracted text)
 
 Each stage has a narrow responsibility. Stages 1-6 are LLM-driven skills under `.claude/skills/`. Stage 7 (Monte Carlo) is the Python script `run_monte_carlo.py`, invoked by the `monte-carlo` skill — the LLM cannot actually sample distributions in-prompt, so the simulation is deterministic Python with a seeded RNG.
 
-There are two extractor skills because PlanExe reports can be very large. `extract-parameters` reads the raw HTML. `extract-parameters-from-digest` reads the much smaller pre-compressed digest produced by `prepare_extract_input.py`. They emit the same JSON shape, so downstream stages do not care which one ran.
+There are two extractor skills because PlanExe reports can be very large. `extract-parameters-from-full` reads the raw HTML. `extract-parameters-from-digest` reads the much smaller pre-compressed digest produced by `prepare_extract_input.py`. They emit the same JSON shape, so downstream stages do not care which one ran.
 
 ---
 
-# Stage 1: extract-parameters
+# Stage 1: extract-parameters-from-full
 
 ## Purpose
 
-`extract-parameters` reads a PlanExe report and returns a compact JSON modelling seed.
+`extract-parameters-from-full` reads a PlanExe report and returns a compact JSON modelling seed.
 
 It should identify only the few most important values for napkin math. It is intentionally non-exhaustive.
 
@@ -272,7 +272,7 @@ It does not decide whether the modelling choices are perfect. It verifies that t
 
 ## Input
 
-The JSON output from `extract-parameters`.
+The JSON output from `extract-parameters-from-full`.
 
 ## Output
 
@@ -412,7 +412,7 @@ This stage should be used only when `validate-parameters.valid == false`.
 
 ## Output
 
-A repaired parameter JSON with the same schema as `extract-parameters`.
+A repaired parameter JSON with the same schema as `extract-parameters-from-full`.
 
 ## Typical repairs
 
@@ -686,7 +686,7 @@ Monte Carlo answers "how often?" It does not replace first-principles structure.
 Build the stages in this order:
 
 ```text
-1. extract-parameters
+1. extract-parameters-from-full
 2. validate-parameters
 3. repair-parameters
 4. generate-bounds
@@ -698,7 +698,7 @@ Build the stages in this order:
 The first milestone is complete when:
 
 ```text
-extract-parameters output passes validate-parameters with valid=true
+extract-parameters-from-full output passes validate-parameters with valid=true
 ```
 
 The second milestone is complete when:
@@ -793,7 +793,7 @@ into versioned output directories under
 `output/<version>/<report-name>/`:
 
 ```text
-parameters.json     extract-parameters (or extract-parameters-from-digest)
+parameters.json     extract-parameters-from-full (or extract-parameters-from-digest)
 validation.json     validate-parameters
 bounds.json         generate-bounds
 calculations.py     generate-calculations

@@ -1,21 +1,21 @@
 ---
 name: validate-parameters
-description: Use when the user wants to validate, lint, or check the JSON output of the extract-parameters stage against the schema, hard caps, percentage rules, formula-id declaration rules, and source-text cleanliness rules
+description: Use when the user wants to validate, lint, or check the JSON output of the extract-parameters-from-full stage against the schema, hard caps, percentage rules, formula-id declaration rules, and source-text cleanliness rules
 ---
 
-# Validate extract-parameters JSON
+# Validate extract-parameters-from-full JSON
 
 ## Overview
 
-Wraps the validation system prompt at `system-prompt.txt` (next to this file) and applies it to a JSON document produced by the `extract-parameters` skill. Output is a strict JSON validation report with stable rule IDs (e.g., `F001`, `C005`, `V001`) so downstream tooling can parse violations programmatically.
+Wraps the validation system prompt at `system-prompt.txt` (next to this file) and applies it to a JSON document produced by the `extract-parameters-from-full` skill. Output is a strict JSON validation report with stable rule IDs (e.g., `F001`, `C005`, `V001`) so downstream tooling can parse violations programmatically.
 
 ## When to Use
 
 - User asks to "validate", "check", "lint", or "audit" an extracted-parameters JSON file
-- User wants to verify a JSON file conforms to the extract-parameters schema and rules before feeding it to downstream code generation
+- User wants to verify a JSON file conforms to the extract-parameters-from-full schema and rules before feeding it to downstream code generation
 - User mentions one of the rule categories explicitly (caps, percentages, formula identifiers, source-text cleanliness)
 
-Not for: regenerating the parameters (use `extract-parameters`), normalising or fixing the JSON, or generating Python from it. Validation is read-only and reports findings only.
+Not for: regenerating the parameters (use `extract-parameters-from-full`), normalising or fixing the JSON, or generating Python from it. Validation is read-only and reports findings only.
 
 ## Workflow
 
@@ -66,5 +66,5 @@ Not for: regenerating the parameters (use `extract-parameters`), normalising or 
 ## Reference
 
 - System prompt (authoritative): `system-prompt.txt`
-- Companion skill that produces the input: `../extract-parameters/SKILL.md`
+- Companion skill that produces the input: `../extract-parameters-from-full/SKILL.md`
 - Example inputs for testing: `/tmp/extract-params-heatwave-v6.json`, `/tmp/extract-params-heatwave-v5.json`, etc.

@@ -1,13 +1,13 @@
 ---
 name: generate-calculations
-description: Use when the user wants to turn a validated extract-parameters JSON into a Python module of deterministic functions implementing the formula_hint expressions for downstream scenario runs and Monte Carlo
+description: Use when the user wants to turn a validated extract-parameters-from-full JSON into a Python module of deterministic functions implementing the formula_hint expressions for downstream scenario runs and Monte Carlo
 ---
 
 # Generate Deterministic Calculations from Extracted Parameters
 
 ## Overview
 
-Wraps the calculation-generator system prompt at `system-prompt.txt` (next to this file) and applies it to a parameter JSON produced by `extract-parameters` (validated by `validate-parameters`). Output is a single Python module of small, pure functions — one per `formula_hint` declared in `recommended_first_calculations` and `derived_questions`.
+Wraps the calculation-generator system prompt at `system-prompt.txt` (next to this file) and applies it to a parameter JSON produced by `extract-parameters-from-full` (validated by `validate-parameters`). Output is a single Python module of small, pure functions — one per `formula_hint` declared in `recommended_first_calculations` and `derived_questions`.
 
 Stage 5 of the pipeline described in `planexe_simulator/README.md`.
 
@@ -17,7 +17,7 @@ Stage 5 of the pipeline described in `planexe_simulator/README.md`.
 - Pipeline step between `validate-parameters` (passes clean) / `generate-bounds` and `run-scenarios`
 - User wants importable Python functions ready for scenario tables
 
-Not for: regenerating the parameter JSON (use `extract-parameters`), validating it (use `validate-parameters`), producing low/base/high ranges (use `generate-bounds`), or running scenarios (use `run-scenarios`).
+Not for: regenerating the parameter JSON (use `extract-parameters-from-full`), validating it (use `validate-parameters`), producing low/base/high ranges (use `generate-bounds`), or running scenarios (use `run-scenarios`).
 
 ## Workflow
 
@@ -100,5 +100,5 @@ No top-level executable code, no `__main__` block, no file I/O, no classes, no d
 
 - System prompt (authoritative): `system-prompt.txt`
 - Pipeline overview and code-generation rules: `../../README.md`, Stage 5
-- Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`
+- Companion skills: `../extract-parameters-from-full/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`
 - Example input for testing: `/tmp/extract-params-heatwave-v10.json` (passes validate-parameters with `valid: true`)

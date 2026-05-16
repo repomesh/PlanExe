@@ -174,12 +174,12 @@ def validate_calculation_entry(entry: dict) -> None:
     if not entry.get("output_name"):
         raise SchemaError(
             f"calculation entry '{entry.get('id')}' has non-null formula_hint but no 'output_name'. "
-            f"Re-run extract-parameters (or extract-parameters-from-digest)."
+            f"Re-run extract-parameters-from-full (or extract-parameters-from-digest)."
         )
     if not entry.get("output_unit"):
         raise SchemaError(
             f"calculation entry '{entry.get('id')}' has non-null formula_hint but no 'output_unit'. "
-            f"Re-run extract-parameters (or extract-parameters-from-digest)."
+            f"Re-run extract-parameters-from-full (or extract-parameters-from-digest)."
         )
 
 

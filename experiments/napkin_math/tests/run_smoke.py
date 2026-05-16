@@ -2,7 +2,7 @@
 """Smoke tests for experiments/napkin_math.
 
 Run after any change under experiments/napkin_math/ or to the upstream skill
-prompts under .claude/skills/{generate-bounds,extract-parameters,...}.
+prompts under .claude/skills/{generate-bounds,extract-parameters-from-full,...}.
 
 Covers:
   1. run_monte_carlo.py end-to-end against the synthetic fixture
@@ -159,7 +159,7 @@ def check_schema_errors(tmpdir: Path) -> None:
         p["recommended_first_calculations"][0]["output_name"] = None
     cp = _run_runner(out, parameters=_mutated_parameters(tmpdir, drop_output_name), expect_exit=2)
     _check("missing output_name on formula-bearing entry -> SCHEMA ERROR",
-           "output_name" in cp.stderr and "extract-parameters" in cp.stderr)
+           "output_name" in cp.stderr and "extract-parameters-from-full" in cp.stderr)
 
     def drop_output_unit(p):
         p["recommended_first_calculations"][0]["output_unit"] = None

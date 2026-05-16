@@ -1,5 +1,5 @@
 ---
-name: extract-parameters
+name: extract-parameters-from-full
 description: Use when the user wants to extract parameters, modelling values, or key variables from a PlanExe report (HTML or text) for napkin math, triage, or Monte Carlo simulation
 ---
 

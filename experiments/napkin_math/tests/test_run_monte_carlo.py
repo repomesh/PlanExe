@@ -245,7 +245,7 @@ class TestSchemaValidation(unittest.TestCase):
         with self.assertRaises(rmc.SchemaError) as ctx:
             rmc.validate_calculation_entry(entry)
         self.assertIn("output_name", str(ctx.exception))
-        self.assertIn("extract-parameters", str(ctx.exception))
+        self.assertIn("extract-parameters-from-full", str(ctx.exception))
 
     def test_calculation_entry_missing_output_unit(self):
         entry = {"id": "x", "formula_hint": "y = a + b",

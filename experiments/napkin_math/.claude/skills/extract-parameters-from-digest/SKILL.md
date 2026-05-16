@@ -7,7 +7,7 @@ description: Use when the user wants to extract parameters from a PlanExe extrac
 
 ## Overview
 
-A drop-in alternative to `extract-parameters` that reads the digest
+A drop-in alternative to `extract-parameters-from-full` that reads the digest
 produced by `prepare_extract_input.py` (see
 `experiments/napkin_math/prepare_extract_input.py`) rather than the full
 PlanExe HTML report.
@@ -30,7 +30,7 @@ It mixes two formats:
 The system prompt at `system-prompt.txt` explains how to read both
 formats.
 
-Output schema and hard limits are identical to `extract-parameters`, so the
+Output schema and hard limits are identical to `extract-parameters-from-full`, so the
 two skills can be compared head-to-head on the same plan.
 
 ## When to Use
@@ -40,7 +40,7 @@ two skills can be compared head-to-head on the same plan.
 - The user is comparing whether this pipeline produces better parameters
   than feeding the full HTML report
 
-For plain PlanExe HTML/text reports, use `extract-parameters` instead.
+For plain PlanExe HTML/text reports, use `extract-parameters-from-full` instead.
 
 ## Workflow
 
@@ -102,6 +102,6 @@ For plain PlanExe HTML/text reports, use `extract-parameters` instead.
 
 - System prompt (authoritative): `system-prompt.txt`
 - Producer of the input digest: `experiments/napkin_math/prepare_extract_input.py`
-- Parallel skill for full HTML reports: `../extract-parameters/SKILL.md`
+- Parallel skill for full HTML reports: `../extract-parameters-from-full/SKILL.md`
 - Background: `docs/proposals/137-section_filtering_for_parameter_extraction.md`,
   `docs/proposals/139-compress-for-monte-carlo.md`

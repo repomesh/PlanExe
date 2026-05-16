@@ -208,8 +208,12 @@ def check_summarize_insights_end_to_end(tmpdir: Path) -> None:
     body = insights.read_text()
     _check("insights.md was produced", insights.exists())
     _check("insights.md contains plan name", "Synthetic Workshop" in body)
-    _check("insights.md contains the verdict table",
-           "Verdict table" in body and "Verdict" in body)
+    _check("insights.md contains the gate verdicts section",
+           "## Gate verdicts" in body)
+    _check("insights.md contains the machine summary JSON block",
+           "## Machine summary" in body and "\"artifact_type\": \"interpretation_layer\"" in body)
+    _check("insights.md contains the artifact contract and provenance map",
+           "## Artifact contract" in body and "## Provenance map" in body)
     _check("insights.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
            "ROBUST" in body or "MARGINAL" in body)
 

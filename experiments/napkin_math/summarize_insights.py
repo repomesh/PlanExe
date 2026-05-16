@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""Summarize napkin_math pipeline outputs into a human-readable insights.md.
+"""Summarize napkin_math pipeline outputs into a thin interpretation layer.
 
-Takes the four pipeline artifacts (any subset present — the script degrades
-gracefully) and emits a markdown file next to the parameters that calls out:
+The output (`insights.md`) is a navigation and judgment file over the
+intermediary artifacts (`parameters.json`, `bounds.json`, `calculations.py`,
+`scenarios.json`, `montecarlo_settings.json`, `montecarlo.json`,
+`validation.json`). It does not reproduce the raw simulation tables — those
+live in the JSON files and are referenced via the provenance map.
 
-- Threshold verdicts (DOOM / FRAGILE / MARGINAL / ROBUST) based on the
-  user-declared threshold pass probabilities.
-- Deterministic low/base/high outputs.
-- Pearson-correlation sensitivity drivers per output.
-- Model-collapse warnings (non-finite run rates).
-- Missing-data entries that did not receive bounds.
+It declares:
+- what this artifact is and isn't (artifact contract)
+- a compact machine-readable manifest (JSON block) at the top
+- which intermediary file holds what (provenance map)
+- critical findings (gates that fail, scenarios that already break, missing
+  inputs, model-collapse blanks)
+- gate verdicts (DOOM / FRAGILE / MARGINAL / ROBUST) with an aggregation
+  warning when units are incompatible
+- failure drivers per failing gate (one row, not a full quartile table)
+- missing inputs ranked by simulation impact
+- per-output confidence and trust boundaries
+- a short scenario sanity check
+- suggested next actions for whatever consumes this file
 
 Doom verdicts are driven entirely by the user's own threshold definitions
 (operator + value). The script never inspects identifier strings, output
@@ -35,6 +45,28 @@ VERDICT_BANDS = [
 
 VERDICT_SEVERITY = {"DOOM": 0, "FRAGILE": 1, "MARGINAL": 2, "ROBUST": 3, "UNKNOWN": 4}
 
+PRIMARY_MODEL_RESULT_FROM_WORST = {
+    "DOOM": "doom",
+    "FRAGILE": "fragile",
+    "MARGINAL": "marginal",
+    "ROBUST": "viable",
+    "UNKNOWN": "unknown",
+}
+
+DO_NOT_TREAT_AS = [
+    "an external feasibility proof for the plan's claims",
+    "a real-world probability calibration",
+    "a replacement for the source report",
+    "evidence that the input bounds match reality",
+]
+
+TRUST_NOT_VALIDATED = [
+    "real-world accuracy of the input bounds",
+    "independence or correlation assumptions across inputs",
+    "external feasibility of regulatory, grid, supply, or market dependencies",
+    "factual truth of the source plan's narrative claims",
+]
+
 
 def load_json(path: Path) -> dict | None:
     if not path or not path.exists():
@@ -53,8 +85,6 @@ def fmt_number(value: Any) -> str:
         return str(value)
     if isinstance(value, (int, float)):
         abs_v = abs(value)
-        if abs_v >= 1_000_000:
-            return f"{value:,.0f}"
         if abs_v >= 1_000:
             return f"{value:,.0f}"
         if abs_v >= 1:
@@ -72,31 +102,12 @@ def verdict_for(probability: float | None) -> tuple[str, str]:
     return "DOOM", "almost certainly fails"
 
 
-def render_plan_summary(params: dict | None) -> list[str]:
-    if not params:
-        return ["# Plan summary", "", "_(parameters.json not available)_", ""]
-    summary = params.get("plan_summary", {})
-    lines = [
-        f"# Plan: {summary.get('plan_name', 'unnamed')}",
-        "",
-        f"**Type:** {summary.get('plan_type', 'unknown')}  ",
-        f"**Primary goal:** {summary.get('primary_goal', '—')}  ",
-        f"**Modelling frame:** {summary.get('modelling_frame', '—')}",
-        "",
-    ]
-    return lines
-
-
 def aggregate_output_ids(params: dict | None) -> set[str]:
     """Return output_ids whose formula uses min() over other gates.
 
-    Those magnitudes are not a usual monetary surplus — they pick the worst
-    of several independent gates. The verdict pass/fail is meaningful, the
-    raw number is not. Report them after the individual gates.
-
-    Additive aggregates (Nuuk-style: pool - shock_a - shock_b) are NOT
-    demoted: when the source explicitly names one pool absorbing every
-    pressure, the magnitude is a real depletion of that pool.
+    Aggregate magnitudes pick the worst of several independent gates. The
+    verdict pass/fail is meaningful, the raw number is not. Surface them
+    after individual gates.
     """
     if not params:
         return set()
@@ -109,33 +120,208 @@ def aggregate_output_ids(params: dict | None) -> set[str]:
     return ids
 
 
-def classify_thresholds(mc: dict | None) -> dict[str, list[tuple[str, dict, str]]]:
-    """Bucket thresholds by verdict severity. Returns {verdict: [(id, threshold, note)]}."""
-    buckets: dict[str, list[tuple[str, dict, str]]] = {}
+def threshold_entries(mc: dict | None, params: dict | None) -> list[dict]:
+    """One entry per threshold, sorted worst-first; aggregates last within band."""
     if not mc or not mc.get("thresholds"):
-        return buckets
+        return []
+    aggregates = aggregate_output_ids(params)
+    outputs = mc.get("outputs") or {}
+    rows = []
     for output_id, t in mc["thresholds"].items():
         verdict, note = verdict_for(t.get("probability"))
-        buckets.setdefault(verdict, []).append((output_id, t, note))
-    return buckets
+        unit = (outputs.get(output_id) or {}).get("unit")
+        rows.append({
+            "id": output_id,
+            "operator": t["operator"],
+            "value": t["value"],
+            "probability": t.get("probability"),
+            "verdict": verdict,
+            "note": note,
+            "is_aggregate": output_id in aggregates,
+            "unit": unit,
+        })
+    rows.sort(key=lambda r: (
+        VERDICT_SEVERITY.get(r["verdict"], 99),
+        1 if r["is_aggregate"] else 0,
+    ))
+    return rows
 
 
-def sort_aggregates_last(entries, output_id_index, aggregates):
-    """Stable sort: non-aggregates first, then aggregates."""
-    return sorted(entries, key=lambda e: 1 if e[output_id_index] in aggregates else 0)
+# ─── plan summary frontmatter ──────────────────────────────────────────────
+
+def render_title_and_frontmatter(params: dict | None) -> list[str]:
+    if not params:
+        return ["# Insights", "", "_(parameters.json not available)_", ""]
+    summary = params.get("plan_summary", {})
+    name = summary.get("plan_name") or "unnamed"
+    return [
+        f"# Insights: {name}",
+        "",
+        f"**Type:** {summary.get('plan_type', 'unknown')}  ",
+        f"**Primary goal:** {summary.get('primary_goal', '—')}",
+        "",
+    ]
 
 
-def render_bad_news_first(mc: dict | None, scenarios: dict | None,
-                          params: dict | None, bounds: dict | None) -> list[str]:
-    """Consolidate every signal that the plan is in trouble into a single
-    top-of-report block. If nothing qualifies, emit nothing."""
-    rows: list[str] = []
-    buckets = classify_thresholds(mc)
-    aggregates = aggregate_output_ids(params)
-    doom = sort_aggregates_last(buckets.get("DOOM", []), 0, aggregates)
-    fragile = sort_aggregates_last(buckets.get("FRAGILE", []), 0, aggregates)
+# ─── artifact contract ─────────────────────────────────────────────────────
 
+def render_artifact_contract() -> list[str]:
+    return [
+        "## Artifact contract",
+        "",
+        "This file is a derived interpretation layer over the simulation artifacts listed in the provenance map below. It summarises what the model tested, which gates fail or pass, which inputs drive the result, which assumptions remain unvalidated, and what to inspect next. It is **not** a copy of the raw simulation data: for exact distributions, bounds rationales, formulas, and run settings, open the referenced artifacts directly.",
+        "",
+    ]
+
+
+# ─── machine summary (JSON) ────────────────────────────────────────────────
+
+def derive_primary_model_result(thresholds: list[dict]) -> str:
+    if not thresholds:
+        return "unknown"
+    worst_severity = min(VERDICT_SEVERITY.get(r["verdict"], 99) for r in thresholds)
+    label = next(
+        (k for k, v in VERDICT_SEVERITY.items() if v == worst_severity),
+        "UNKNOWN",
+    )
+    return PRIMARY_MODEL_RESULT_FROM_WORST.get(label, "unknown")
+
+
+def render_machine_summary(params: dict | None, mc: dict | None,
+                           validation: dict | None,
+                           params_path: Path | None) -> list[str]:
+    plan_summary = (params or {}).get("plan_summary", {}) or {}
+    thresholds = threshold_entries(mc, params)
+    settings = (mc or {}).get("settings") or {}
+    failed = [r["id"] for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
+    drivers = [
+        e["id"] for e in (mc or {}).get("missing_value_priority", [])[:3]
+    ]
+    validation_status = "unknown"
+    if validation is not None:
+        validation_status = "valid" if validation.get("valid") else "invalid"
+
+    manifest = {
+        "artifact_type": "interpretation_layer",
+        "plan_name": plan_summary.get("plan_name"),
+        "source_plan_dir": str(params_path.parent.resolve()) if params_path else None,
+        "primary_model_result": derive_primary_model_result(thresholds),
+        "validation_status": validation_status,
+        "simulation": {
+            "n_runs": settings.get("n_runs"),
+            "seed": settings.get("seed"),
+            "distribution_default": settings.get("distribution_default"),
+        },
+        "primary_failed_gates": failed,
+        "primary_uncertainty_drivers": drivers,
+        "do_not_treat_as": DO_NOT_TREAT_AS,
+    }
+    block = json.dumps(manifest, indent=2)
+    return [
+        "## Machine summary",
+        "",
+        "Compact manifest for programmatic consumers. The fields below are the structured form of the prose verdicts that follow.",
+        "",
+        "```json",
+        block,
+        "```",
+        "",
+    ]
+
+
+# ─── provenance map ────────────────────────────────────────────────────────
+
+PROVENANCE_ROWS = [
+    ("extract_parameters_input.md",
+     "Source-text digest fed to the parameter extractor.",
+     "Auditing what the extractor actually saw."),
+    ("parameters.json",
+     "Extracted constants, missing inputs, derived questions, formula hints.",
+     "Need model structure or to confirm a formula's wording."),
+    ("bounds.json",
+     "low/base/high ranges with rationales, sampling discipline, source labels.",
+     "Auditing the source of an uncertainty range."),
+    ("calculations.py",
+     "Executable Python formula implementation, one function per gate.",
+     "Need the exact arithmetic."),
+    ("scenarios.json",
+     "Three deterministic scenarios (low/base/high) with outputs and warnings.",
+     "Sanity-checking the model against deterministic anchor points."),
+    ("scenario_outputs.json",
+     "Auxiliary per-scenario output file.",
+     "Cross-referencing the scenario outputs."),
+    ("montecarlo_settings.json",
+     "Run settings: n_runs, seed, distribution_default, threshold definitions.",
+     "Reproducing the run or changing the threshold definitions."),
+    ("montecarlo.json",
+     "Full simulation results: distributions, pass rates, sensitivity, quartile_analysis, binding_gate_analysis, required_input_thresholds, missing_value_priority, model_confidence.",
+     "Need raw simulation data, distributions, or per-driver analysis."),
+    ("validation.json",
+     "Structural validation report (which checks passed, which failed).",
+     "Confirming the pipeline ran without structural problems."),
+]
+
+
+def render_provenance_map(present_files: set[str]) -> list[str]:
+    rows = [
+        "## Provenance map",
+        "",
+        "Each intermediary file and the question it answers.",
+        "",
+        "| File | Role | Open when |",
+        "|---|---|---|",
+    ]
+    for name, role, when in PROVENANCE_ROWS:
+        marker = "" if name in present_files else " _(not in this run)_"
+        rows.append(f"| `{name}`{marker} | {role} | {when} |")
+    rows.append("")
+    return rows
+
+
+# ─── modelling frame ───────────────────────────────────────────────────────
+
+def render_modelling_frame(params: dict | None) -> list[str]:
+    if not params:
+        return []
+    frame = (params.get("plan_summary") or {}).get("modelling_frame")
+    if not frame:
+        return []
+    return ["## Modelling frame", "", frame, ""]
+
+
+# ─── simulation settings ───────────────────────────────────────────────────
+
+def render_simulation_settings(mc: dict | None, validation: dict | None) -> list[str]:
+    if not mc:
+        return []
+    settings = mc.get("settings") or {}
+    if not settings:
+        return []
+    rows = ["## Simulation settings", ""]
+    rows.append(f"- n_runs: {settings.get('n_runs', '—'):,}"
+                if isinstance(settings.get("n_runs"), int)
+                else f"- n_runs: {settings.get('n_runs', '—')}")
+    rows.append(f"- seed: {settings.get('seed', '—')}")
+    rows.append(f"- distribution_default: {settings.get('distribution_default', '—')}")
+    if validation is not None:
+        status = "valid" if validation.get("valid") else "invalid"
+        err = validation.get("error_count", 0)
+        warn = validation.get("warn_count", 0)
+        rows.append(f"- validation: {status} ({err} errors, {warn} warnings)")
+    rows.append("")
+    return rows
+
+
+# ─── critical findings ─────────────────────────────────────────────────────
+
+def render_critical_findings(mc: dict | None, scenarios: dict | None,
+                             params: dict | None, bounds: dict | None) -> list[str]:
+    """Severity-ordered bullets that signal the plan does not survive its own assumptions."""
+    thresholds = threshold_entries(mc, params)
+    doom = [r for r in thresholds if r["verdict"] == "DOOM"]
+    fragile = [r for r in thresholds if r["verdict"] == "FRAGILE"]
     scenario_warns = (scenarios or {}).get("warnings", []) if scenarios else []
+
     collapses: list[tuple[str, float]] = []
     if mc:
         for name, o in (mc.get("outputs") or {}).items():
@@ -145,6 +331,7 @@ def render_bad_news_first(mc: dict | None, scenarios: dict | None,
             rate = o["missing_count"] / total
             if rate >= 0.05:
                 collapses.append((name, rate))
+
     still_missing: list[dict] = []
     if params:
         bound_ids = set(bounds or {})
@@ -153,211 +340,146 @@ def render_bad_news_first(mc: dict | None, scenarios: dict | None,
                 still_missing.append(mv)
 
     if not (doom or fragile or scenario_warns or collapses or still_missing):
-        return rows
+        return []
 
-    rows.append("## Bad news first")
+    rows = ["## Critical findings", ""]
+    for r in doom:
+        fail_pct = (1 - (r["probability"] or 0)) * 100
+        rows.append(
+            f"- **DOOM** — `{r['id']}` misses {r['operator']} {fmt_number(r['value'])} "
+            f"in {fail_pct:.1f}% of runs. The plan depends on this holding; the math says it almost never does."
+        )
+    for r in fragile:
+        pass_pct = (r["probability"] or 0) * 100
+        rows.append(
+            f"- **FRAGILE** — `{r['id']}` holds in only {pass_pct:.1f}% of runs. "
+            f"The assumptions behind it need a hard review before the plan moves forward."
+        )
+    for w in scenario_warns:
+        scope = w.get("scenario") or "all"
+        calc = w.get("calculation") or "—"
+        rows.append(f"- **Scenario warn ({scope})** — `{calc}`: {w['message']}")
+    for name, rate in sorted(collapses, key=lambda x: -x[1]):
+        rows.append(
+            f"- **Model collapse** — `{name}` came back blank in {rate * 100:.1f}% of runs. "
+            f"An input is missing or a denominator can legitimately land at zero. Fix the inputs and re-run."
+        )
+    for mv in still_missing:
+        rows.append(f"- **Still missing input** — `{mv['id']}`: {mv.get('why_needed', '')}")
     rows.append("")
-    rows.append(
-        "Every item below is a signal the plan does not survive its own assumptions. "
-        "Items are ordered by severity."
-    )
-    rows.append("")
-
-    if doom:
-        rows.append("### Likely deal-breakers")
-        rows.append("")
-        for output_id, t, _note in doom:
-            fail_pct = (1 - (t.get("probability") or 0)) * 100
-            rows.append(
-                f"- **`{output_id}`** misses its target ({t['operator']} "
-                f"{fmt_number(t['value'])}) in {fail_pct:.1f}% of simulated futures. "
-                f"The plan depends on this holding; the math says it almost never does."
-            )
-        rows.append("")
-
-    if fragile:
-        rows.append("### Coin-flip territory")
-        rows.append("")
-        for output_id, t, _note in fragile:
-            pass_pct = (t.get("probability") or 0) * 100
-            rows.append(
-                f"- **`{output_id}`** holds in only {pass_pct:.1f}% of simulated futures — "
-                f"below half. The assumptions behind it need a hard review before the plan "
-                f"moves forward."
-            )
-        rows.append("")
-
-    if scenario_warns:
-        rows.append("### Already broken in the three-scenario sanity check")
-        rows.append("")
-        for w in scenario_warns:
-            scope = w.get("scenario") or "all"
-            calc = w.get("calculation") or "—"
-            rows.append(f"- **{scope}** scenario, `{calc}`: {w['message']}")
-        rows.append("")
-
-    if collapses:
-        rows.append("### Numbers the model could not compute")
-        rows.append("")
-        for name, rate in sorted(collapses, key=lambda x: -x[1]):
-            severity = "most of the time" if rate >= 0.5 else "noticeably often"
-            rows.append(
-                f"- `{name}` came back blank in {rate * 100:.1f}% of simulated futures "
-                f"({severity}). The plan is missing an input the formula needs, or a "
-                f"denominator can legitimately land at zero. Fix the inputs and re-run."
-            )
-        rows.append("")
-
-    if still_missing:
-        rows.append("### Inputs the plan does not supply at all")
-        rows.append("")
-        for mv in still_missing:
-            rows.append(f"- `{mv['id']}` — {mv.get('why_needed', '')}")
-        rows.append("")
-
     return rows
 
 
-def render_threshold_verdicts(mc: dict | None, params: dict | None = None) -> list[str]:
-    if not mc or not mc.get("thresholds"):
+# ─── gate verdicts ─────────────────────────────────────────────────────────
+
+def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
+    thresholds = threshold_entries(mc, params)
+    if not thresholds:
         return []
-    n_runs = mc.get("settings", {}).get("n_runs")
+    n_runs = (mc.get("settings") or {}).get("n_runs")
     runs_phrase = f"{n_runs:,} simulated runs" if isinstance(n_runs, int) else "the simulated runs"
-    aggregates = aggregate_output_ids(params)
     rows = [
-        "## Verdict table (all thresholds, worst first; min() aggregates after individual gates)",
+        "## Gate verdicts",
         "",
-        f"For each success condition the plan needs to meet, this is how often it actually meets it across {runs_phrase} that vary every uncertain input within its plausible range.",
+        f"Pass rate for every declared threshold over {runs_phrase}. Bands: ≥80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, <20% **DOOM**. Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools — their verdict is meaningful, their raw magnitude is not.",
         "",
-        "Bands: at least 80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, under 20% **DOOM**.",
-        "",
-        "Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools. Their verdict (pass/fail) is meaningful; their raw magnitude picks the worst gate's number and is not a real monetary surplus. Individual gates are listed first within each severity band, then the aggregates.",
-        "",
-        "| | What we wanted | Condition | How often it holds | Verdict | What that means |",
+        "| | Output | Condition | Pass rate | Verdict | Meaning |",
         "|---|---|---|---:|---|---|",
     ]
-    entries: list[tuple[int, int, str, dict, str, str]] = []
-    for output_id, t in mc["thresholds"].items():
-        verdict, note = verdict_for(t.get("probability"))
-        is_agg = 1 if output_id in aggregates else 0
-        entries.append((VERDICT_SEVERITY.get(verdict, 99), is_agg, output_id, t, verdict, note))
-    entries.sort(key=lambda x: (x[0], x[1]))
-    for _sev, is_agg, output_id, t, verdict, note in entries:
-        prob = t.get("probability")
+    for r in thresholds:
+        prob = r["probability"]
         prob_str = f"{prob * 100:.1f}%" if prob is not None else "n/a"
-        marker = "min" if is_agg else ""
+        marker = "min" if r["is_aggregate"] else ""
         rows.append(
-            f"| {marker} | `{output_id}` | {t['operator']} {fmt_number(t['value'])} | {prob_str} | "
-            f"**{verdict}** | {note} |"
+            f"| {marker} | `{r['id']}` | {r['operator']} {fmt_number(r['value'])} | "
+            f"{prob_str} | **{r['verdict']}** | {r['note']} |"
         )
     rows.append("")
-    return rows
 
-
-def render_distributions(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("outputs"):
-        return []
-    rows = [
-        "## Range of outcomes",
-        "",
-        "Each row is one of the numbers the plan needs to track. Reading across, you get a sense of the "
-        "**worst-case** (5th percentile — only 5% of futures are this bad or worse), the **typical case** "
-        "(median), the **best-case** (95th percentile — only 5% of futures are this good or better), and "
-        "the **average** across all simulated futures.",
-        "",
-        "The **uncertainty** column is the standard deviation — bigger numbers mean the outcome swings more "
-        "widely between futures. The **blank runs** column counts simulated futures where the number could "
-        "not be calculated at all (typically an input the plan never specified, or a formula trying to "
-        "divide by a value that landed at zero).",
-        "",
-        "| Number | Unit | Worst (5%) | Typical | Best (95%) | Average | Uncertainty | Blank runs |",
-        "|---|---|---:|---:|---:|---:|---:|---:|",
-    ]
-    for name, o in mc["outputs"].items():
+    units = {r["unit"] for r in thresholds if r["unit"]}
+    has_aggregate = any(r["is_aggregate"] for r in thresholds)
+    if len(units) > 1 and not has_aggregate:
+        rows.append("### Aggregation warning")
+        rows.append("")
+        unit_list = ", ".join(sorted(u for u in units if u))
         rows.append(
-            f"| `{name}` | {o['unit']} | {fmt_number(o['p05'])} | {fmt_number(o['p50'])} "
-            f"| {fmt_number(o['p95'])} | {fmt_number(o['mean'])} | {fmt_number(o['std'])} "
-            f"| {o['missing_count']:,} |"
+            f"The thresholds above use incompatible units ({unit_list}) and the source plan does not declare a combined-gate aggregate. **Do not average or otherwise combine these pass rates into a single scalar.** Use the categorical verdicts per gate, or read the per-output distributions in `montecarlo.json`."
         )
+        rows.append("")
+    return rows
+
+
+# ─── failure drivers (one row per failing gate) ────────────────────────────
+
+def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
+    if not mc:
+        return []
+    thresholds = threshold_entries(mc, params)
+    failing = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
+    if not failing:
+        return []
+    quartile = mc.get("quartile_analysis") or {}
+    required = mc.get("required_input_thresholds") or {}
+    binding = mc.get("binding_gate_analysis") or {}
+
+    rows = [
+        "## Failure drivers",
+        "",
+        "For each failing gate (DOOM or FRAGILE): the single input with the largest pass-rate swing between its bottom and top quartile, and the conditional input restriction that would lift the gate to an 80% pass rate (when one exists). Full per-driver tables and binding-gate frequencies are in `montecarlo.json`.",
+        "",
+        "| Failing gate | Top driver | Δ-pp (bottom→top quartile) | 80% pass requires |",
+        "|---|---|---:|---|",
+    ]
+    for r in failing:
+        gate = r["id"]
+        drivers = quartile.get(gate) or []
+        top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
+        if top is None:
+            driver_cell, delta_cell = "—", "—"
+        else:
+            driver_cell = f"`{top['id']}`"
+            delta_cell = f"{top['delta_pp']:+.1f}"
+
+        req_entries = required.get(gate) or []
+        if req_entries:
+            req = req_entries[0]
+            direction = "above" if req["direction"] == "above" else "below"
+            pct = req["input_percentile_cutoff"]
+            req_cell = f"`{req['id']}` {direction} p{pct}"
+        else:
+            req_cell = "no single input restriction sufficient"
+        rows.append(f"| `{gate}` | {driver_cell} | {delta_cell} | {req_cell} |")
     rows.append("")
-    return rows
 
-
-def render_binding_gates(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("binding_gate_analysis"):
-        return []
-    rows = [
-        "## Which sub-gate causes the aggregate to fail",
-        "",
-        "For each `min()` aggregate threshold that fails, this is the frequency with which each underlying gate was the binding constraint (the one with the smallest surplus in that run). Read as: \"if you only fix one gate, this is the one whose pass rate matters most.\"",
-        "",
-    ]
-    for agg_name, info in mc["binding_gate_analysis"].items():
-        rows.append(f"**`{agg_name}`** (failed in {info['fail_count']:,} runs):")
+    if binding:
+        rows.append("Binding-gate notes (aggregates only):")
         rows.append("")
-        for entry in info["binding_when_aggregate_fails"]:
-            rows.append(f"- `{entry['dependency']}` was the binder in {entry['frequency'] * 100:.1f}% of failed runs")
-        rows.append("")
-    return rows
-
-
-def render_quartile_analysis(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("quartile_analysis"):
-        return []
-    rows = [
-        "## Marginal effect of each input — bottom vs top quartile",
-        "",
-        "For each threshold, this is how the pass-probability shifts when a single input is in the bottom quartile of its bound versus the top quartile. The `Δ-pp` column is percentage points: positive means moving the input up helps the gate pass; negative means moving the input up hurts. This complements the correlation-based driver list above by showing the actual lift in pass probability you would get from improving one input at a time.",
-        "",
-    ]
-    for output_id, entries in mc["quartile_analysis"].items():
-        rows.append(f"**`{output_id}`**:")
-        rows.append("")
-        rows.append("| Driver | P(pass) bottom Q | P(pass) top Q | Δ-pp |")
-        rows.append("|---|---:|---:|---:|")
-        for e in entries:
+        for agg_name, info in binding.items():
+            top_binder = max(
+                info.get("binding_when_aggregate_fails", []),
+                key=lambda x: x.get("frequency", 0),
+                default=None,
+            )
+            if top_binder is None:
+                continue
             rows.append(
-                f"| `{e['id']}` | {e['p_pass_low_quartile'] * 100:.1f}% | "
-                f"{e['p_pass_high_quartile'] * 100:.1f}% | {e['delta_pp']:+.1f} |"
+                f"- `{agg_name}` (fails {info['fail_count']:,} runs): "
+                f"`{top_binder['dependency']}` is the binder in "
+                f"{top_binder['frequency'] * 100:.1f}% of failed runs."
             )
         rows.append("")
     return rows
 
 
-def render_required_input_thresholds(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("required_input_thresholds"):
-        return []
-    rows = [
-        "## What would need to be true for each failing gate to clear at 80%",
-        "",
-        "For each gate that fails the 80% confidence bar, this is the input-bound restriction that would lift the conditional pass-probability to at least 80%. \"Below the 25th percentile\" means: the simulation only passes 80% of the time when this input lands in the optimistic quarter of its bound. An empty list for a gate means no single input restriction is enough — multiple inputs need to move together, or the gate is structurally beyond the current bounds.",
-        "",
-    ]
-    for output_id, entries in mc["required_input_thresholds"].items():
-        if not entries:
-            continue
-        rows.append(f"**`{output_id}`** — required input restrictions to reach 80% pass rate:")
-        rows.append("")
-        for e in entries:
-            direction = "above" if e["direction"] == "above" else "below"
-            pct = e["input_percentile_cutoff"]
-            cond_p = e["conditional_pass_prob"] * 100
-            admitted = e["admitted_fraction"] * 100
-            rows.append(
-                f"- `{e['id']}` must stay {direction} the {pct}th percentile "
-                f"(conditional pass rate {cond_p:.1f}%, admitting {admitted:.1f}% of runs)"
-            )
-        rows.append("")
-    return rows
+# ─── missing inputs ranked by impact ───────────────────────────────────────
 
-
-def render_missing_value_priority(mc: dict | None) -> list[str]:
+def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
     if not mc or not mc.get("missing_value_priority"):
         return []
     rows = [
-        "## Missing inputs ranked by simulation impact",
+        "## Missing inputs ranked by impact",
         "",
-        "The plan does not state these values; the model assumed bounds. Rank is by `|Δ-pp on the worst-affected gate| × (1 - that gate's pass rate) × bound-width-ratio` — the higher the score, the more value you would get by pinning this input down with real data instead of guessing.",
+        "The plan does not state these values; the model assumed bounds. Rank by `|Δ-pp on the worst-affected gate| × (1 − that gate's pass rate) × bound-width-ratio` — the higher, the more decision-value in pinning this input down.",
         "",
         "| Rank | Input | Worst-affected gate | Score | Bound width / base | Source |",
         "|---:|---|---|---:|---:|---|",
@@ -371,150 +493,140 @@ def render_missing_value_priority(mc: dict | None) -> list[str]:
     return rows
 
 
-def render_model_confidence(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("model_confidence"):
-        return []
-    rows = [
-        "## Confidence in each output",
-        "",
-        "Grade per output, derived from how many of its input bounds are sourced from data versus assumption, and how wide those bounds are relative to the base value. LOW means the number should be read as directional, not precise.",
-        "",
-        "| Output | Confidence | Data-sourced inputs | Bound-width / base | Reasons |",
-        "|---|:---:|---:|---:|---|",
-    ]
-    for output_id, info in mc["model_confidence"].items():
-        if "data_source_fraction" not in info:
-            continue
-        data_pct = info["data_source_fraction"] * 100
-        width = info["average_bound_width_ratio"]
-        reasons = "; ".join(info.get("reasons", []))
-        rows.append(
-            f"| `{output_id}` | **{info['grade']}** | {data_pct:.0f}% | {width:.2f} | {reasons} |"
-        )
+# ─── confidence and trust boundaries ───────────────────────────────────────
+
+def render_confidence_and_trust(mc: dict | None, validation: dict | None) -> list[str]:
+    rows = ["## Confidence and trust boundaries", ""]
+    rows.append("### Validated")
     rows.append("")
+    if validation is not None:
+        checks = (validation.get("summary") or {}).get("checks_performed", [])
+        if checks:
+            rows.append(
+                "Structural checks that passed (`validation.json`): "
+                + ", ".join(f"`{c}`" for c in checks) + "."
+            )
+        else:
+            rows.append("_(validation.json does not list checks)_")
+    else:
+        rows.append("_(validation.json not in this run)_")
+    rows.append("")
+    rows.append("### Not validated")
+    rows.append("")
+    for item in TRUST_NOT_VALIDATED:
+        rows.append(f"- {item}")
+    rows.append("")
+
+    if mc and mc.get("model_confidence"):
+        rows.append("### Per-output confidence")
+        rows.append("")
+        rows.append("| Output | Grade | Data-sourced inputs | Bound-width / base |")
+        rows.append("|---|:---:|---:|---:|")
+        for output_id, info in mc["model_confidence"].items():
+            if "data_source_fraction" not in info:
+                continue
+            data_pct = info["data_source_fraction"] * 100
+            width = info["average_bound_width_ratio"]
+            rows.append(
+                f"| `{output_id}` | **{info['grade']}** | {data_pct:.0f}% | {width:.2f} |"
+            )
+        rows.append("")
+        rows.append("Per-output reasons are in `montecarlo.json` under `model_confidence`.")
+        rows.append("")
     return rows
 
 
-def render_sensitivity(mc: dict | None) -> list[str]:
-    if not mc or not mc.get("sensitivity"):
-        return []
-    rows = [
-        "## Which inputs move the outcome the most",
-        "",
-        "For each number above, this is the short list of inputs that most strongly move it. "
-        "The score next to each driver runs from 0 (no relationship) to ±1 (lock-step). "
-        "**↑** means the output goes up when this input goes up; **↓** means the opposite. "
-        "Treat this as \"these are the levers worth getting right\" — it ranks how closely outputs "
-        "track inputs in the simulation, not strict cause-and-effect.",
-        "",
-    ]
-    for output_id, s in mc["sensitivity"].items():
-        if not s.get("top_inputs"):
-            continue
-        rows.append(f"**`{output_id}`** — strongest drivers:")
-        rows.append("")
-        for t in s["top_inputs"][:3]:
-            sign = "↑" if t["correlation"] >= 0 else "↓"
-            rows.append(f"- `{t['id']}` ({sign} score {t['correlation']:+.2f})")
-        rows.append("")
-    return rows
+# ─── scenario sanity check ─────────────────────────────────────────────────
 
-
-def render_scenarios(scenarios: dict | None) -> list[str]:
+def render_scenario_sanity_check(scenarios: dict | None) -> list[str]:
     if not scenarios or not scenarios.get("comparison"):
         return []
     rows = [
-        "## Three hand-picked scenarios",
+        "## Scenario sanity check",
         "",
-        "Instead of simulating thousands of futures, this section picks exactly three: every uncertain "
-        "input set to the **low** end of its range, every input set to its **middle** value, and every "
-        "input set to the **high** end. It is a sanity check, not a full picture.",
+        "Three deterministic scenarios: every uncertain input at the **low** end of its range, every input at its **middle** value, every input at the **high** end. The labels refer to **inputs**, not to whether the outcome is good or bad. A negative middle column on a gate the plan needs to pass means the plan is already in trouble at its own central assumptions.",
         "",
-        "The labels refer to **inputs**, not to whether the outcome is good or bad. A high-cost input "
-        "is bad news; a high-effectiveness input is good news. If a number that the plan needs to stay "
-        "positive is already negative in the middle column, the plan is in trouble at its own central "
-        "assumptions — never mind the worst case.",
-        "",
-        "| Number | Unit | Low inputs | Middle inputs | High inputs | Range |",
-        "|---|---|---:|---:|---:|---:|",
+        "| Output | Unit | Low | Middle | High |",
+        "|---|---|---:|---:|---:|",
     ]
     for name, o in scenarios["comparison"]["outputs"].items():
-        spread = o.get("spread_absolute")
         rows.append(
             f"| `{name}` | {o.get('unit', '—')} | "
-            f"{fmt_number(o['low'])} | {fmt_number(o['base'])} | {fmt_number(o['high'])} | "
-            f"{fmt_number(spread)} |"
+            f"{fmt_number(o['low'])} | {fmt_number(o['base'])} | {fmt_number(o['high'])} |"
         )
     rows.append("")
     return rows
 
 
-def render_missing_data(params: dict | None, bounds: dict | None) -> list[str]:
-    if not params:
-        return []
-    declared = params.get("missing_values_to_estimate", [])
-    if not declared:
-        return []
+# ─── suggested next actions ────────────────────────────────────────────────
+
+def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[str]:
+    thresholds = threshold_entries(mc, params)
+    failing = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
     rows = [
-        "## Inputs the plan did not supply",
+        "## Suggested next actions",
         "",
-        "Things the plan needs to be modelled but does not state directly. Entries marked "
-        "**estimated** have been given a plausible low/middle/high range; entries marked "
-        "**still missing** have no value at all, so any number that depends on them will "
-        "show up as a blank run in the section above.",
+        "Imperatives for whatever consumes this file next.",
         "",
     ]
-    bound_ids = set(bounds or {})
-    for mv in declared:
-        vid = mv["id"]
-        status = "estimated" if vid in bound_ids else "**still missing**"
-        rows.append(f"- `{vid}` ({status}) — {mv.get('why_needed', '')}")
+    if failing:
+        rows.append(
+            "1. To answer whether the plan is viable, lead with the gate verdicts above — not the source plan's narrative. "
+            f"{len(failing)} gate(s) currently fail at the 50% pass-rate bar."
+        )
+    else:
+        rows.append(
+            "1. To answer whether the plan is viable, lead with the gate verdicts above. No gate currently fails the 50% pass-rate bar — but read the bounds and trust boundaries before treating that as a green light."
+        )
+    rows.append(
+        "2. To prioritise data-gathering, inspect `missing_value_priority` in `montecarlo.json`. The top-scored entries are the cheapest improvements to the simulation's predictive value."
+    )
+    rows.append(
+        "3. To audit whether the simulation is trustworthy, open `bounds.json` (range rationales and `source: data|assumption` labels), `montecarlo_settings.json` (n_runs, seed, distribution_default, threshold definitions), and `validation.json` (which structural checks passed)."
+    )
+    rows.append(
+        "4. To improve the plan, target the gates with the lowest pass rates first. Failure-driver rows above name the single input whose quartile movement has the largest effect on each failing gate."
+    )
+    rows.append(
+        "5. For exact formulas and the executable model, use `parameters.json` (declared formula hints) and `calculations.py` (implementation). Do not infer formulas from prose elsewhere in this file."
+    )
     rows.append("")
     return rows
 
 
-def render_inputs_footer(params_path: Path | None, bounds_path: Path | None,
-                        scenarios_path: Path | None, mc_path: Path | None) -> list[str]:
-    rows = ["## Source files", "",
-            "This summary was generated from the following machine-readable files. "
-            "Open them if you want to see every number, not just the headlines.",
-            ""]
-    labels = {
-        "parameters": "extracted plan parameters",
-        "bounds": "plausible low/middle/high ranges for each input",
-        "scenarios": "three hand-picked scenarios",
-        "montecarlo": "thousands of simulated futures",
-    }
-    for key, p in [
-        ("parameters", params_path),
-        ("bounds", bounds_path),
-        ("scenarios", scenarios_path),
-        ("montecarlo", mc_path),
-    ]:
-        if p and p.exists():
-            rows.append(f"- `{p.name}` — {labels[key]}")
-    rows.append("")
-    return rows
-
+# ─── build ─────────────────────────────────────────────────────────────────
 
 def build_insights(params: dict | None, bounds: dict | None,
                    scenarios: dict | None, mc: dict | None,
+                   validation: dict | None,
                    params_path: Path | None, bounds_path: Path | None,
-                   scenarios_path: Path | None, mc_path: Path | None) -> str:
+                   scenarios_path: Path | None, mc_path: Path | None,
+                   validation_path: Path | None,
+                   settings_path: Path | None,
+                   extract_input_path: Path | None,
+                   calculations_path: Path | None,
+                   scenario_outputs_path: Path | None) -> str:
+    present_files: set[str] = set()
+    for p in (params_path, bounds_path, scenarios_path, mc_path, validation_path,
+              settings_path, extract_input_path, calculations_path,
+              scenario_outputs_path):
+        if p and p.exists():
+            present_files.add(p.name)
+
     sections: list[list[str]] = [
-        render_plan_summary(params),
-        render_bad_news_first(mc, scenarios, params, bounds),
-        render_threshold_verdicts(mc, params),
-        render_binding_gates(mc),
-        render_quartile_analysis(mc),
-        render_required_input_thresholds(mc),
-        render_distributions(mc),
-        render_sensitivity(mc),
-        render_missing_value_priority(mc),
-        render_model_confidence(mc),
-        render_scenarios(scenarios),
-        render_missing_data(params, bounds),
-        render_inputs_footer(params_path, bounds_path, scenarios_path, mc_path),
+        render_title_and_frontmatter(params),
+        render_artifact_contract(),
+        render_machine_summary(params, mc, validation, params_path),
+        render_provenance_map(present_files),
+        render_modelling_frame(params),
+        render_simulation_settings(mc, validation),
+        render_critical_findings(mc, scenarios, params, bounds),
+        render_gate_verdicts(mc, params),
+        render_failure_drivers(mc, params),
+        render_missing_inputs_ranked(mc),
+        render_confidence_and_trust(mc, validation),
+        render_scenario_sanity_check(scenarios),
+        render_suggested_next_actions(mc, params),
     ]
     out: list[str] = []
     for section in sections:
@@ -529,16 +641,37 @@ def main() -> int:
     p.add_argument("--bounds", type=Path)
     p.add_argument("--scenarios", type=Path)
     p.add_argument("--montecarlo", type=Path)
+    p.add_argument("--validation", type=Path)
+    p.add_argument("--settings", type=Path)
+    p.add_argument("--extract-input", type=Path)
+    p.add_argument("--calculations", type=Path)
+    p.add_argument("--scenario-outputs", type=Path)
     p.add_argument("--output", type=Path)
     args = p.parse_args()
 
-    output = args.output or (args.parameters.parent / "insights.md")
+    base = args.parameters.parent
+    validation_path = args.validation or (base / "validation.json")
+    settings_path = args.settings or (base / "montecarlo_settings.json")
+    extract_input_path = args.extract_input or (base / "extract_parameters_input.md")
+    calculations_path = args.calculations or (base / "calculations.py")
+    scenario_outputs_path = args.scenario_outputs or (base / "scenario_outputs.json")
+
+    output = args.output or (base / "insights.md")
     md = build_insights(
-        load_json(args.parameters),
-        load_json(args.bounds) if args.bounds else None,
-        load_json(args.scenarios) if args.scenarios else None,
-        load_json(args.montecarlo) if args.montecarlo else None,
-        args.parameters, args.bounds, args.scenarios, args.montecarlo,
+        params=load_json(args.parameters),
+        bounds=load_json(args.bounds) if args.bounds else None,
+        scenarios=load_json(args.scenarios) if args.scenarios else None,
+        mc=load_json(args.montecarlo) if args.montecarlo else None,
+        validation=load_json(validation_path) if validation_path.exists() else None,
+        params_path=args.parameters,
+        bounds_path=args.bounds,
+        scenarios_path=args.scenarios,
+        mc_path=args.montecarlo,
+        validation_path=validation_path,
+        settings_path=settings_path,
+        extract_input_path=extract_input_path,
+        calculations_path=calculations_path,
+        scenario_outputs_path=scenario_outputs_path,
     )
     output.write_text(md)
     print(output)

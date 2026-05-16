@@ -1,13 +1,13 @@
 ---
 name: summarize-insights
-description: Use after the napkin_math pipeline has produced parameters/bounds/scenarios/montecarlo JSON to generate a human-readable insights.md that highlights threshold verdicts (DOOM / FRAGILE / MARGINAL / ROBUST), sensitivity drivers, scenario warnings, and model-collapse risk. Bad news first, no sugar-coating, no hedging — the artifact tells project managers what the math actually says.
+description: Use after the napkin_math pipeline has produced parameters/bounds/scenarios/montecarlo JSON to generate a thin interpretation layer (insights.md) over the intermediary artifacts. Emits a JSON manifest, a provenance map, gate verdicts (DOOM / FRAGILE / MARGINAL / ROBUST), failure drivers, confidence and trust boundaries, scenario sanity check, and suggested next actions. The artifact is a navigation/judgment file, not a copy of the raw simulation data.
 ---
 
-# Summarize napkin_math insights into a readable markdown digest
+# Summarize napkin_math insights into a thin interpretation layer
 
 ## Overview
 
-A thin wrapper around `experiments/napkin_math/summarize_insights.py`. The script reads any subset of the four pipeline artifacts (`parameters.json`, `bounds.json`, `scenarios.json`, `montecarlo.json`) and emits `insights.md` next to them. The output is meant to be skimmable — a glance tells you whether the plan is in trouble.
+A thin wrapper around `experiments/napkin_math/summarize_insights.py`. The script reads the pipeline artifacts and emits `insights.md` next to them. The output is an **interpretation layer**: it tells the next reader of this directory what the simulation tested, which gates fail or pass, which inputs drive the result, which assumptions remain unvalidated, and what to inspect next. The raw distributions live in `montecarlo.json`; `insights.md` references them via the provenance map rather than reproducing them.
 
 ## When to Use
 
@@ -19,7 +19,7 @@ Not for: producing the simulation itself (`monte-carlo`), running scenarios (`ru
 
 ## Workflow
 
-1. **Locate the inputs.** Required: `parameters.json`. Optional but recommended: `bounds.json`, `scenarios.json`, `montecarlo.json`. The script degrades gracefully if any optional file is missing — it just omits that section. If `parameters.json` is missing, ask.
+1. **Locate the inputs.** Required: `parameters.json`. Optional but recommended: `bounds.json`, `scenarios.json`, `montecarlo.json`. `validation.json` and `montecarlo_settings.json` are picked up automatically from the same directory if present. The script degrades gracefully if any optional file is missing — it just omits that section. If `parameters.json` is missing, ask.
 
 2. **Invoke the script.** Requires Python 3.11+ (no extra deps):
 
@@ -34,7 +34,7 @@ Not for: producing the simulation itself (`monte-carlo`), running scenarios (`ru
 
    Default output: `<dir-of-parameters>/insights.md`. The script prints the output path on stdout.
 
-3. **Report back.** Tell the user the output path. If the user asks for a verdict in-conversation, read `insights.md` and quote the doom / fragile bullets verbatim — don't paraphrase.
+3. **Report back.** Tell the user the output path. If the user asks for a verdict in-conversation, read `insights.md` and quote the gate-verdict rows and critical-findings bullets verbatim — don't paraphrase.
 
 ## How doom verdicts are decided
 
@@ -55,11 +55,13 @@ The script does **not** invent thresholds for outputs the user did not declare. 
 
 ## Audience and tone
 
-The primary consumer of `insights.md` is **downstream AI** (another agent, a planning loop, a follow-on extractor), not a human reader skimming for 7 seconds. A project manager may read it secondarily, but the writing optimises for token-density of useful signal over engagement hooks.
+`insights.md` is written to be consumed by the next program or process that touches this directory — a downstream pipeline stage, a planning loop, a follow-on extractor, a future invocation of this same workflow. A human can also read it, but the writing optimises for token-density of useful signal over engagement hooks. The output describes **what the file is** (an interpretation layer over the simulation artifacts); it does not label its audience.
 
 What that means concretely:
 
-- No reader-engagement prefixes ("If you read nothing else, read this", "Stop and pay attention", "Important:"). The structural markers (`## Bad news first`, `### Likely deal-breakers`, the verdict labels) already carry that weight; restating them in prose burns tokens.
+- The file leads with a machine-readable JSON manifest. Every prose section after it is a structured form of those same signals.
+- Stable retrievable section names (`## Critical findings`, `## Gate verdicts`, `## Failure drivers`, `## Suggested next actions`). No colorful or narrative-flavoured headings.
+- No reader-engagement prefixes ("If you read nothing else, read this", "Stop and pay attention", "Important:"). The structural markers and verdict labels carry that weight.
 - No filler sentences whose only job is to motivate the next sentence. Lead with the substantive claim.
 - Keep substantive explanations (what a verdict label means, what a column shows, what makes an item belong in a section). Those are signal, not filler.
 - Don't apologise for or hedge the bad news. State it.
@@ -68,7 +70,7 @@ What that means concretely:
 
 These are not stylistic preferences. They are how this skill is meant to communicate.
 
-1. **Bad news first.** The first section after the plan summary is `Bad news first`, which consolidates every signal that the plan does not survive its own assumptions: DOOM and FRAGILE thresholds, scenario warnings, numbers the model could not compute, and inputs the plan does not supply at all. If any of those exist, they lead. Detail tables come after. If nothing qualifies, the section is omitted entirely — silence is the only acceptable form of good news.
+1. **Critical findings first.** After the artifact contract, machine summary, provenance map, modelling frame, and simulation settings, the first interpretation section is `## Critical findings`. It consolidates every signal that the plan does not survive its own assumptions: DOOM and FRAGILE thresholds, scenario warnings, numbers the model could not compute, and inputs the plan does not supply at all. If nothing qualifies, the section is omitted entirely — silence is the only acceptable form of good news.
 
 2. **No sugar-coating.** A 5% pass probability is "almost certainly fails", not "shows some challenges". A negative base-scenario number is "the plan is in trouble at its own central assumptions", not "may warrant further attention". Use the strongest accurate language; if the script's wording softens a result, fix the script.
 
@@ -86,23 +88,29 @@ These are not stylistic preferences. They are how this skill is meant to communi
 
 ## Sections in the generated insights.md
 
-Order is deliberate: plan summary, then bad news, then the detail tables. The output is written for project managers and non-developers — section names and language avoid statistics/engineering jargon (no "NaN", "Infinity", "Pearson", "non-finite", "model collapse", "p05/p50/p95" in the body text):
+Order is deliberate. Stable section names — programmatic consumers retrieve by heading text, so the headings stay the same regardless of plan domain:
 
-- **Plan summary** — name, type, primary goal, modelling frame.
-- **Bad news first** — the consolidated top-of-report block, only present when there is bad news. Sub-sections in this order: Likely deal-breakers (DOOM thresholds), Coin-flip territory (FRAGILE thresholds), Already broken in the three-scenario sanity check (scenario warnings), Numbers the model could not compute (≥5% blank runs), Inputs the plan does not supply at all (still-missing entries).
-- **Verdict table (all thresholds, worst first)** — every threshold including ROBUST/MARGINAL ones, sorted by severity (DOOM → FRAGILE → MARGINAL → ROBUST).
-- **Range of outcomes** — worst-case / typical / best-case / average / uncertainty / blank-runs columns. No standalone alerts here; alerts live in "Bad news first" above.
-- **Which inputs move the outcome the most** — top-3 drivers per output with ↑/↓ direction and a 0-to-±1 score.
-- **Three hand-picked scenarios** — the low/middle/high deterministic table. No standalone alerts; warnings have already been surfaced in "Bad news first".
-- **Inputs the plan did not supply** — `extract-parameters` missing-data entries, marked **estimated** when bounded or **still missing** when not. Still-missing entries have already been flagged in "Bad news first"; this section is the full list including the estimated ones.
-- **Source files** — pointers to the underlying machine-readable JSON for anyone who wants every number.
+- **`# Insights: <plan name>`** — title plus a 2-line frontmatter (type, primary goal).
+- **`## Artifact contract`** — declares what this file is (an interpretation layer over the simulation artifacts) and what it is not (a copy of the raw simulation data, an external feasibility proof, a probability calibration).
+- **`## Machine summary`** — a JSON code block with the compact manifest: `artifact_type`, `plan_name`, `source_plan_dir`, `primary_model_result` (doom/fragile/marginal/viable), `validation_status`, `simulation` (n_runs/seed/distribution_default), `primary_failed_gates`, `primary_uncertainty_drivers`, `do_not_treat_as`. JSON, not YAML — that is intentional.
+- **`## Provenance map`** — table listing every intermediary file with its role and "open when" guidance. The first row points at `extract_parameters_input.md`, then parameters/bounds/calculations/scenarios/scenario_outputs/montecarlo_settings/montecarlo/validation.
+- **`## Modelling frame`** — the source plan's own statement of what the model is testing, lifted verbatim from `parameters.plan_summary.modelling_frame`.
+- **`## Simulation settings`** — n_runs, seed, distribution_default, validation status.
+- **`## Critical findings`** — bullets in severity order: DOOM gates, FRAGILE gates, scenario warnings, numbers the model could not compute (≥5% blank runs), still-missing inputs. Section omitted entirely when nothing qualifies.
+- **`## Gate verdicts`** — every declared threshold, worst-first, with the `min` marker on aggregate gates. Includes an `### Aggregation warning` sub-section when the thresholds use incompatible units and the plan declares no `min()` aggregate.
+- **`## Failure drivers`** — one row per failing gate (DOOM or FRAGILE): top driver from `quartile_analysis` (max abs Δ-pp) and the conditional input restriction from `required_input_thresholds` that would lift the gate to 80%. Binding-gate frequencies for aggregates appear as bullets below the table.
+- **`## Missing inputs ranked by impact`** — the `missing_value_priority` table.
+- **`## Confidence and trust boundaries`** — Validated (a one-line list of `validation.json` checks_performed), Not validated (a canonical list: real-world accuracy of bounds, independence assumptions, external feasibility, factual truth of source claims), Per-output confidence (HIGH/MEDIUM/LOW grade table from `model_confidence`).
+- **`## Scenario sanity check`** — short low/middle/high deterministic comparison table.
+- **`## Suggested next actions`** — five imperatives for whatever consumes this file next. No "AI" in the heading or body; phrased as "To answer X, lead with Y; to audit Z, open W".
 
 ## Common Mistakes
 
 | Mistake | Fix |
 |---|---|
-| Running before `montecarlo.json` exists | Threshold verdicts are the most actionable section. Run the Monte Carlo stage first. |
-| Reading the markdown and paraphrasing doom callouts | Quote them. The cutoff bands and phrasing are deliberate. |
+| Running before `montecarlo.json` exists | Gate verdicts, failure drivers, and the machine summary's `primary_model_result` all depend on simulation output. Run the Monte Carlo stage first. |
+| Reading the markdown and paraphrasing the gate verdicts | Quote them. The cutoff bands and phrasing are deliberate. |
+| Treating the machine summary as authoritative without reading the prose | The JSON manifest is a compact pointer, not a proof. The aggregation warning, trust boundaries, and failure-driver rows are load-bearing context. |
 | Treating a MARGINAL verdict as good news | MARGINAL means "passes in 50–80% of runs" — that's the same as "fails up to 50% of the time". |
 | Inventing a threshold to make a number look good | Thresholds reflect the user's success criteria. Don't fabricate them after the fact. |
 

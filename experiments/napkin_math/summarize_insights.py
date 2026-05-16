@@ -158,8 +158,8 @@ def render_bad_news_first(mc: dict | None, scenarios: dict | None,
     rows.append("## Bad news first")
     rows.append("")
     rows.append(
-        "If you read nothing else, read this. Every item below is a signal the plan does "
-        "not survive its own assumptions. Items are ordered by severity."
+        "Every item below is a signal the plan does not survive its own assumptions. "
+        "Items are ordered by severity."
     )
     rows.append("")
 
@@ -283,6 +283,118 @@ def render_distributions(mc: dict | None) -> list[str]:
     return rows
 
 
+def render_binding_gates(mc: dict | None) -> list[str]:
+    if not mc or not mc.get("binding_gate_analysis"):
+        return []
+    rows = [
+        "## Which sub-gate causes the aggregate to fail",
+        "",
+        "For each `min()` aggregate threshold that fails, this is the frequency with which each underlying gate was the binding constraint (the one with the smallest surplus in that run). Read as: \"if you only fix one gate, this is the one whose pass rate matters most.\"",
+        "",
+    ]
+    for agg_name, info in mc["binding_gate_analysis"].items():
+        rows.append(f"**`{agg_name}`** (failed in {info['fail_count']:,} runs):")
+        rows.append("")
+        for entry in info["binding_when_aggregate_fails"]:
+            rows.append(f"- `{entry['dependency']}` was the binder in {entry['frequency'] * 100:.1f}% of failed runs")
+        rows.append("")
+    return rows
+
+
+def render_quartile_analysis(mc: dict | None) -> list[str]:
+    if not mc or not mc.get("quartile_analysis"):
+        return []
+    rows = [
+        "## Marginal effect of each input — bottom vs top quartile",
+        "",
+        "For each threshold, this is how the pass-probability shifts when a single input is in the bottom quartile of its bound versus the top quartile. The `Δ-pp` column is percentage points: positive means moving the input up helps the gate pass; negative means moving the input up hurts. This complements the correlation-based driver list above by showing the actual lift in pass probability you would get from improving one input at a time.",
+        "",
+    ]
+    for output_id, entries in mc["quartile_analysis"].items():
+        rows.append(f"**`{output_id}`**:")
+        rows.append("")
+        rows.append("| Driver | P(pass) bottom Q | P(pass) top Q | Δ-pp |")
+        rows.append("|---|---:|---:|---:|")
+        for e in entries:
+            rows.append(
+                f"| `{e['id']}` | {e['p_pass_low_quartile'] * 100:.1f}% | "
+                f"{e['p_pass_high_quartile'] * 100:.1f}% | {e['delta_pp']:+.1f} |"
+            )
+        rows.append("")
+    return rows
+
+
+def render_required_input_thresholds(mc: dict | None) -> list[str]:
+    if not mc or not mc.get("required_input_thresholds"):
+        return []
+    rows = [
+        "## What would need to be true for each failing gate to clear at 80%",
+        "",
+        "For each gate that fails the 80% confidence bar, this is the input-bound restriction that would lift the conditional pass-probability to at least 80%. \"Below the 25th percentile\" means: the simulation only passes 80% of the time when this input lands in the optimistic quarter of its bound. An empty list for a gate means no single input restriction is enough — multiple inputs need to move together, or the gate is structurally beyond the current bounds.",
+        "",
+    ]
+    for output_id, entries in mc["required_input_thresholds"].items():
+        if not entries:
+            continue
+        rows.append(f"**`{output_id}`** — required input restrictions to reach 80% pass rate:")
+        rows.append("")
+        for e in entries:
+            direction = "above" if e["direction"] == "above" else "below"
+            pct = e["input_percentile_cutoff"]
+            cond_p = e["conditional_pass_prob"] * 100
+            admitted = e["admitted_fraction"] * 100
+            rows.append(
+                f"- `{e['id']}` must stay {direction} the {pct}th percentile "
+                f"(conditional pass rate {cond_p:.1f}%, admitting {admitted:.1f}% of runs)"
+            )
+        rows.append("")
+    return rows
+
+
+def render_missing_value_priority(mc: dict | None) -> list[str]:
+    if not mc or not mc.get("missing_value_priority"):
+        return []
+    rows = [
+        "## Missing inputs ranked by simulation impact",
+        "",
+        "The plan does not state these values; the model assumed bounds. Rank is by `|Δ-pp on the worst-affected gate| × (1 - that gate's pass rate) × bound-width-ratio` — the higher the score, the more value you would get by pinning this input down with real data instead of guessing.",
+        "",
+        "| Rank | Input | Worst-affected gate | Score | Bound width / base | Source |",
+        "|---:|---|---|---:|---:|---|",
+    ]
+    for i, e in enumerate(mc["missing_value_priority"], 1):
+        rows.append(
+            f"| {i} | `{e['id']}` | `{e['worst_gate']}` | {e['score']:.2f} | "
+            f"{e['bound_width_ratio']:.2f} | {e['source']} |"
+        )
+    rows.append("")
+    return rows
+
+
+def render_model_confidence(mc: dict | None) -> list[str]:
+    if not mc or not mc.get("model_confidence"):
+        return []
+    rows = [
+        "## Confidence in each output",
+        "",
+        "Grade per output, derived from how many of its input bounds are sourced from data versus assumption, and how wide those bounds are relative to the base value. LOW means the number should be read as directional, not precise.",
+        "",
+        "| Output | Confidence | Data-sourced inputs | Bound-width / base | Reasons |",
+        "|---|:---:|---:|---:|---|",
+    ]
+    for output_id, info in mc["model_confidence"].items():
+        if "data_source_fraction" not in info:
+            continue
+        data_pct = info["data_source_fraction"] * 100
+        width = info["average_bound_width_ratio"]
+        reasons = "; ".join(info.get("reasons", []))
+        rows.append(
+            f"| `{output_id}` | **{info['grade']}** | {data_pct:.0f}% | {width:.2f} | {reasons} |"
+        )
+    rows.append("")
+    return rows
+
+
 def render_sensitivity(mc: dict | None) -> list[str]:
     if not mc or not mc.get("sensitivity"):
         return []
@@ -393,8 +505,13 @@ def build_insights(params: dict | None, bounds: dict | None,
         render_plan_summary(params),
         render_bad_news_first(mc, scenarios, params, bounds),
         render_threshold_verdicts(mc, params),
+        render_binding_gates(mc),
+        render_quartile_analysis(mc),
+        render_required_input_thresholds(mc),
         render_distributions(mc),
         render_sensitivity(mc),
+        render_missing_value_priority(mc),
+        render_model_confidence(mc),
         render_scenarios(scenarios),
         render_missing_data(params, bounds),
         render_inputs_footer(params_path, bounds_path, scenarios_path, mc_path),

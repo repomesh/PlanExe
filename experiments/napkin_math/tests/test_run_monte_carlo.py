@@ -732,5 +732,115 @@ class TestDistributionDefault(unittest.TestCase):
         self.assertGreater(uni_var, tri_var)
 
 
+class TestNewAnalysisBlocks(unittest.TestCase):
+    """Smoke tests for the v34 quick-win analyses: binding gates, quartile pass
+    rates, required-input thresholds, missing-value priority, model confidence."""
+
+    def _faraday_like_fixture(self, tmpdir: Path) -> dict:
+        """Tiny min()-aggregate fixture with three EUR surplus gates."""
+        calc = (
+            "def gate_a(a: float, b: float) -> float:\n    return a - b\n"
+            "def gate_b(c: float, d: float) -> float:\n    return c - d\n"
+            "def gate_c(e: float, f: float) -> float:\n    return e - f\n"
+            "def weakest_gate(gate_a: float, gate_b: float, gate_c: float) -> float:\n"
+            "    return min(gate_a, gate_b, gate_c)\n"
+        )
+        recommended = [
+            {"id": "gate_a", "label": "x",
+             "formula_hint": "gate_a = a - b",
+             "output_name": "gate_a", "output_unit": "EUR",
+             "depends_on": ["a", "b"], "why_first": "x"},
+            {"id": "gate_b", "label": "x",
+             "formula_hint": "gate_b = c - d",
+             "output_name": "gate_b", "output_unit": "EUR",
+             "depends_on": ["c", "d"], "why_first": "x"},
+            {"id": "gate_c", "label": "x",
+             "formula_hint": "gate_c = e - f",
+             "output_name": "gate_c", "output_unit": "EUR",
+             "depends_on": ["e", "f"], "why_first": "x"},
+            {"id": "weakest_gate", "label": "x",
+             "formula_hint": "weakest_gate = min(gate_a, gate_b, gate_c)",
+             "output_name": "weakest_gate", "output_unit": "EUR",
+             "depends_on": ["gate_a", "gate_b", "gate_c"], "why_first": "x"},
+        ]
+        missing = [{"id": v, "label": "x", "unit": "EUR",
+                    "why_needed": "x", "suggested_estimation_method": "x"}
+                   for v in "abcdef"]
+        # gate_a is the dominant binder: a vs b overlap, gate_a swings near zero;
+        # gate_b borderline; gate_c almost always positive.
+        bnds = {
+            "a": make_bound(unit="EUR", low=80, base=100, high=120, sampling_discipline="continuous"),
+            "b": make_bound(unit="EUR", low=90, base=105, high=130, sampling_discipline="continuous"),
+            "c": make_bound(unit="EUR", low=80, base=100, high=120, sampling_discipline="continuous"),
+            "d": make_bound(unit="EUR", low=85, base=95, high=105, sampling_discipline="continuous"),
+            "e": make_bound(unit="EUR", low=500, base=600, high=700, sampling_discipline="continuous"),
+            "f": make_bound(unit="EUR", low=10, base=20, high=30, sampling_discipline="continuous"),
+        }
+        # Mark a/b as data-source, others as assumption to test confidence grading.
+        for k in ("a", "b"):
+            bnds[k]["source"] = "data"
+        for k in ("c", "d", "e", "f"):
+            bnds[k]["source"] = "assumption"
+        return run_with_fixture(
+            tmpdir,
+            missing_values=missing,
+            recommended=recommended,
+            bounds=bnds,
+            calc_source=calc,
+            _settings={"n_runs": 500, "seed": 1,
+                       "thresholds": {"weakest_gate": {"operator": ">=", "value": 0}}},
+        )
+
+    def test_binding_gate_identified_for_min_aggregate(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = self._faraday_like_fixture(Path(td))
+        self.assertIn("binding_gate_analysis", result)
+        bg = result["binding_gate_analysis"].get("weakest_gate")
+        self.assertIsNotNone(bg)
+        # gate_a is structurally most negative (a ≪ b), so it should dominate the binding distribution.
+        top = bg["binding_when_aggregate_fails"][0]
+        self.assertEqual(top["dependency"], "gate_a")
+        self.assertGreater(top["frequency"], 0.5)
+
+    def test_quartile_analysis_present_for_thresholds(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = self._faraday_like_fixture(Path(td))
+        self.assertIn("quartile_analysis", result)
+        q = result["quartile_analysis"].get("weakest_gate")
+        self.assertIsNotNone(q)
+        # Every row has the three required keys.
+        for row in q:
+            self.assertIn("id", row)
+            self.assertIn("p_pass_low_quartile", row)
+            self.assertIn("p_pass_high_quartile", row)
+            self.assertIn("delta_pp", row)
+
+    def test_required_input_thresholds_empty_when_unreachable(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = self._faraday_like_fixture(Path(td))
+        # weakest_gate is structurally infeasible; no single-input restriction reaches 80%.
+        self.assertEqual(result["required_input_thresholds"].get("weakest_gate", []), [])
+
+    def test_missing_value_priority_ranks_inputs(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = self._faraday_like_fixture(Path(td))
+        mv = result["missing_value_priority"]
+        self.assertGreater(len(mv), 0)
+        # b drives gate_a (the binding gate); it should rank highly.
+        ids = [e["id"] for e in mv[:2]]
+        self.assertIn("b", ids)
+
+    def test_model_confidence_grades_present_for_outputs(self):
+        with tempfile.TemporaryDirectory() as td:
+            result = self._faraday_like_fixture(Path(td))
+        mc = result["model_confidence"]
+        self.assertIn("weakest_gate", mc)
+        grade = mc["weakest_gate"]["grade"]
+        self.assertIn(grade, {"HIGH", "MEDIUM", "LOW"})
+        # 2/6 inputs data-sourced (a, b); under the data-fraction rule that's < 30%, so LOW expected
+        # unless bound widths compensate. Either MEDIUM or LOW is acceptable depending on widths.
+        self.assertIn(grade, {"LOW", "MEDIUM"})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -53,6 +53,17 @@ Any output classified DOOM or FRAGILE also gets a "bottom line" callout at the t
 
 The script does **not** invent thresholds for outputs the user did not declare. To get a verdict on an output, declare a threshold on it in the Monte Carlo settings file.
 
+## Audience and tone
+
+The primary consumer of `insights.md` is **downstream AI** (another agent, a planning loop, a follow-on extractor), not a human reader skimming for 7 seconds. A project manager may read it secondarily, but the writing optimises for token-density of useful signal over engagement hooks.
+
+What that means concretely:
+
+- No reader-engagement prefixes ("If you read nothing else, read this", "Stop and pay attention", "Important:"). The structural markers (`## Bad news first`, `### Likely deal-breakers`, the verdict labels) already carry that weight; restating them in prose burns tokens.
+- No filler sentences whose only job is to motivate the next sentence. Lead with the substantive claim.
+- Keep substantive explanations (what a verdict label means, what a column shows, what makes an item belong in a section). Those are signal, not filler.
+- Don't apologise for or hedge the bad news. State it.
+
 ## Writing rules — apply to the script's output AND to anything you say back to the user about the insights
 
 These are not stylistic preferences. They are how this skill is meant to communicate.
@@ -61,7 +72,7 @@ These are not stylistic preferences. They are how this skill is meant to communi
 
 2. **No sugar-coating.** A 5% pass probability is "almost certainly fails", not "shows some challenges". A negative base-scenario number is "the plan is in trouble at its own central assumptions", not "may warrant further attention". Use the strongest accurate language; if the script's wording softens a result, fix the script.
 
-3. **No sycophancy.** Never start a paragraph with "Great plan, but..." or "The team has done strong work; one concern is...". The reader has the plan in front of them. They do not need praise from the report.
+3. **No sycophancy.** Never start a paragraph with "Great plan, but..." or "The team has done strong work; one concern is...". The downstream consumer has the plan available. It does not need praise from the report.
 
 4. **No hedging phrases.** Banned in both the script's emitted text and in conversational reporting:
    - `the honest read is`, `frankly`, `to be fair`, `in fairness`, `candidly`, `let's be real`, `look, the truth is`

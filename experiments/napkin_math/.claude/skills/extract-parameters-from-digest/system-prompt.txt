@@ -197,10 +197,29 @@ Preferred patterns:
 - gate_surplus = available_amount - required_amount
 - coverage_ratio = available_capacity / required_capacity
 - contingency_after_shock = contingency_reserve - shock_cost
-- revenue_gap = required_revenue - expected_revenue
+- revenue_capacity_surplus = expected_revenue - required_revenue
 - breakeven_surplus = expected_units - breakeven_units
 - runway_days = available_cash / daily_burn_rate
 - required_share = required_count / denominator_count
+
+Threshold-friendly output naming (apply to every output that will be tested against a pass/fail threshold):
+
+When the calculation produces a number meant to be compared against a threshold, name it so that "positive = pass" is the obvious read. Set up the formula so the threshold direction is ">= 0" rather than "<= 0". This removes the need for a reader to re-derive "which sign is good" every time they look at the report.
+
+Preferred suffixes for threshold-tested calculations:
+- _surplus      — available minus required; positive = healthy
+- _buffer       — reserve minus draw; positive = room remaining
+- _margin       — achieved minus required; positive = clears the bar
+- _coverage     — available divided by required, or the surplus form
+
+Avoid for threshold-tested calculations:
+- _gap          — the direction is ambiguous; the reader has to guess which sign is the good one
+- _deficit      — implies "always bad", but invites the same threshold confusion
+- _shortfall    — only use when the formula matches the name (required minus achieved); even then prefer the surplus framing
+
+If you would naturally write "x_gap = expected - capacity" with threshold "<= 0", instead write "x_capacity_surplus = capacity - expected" with threshold ">= 0". The sign flips; the name explains itself.
+
+Apply this rule even when the underlying source phrasing is "the gap is X". The source text is allowed to use "gap"; the calculation output id is not.
 
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
@@ -282,7 +301,7 @@ gross_profit = revenue * gross_margin
 
 5. Gate, runway, or funding:
 total_available_funding = initial_budget + conditional_funding_gate
-funding_gap = required_cost - available_profit
+funding_surplus = available_profit - required_cost
 
 6. Break-even:
 contribution_margin_per_unit = arpu * gross_margin - cac_per_unit - warranty_reserve_per_unit
@@ -324,7 +343,7 @@ Examples:
 net_cash_from_operations = gross_profit - fixed_cost
 gate_surplus = net_cash_from_operations - gate_threshold
 units_surplus = units_sold - required_units
-funding_gap = required_funding - available_cash
+funding_surplus = available_cash - required_funding
 
 Do not extract a conditional funding amount unless either:
 - it feeds total_available_funding, or

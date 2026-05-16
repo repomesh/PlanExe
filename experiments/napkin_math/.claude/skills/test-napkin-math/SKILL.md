@@ -16,7 +16,7 @@ Covers the Monte Carlo runner (end-to-end, determinism, Bernoulli arithmetic, se
 - After any edit to:
   - `experiments/napkin_math/run_monte_carlo.py`
   - `experiments/napkin_math/prepare_extract_input.py`
-  - `experiments/napkin_math/tests/fixtures/smoke_v2/*`
+  - `experiments/napkin_math/tests/fixtures/smoke/*`
   - `worker_plan/worker_plan_internal/parameter_extraction/compress_report_section.py`
   - any system-prompt.txt / SKILL.md under `experiments/napkin_math/.claude/skills/{extract-parameters,extract-parameters-from-digest,generate-bounds,generate-calculations,run-scenarios,monte-carlo}/` that touches the artifact schema
 - Before declaring any napkin_math change "done" — even if the change looks self-contained, the schema is tightly coupled across stages
@@ -70,6 +70,6 @@ Not for: end-to-end LLM-driven runs of the extract-parameters skills against rea
 ## Reference
 
 - Test runner: `experiments/napkin_math/tests/run_smoke.py`
-- Synthetic fixture: `experiments/napkin_math/tests/fixtures/smoke_v2/`
+- Synthetic fixture: `experiments/napkin_math/tests/fixtures/smoke/`
 - Monte Carlo runner under test: `experiments/napkin_math/run_monte_carlo.py`
 - Companion skills (consumers of the same schema): `../extract-parameters/SKILL.md`, `../extract-parameters-from-digest/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`, `../monte-carlo/SKILL.md`

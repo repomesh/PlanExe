@@ -123,6 +123,6 @@ JSON forbids `NaN`/`Infinity` — the runner writes `null` and adds a warning. I
 - Pipeline overview: `../../README.md`, Stage 7
 - Companion skills: `../extract-parameters/SKILL.md`, `../validate-parameters/SKILL.md`, `../generate-bounds/SKILL.md`, `../generate-calculations/SKILL.md`, `../run-scenarios/SKILL.md`
 - Synthetic fixture exercising every `sampling_discipline` (used as the runner smoke test):
-  - `experiments/napkin_math/tests/fixtures/smoke_v2/parameters.json`
-  - `experiments/napkin_math/tests/fixtures/smoke_v2/bounds.json`
-  - `experiments/napkin_math/tests/fixtures/smoke_v2/calculations.py`
+  - `experiments/napkin_math/tests/fixtures/smoke/parameters.json`
+  - `experiments/napkin_math/tests/fixtures/smoke/bounds.json`
+  - `experiments/napkin_math/tests/fixtures/smoke/calculations.py`

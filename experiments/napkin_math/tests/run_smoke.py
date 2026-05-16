@@ -27,7 +27,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NAPKIN_DIR = REPO_ROOT / "experiments" / "napkin_math"
-FIXTURE_DIR = NAPKIN_DIR / "tests" / "fixtures" / "smoke_v2"
+FIXTURE_DIR = NAPKIN_DIR / "tests" / "fixtures" / "smoke"
 RUNNER = NAPKIN_DIR / "run_monte_carlo.py"
 PY = os.environ.get("NAPKIN_TEST_PYTHON", "/opt/homebrew/bin/python3.11")
 

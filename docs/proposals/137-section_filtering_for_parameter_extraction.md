@@ -801,3 +801,42 @@ Self Audit
 The main principle:
 
 > Feed the extractor sections that contain assumptions, gates, risks, denominators, and missing evidence. Drop sections that mainly contain persuasion, UI, documentation planning, or duplicate narrative.
+
+---
+
+## Reference implementation
+
+A first reference implementation of this section-filtering recommendation lives in `experiments/napkin_math/prepare_extract_input.py`. It assembles `extract_parameters_input.md` in 137's order, with the Strategic Decisions slot replaced by **Selected Scenario** per [proposal 139](139-compress-for-monte-carlo.md) to keep rejected alternatives out of the parameter extractor.
+
+The bundle is mixed-format:
+
+- The four sections 137 marks "Keep or compress" (Selected Scenario, Review Plan, Premortem, Expert Criticism) are compressed via `compress_report_section`. Each bullet carries an inline epistemic tag of the form `[<source_status> | e=N r=N | quote: verified|unverified]`.
+- The four sections marked plain "Keep" (Executive Summary, Project Plan, Assumptions, Data Collection) are passed through raw from the PlanExe sample. They are already short and primarily numeric; further compression risks dropping modelling primitives.
+
+The companion skill `experiments/napkin_math/.claude/skills/extract-parameters-from-digest/` consumes the assembled file and produces a JSON parameter set with the same schema as the `extract-parameters` skill that reads the full PlanExe HTML. The two skills are head-to-head comparable on the same source plan.
+
+---
+
+## Lessons from the first reference implementation
+
+A handful of failure modes recurred during head-to-head testing against the full-HTML pipeline. Recording them so the next implementation does not re-discover them.
+
+### Budget and revenue are not the same denominator
+
+When the report says "25% from rentals" or "40% Courses, 35% Memberships, 25% Drop-ins", that is a share of **revenue**, not of budget. An extractor that builds `rental_revenue = budget * rental_share` silently conflates spend capacity with sales target, and every downstream coverage and utilization ratio derived from that formula is distorted. The remedy is to surface `year1_revenue_target_dkk` (or the period equivalent) as a missing input whenever a revenue-mix share is captured without an explicit revenue target in the source. The same trap exists for cost-share, margin-share, contribution-share, and channel-share percentages.
+
+### Cross-section duplication is the consumer's job to resolve
+
+The four compressed sections routinely surface the same primitive ("minimum viable rental rate", "off-peak hourly price", "speculative high hourly rate") under different phrasings, because each compress call sees a different multi-file Luigi blob and is asked to be locally complete. Resist the urge to deduplicate inside the compressor — losing redundancy loses per-section provenance. The downstream extractor is where canonicalisation belongs: pick one stable snake_case id, merge near-duplicates, prefer the framing closest to a modelling primitive (rate, count, fraction, amount-per-period).
+
+### Denominator-pairing is cheap and load-bearing
+
+Every rate, share, conversion rate, hourly price, FTE count, and failure-duration magnitude in the digest needs a paired denominator or scaling input to be turned into an executable Monte Carlo formula. The compressor surfaces those denominators as `[missing]` items in the `missing_data_to_estimate` bucket — revenue target for a revenue-mix share, billable hours for an hourly rate, attendee count for a conversion rate, per-head cost for a headcount, per-period revenue exposure for a downtime duration. Without this rule the extractor invents the denominator, which makes the resulting distribution arbitrary.
+
+### Strategic-Decisions content still arrives, just not as a standalone section
+
+Substituting Selected Scenario for Strategic Decisions (per 139) does not lose the rejected-alternative content the planner considered. That content still flows into the compressor through the multi-file Luigi blobs that feed Review Plan, Premortem, and Expert Criticism — the compressor sees it as context but does not promote rejected alternatives into the numeric_values or gates of any section. The substitution is about provenance discipline, not information loss.
+
+### Raw "Keep" sections are not free
+
+The four raw sections inflate the digest by ~30 KB on the Nuuk sample (the compressed digest alone is ~21 KB; the full bundle is ~56 KB). That is the cost of preserving Executive Summary, Project Plan, Assumptions, and Data Collection at full fidelity. The savings claim ("instead of a 100 KB+ HTML report") still holds, but the extractor's prompt needs to make clear that raw sections carry no inline tags and require general triage — the format split is real, not cosmetic.

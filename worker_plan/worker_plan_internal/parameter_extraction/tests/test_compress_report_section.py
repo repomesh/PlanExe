@@ -301,3 +301,62 @@ def test_convert_to_markdown_skips_empty_buckets() -> None:
     assert "## Gates and thresholds" not in markdown
     assert "## Risks and shocks" not in markdown
     assert "## Missing data to estimate" not in markdown
+
+
+def test_numeric_density_bonus_counts_numeric_tokens() -> None:
+    """Numeric density is the only content-bonus the scorer applies and it
+    must be language- and domain-neutral. Digits are digits regardless of
+    whether the surrounding text is English, Danish, French, or domain-
+    specific (commercial, public-health, renovation, hobby)."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        numeric_density_bonus,
+    )
+
+    assert numeric_density_bonus("No numbers in this line") == 0
+    assert numeric_density_bonus("Rental rate is 165 per hour") == 1.0
+    # Three tokens: "2,000,000", "0.15", "300,000"
+    assert numeric_density_bonus("Budget 2,000,000 at 0.15 leaves 300,000") == 3.0
+    # Cap at 3.0 even with more numbers
+    assert numeric_density_bonus("1 2 3 4 5 6 7 8") == 3.0
+    # Same scorer regardless of input language. The Danish phrase below
+    # has two numeric tokens ("2.000.000" and "15"), so the bonus is 2.0
+    # — no English keyword is required for the count to work.
+    assert numeric_density_bonus("Budgettet er 2.000.000 DKK med 15 procent reserve") == 2.0
+
+
+def test_composite_score_prefers_quantified_over_prose() -> None:
+    """Two items with identical LLM self-ratings and quote-verification
+    status should be ordered by quantification: numeric content outranks
+    bare prose. No language- or domain-specific keyword check involved."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        annotate_scored_items,
+    )
+
+    section = (
+        "Total commitment 2,000,000 with 15% buffer. "
+        "Some background prose about community values."
+    )
+    quantified = ScoredItem(
+        line_english="Reserve buffer is 15% of the 2,000,000 total",
+        line_original="Reserve buffer is 15% of the 2,000,000 total",
+        modelling_relevance=3,
+        source_evidence=3,
+        source_status="explicit",
+        source_quote="15% buffer",
+    )
+    prose = ScoredItem(
+        line_english="The plan emphasizes community-focused values for residents",
+        line_original="The plan emphasizes community-focused values for residents",
+        modelling_relevance=3,
+        source_evidence=3,
+        source_status="explicit",
+        source_quote="community values",
+    )
+    kept, _ = annotate_scored_items(
+        [prose, quantified], section_markdown=section, field_name="numeric_values"
+    )
+    # Same base (3*3=9) and both verified. The quantified item wins on the
+    # numeric-density bonus alone.
+    assert kept[0].line_english.startswith("Reserve buffer is 15%")
+    assert kept[1].line_english.startswith("The plan emphasizes community")

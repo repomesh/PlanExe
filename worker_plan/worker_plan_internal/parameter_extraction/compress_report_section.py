@@ -33,6 +33,7 @@ PROMPT> python -m worker_plan_internal.parameter_extraction.run_compress_full
 """
 import json
 import logging
+import re
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -351,6 +352,19 @@ Language rule (apply to every item):
   source contains non-English text, line_original keeps the native
   spelling and technical terms intact.
 
+Quantity annotation rule (apply to every item):
+- When the source states a count as a word (in any language: "two",
+  "twelve", "a dozen", "half a hundred", "to", "deux", "zwei", …),
+  annotate the digit form parenthetically in line_english after the
+  count word. Examples: "four (4) part-time instructors", "a dozen (12)
+  weekly drop-in sessions", "two (2) FTE equivalents". This applies to
+  the line_english field only; line_original keeps the source's native
+  phrasing without the digit annotation.
+- Do NOT digit-annotate vague quantifiers — "several", "a handful",
+  "many", "few", "some", "various", "a number of" are not counts and
+  must NOT be expanded into invented digits. If you do not know the
+  count, leave the word unannotated.
+
 Scoring rules (identical across buckets):
 - modelling_relevance (1-5): how useful this item is for Monte Carlo /
   napkin-math modelling. 5 = primary driver of viability; 1 = irrelevant
@@ -538,6 +552,28 @@ Prefer primitives over derived quantities. Avoid words like 'gap',
 naming a formula explicitly; if a derived quantity is missing, decompose
 it into the primitives that go into it.
 
+Denominator-pairing rule (important): the earlier buckets already
+captured rates, shares, percentages, per-unit prices, conversion rates,
+utilization targets, FTE counts, and failure-duration magnitudes. Each
+of those needs a matching denominator or scaling input to become an
+executable formula. For every such rate-like or per-unit item in the
+prior buckets that the section does NOT otherwise quantify, surface its
+missing counterpart here. Patterns to look for:
+- A share-of-revenue percentage needs the absolute period-revenue
+  target.
+- A per-hour, per-day, or per-unit price needs the billable hours, days,
+  or units per period the price will be applied to.
+- A conversion or adoption rate needs the count of attendees,
+  candidates, or eligible people the rate operates on.
+- An FTE or headcount value needs the per-head monthly or annual cost.
+- A failure-duration magnitude (weeks of downtime, days of disruption)
+  needs the per-week or per-day revenue exposure the failure interrupts.
+- An overhead coverage threshold ('cover 75% of X') needs the absolute
+  X amount per period.
+Do not invent a value; just name the missing primitive and how it
+would be estimated. Skip this pairing only when the section already
+supplies the denominator elsewhere.
+
 Note: by definition these items are absent from the source. Always set
 source_status to 'missing' for items in this bucket. When the source has
 no value, source_quote is 'NOT IN SOURCE' and source_evidence is 1. When
@@ -581,11 +617,29 @@ BUCKET_SPECS: tuple[BucketSpec, ...] = (
 PER_BUCKET_MAX_ATTEMPTS = 3
 
 # Public list buckets are capped to the top-N items after the LLM-side
-# cap, sorted by (modelling_relevance * source_evidence) with a bonus for
-# items whose quote was code-verified. The LLM is asked to over-produce so
+# cap, sorted by a composite score combining the LLM's self-rated
+# source_evidence * modelling_relevance, a code-side quote-verification
+# bonus, and a numeric-density bonus. The LLM is asked to over-produce so
 # the Python sort can drop the weakest candidates; everything stays in
 # metadata for inspection.
 MAX_ITEMS_PER_BUCKET = 6
+
+# Digit-led tokens, used to count numeric content in a candidate line.
+# Numbers are universal across languages and across plan domains
+# (commercial budgets, renovation square-metre counts, public-health
+# coverage rates, …), so a numeric-density bonus does not bias the
+# ranking toward any one input language or plan type. Matches things
+# like ``2,000,000``, ``0.15``, ``2026-09-15``.
+NUMBER_PATTERN: re.Pattern[str] = re.compile(r"\d[\d,.]*")
+
+# Bonus weights for the composite score. The verified-quote bonus (10)
+# is the largest because code-verified provenance is the strongest single
+# trust signal. The numeric-density bonus is smaller and capped so a
+# heavily-quantified item cannot overwhelm a well-evidenced qualitative
+# one.
+VERIFIED_QUOTE_BONUS: int = 10
+NUMERIC_DENSITY_BONUS_PER_TOKEN: float = 1.0
+NUMERIC_DENSITY_BONUS_CAP: float = 3.0
 
 # Buckets whose schema is list[ScoredItem] (i.e. everything except
 # section_summary). The order matches BUCKET_SPECS below.
@@ -630,6 +684,38 @@ def quote_is_in_source(quote: str, section_markdown: str) -> bool:
     return normalise_for_quote_match(quote) in normalise_for_quote_match(section_markdown)
 
 
+def numeric_density_bonus(text: str) -> float:
+    """Bonus for lines carrying numeric tokens (currency amounts, dates,
+    percentages, square metres). A bare-prose claim with no numbers is
+    less useful for napkin math than one with explicit quantities.
+    Language- and domain-neutral: digits are digits in any plan.
+    """
+    count = len(NUMBER_PATTERN.findall(text))
+    return min(count * NUMERIC_DENSITY_BONUS_PER_TOKEN, NUMERIC_DENSITY_BONUS_CAP)
+
+
+def composite_score(
+    item: "ScoredItem",
+    quote_verified: bool,
+) -> float:
+    """Combine the LLM-self-rated base score with code-side bonuses.
+
+    base = source_evidence * modelling_relevance  (range 1..25)
+    + verified-quote bonus                        (0 or 10)
+    + numeric-density bonus                       (0..3)
+
+    Items with a code-verified quote always outrank otherwise-equivalent
+    unverified items. The numeric-density bonus then breaks ties toward
+    quantified content. Both signals are language- and domain-neutral.
+    """
+    haystack = f"{item.line_english} {item.source_quote}"
+    return (
+        item.source_evidence * item.modelling_relevance
+        + (VERIFIED_QUOTE_BONUS if quote_verified else 0)
+        + numeric_density_bonus(haystack)
+    )
+
+
 def annotate_scored_items(
     items: list[ScoredItem],
     section_markdown: str,
@@ -641,10 +727,12 @@ def annotate_scored_items(
     The LLM produces ``ScoredItem`` (line + scores + status + quote). For
     each, we substring-check the quote against the source markdown, build
     a ``PublicScoredItem`` with ``quote_verified`` set accordingly, sort by
-    ``source_evidence * modelling_relevance`` (with a bonus for verified
-    items), and keep the top ``MAX_ITEMS_PER_BUCKET``. The full set of
-    scored items (including dropped ones) is returned as a list of dicts
-    so the caller can stash them in metadata for inspection.
+    ``composite_score`` (LLM-self-rated evidence × relevance plus
+    code-side bonuses for verified quote, protected modelling terms,
+    numeric density, and formula-cue presence), and keep the top
+    ``MAX_ITEMS_PER_BUCKET``. The full set of scored items (including
+    dropped ones) is returned as a list of dicts so the caller can stash
+    them in metadata for inspection.
 
     For buckets listed in ``FORCED_STATUS_BY_BUCKET`` (currently just
     ``missing_data_to_estimate``), the ``source_status`` is overwritten
@@ -653,7 +741,7 @@ def annotate_scored_items(
     """
     forced_status = FORCED_STATUS_BY_BUCKET.get(field_name)
     scored_dicts: list[dict] = []
-    annotated_pairs: list[tuple[int, PublicScoredItem]] = []
+    annotated_pairs: list[tuple[float, PublicScoredItem]] = []
     for llm_item in items:
         verified = quote_is_in_source(llm_item.source_quote, section_markdown)
         item_dict = llm_item.model_dump()
@@ -664,11 +752,7 @@ def annotate_scored_items(
             quote_verified=verified,
         )
         scored_dicts.append(public_item.model_dump())
-        sort_key = (
-            llm_item.source_evidence * llm_item.modelling_relevance
-            + (10 if verified else 0)
-        )
-        annotated_pairs.append((sort_key, public_item))
+        annotated_pairs.append((composite_score(llm_item, verified), public_item))
 
     annotated_pairs.sort(key=lambda pair: pair[0], reverse=True)
     kept = [item for _, item in annotated_pairs[:MAX_ITEMS_PER_BUCKET]]

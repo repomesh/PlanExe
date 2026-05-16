@@ -209,6 +209,23 @@ rental_revenue_shortfall_dkk = max(0, -drop_in_capacity_surplus_dkk)      (the s
 
 Then any aggregate test that consumes the stressor reads from this derived value, and the simulation respects the causal link.
 
+No dead-end variables:
+
+Every entry in key_values and missing_values_to_estimate must feed at least one calculation — either directly (it appears in another entry's depends_on or formula_hint RHS) or transitively (it feeds a calculation whose output is used by another calculation). Before emitting the JSON, walk every variable and confirm it reaches a recommended_first_calculation or derived_question output.
+
+A variable extracted "for context" but never used by a calculation is dead weight. It pollutes the bounds (forcing generate-bounds to assign a range you never sample meaningfully), shows up as a non-driver in sensitivity reports, and clutters the insights without adding signal.
+
+Common dead-end patterns to watch for:
+- a threshold or trigger value (e.g., "surcharge activates when X exceeds 30%") extracted without also extracting X and the margin calculation that tests it;
+- a capacity, FTE, or staffing constant extracted as background detail but never multiplied into a throughput, cost, or revenue formula;
+- a percentage target or "operational goal" the plan mentions but the model has no way to evaluate.
+
+Fix in priority order:
+1. If you can model the variable cheaply, add a calculation that uses it. For triggers, the natural form is "<x>_margin = actual_share - threshold_share" — and you must also add `actual_share` to missing_values_to_estimate if absent from the report. Both the trigger and the actual share must connect to the margin calculation.
+2. If you cannot model it, drop the variable. Do not extract it and leave it stranded.
+
+It is better to return six well-connected key_values than eight where two are dead-ends. The caps are a ceiling, not a target.
+
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
 If space limits prevent adding the missing input, omit the derived question rather than emitting formula_hint: null.

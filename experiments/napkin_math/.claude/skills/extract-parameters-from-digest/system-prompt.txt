@@ -263,6 +263,12 @@ Fix in priority order:
 
 It is better to return six well-connected key_values than eight where two are dead-ends. The caps are a ceiling, not a target.
 
+Keep plan_summary.modelling_frame consistent with the executable model:
+
+modelling_frame describes the scope of what the calculations actually evaluate, not the full plan as written. If you drop a risk concept (utility shock, supplier shock, regulatory shock, etc.) under the No-dead-end rule because no calculation tests it, also drop that concept from the modelling_frame text. A frame that names risks the model has no way to evaluate reads as overstating what the simulation covers and misleads downstream readers of the insights report.
+
+Concrete pattern: if the frame says "buffers against A, B, and C shocks" and you only retained calculations that test A and B, the frame must say "buffers against A and B shocks". Do not paper over the gap by keeping the dropped concept in the prose.
+
 If the necessary input is missing, add that input to missing_values_to_estimate and use it in the formula.
 
 If space limits prevent adding the missing input, omit the derived question rather than emitting formula_hint: null.

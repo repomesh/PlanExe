@@ -158,8 +158,8 @@ def render_bad_news_first(mc: dict | None, scenarios: dict | None,
     rows.append("## Bad news first")
     rows.append("")
     rows.append(
-        "If you read nothing else, read this. Every item below is a signal the plan does "
-        "not survive its own assumptions. Items are ordered by severity."
+        "Every item below is a signal the plan does not survive its own assumptions. "
+        "Items are ordered by severity."
     )
     rows.append("")
 

@@ -95,9 +95,14 @@ SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 # Functions allowed inside formula_hint. Numeric literals are also fine.
 FORMULA_BUILTINS = {"min", "max", "abs", "sum", "round", "int", "float"}
 
-# A threshold-tested output should be named so positive = pass. These
-# suffixes are warned about (the renderer can detect threshold use later).
-THRESHOLD_UNFRIENDLY_SUFFIXES = ("_gap", "_deficit", "_shortfall")
+# A threshold-tested output should be named so positive = pass. The suffix
+# is flagged whether it appears at the very end of output_name or before a
+# unit suffix (e.g. `revenue_shortfall_usd`, `funding_gap_eur`,
+# `coverage_deficit_dkk`). Matching the bad word as a token — preceded by
+# an underscore and followed by either end-of-string or another underscore
+# — avoids false positives on names that happen to contain the substring
+# elsewhere.
+THRESHOLD_UNFRIENDLY_PATTERN = re.compile(r"_(gap|deficit|shortfall)(_[a-z0-9_]+)?$")
 
 
 def violation(rule_id: str, severity: str, path: str,
@@ -416,11 +421,12 @@ def check_no_dead_end_variables(params: dict, violations: list) -> None:
 
 
 def check_threshold_friendly_naming(params: dict, violations: list) -> None:
-    """Soft check (WARN): outputs ending in _gap/_deficit/_shortfall are
-    flagged because they read ambiguously when tested against a threshold.
-    The validator doesn't see montecarlo_settings.json so it warns on every
-    output with these suffixes; the prompt-side rule asks the extractor to
-    flip the sign and rename.
+    """Soft check (WARN): outputs containing _gap/_deficit/_shortfall as a
+    token (at end, or before a unit suffix like _usd/_eur) are flagged.
+    They read ambiguously when tested against a threshold. The validator
+    doesn't see montecarlo_settings.json so it warns on every output with
+    these suffixes; the prompt-side rule asks the extractor to flip the
+    sign and rename.
     """
     for section in ("derived_questions", "recommended_first_calculations"):
         for i, entry in enumerate(params.get(section, []) or []):
@@ -429,16 +435,19 @@ def check_threshold_friendly_naming(params: dict, violations: list) -> None:
             on = entry.get("output_name")
             if not isinstance(on, str):
                 continue
-            for suffix in THRESHOLD_UNFRIENDLY_SUFFIXES:
-                if on.endswith(suffix):
-                    base = on[: -len(suffix)]
-                    violations.append(violation(
-                        "threshold_friendly_naming", "WARN",
-                        f"$.{section}[{i}].output_name",
-                        f"output_name `{on}` ends in `{suffix}`; threshold-tested outputs should use _surplus/_buffer/_margin/_coverage",
-                        f"rename to e.g. `{base}_surplus` and flip the formula sign so positive = pass",
-                    ))
-                    break
+            m = THRESHOLD_UNFRIENDLY_PATTERN.search(on)
+            if not m:
+                continue
+            bad = m.group(1)
+            tail = m.group(2) or ""
+            base = on[: m.start()]
+            suggested = f"{base}_surplus{tail}"
+            violations.append(violation(
+                "threshold_friendly_naming", "WARN",
+                f"$.{section}[{i}].output_name",
+                f"output_name `{on}` contains `_{bad}`; threshold-tested outputs should use _surplus/_buffer/_margin/_coverage",
+                f"rename to e.g. `{suggested}` and flip the formula sign so positive = pass",
+            ))
 
 
 def check_shared_pool_legitimacy(params: dict, violations: list) -> None:

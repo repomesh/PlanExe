@@ -485,7 +485,10 @@ def render_unmodelled_gates(params: dict | None) -> list[str]:
             continue
         gid = g.get("id", "—")
         why = g.get("why_it_matters", "—")
-        anchor = g.get("source_anchor", "—")
+        raw_anchor = g.get("source_anchor", "—")
+        # Prefix with the canonical source artifact so downstream agents can
+        # trace the claim back to a specific section of the PlanExe report.
+        anchor = f"report.html / {raw_anchor}" if raw_anchor and raw_anchor != "—" else "—"
         consequence = g.get("consequence_if_false", "—")
         rows.append(f"| `{gid}` | {why} | {anchor} | {consequence} |")
     rows.append("")
@@ -550,10 +553,26 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
     rows = ["## Critical findings", ""]
     if unmodelled_gates:
         labels = [
-            g.get("label") or g.get("id") for g in unmodelled_gates
+            (g.get("label") or g.get("id") or "") for g in unmodelled_gates
             if isinstance(g, dict)
         ]
-        labels_str = ", ".join(labels) if labels else "the listed gates"
+        # Lower-case the first letter of each label when emitting in mid-sentence
+        # prose. Labels are stored title-cased for the table; in a flowing
+        # sentence ("the simulation does not evaluate ...") the title casing
+        # reads as proper nouns. Preserve labels that start with an acronym:
+        # if the second character is also uppercase, the first word is an
+        # acronym (e.g. "AML/KYC compliant ...") and the casing stays.
+        def _lower_first(s: str) -> str:
+            if len(s) >= 2 and s[1].isupper():
+                return s
+            return s[:1].lower() + s[1:]
+        labels = [_lower_first(l) for l in labels if l]
+        if len(labels) > 1:
+            labels_str = ", ".join(labels[:-1]) + ", or " + labels[-1]
+        elif labels:
+            labels_str = labels[0]
+        else:
+            labels_str = "the listed gates"
         rows.append(
             f"- **SCOPE WARNING** — The simulation does not evaluate {labels_str}. "
             f"These are existential gates and may dominate the modelled financial result. "

@@ -835,7 +835,29 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
 
 # ─── missing inputs ranked by impact ───────────────────────────────────────
 
-def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
+def saturated_doom_gates(mc: dict | None, params: dict | None) -> list[str]:
+    """Identify DOOM gates where no single quartile movement changes the
+    outcome. These gates are absent from `missing_value_priority` (no input
+    has them as its worst-affected gate, by construction). Naming them
+    explicitly above the ranking removes the ambiguity a downstream reader
+    would otherwise hit: "why is the ranking targeting other gates than the
+    worst declared one?".
+    """
+    if not mc:
+        return []
+    quartile = mc.get("quartile_analysis") or {}
+    out: list[str] = []
+    for r in threshold_entries(mc, params):
+        if r["verdict"] != "DOOM":
+            continue
+        drivers = quartile.get(r["id"]) or []
+        top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
+        if is_saturated_failure(r["probability"], top):
+            out.append(r["id"])
+    return out
+
+
+def render_missing_inputs_ranked(mc: dict | None, params: dict | None = None) -> list[str]:
     if not mc or not mc.get("missing_value_priority"):
         return []
     rows = [
@@ -843,9 +865,21 @@ def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
         "",
         "The plan does not state these values; the model assumed bounds. Rank by `|Δ-pp on the worst-affected gate| × (1 − that gate's pass rate) × bound-width-ratio` — the higher, the more decision-value in pinning this input down.",
         "",
-        "| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |",
-        "|---:|---|---|---:|---:|---|",
     ]
+    saturated = saturated_doom_gates(mc, params)
+    if saturated:
+        gate_list = ", ".join(f"`{g}`" for g in saturated)
+        if len(saturated) == 1:
+            rows.append(
+                f"Note: the saturated DOOM gate {gate_list} is absent from the ranking because no single missing-input restriction can lift its pass rate under current bounds. The inputs below target the next most decision-relevant non-saturated gates; the saturated gate needs a bounds or threshold-definition audit, not a single input fix."
+            )
+        else:
+            rows.append(
+                f"Note: the saturated DOOM gates {gate_list} are absent from the ranking because no single missing-input restriction can lift their pass rates under current bounds. The inputs below target the next most decision-relevant non-saturated gates; saturated gates need a bounds or threshold-definition audit, not a single input fix."
+            )
+        rows.append("")
+    rows.append("| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |")
+    rows.append("|---:|---|---|---:|---:|---|")
     for i, e in enumerate(mc["missing_value_priority"], 1):
         basis = BASIS_FROM_SOURCE.get(e["source"], e["source"])
         rows.append(
@@ -1011,7 +1045,7 @@ def build_assessment(params: dict | None, bounds: dict | None,
         render_gate_verdicts(mc, params),
         render_decision_implications(mc, params),
         render_failure_drivers(mc, params),
-        render_missing_inputs_ranked(mc),
+        render_missing_inputs_ranked(mc, params),
         render_confidence_and_trust(mc, validation),
         render_scenario_sanity_check(scenarios),
         render_suggested_next_actions(mc, params),

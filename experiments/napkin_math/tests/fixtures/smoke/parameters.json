@@ -106,6 +106,15 @@
       "output_unit": "INR",
       "depends_on": ["year1_budget_inr", "month4_gate_release_inr"],
       "why_first": "Establishes the post-gate spending envelope."
+    },
+    {
+      "id": "calc_annual_instructor_payroll_inr",
+      "label": "Annual instructor payroll",
+      "formula_hint": "annual_instructor_payroll_inr = operating_weeks_per_year * instructor_hourly_rate_inr * 30",
+      "output_name": "annual_instructor_payroll_inr",
+      "output_unit": "INR",
+      "depends_on": ["operating_weeks_per_year", "instructor_hourly_rate_inr"],
+      "why_first": "Consumes the operating-weeks and hourly-rate inputs at a 30 hr/week literal."
     }
   ]
 }

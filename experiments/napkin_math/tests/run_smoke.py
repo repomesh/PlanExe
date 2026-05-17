@@ -68,8 +68,9 @@ def check_end_to_end(tmpdir: Path) -> None:
     _check("runner produced an output file", out.exists())
     result = json.loads(out.read_text())
     _check("valid: true", result.get("valid") is True)
-    _check("two outputs computed", set(result["outputs"]) == {
-        "taster_converted_members", "total_budget_with_gate_inr"
+    _check("three outputs computed", set(result["outputs"]) == {
+        "taster_converted_members", "total_budget_with_gate_inr",
+        "annual_instructor_payroll_inr",
     })
     _check("no warnings on clean fixture", result["warnings"] == [],
            detail=json.dumps(result["warnings"]))
@@ -220,6 +221,30 @@ def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
            "ROBUST" in body or "MARGINAL" in body)
 
 
+def check_validate_parameters_end_to_end(tmpdir: Path) -> None:
+    """Run validate_parameters.py against the smoke fixture and verify it
+    produces a clean validation.json (exit 0, valid: true, 16 checks listed).
+    """
+    out = tmpdir / "validation.json"
+    validator = NAPKIN_DIR / "validate_parameters.py"
+    cp = subprocess.run(
+        [PY, str(validator),
+         "--parameters", str(FIXTURE_DIR / "parameters.json"),
+         "--output", str(out)],
+        capture_output=True, text=True,
+    )
+    _check(
+        f"validate_parameters.py exits 0 on clean fixture (exit={cp.returncode})",
+        cp.returncode == 0,
+        detail=cp.stderr,
+    )
+    body = json.loads(out.read_text())
+    _check("validation.json valid: true", body.get("valid") is True)
+    _check("validation.json error_count == 0", body.get("error_count") == 0)
+    _check("validation.json lists 16 checks_performed",
+           len(body.get("summary", {}).get("checks_performed", [])) == 16)
+
+
 def check_prepare_extract_input_imports() -> None:
     cp = subprocess.run(
         [PY, "-c", "import importlib.util, sys, pathlib; "
@@ -264,6 +289,7 @@ def main() -> int:
         ("sensitivity_ranking", check_sensitivity_ranking),
         ("schema_errors", check_schema_errors),
         ("summarize_assessment_end_to_end", check_summarize_assessment_end_to_end),
+        ("validate_parameters_end_to_end", check_validate_parameters_end_to_end),
     ]
     failures: list[str] = []
     with tempfile.TemporaryDirectory() as td:

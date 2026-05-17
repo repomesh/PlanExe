@@ -270,9 +270,13 @@ Percentages should be represented as fractions:
 
 It does not decide whether the modelling choices are perfect. It verifies that the JSON is consistent, bounded, dependency-safe, and machine-readable.
 
+## Implementation
+
+`validate-parameters` is a deterministic Python script: `experiments/napkin_math/validate_parameters.py`. It runs in milliseconds, costs no tokens, and is the producer for the `validation.json` artifact the rest of the pipeline (`summarize_assessment.py`) consumes. The skill at `.claude/skills/validate-parameters/` is a thin wrapper around this script.
+
 ## Input
 
-The JSON output from `extract-parameters-from-full`.
+The JSON output from `extract-parameters-from-full` or `extract-parameters-from-digest` (both produce the same schema).
 
 ## Output
 
@@ -312,21 +316,25 @@ Warnings do not make the output invalid.
 
 ## Validation categories
 
-The validator checks:
+The validator runs 16 named structural checks. The list is also written into `validation.json` under `summary.checks_performed`, where `summarize_assessment.py` surfaces it as the "Validated" line under `## Confidence and trust boundaries`.
 
 ```text
-JSON parse validity
-top-level structure
-required fields
-array lengths
-comment/source_text word caps
-enum values
-fraction formatting
-id uniqueness
-snake_case ids
-depends_on references
-formula RHS references
-source_text cleanliness
+json_parse
+top_level_structure
+required_fields
+array_length_caps
+global_id_uniqueness
+snake_case_ids
+depends_on_declared
+formula_rhs_declared
+fraction_value_range
+comment_word_caps
+source_text_word_caps
+output_name_present_when_formula_hint
+output_unit_present_when_formula_hint
+no_dead_end_variables
+threshold_friendly_naming         (WARN-level)
+shared_pool_legitimacy             (enforced upstream in the extractor prompt)
 ```
 
 ## Important validator rules

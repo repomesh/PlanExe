@@ -53,6 +53,7 @@ CAPS = {
     "derived_questions": 5,
     "missing_values_to_estimate": 5,
     "recommended_first_calculations": 5,
+    "unmodelled_gates": 5,
 }
 
 REQUIRED_KEYS = {
@@ -73,7 +74,21 @@ REQUIRED_KEYS = {
         "id", "label", "formula_hint", "output_name", "output_unit",
         "depends_on", "why_first",
     },
+    "unmodelled_gates": {
+        "id", "label", "why_it_matters", "source_anchor", "consequence_if_false",
+    },
 }
+
+# Top-level keys the validator REQUIRES (vs optional). unmodelled_gates is
+# optional — older parameters.json files won't have it.
+OPTIONAL_TOP_LEVEL_KEYS = {"unmodelled_gates"}
+
+# Sections whose entries carry an `id` field. Used by uniqueness, snake_case,
+# and reference checks.
+SECTIONS_WITH_IDS = (
+    "key_values", "derived_questions", "missing_values_to_estimate",
+    "recommended_first_calculations", "unmodelled_gates",
+)
 
 SNAKE_CASE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -98,9 +113,7 @@ def violation(rule_id: str, severity: str, path: str,
 
 def collect_all_ids(params: dict) -> set[str]:
     ids: set[str] = set()
-    for section in REQUIRED_KEYS:
-        if section == "plan_summary":
-            continue
+    for section in SECTIONS_WITH_IDS:
         for entry in params.get(section, []) or []:
             if isinstance(entry, dict) and isinstance(entry.get("id"), str):
                 ids.add(entry["id"])
@@ -110,9 +123,7 @@ def collect_all_ids(params: dict) -> set[str]:
 def collect_output_names(params: dict) -> set[str]:
     """output_name values declared anywhere — usable as RHS references."""
     names: set[str] = set()
-    for section in REQUIRED_KEYS:
-        if section == "plan_summary":
-            continue
+    for section in SECTIONS_WITH_IDS:
         for entry in params.get(section, []) or []:
             if not isinstance(entry, dict):
                 continue
@@ -137,8 +148,8 @@ def parse_rhs_vars(formula: str) -> set[str]:
 # ─── individual checks ─────────────────────────────────────────────────────
 
 def check_top_level_structure(params: dict, violations: list) -> None:
-    expected = set(REQUIRED_KEYS)
-    for k in sorted(expected - set(params.keys())):
+    required_top = set(REQUIRED_KEYS) - OPTIONAL_TOP_LEVEL_KEYS
+    for k in sorted(required_top - set(params.keys())):
         violations.append(violation(
             "top_level_structure", "ERROR", f"$.{k}",
             f"missing top-level key `{k}`",
@@ -158,6 +169,9 @@ def check_required_fields(params: dict, violations: list) -> None:
                     f"plan_summary missing required field `{k}`",
                     f"add `{k}` to plan_summary",
                 ))
+            continue
+        # Optional sections skip when absent; validate shape when present.
+        if obj is None and section in OPTIONAL_TOP_LEVEL_KEYS:
             continue
         if not isinstance(obj, list):
             continue
@@ -185,9 +199,7 @@ def check_array_length_caps(params: dict, violations: list) -> None:
 
 def check_global_id_uniqueness(params: dict, violations: list) -> None:
     seen: dict[str, list[str]] = {}
-    for section in REQUIRED_KEYS:
-        if section == "plan_summary":
-            continue
+    for section in SECTIONS_WITH_IDS:
         for i, entry in enumerate(params.get(section, []) or []):
             if not isinstance(entry, dict):
                 continue
@@ -204,9 +216,7 @@ def check_global_id_uniqueness(params: dict, violations: list) -> None:
 
 
 def check_snake_case_ids(params: dict, violations: list) -> None:
-    for section in REQUIRED_KEYS:
-        if section == "plan_summary":
-            continue
+    for section in SECTIONS_WITH_IDS:
         for i, entry in enumerate(params.get(section, []) or []):
             if not isinstance(entry, dict):
                 continue
@@ -484,6 +494,7 @@ def validate(params: dict) -> dict:
                 "derived_questions": len(params.get("derived_questions", []) or []),
                 "missing_values_to_estimate": len(params.get("missing_values_to_estimate", []) or []),
                 "recommended_first_calculations": len(params.get("recommended_first_calculations", []) or []),
+                "unmodelled_gates": len(params.get("unmodelled_gates", []) or []),
             },
             "rule_id_breakdown": rule_id_breakdown,
             "checks_performed": CHECKS_PERFORMED,

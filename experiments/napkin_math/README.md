@@ -71,9 +71,12 @@ A JSON object with this shape:
   "key_values": [],
   "derived_questions": [],
   "missing_values_to_estimate": [],
-  "recommended_first_calculations": []
+  "recommended_first_calculations": [],
+  "unmodelled_gates": []
 }
 ```
+
+`unmodelled_gates` is optional. It may be omitted entirely on plans where every viability claim can be expressed as an executable formula.
 
 ## Hard caps
 
@@ -84,6 +87,7 @@ The extractor should return at most:
 5 derived_questions
 5 missing_values_to_estimate
 5 recommended_first_calculations
+5 unmodelled_gates
 ```
 
 It may return fewer. It should not pad the output just to fill the caps.
@@ -260,6 +264,33 @@ Percentages should be represented as fractions:
 60% -> value: 0.6, unit: "fraction"
 ```
 
+## Unmodelled existential gates
+
+Some plans depend on gates the deterministic Python model cannot evaluate:
+
+- legal or regulatory authorization that the model treats as already granted;
+- political acceptance, legitimacy, or non-reversal that no input represents;
+- compliance infrastructure (AML/KYC banking partners, certifications, operating licences) the model treats as given;
+- an external actor's binding commitment (a grid operator, banking consortium, court) treated as a fixed input rather than a probabilistic gate.
+
+These gates have no quantifiable threshold the Monte Carlo can test, but their failure would end the plan independently of any financial or operational threshold the model evaluates. When the source report names such a gate, the extractor declares it in `unmodelled_gates`:
+
+```json
+{
+  "id": "regulatory_authorization_gate",
+  "label": "Federal land-use authorization",
+  "why_it_matters": "The plan relies on post-facto authorization for federal land use; expert criticism calls for comprehensive legal submission within 10 days as a precondition.",
+  "source_anchor": "expert_criticism",
+  "consequence_if_false": "Project shutdown before any financial gate can be evaluated; sponsor capital stranded."
+}
+```
+
+`source_anchor` is one of: `executive_summary`, `project_plan`, `selected_scenario`, `assumptions`, `review_plan`, `premortem`, `expert_criticism`, `data_collection`.
+
+The array is **optional**. Most plans whose viability can be expressed entirely as executable formulas should omit it or use `[]`. The field exists so that plans whose dominant failure modes are legal/political/compliance can flag those failure modes explicitly, instead of letting the assessment read as a complete feasibility verdict when it is actually a financial stress test.
+
+Do not use `unmodelled_gates` as a dumping ground for risks. Only include gates whose failure would end the plan independently of the financial or operational thresholds the model tests.
+
 ---
 
 # Stage 2: validate-parameters
@@ -303,7 +334,8 @@ A validation report:
       "key_values": 8,
       "derived_questions": 3,
       "missing_values_to_estimate": 4,
-      "recommended_first_calculations": 5
+      "recommended_first_calculations": 5,
+      "unmodelled_gates": 3
     },
     "rule_id_breakdown": {},
     "checks_performed": [
@@ -348,9 +380,9 @@ Warnings do not make the output invalid.
 | # | Check | Severity | What it checks |
 |---|---|---|---|
 | 1 | `json_parse` | ERROR | the file parses as JSON. A parse failure is reported as a single violation with this rule_id and exit code 2. |
-| 2 | `top_level_structure` | ERROR | the top-level object has `plan_summary`, `key_values`, `derived_questions`, `missing_values_to_estimate`, and `recommended_first_calculations`. |
-| 3 | `required_fields` | ERROR | each entry carries the required keys for its array (e.g. every `key_values` entry has `id`, `label`, `category`, `value_type`, `unit`, `value`, `comment`, `formula_hint`, `output_name`, `output_unit`, `depends_on`, `modelling_priority`, `uncertainty`, `source_text`). |
-| 4 | `array_length_caps` | ERROR | ≤8 `key_values`, ≤5 `derived_questions`, ≤5 `missing_values_to_estimate`, ≤5 `recommended_first_calculations`. |
+| 2 | `top_level_structure` | ERROR | the top-level object has `plan_summary`, `key_values`, `derived_questions`, `missing_values_to_estimate`, and `recommended_first_calculations`. `unmodelled_gates` is optional. |
+| 3 | `required_fields` | ERROR | each entry carries the required keys for its array (e.g. every `key_values` entry has `id`, `label`, `category`, `value_type`, `unit`, `value`, `comment`, `formula_hint`, `output_name`, `output_unit`, `depends_on`, `modelling_priority`, `uncertainty`, `source_text`; every `unmodelled_gates` entry — when the field is present — has `id`, `label`, `why_it_matters`, `source_anchor`, `consequence_if_false`). |
+| 4 | `array_length_caps` | ERROR | ≤8 `key_values`, ≤5 `derived_questions`, ≤5 `missing_values_to_estimate`, ≤5 `recommended_first_calculations`, ≤5 `unmodelled_gates`. |
 | 5 | `global_id_uniqueness` | ERROR | every `id` is unique across all four arrays. |
 | 6 | `snake_case_ids` | ERROR | every `id` matches `^[a-z][a-z0-9_]*$` (lowercase letters, digits, underscores, no leading digit). |
 | 7 | `depends_on_declared` | ERROR | every id in any `depends_on` matches a declared `id` OR `output_name` somewhere in the file. See "depends_on accepts ids and output_names" below. |

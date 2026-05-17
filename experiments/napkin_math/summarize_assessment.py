@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 
-ASSESSMENT_SCHEMA_VERSION = 4
+ASSESSMENT_SCHEMA_VERSION = 5
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -347,6 +347,7 @@ def render_machine_summary(params: dict | None, mc: dict | None,
     if validation is not None:
         validation_status = "valid" if validation.get("valid") else "invalid"
 
+    unmodelled = (params or {}).get("unmodelled_gates") or []
     manifest = {
         "assessment_schema_version": ASSESSMENT_SCHEMA_VERSION,
         "artifact_type": "interpretation_layer",
@@ -362,6 +363,10 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         },
         "primary_failed_gates": failed,
         "primary_uncertainty_drivers": drivers,
+        "unmodelled_gates_summary": {
+            "count": len(unmodelled),
+            "ids": [g.get("id") for g in unmodelled if isinstance(g, dict) and g.get("id")],
+        },
         "do_not_treat_as": DO_NOT_TREAT_AS,
         "schema_notes": SCHEMA_NOTES,
     }
@@ -435,7 +440,48 @@ def render_modelling_frame(params: dict | None) -> list[str]:
     frame = (params.get("plan_summary") or {}).get("modelling_frame")
     if not frame:
         return []
-    return ["## Modelling frame", "", frame, ""]
+    rows = ["## Modelling frame", "", frame, ""]
+    unmodelled = (params or {}).get("unmodelled_gates") or []
+    if unmodelled:
+        n = len(unmodelled)
+        rows.append(
+            f"**Note:** This assessment is a financial / operational stress test. "
+            f"{n} unmodelled existential gate{'s' if n != 1 else ''} "
+            f"(legal, political, compliance, or external-actor commitments) "
+            f"{'are' if n != 1 else 'is'} listed below but not evaluated by the simulation. "
+            f"Treat the gate-verdict pass rates as conditional on those gates holding."
+        )
+        rows.append("")
+    return rows
+
+
+def render_unmodelled_gates(params: dict | None) -> list[str]:
+    """Render the gates the deterministic model cannot evaluate, with source
+    anchors. Section omitted entirely when the array is empty or absent.
+    """
+    if not params:
+        return []
+    gates = params.get("unmodelled_gates") or []
+    if not gates:
+        return []
+    rows = [
+        "## Known unmodelled existential gates",
+        "",
+        "Gates whose failure would end the plan independently of any financial or operational threshold the model tests. Sourced from the extractor's flag in `parameters.unmodelled_gates`. The simulation does not evaluate these; the source report is the authoritative reference for each.",
+        "",
+        "| Gate | Why it matters | Source anchor | Consequence if false |",
+        "|---|---|---|---|",
+    ]
+    for g in gates:
+        if not isinstance(g, dict):
+            continue
+        gid = g.get("id", "—")
+        why = g.get("why_it_matters", "—")
+        anchor = g.get("source_anchor", "—")
+        consequence = g.get("consequence_if_false", "—")
+        rows.append(f"| `{gid}` | {why} | {anchor} | {consequence} |")
+    rows.append("")
+    return rows
 
 
 # ─── simulation settings ───────────────────────────────────────────────────
@@ -865,6 +911,7 @@ def build_assessment(params: dict | None, bounds: dict | None,
         render_machine_summary(params, mc, validation, params_path),
         render_provenance_map(present_files),
         render_modelling_frame(params),
+        render_unmodelled_gates(params),
         render_simulation_settings(mc, validation),
         render_critical_findings(mc, scenarios, params, bounds),
         render_gate_verdicts(mc, params),

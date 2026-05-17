@@ -794,6 +794,32 @@ When a formula requires a missing input, include that input in missing_values_to
 
 Avoid formula_hint variables that are semantically different from the extracted id. For example, do not use registered_population if the extracted value is target_population unless both are declared.
 
+Unmodelled existential gates (optional but recommended):
+
+Some plans depend on gates the deterministic Python model cannot evaluate — legal/political authorization, regulatory approval, compliance infrastructure (AML/KYC, certifications, licences), an external actor's binding commitment treated as a fixed input. These gates have no quantifiable threshold the Monte Carlo can test, but their failure would shut the plan down independently of any financial or operational threshold the model evaluates.
+
+When the source report names such a gate (typically in risk register, executive summary, or expert review sections), declare it in `unmodelled_gates`. This tells downstream consumers that the simulation is a partial feasibility assessment, not a full one.
+
+Hard limit: at most 5 unmodelled_gates.
+
+For each unmodelled gate, return:
+- id: stable snake_case identifier ending in `_gate`
+- label: short human-readable name
+- why_it_matters: one or two sentences explaining the gate's role
+- source_anchor: which source section the gate is named in (one of: executive_summary, project_plan, selected_scenario, assumptions, review_plan, premortem, expert_criticism, data_collection)
+- consequence_if_false: what happens to the plan if this gate fails
+
+When to populate unmodelled_gates:
+- The plan depends on regulatory approval or post-facto authorization the model does not test.
+- The plan requires political acceptance, legitimacy, non-reversal, or social licence that no input represents.
+- The plan needs compliance infrastructure (AML/KYC banking partners, safety certifications, operating licences) the model treats as given.
+- The plan depends on an external actor's binding commitment (a grid operator, banking consortium, agency, court) that the model treats as a fixed input rather than a probabilistic gate.
+
+When to leave it empty (omit the field or use `[]`):
+- Every viability claim the source plan makes can be expressed as a formula tested against a quantifiable threshold.
+
+Do not use unmodelled_gates as a dumping ground for risks. Only include gates whose failure would end the plan independently of the financial or operational thresholds the model tests.
+
 Return this exact JSON shape:
 
 {
@@ -850,6 +876,15 @@ Return this exact JSON shape:
       "output_unit": "",
       "depends_on": [],
       "why_first": ""
+    }
+  ],
+  "unmodelled_gates": [
+    {
+      "id": "",
+      "label": "",
+      "why_it_matters": "",
+      "source_anchor": "",
+      "consequence_if_false": ""
     }
   ]
 }

@@ -216,7 +216,7 @@ def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
     _check("assessment.md contains the artifact contract and provenance map",
            "## Artifact contract" in body and "## Provenance map" in body)
     _check("assessment.md schema version field is present",
-           "\"assessment_schema_version\": 4" in body)
+           "\"assessment_schema_version\": 5" in body)
     _check("assessment.md classifies one threshold as ROBUST (taster ≥ 100 with p=0.6 → ~150 expected)",
            "ROBUST" in body or "MARGINAL" in body)
 

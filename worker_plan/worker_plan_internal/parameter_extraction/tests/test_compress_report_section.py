@@ -1,8 +1,14 @@
+import pytest
+from pydantic import ValidationError
+
 from worker_plan_internal.parameter_extraction.compress_report_section import (
     COMPRESS_REPORT_SECTION_SYSTEM_PROMPT,
     CompressedReportSection,
     CompressReportSection,
+    GatesAndThresholdsOnly,
+    NumericValuesOnly,
     PublicScoredItem,
+    SectionSummaryOnly,
     build_user_prompt,
     infer_section_type_from_path,
     normalize_section_type,
@@ -79,6 +85,33 @@ def test_pydantic_schema_shape() -> None:
             f"Field {name!r} is {fields[name].annotation!r}; "
             f"expected {expected_type!r}."
         )
+
+
+def test_lenient_model_validate_json_strips_trailing_object() -> None:
+    text = (
+        '{"section_summary": "summary text"}'
+        '{"section_summary": "second object the validator must ignore"}'
+    )
+    obj = SectionSummaryOnly.model_validate_json(text)
+    assert obj.section_summary == "summary text"
+
+
+def test_lenient_model_validate_json_strips_trailing_prose() -> None:
+    text = '{"numeric_values": []}\n\nHere is some commentary the model added.'
+    obj = NumericValuesOnly.model_validate_json(text)
+    assert obj.numeric_values == []
+
+
+def test_lenient_model_validate_json_keeps_well_formed_input() -> None:
+    text = '{"gates_and_thresholds": []}'
+    obj = GatesAndThresholdsOnly.model_validate_json(text)
+    assert obj.gates_and_thresholds == []
+
+
+def test_lenient_model_validate_json_preserves_schema_errors() -> None:
+    text = '{"section_summary": 123}'
+    with pytest.raises(ValidationError):
+        SectionSummaryOnly.model_validate_json(text)
 
 
 def _si(

@@ -32,6 +32,7 @@ driver:
 PROMPT> python -m worker_plan_internal.parameter_extraction.run_compress_full
 """
 import json
+import json
 import logging
 import re
 import time
@@ -43,9 +44,57 @@ from typing import Any, Literal, Optional
 
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.llms.llm import LLM
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
+
+
+class LenientJsonModel(BaseModel):
+    """BaseModel whose `model_validate_json` tolerates trailing characters.
+
+    Small structured-output LLMs (notably Gemini Flash Lite) occasionally
+    emit a valid JSON object followed by extra tokens. Pydantic's strict
+    validator rejects the whole payload with `json_invalid` ("trailing
+    characters"), wasting retries on a response whose prefix is already
+    correct. This override falls back to `json.JSONDecoder().raw_decode`
+    to peel off the first balanced JSON value and validates that. If the
+    extracted value still fails schema validation, the original error is
+    re-raised so genuine schema problems are not hidden.
+    """
+
+    @classmethod
+    def model_validate_json(cls, json_data, **kwargs):
+        try:
+            return super().model_validate_json(json_data, **kwargs)
+        except ValidationError as primary_error:
+            if not _is_trailing_characters_error(primary_error):
+                raise
+            text = _coerce_to_str(json_data)
+            if text is None:
+                raise
+            try:
+                first_value, _ = json.JSONDecoder().raw_decode(text.lstrip())
+            except json.JSONDecodeError:
+                raise primary_error
+            return cls.model_validate(first_value, **kwargs)
+
+
+def _is_trailing_characters_error(err: ValidationError) -> bool:
+    for error in err.errors():
+        if error.get("type") == "json_invalid" and "trailing" in error.get("msg", "").lower():
+            return True
+    return False
+
+
+def _coerce_to_str(json_data: Any) -> Optional[str]:
+    if isinstance(json_data, str):
+        return json_data
+    if isinstance(json_data, (bytes, bytearray)):
+        try:
+            return json_data.decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    return None
 
 
 class ReportSectionTypeEnum(str, Enum):
@@ -283,35 +332,35 @@ CRITICAL response format rules:
 BUCKET_FIELD_DESC = "See the bucket prompt in the user message for the expected content."
 
 
-class SectionSummaryOnly(BaseModel):
+class SectionSummaryOnly(LenientJsonModel):
     section_summary: str = Field(description=BUCKET_FIELD_DESC)
 
 
-class NumericValuesOnly(BaseModel):
+class NumericValuesOnly(LenientJsonModel):
     numeric_values: list[ScoredItem] = Field(
         default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
-class LoadBearingAssumptionsOnly(BaseModel):
+class LoadBearingAssumptionsOnly(LenientJsonModel):
     load_bearing_assumptions: list[ScoredItem] = Field(
         default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
-class GatesAndThresholdsOnly(BaseModel):
+class GatesAndThresholdsOnly(LenientJsonModel):
     gates_and_thresholds: list[ScoredItem] = Field(
         default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
-class RisksAndShocksOnly(BaseModel):
+class RisksAndShocksOnly(LenientJsonModel):
     risks_and_shocks: list[ScoredItem] = Field(
         default_factory=list, description=BUCKET_FIELD_DESC,
     )
 
 
-class MissingDataOnly(BaseModel):
+class MissingDataOnly(LenientJsonModel):
     missing_data_to_estimate: list[ScoredItem] = Field(
         default_factory=list, description=BUCKET_FIELD_DESC,
     )

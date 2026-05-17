@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 
-ASSESSMENT_SCHEMA_VERSION = 5
+ASSESSMENT_SCHEMA_VERSION = 6
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -348,6 +348,16 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         validation_status = "valid" if validation.get("valid") else "invalid"
 
     unmodelled = (params or {}).get("unmodelled_gates") or []
+    unmodelled_ids = [
+        g.get("id") for g in unmodelled
+        if isinstance(g, dict) and isinstance(g.get("id"), str)
+    ]
+    scope_warning = (
+        "Declared simulation gates cover financial / operational viability only; "
+        "the gates listed in `known_unmodelled_existential_gates` are not simulated "
+        "and may dominate the modelled financial result."
+        if unmodelled_ids else None
+    )
     manifest = {
         "assessment_schema_version": ASSESSMENT_SCHEMA_VERSION,
         "artifact_type": "interpretation_layer",
@@ -363,10 +373,8 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         },
         "primary_failed_gates": failed,
         "primary_uncertainty_drivers": drivers,
-        "unmodelled_gates_summary": {
-            "count": len(unmodelled),
-            "ids": [g.get("id") for g in unmodelled if isinstance(g, dict) and g.get("id")],
-        },
+        "known_unmodelled_existential_gates": unmodelled_ids,
+        "assessment_scope_warning": scope_warning,
         "do_not_treat_as": DO_NOT_TREAT_AS,
         "schema_notes": SCHEMA_NOTES,
     }
@@ -534,10 +542,23 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
             if mv["id"] not in bound_ids:
                 still_missing.append(mv)
 
-    if not (doom or fragile or scenario_warns or collapses or still_missing):
+    unmodelled_gates = (params or {}).get("unmodelled_gates") or [] if params else []
+
+    if not (doom or fragile or scenario_warns or collapses or still_missing or unmodelled_gates):
         return []
 
     rows = ["## Critical findings", ""]
+    if unmodelled_gates:
+        labels = [
+            g.get("label") or g.get("id") for g in unmodelled_gates
+            if isinstance(g, dict)
+        ]
+        labels_str = ", ".join(labels) if labels else "the listed gates"
+        rows.append(
+            f"- **SCOPE WARNING** — The simulation does not evaluate {labels_str}. "
+            f"These are existential gates and may dominate the modelled financial result. "
+            f"See `## Known unmodelled existential gates` for details."
+        )
     for r in doom:
         fail_pct = (1 - (r["probability"] or 0)) * 100
         rows.append(

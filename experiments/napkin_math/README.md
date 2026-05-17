@@ -71,9 +71,12 @@ A JSON object with this shape:
   "key_values": [],
   "derived_questions": [],
   "missing_values_to_estimate": [],
-  "recommended_first_calculations": []
+  "recommended_first_calculations": [],
+  "unmodelled_gates": []
 }
 ```
+
+`unmodelled_gates` is optional. It may be omitted entirely on plans where every viability claim can be expressed as an executable formula.
 
 ## Hard caps
 
@@ -84,6 +87,7 @@ The extractor should return at most:
 5 derived_questions
 5 missing_values_to_estimate
 5 recommended_first_calculations
+5 unmodelled_gates
 ```
 
 It may return fewer. It should not pad the output just to fill the caps.
@@ -260,6 +264,33 @@ Percentages should be represented as fractions:
 60% -> value: 0.6, unit: "fraction"
 ```
 
+## Unmodelled existential gates
+
+Some plans depend on gates the deterministic Python model cannot evaluate:
+
+- legal or regulatory authorization that the model treats as already granted;
+- political acceptance, legitimacy, or non-reversal that no input represents;
+- compliance infrastructure (AML/KYC banking partners, certifications, operating licences) the model treats as given;
+- an external actor's binding commitment (a grid operator, banking consortium, court) treated as a fixed input rather than a probabilistic gate.
+
+These gates have no quantifiable threshold the Monte Carlo can test, but their failure would end the plan independently of any financial or operational threshold the model evaluates. When the source report names such a gate, the extractor declares it in `unmodelled_gates`:
+
+```json
+{
+  "id": "regulatory_authorization_gate",
+  "label": "Federal land-use authorization",
+  "why_it_matters": "The plan relies on post-facto authorization for federal land use; expert criticism calls for comprehensive legal submission within 10 days as a precondition.",
+  "source_anchor": "expert_criticism",
+  "consequence_if_false": "Project shutdown before any financial gate can be evaluated; sponsor capital stranded."
+}
+```
+
+`source_anchor` is one of: `executive_summary`, `project_plan`, `selected_scenario`, `assumptions`, `review_plan`, `premortem`, `expert_criticism`, `data_collection`.
+
+The array is **optional**. Most plans whose viability can be expressed entirely as executable formulas should omit it or use `[]`. The field exists so that plans whose dominant failure modes are legal/political/compliance can flag those failure modes explicitly, instead of letting the assessment read as a complete feasibility verdict when it is actually a financial stress test.
+
+Do not use `unmodelled_gates` as a dumping ground for risks. Only include gates whose failure would end the plan independently of the financial or operational thresholds the model tests.
+
 ---
 
 # Stage 2: validate-parameters
@@ -270,9 +301,23 @@ Percentages should be represented as fractions:
 
 It does not decide whether the modelling choices are perfect. It verifies that the JSON is consistent, bounded, dependency-safe, and machine-readable.
 
+## Implementation
+
+`validate-parameters` is a deterministic Python script: `experiments/napkin_math/validate_parameters.py`. It runs in milliseconds, costs no tokens, and is the producer for the `validation.json` artifact the rest of the pipeline (`summarize_assessment.py`) consumes. The skill at `.claude/skills/validate-parameters/` is a thin wrapper around this script.
+
+## How to run
+
+```sh
+/opt/homebrew/bin/python3.11 experiments/napkin_math/validate_parameters.py \
+  --parameters <path>/parameters.json \
+  [--output    <path>/validation.json]
+```
+
+Default output: `<dir-of-parameters>/validation.json`. Exit code is 0 on `valid: true`, 1 on validation errors, 2 on JSON parse failure. The script prints the output path on stdout.
+
 ## Input
 
-The JSON output from `extract-parameters-from-full`.
+The JSON output from `extract-parameters-from-full` or `extract-parameters-from-digest` (both produce the same schema).
 
 ## Output
 
@@ -287,14 +332,34 @@ A validation report:
   "summary": {
     "counts": {
       "key_values": 8,
-      "derived_questions": 5,
-      "missing_values_to_estimate": 5,
-      "recommended_first_calculations": 3
+      "derived_questions": 3,
+      "missing_values_to_estimate": 4,
+      "recommended_first_calculations": 5,
+      "unmodelled_gates": 3
     },
-    "rule_id_breakdown": {}
+    "rule_id_breakdown": {},
+    "checks_performed": [
+      "json_parse",
+      "top_level_structure",
+      "..."
+    ]
   }
 }
 ```
+
+Each entry in `violations` has the shape:
+
+```json
+{
+  "rule_id": "no_dead_end_variables",
+  "severity": "ERROR",
+  "path": "$.key_values[3]",
+  "message": "key_value `operating_weeks_per_year` is not consumed by any calculation",
+  "suggested_fix": "use it in a derived_question or recommended_first_calculation, or drop it"
+}
+```
+
+`summary.checks_performed` is the authoritative list of what the validator actually ran. `summarize_assessment.py` reads it verbatim and surfaces it as the "Validated" line under `## Confidence and trust boundaries` in `assessment.md`. `summary.rule_id_breakdown` is a `{rule_id: count}` map of how often each rule fired.
 
 ## Error vs warning
 
@@ -310,39 +375,57 @@ error_count == 0
 
 Warnings do not make the output invalid.
 
-## Validation categories
+## The 16 checks
 
-The validator checks:
-
-```text
-JSON parse validity
-top-level structure
-required fields
-array lengths
-comment/source_text word caps
-enum values
-fraction formatting
-id uniqueness
-snake_case ids
-depends_on references
-formula RHS references
-source_text cleanliness
-```
+| # | Check | Severity | What it checks |
+|---|---|---|---|
+| 1 | `json_parse` | ERROR | the file parses as JSON. A parse failure is reported as a single violation with this rule_id and exit code 2. |
+| 2 | `top_level_structure` | ERROR | the top-level object has `plan_summary`, `key_values`, `derived_questions`, `missing_values_to_estimate`, and `recommended_first_calculations`. `unmodelled_gates` is optional. |
+| 3 | `required_fields` | ERROR | each entry carries the required keys for its array (e.g. every `key_values` entry has `id`, `label`, `category`, `value_type`, `unit`, `value`, `comment`, `formula_hint`, `output_name`, `output_unit`, `depends_on`, `modelling_priority`, `uncertainty`, `source_text`; every `unmodelled_gates` entry — when the field is present — has `id`, `label`, `why_it_matters`, `source_anchor`, `consequence_if_false`). |
+| 4 | `array_length_caps` | ERROR | ≤8 `key_values`, ≤5 `derived_questions`, ≤5 `missing_values_to_estimate`, ≤5 `recommended_first_calculations`, ≤5 `unmodelled_gates`. |
+| 5 | `global_id_uniqueness` | ERROR | every `id` is unique across all four arrays. |
+| 6 | `snake_case_ids` | ERROR | every `id` matches `^[a-z][a-z0-9_]*$` (lowercase letters, digits, underscores, no leading digit). |
+| 7 | `depends_on_declared` | ERROR | every id in any `depends_on` matches a declared `id` OR `output_name` somewhere in the file. See "depends_on accepts ids and output_names" below. |
+| 8 | `formula_rhs_declared` | ERROR | every snake_case identifier on the RHS of any `formula_hint` is declared (or is the entry's own `output_name`). Built-in functions (`min`, `max`, `abs`, `sum`, `round`, `int`, `float`) are exempt; numeric literals are not identifiers so they fall out naturally. |
+| 9 | `fraction_value_range` | ERROR | if a `key_value` has `unit == "fraction"`, its `value` must be in `[0, 1]` or `null`. A 60% value must be `0.6`, not `60`. |
+| 10 | `comment_word_caps` | ERROR | each `key_value.comment` is ≤25 words. |
+| 11 | `source_text_word_caps` | ERROR | each `key_value.source_text` is ≤20 words. |
+| 12 | `output_name_present_when_formula_hint` | ERROR | when `formula_hint` is non-empty, `output_name` must be set. The downstream `monte-carlo` and `run-scenarios` runners read `output_name` directly; they do not parse the formula's LHS. |
+| 13 | `output_unit_present_when_formula_hint` | ERROR | when `formula_hint` is non-empty, `output_unit` must be set. |
+| 14 | `no_dead_end_variables` | ERROR | every `key_value` and `missing_values_to_estimate` entry is consumed (transitively) by some calculation. A variable extracted "for context" but never multiplied/subtracted/divided into a calculation output is dead weight: it pollutes bounds, shows up as a non-driver in sensitivity reports, and clutters the assessment without adding signal. See "How no_dead_end_variables is computed" below. |
+| 15 | `threshold_friendly_naming` | WARN | `output_name`s ending in `_gap` / `_deficit` / `_shortfall` are flagged because they read ambiguously when tested against a `>= 0` / `<= 0` threshold. Preferred suffixes: `_surplus`, `_buffer`, `_margin`, `_coverage`. WARN-only because the validator does not see `montecarlo_settings.json` and can't tell which outputs are actually threshold-tested. |
+| 16 | `shared_pool_legitimacy` | (no-op) | listed in `checks_performed` for completeness; enforcement is upstream in the extractor's system prompt (requires reading source narrative to verify multiple subtracted pressures legitimately draw on one named pool, which is not a structural check). |
 
 ## Important validator rules
 
-### Global id declaration
+### depends_on accepts ids and output_names
 
-Every id used in `depends_on` must be declared globally in one of:
+Every id used in `depends_on` must match a declared identifier somewhere in the file. The validator accepts either form:
 
 ```text
-key_values[*].id
+key_values[*].id                          OR  key_values[*].output_name
 missing_values_to_estimate[*].id
-derived_questions[*].id
-recommended_first_calculations[*].id
+derived_questions[*].id                   OR  derived_questions[*].output_name
+recommended_first_calculations[*].id      OR  recommended_first_calculations[*].output_name
 ```
 
+The output_name path matters in practice. The extractor often gives `derived_questions` `q_*`-style ids whose `output_name` differs from the id — for example, an entry with `id: q_weakest_program_gate` may have `output_name: weakest_program_gate_surplus_eur`. A downstream aggregate that consumes this value naturally references the output_name (the computed quantity), not the question's id. Both are legitimate; the validator treats them identically.
+
 This prevents formulas from referencing variables that the code generator cannot resolve.
+
+### How no_dead_end_variables is computed
+
+The validator builds the set of "referenced" identifiers in two passes:
+
+1. **Direct.** Every id in `depends_on` of any `derived_questions` or `recommended_first_calculations` entry, plus every snake_case identifier on the RHS of any of their `formula_hint`s.
+2. **Transitive.** Iteratively: if a `key_value`'s `output_name` is in the referenced set, then every RHS variable of that key_value's `formula_hint` is also referenced. Repeat until the set stabilises.
+
+A `key_value` or `missing_values_to_estimate` entry is dead-end if neither its `id` nor its `output_name` ends up in the referenced set. Recommended fixes (in priority order):
+
+1. Add a calculation that uses the variable. For a trigger value, the natural form is `<x>_margin = actual_share - threshold_share`, and the corresponding `actual_share` must also be added if absent.
+2. If no useful calculation exists, drop the variable.
+
+It is better to return six well-connected `key_values` than eight where two are dead-ends. The array caps are a ceiling, not a target.
 
 ### Formula RHS declaration
 
@@ -385,13 +468,34 @@ kit_procurement_allocation = pre_gate_budget * 0.4
 
 ### Function-style formulas
 
-Simple probability or math notation is allowed:
+The validator exempts these built-in function names from RHS declaration: `min`, `max`, `abs`, `sum`, `round`, `int`, `float`. Variable-like arguments inside the parentheses must still be declared.
 
 ```text
-gate_pass_probability = P(contact_rate >= contact_rate_target) * P(utilization >= utilization_target)
+weakest_financial_gate_surplus_eur = min(clearing_capacity_surplus_eur, regulatory_risk_buffer_surplus_eur, royalty_cost_coverage_surplus_eur)
+rental_revenue_shortfall = max(0, expected_revenue - achievable_revenue)
 ```
 
-But variable-like arguments must be declared.
+The validator does not extract probability-style `P(...)` notation. If the extractor emits a formula with `P(x >= y)`, the validator will report each variable-like identifier inside the parentheses as `formula_rhs_declared`-eligible. Prefer simple algebraic formulas over custom function syntax.
+
+## Exit codes
+
+```text
+0 — valid: true
+1 — valid: false (one or more ERROR-level violations)
+2 — JSON parse failure (a single json_parse violation; valid: false)
+```
+
+A pipeline driver can branch on the exit code without parsing `validation.json`.
+
+## What happens next
+
+`validation.json` is consumed by `summarize_assessment.py`:
+
+- `validation.valid` becomes `assessment.machine_summary.validation_status` (`valid` / `invalid` / `unknown`).
+- `validation.summary.checks_performed` is surfaced verbatim as the "Validated" line under `## Confidence and trust boundaries` in `assessment.md`.
+- The "Not validated" list in `assessment.md` is a canonical disclaimer (real-world accuracy of bounds, independence assumptions, external feasibility, factual truth of source claims) that the validator does **not** address — those are not structural checks.
+
+If `validate-parameters` returns `valid: false`, the right next step is to regenerate `parameters.json` (re-run `extract-parameters-from-digest` or `extract-parameters-from-full`) or to hand-edit it and re-validate. The historical `repair-parameters` stage below was a planned LLM-driven repair step that has not been implemented.
 
 ---
 

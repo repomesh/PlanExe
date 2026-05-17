@@ -184,6 +184,17 @@ If you would naturally write "x_gap = expected - capacity" with threshold "<= 0"
 
 Apply this rule even when the underlying source phrasing is "the gap is X". The source text is allowed to use "gap"; the calculation output id is not.
 
+Contractual-gate naming:
+
+When a calculated window, margin, or trigger represents a contractual gate enforced by a specific counterparty (sponsor, lender, regulator, agency, court, investor, grantor, prime contractor), prefix the id with the counterparty so the gate's contractual — rather than operational — nature is visible to downstream consumers. Examples:
+
+- sponsor_profitability_trigger_window_days  (not "effective_profitability_window_days")
+- lender_dscr_covenant_margin                (not "dscr_margin")
+- regulator_emissions_threshold_margin       (not "emissions_margin")
+- prime_contractor_milestone_window_days     (not "milestone_window_days")
+
+The prefix tells the next reader that failing this gate is a contract-validity failure, not an operational shortfall — different remediation paths apply. When the source plan does not name a specific counterparty, use the neutral non-prefixed form.
+
 Derive coupled stressors instead of sampling them independently:
 
 If a stressor variable (a shortfall, deficit, overrun, drain, leakage) is mechanically derivable from quantities the model already covers, declare it as a calculation. Do not put it in missing_values_to_estimate as if it were an independent input. Sampling a derived stressor independently:
@@ -794,6 +805,32 @@ When a formula requires a missing input, include that input in missing_values_to
 
 Avoid formula_hint variables that are semantically different from the extracted id. For example, do not use registered_population if the extracted value is target_population unless both are declared.
 
+Unmodelled existential gates (optional but recommended):
+
+Some plans depend on gates the deterministic Python model cannot evaluate — legal/political authorization, regulatory approval, compliance infrastructure (AML/KYC, certifications, licences), an external actor's binding commitment treated as a fixed input. These gates have no quantifiable threshold the Monte Carlo can test, but their failure would shut the plan down independently of any financial or operational threshold the model evaluates.
+
+When the source report names such a gate (typically in risk register, executive summary, or expert review sections), declare it in `unmodelled_gates`. This tells downstream consumers that the simulation is a partial feasibility assessment, not a full one.
+
+Hard limit: at most 5 unmodelled_gates.
+
+For each unmodelled gate, return:
+- id: stable snake_case identifier ending in `_gate`
+- label: short human-readable name
+- why_it_matters: one or two sentences explaining the gate's role
+- source_anchor: which source section the gate is named in (one of: executive_summary, project_plan, selected_scenario, assumptions, review_plan, premortem, expert_criticism, data_collection)
+- consequence_if_false: what happens to the plan if this gate fails
+
+When to populate unmodelled_gates:
+- The plan depends on regulatory approval or post-facto authorization the model does not test.
+- The plan requires political acceptance, legitimacy, non-reversal, or social licence that no input represents.
+- The plan needs compliance infrastructure (AML/KYC banking partners, safety certifications, operating licences) the model treats as given.
+- The plan depends on an external actor's binding commitment (a grid operator, banking consortium, agency, court) that the model treats as a fixed input rather than a probabilistic gate.
+
+When to leave it empty (omit the field or use `[]`):
+- Every viability claim the source plan makes can be expressed as a formula tested against a quantifiable threshold.
+
+Do not use unmodelled_gates as a dumping ground for risks. Only include gates whose failure would end the plan independently of the financial or operational thresholds the model tests.
+
 Return this exact JSON shape:
 
 {
@@ -850,6 +887,15 @@ Return this exact JSON shape:
       "output_unit": "",
       "depends_on": [],
       "why_first": ""
+    }
+  ],
+  "unmodelled_gates": [
+    {
+      "id": "",
+      "label": "",
+      "why_it_matters": "",
+      "source_anchor": "",
+      "consequence_if_false": ""
     }
   ]
 }

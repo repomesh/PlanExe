@@ -37,7 +37,7 @@ from pathlib import Path
 from typing import Any
 
 
-ASSESSMENT_SCHEMA_VERSION = 4
+ASSESSMENT_SCHEMA_VERSION = 6
 
 VERDICT_BANDS = [
     (0.80, "ROBUST",   "passes in the strong majority of runs"),
@@ -281,7 +281,10 @@ def lookup_gate_metadata(params: dict | None, gate_id: str) -> dict:
     extractor inferred.
     """
     if not params:
-        return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+        return {
+            "why": None, "threshold_param_id": None,
+            "threshold_value_type": None, "gate_found": False,
+        }
     key_values_by_id = {kv["id"]: kv for kv in params.get("key_values", [])}
     for src in ("recommended_first_calculations", "derived_questions"):
         for entry in params.get(src, []):
@@ -297,14 +300,31 @@ def lookup_gate_metadata(params: dict | None, gate_id: str) -> dict:
                 "why": why,
                 "threshold_param_id": threshold_param["id"] if threshold_param else None,
                 "threshold_value_type": threshold_param.get("value_type") if threshold_param else None,
+                "gate_found": True,
             }
-    return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+    return {
+        "why": None, "threshold_param_id": None,
+        "threshold_value_type": None, "gate_found": False,
+    }
 
 
-def threshold_basis_for(value_type: str | None) -> str:
-    if not value_type:
-        return "unknown"
-    return VALUE_TYPE_TO_THRESHOLD_BASIS.get(value_type, "model_defined")
+def threshold_basis_for(value_type: str | None, gate_found: bool = False) -> str:
+    """Categorise where the threshold's value came from.
+
+    - report_explicit / report_inferred when the gate's formula tests against
+      a declared key_value with a matching value_type.
+    - model_defined when the gate exists in parameters.json but its threshold
+      is a bare numerical comparison (typically `>= 0`) defined in
+      montecarlo_settings.json with no anchoring key_value — that is a
+      modelling default, not derived from the source narrative.
+    - unknown only when the gate isn't in parameters.json at all (so the
+      validator/summarizer can't reason about its origin).
+    """
+    if value_type:
+        return VALUE_TYPE_TO_THRESHOLD_BASIS.get(value_type, "model_defined")
+    if gate_found:
+        return "model_defined"
+    return "unknown"
 
 
 def derive_artifact_set(params_path: Path | None) -> dict:
@@ -347,6 +367,17 @@ def render_machine_summary(params: dict | None, mc: dict | None,
     if validation is not None:
         validation_status = "valid" if validation.get("valid") else "invalid"
 
+    unmodelled = (params or {}).get("unmodelled_gates") or []
+    unmodelled_ids = [
+        g.get("id") for g in unmodelled
+        if isinstance(g, dict) and isinstance(g.get("id"), str)
+    ]
+    scope_warning = (
+        "Declared simulation gates cover financial / operational viability only; "
+        "the gates listed in `known_unmodelled_existential_gates` are not simulated "
+        "and may dominate the modelled financial result."
+        if unmodelled_ids else None
+    )
     manifest = {
         "assessment_schema_version": ASSESSMENT_SCHEMA_VERSION,
         "artifact_type": "interpretation_layer",
@@ -362,6 +393,8 @@ def render_machine_summary(params: dict | None, mc: dict | None,
         },
         "primary_failed_gates": failed,
         "primary_uncertainty_drivers": drivers,
+        "known_unmodelled_existential_gates": unmodelled_ids,
+        "assessment_scope_warning": scope_warning,
         "do_not_treat_as": DO_NOT_TREAT_AS,
         "schema_notes": SCHEMA_NOTES,
     }
@@ -435,7 +468,51 @@ def render_modelling_frame(params: dict | None) -> list[str]:
     frame = (params.get("plan_summary") or {}).get("modelling_frame")
     if not frame:
         return []
-    return ["## Modelling frame", "", frame, ""]
+    rows = ["## Modelling frame", "", frame, ""]
+    unmodelled = (params or {}).get("unmodelled_gates") or []
+    if unmodelled:
+        n = len(unmodelled)
+        rows.append(
+            f"**Note:** This assessment is a financial / operational stress test. "
+            f"{n} unmodelled existential gate{'s' if n != 1 else ''} "
+            f"(legal, political, compliance, or external-actor commitments) "
+            f"{'are' if n != 1 else 'is'} listed below but not evaluated by the simulation. "
+            f"Treat the gate-verdict pass rates as conditional on those gates holding."
+        )
+        rows.append("")
+    return rows
+
+
+def render_unmodelled_gates(params: dict | None) -> list[str]:
+    """Render the gates the deterministic model cannot evaluate, with source
+    anchors. Section omitted entirely when the array is empty or absent.
+    """
+    if not params:
+        return []
+    gates = params.get("unmodelled_gates") or []
+    if not gates:
+        return []
+    rows = [
+        "## Known unmodelled existential gates",
+        "",
+        "Gates whose failure would end the plan independently of any financial or operational threshold the model tests. Sourced from the extractor's flag in `parameters.unmodelled_gates`. The simulation does not evaluate these; the source report is the authoritative reference for each.",
+        "",
+        "| Gate | Why it matters | Source anchor | Consequence if false |",
+        "|---|---|---|---|",
+    ]
+    for g in gates:
+        if not isinstance(g, dict):
+            continue
+        gid = g.get("id", "—")
+        why = g.get("why_it_matters", "—")
+        raw_anchor = g.get("source_anchor", "—")
+        # Prefix with the canonical source artifact so downstream agents can
+        # trace the claim back to a specific section of the PlanExe report.
+        anchor = f"report.html / {raw_anchor}" if raw_anchor and raw_anchor != "—" else "—"
+        consequence = g.get("consequence_if_false", "—")
+        rows.append(f"| `{gid}` | {why} | {anchor} | {consequence} |")
+    rows.append("")
+    return rows
 
 
 # ─── simulation settings ───────────────────────────────────────────────────
@@ -488,10 +565,39 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
             if mv["id"] not in bound_ids:
                 still_missing.append(mv)
 
-    if not (doom or fragile or scenario_warns or collapses or still_missing):
+    unmodelled_gates = (params or {}).get("unmodelled_gates") or [] if params else []
+
+    if not (doom or fragile or scenario_warns or collapses or still_missing or unmodelled_gates):
         return []
 
     rows = ["## Critical findings", ""]
+    if unmodelled_gates:
+        labels = [
+            (g.get("label") or g.get("id") or "") for g in unmodelled_gates
+            if isinstance(g, dict)
+        ]
+        # Lower-case the first letter of each label when emitting in mid-sentence
+        # prose. Labels are stored title-cased for the table; in a flowing
+        # sentence ("the simulation does not evaluate ...") the title casing
+        # reads as proper nouns. Preserve labels that start with an acronym:
+        # if the second character is also uppercase, the first word is an
+        # acronym (e.g. "AML/KYC compliant ...") and the casing stays.
+        def _lower_first(s: str) -> str:
+            if len(s) >= 2 and s[1].isupper():
+                return s
+            return s[:1].lower() + s[1:]
+        labels = [_lower_first(l) for l in labels if l]
+        if len(labels) > 1:
+            labels_str = ", ".join(labels[:-1]) + ", or " + labels[-1]
+        elif labels:
+            labels_str = labels[0]
+        else:
+            labels_str = "the listed gates"
+        rows.append(
+            f"- **SCOPE WARNING** — The simulation does not evaluate {labels_str}. "
+            f"These are existential gates and may dominate the modelled financial result. "
+            f"See `## Known unmodelled existential gates` for details."
+        )
     for r in doom:
         fail_pct = (1 - (r["probability"] or 0)) * 100
         rows.append(
@@ -540,7 +646,7 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
         prob_str = f"{prob * 100:.1f}%" if prob is not None else "n/a"
         marker = "min" if r["is_aggregate"] else ""
         meta = lookup_gate_metadata(params, r["id"])
-        tbasis = threshold_basis_for(meta["threshold_value_type"])
+        tbasis = threshold_basis_for(meta["threshold_value_type"], meta.get("gate_found", False))
         rows.append(
             f"| {marker} | `{r['id']}` | {r['operator']} {fmt_number(r['value'])} | "
             f"{tbasis} | {prob_str} | **{r['verdict']}** | {r['note']} |"
@@ -561,6 +667,29 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
 
 
 # ─── decision implications ─────────────────────────────────────────────────
+
+# Pass-rate floor below which we treat a gate as a "saturated failure": the
+# quartile-analysis Δ-pp values are too small to be informative because no
+# input quartile movement changes the outcome — the gate fails (or passes)
+# structurally across the whole sampled space. Pretending a top-driver row
+# is a useful "structural lever" in that regime gives a misleading
+# optimisation hint.
+SATURATED_PASS_RATE_THRESHOLD = 0.005   # < 0.5% pass = effectively zero
+SATURATED_QUARTILE_DELTA_FLOOR = 0.5    # |Δ-pp| < 0.5pp = no meaningful sensitivity
+
+
+def is_saturated_failure(probability: float | None, top_driver: dict | None) -> bool:
+    """A gate is saturated when its pass rate is effectively zero AND no
+    single input quartile movement meaningfully shifts that. Both conditions
+    must hold: a low pass rate with a strong driver is just hard, not
+    saturated.
+    """
+    if probability is None or probability >= SATURATED_PASS_RATE_THRESHOLD:
+        return False
+    if top_driver is None:
+        return True
+    return abs(top_driver.get("delta_pp", 0)) < SATURATED_QUARTILE_DELTA_FLOOR
+
 
 def render_decision_implications(mc: dict | None, params: dict | None) -> list[str]:
     """Bridge: gate result → planning consequence → revision direction.
@@ -607,7 +736,13 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
             )
         drivers = quartile.get(r["id"]) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
-        if top is None:
+        if is_saturated_failure(r["probability"], top):
+            lever = (
+                f"Saturated failure: pass rate is {prob * 100:.1f}% and no single "
+                f"input quartile movement changes that. Quartile sensitivity is "
+                f"not informative; audit the input bounds and the threshold definition."
+            )
+        elif top is None:
             lever = "No single driver dominates — audit the cluster of inputs feeding this gate."
         else:
             delta = top.get("delta_pp", 0)
@@ -656,14 +791,19 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
         gate = r["id"]
         drivers = quartile.get(gate) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
-        if top is None:
+        saturated = is_saturated_failure(r["probability"], top)
+        if saturated:
+            driver_cell, delta_cell = "(saturated failure)", "n/a"
+        elif top is None:
             driver_cell, delta_cell = "—", "—"
         else:
             driver_cell = f"`{top['id']}`"
             delta_cell = f"{top['delta_pp']:+.1f}"
 
         req_entries = required.get(gate) or []
-        if req_entries:
+        if saturated:
+            req_cell = "saturated failure: no single input restriction can lift the pass rate; revisit bounds and threshold"
+        elif req_entries:
             req = req_entries[0]
             direction = "above" if req["direction"] == "above" else "below"
             pct = req["input_percentile_cutoff"]
@@ -865,6 +1005,7 @@ def build_assessment(params: dict | None, bounds: dict | None,
         render_machine_summary(params, mc, validation, params_path),
         render_provenance_map(present_files),
         render_modelling_frame(params),
+        render_unmodelled_gates(params),
         render_simulation_settings(mc, validation),
         render_critical_findings(mc, scenarios, params, bounds),
         render_gate_verdicts(mc, params),

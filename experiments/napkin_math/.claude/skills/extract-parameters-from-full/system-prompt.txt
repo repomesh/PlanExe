@@ -184,6 +184,17 @@ If you would naturally write "x_gap = expected - capacity" with threshold "<= 0"
 
 Apply this rule even when the underlying source phrasing is "the gap is X". The source text is allowed to use "gap"; the calculation output id is not.
 
+Contractual-gate naming:
+
+When a calculated window, margin, or trigger represents a contractual gate enforced by a specific counterparty (sponsor, lender, regulator, agency, court, investor, grantor, prime contractor), prefix the id with the counterparty so the gate's contractual — rather than operational — nature is visible to downstream consumers. Examples:
+
+- sponsor_profitability_trigger_window_days  (not "effective_profitability_window_days")
+- lender_dscr_covenant_margin                (not "dscr_margin")
+- regulator_emissions_threshold_margin       (not "emissions_margin")
+- prime_contractor_milestone_window_days     (not "milestone_window_days")
+
+The prefix tells the next reader that failing this gate is a contract-validity failure, not an operational shortfall — different remediation paths apply. When the source plan does not name a specific counterparty, use the neutral non-prefixed form.
+
 Derive coupled stressors instead of sampling them independently:
 
 If a stressor variable (a shortfall, deficit, overrun, drain, leakage) is mechanically derivable from quantities the model already covers, declare it as a calculation. Do not put it in missing_values_to_estimate as if it were an independent input. Sampling a derived stressor independently:

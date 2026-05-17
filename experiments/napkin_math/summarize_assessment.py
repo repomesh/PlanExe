@@ -281,7 +281,10 @@ def lookup_gate_metadata(params: dict | None, gate_id: str) -> dict:
     extractor inferred.
     """
     if not params:
-        return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+        return {
+            "why": None, "threshold_param_id": None,
+            "threshold_value_type": None, "gate_found": False,
+        }
     key_values_by_id = {kv["id"]: kv for kv in params.get("key_values", [])}
     for src in ("recommended_first_calculations", "derived_questions"):
         for entry in params.get(src, []):
@@ -297,14 +300,31 @@ def lookup_gate_metadata(params: dict | None, gate_id: str) -> dict:
                 "why": why,
                 "threshold_param_id": threshold_param["id"] if threshold_param else None,
                 "threshold_value_type": threshold_param.get("value_type") if threshold_param else None,
+                "gate_found": True,
             }
-    return {"why": None, "threshold_param_id": None, "threshold_value_type": None}
+    return {
+        "why": None, "threshold_param_id": None,
+        "threshold_value_type": None, "gate_found": False,
+    }
 
 
-def threshold_basis_for(value_type: str | None) -> str:
-    if not value_type:
-        return "unknown"
-    return VALUE_TYPE_TO_THRESHOLD_BASIS.get(value_type, "model_defined")
+def threshold_basis_for(value_type: str | None, gate_found: bool = False) -> str:
+    """Categorise where the threshold's value came from.
+
+    - report_explicit / report_inferred when the gate's formula tests against
+      a declared key_value with a matching value_type.
+    - model_defined when the gate exists in parameters.json but its threshold
+      is a bare numerical comparison (typically `>= 0`) defined in
+      montecarlo_settings.json with no anchoring key_value — that is a
+      modelling default, not derived from the source narrative.
+    - unknown only when the gate isn't in parameters.json at all (so the
+      validator/summarizer can't reason about its origin).
+    """
+    if value_type:
+        return VALUE_TYPE_TO_THRESHOLD_BASIS.get(value_type, "model_defined")
+    if gate_found:
+        return "model_defined"
+    return "unknown"
 
 
 def derive_artifact_set(params_path: Path | None) -> dict:
@@ -626,7 +646,7 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
         prob_str = f"{prob * 100:.1f}%" if prob is not None else "n/a"
         marker = "min" if r["is_aggregate"] else ""
         meta = lookup_gate_metadata(params, r["id"])
-        tbasis = threshold_basis_for(meta["threshold_value_type"])
+        tbasis = threshold_basis_for(meta["threshold_value_type"], meta.get("gate_found", False))
         rows.append(
             f"| {marker} | `{r['id']}` | {r['operator']} {fmt_number(r['value'])} | "
             f"{tbasis} | {prob_str} | **{r['verdict']}** | {r['note']} |"
@@ -647,6 +667,29 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
 
 
 # ─── decision implications ─────────────────────────────────────────────────
+
+# Pass-rate floor below which we treat a gate as a "saturated failure": the
+# quartile-analysis Δ-pp values are too small to be informative because no
+# input quartile movement changes the outcome — the gate fails (or passes)
+# structurally across the whole sampled space. Pretending a top-driver row
+# is a useful "structural lever" in that regime gives a misleading
+# optimisation hint.
+SATURATED_PASS_RATE_THRESHOLD = 0.005   # < 0.5% pass = effectively zero
+SATURATED_QUARTILE_DELTA_FLOOR = 0.5    # |Δ-pp| < 0.5pp = no meaningful sensitivity
+
+
+def is_saturated_failure(probability: float | None, top_driver: dict | None) -> bool:
+    """A gate is saturated when its pass rate is effectively zero AND no
+    single input quartile movement meaningfully shifts that. Both conditions
+    must hold: a low pass rate with a strong driver is just hard, not
+    saturated.
+    """
+    if probability is None or probability >= SATURATED_PASS_RATE_THRESHOLD:
+        return False
+    if top_driver is None:
+        return True
+    return abs(top_driver.get("delta_pp", 0)) < SATURATED_QUARTILE_DELTA_FLOOR
+
 
 def render_decision_implications(mc: dict | None, params: dict | None) -> list[str]:
     """Bridge: gate result → planning consequence → revision direction.
@@ -693,7 +736,13 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
             )
         drivers = quartile.get(r["id"]) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
-        if top is None:
+        if is_saturated_failure(r["probability"], top):
+            lever = (
+                f"Saturated failure: pass rate is {prob * 100:.1f}% and no single "
+                f"input quartile movement changes that. Quartile sensitivity is "
+                f"not informative; audit the input bounds and the threshold definition."
+            )
+        elif top is None:
             lever = "No single driver dominates — audit the cluster of inputs feeding this gate."
         else:
             delta = top.get("delta_pp", 0)
@@ -742,14 +791,19 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
         gate = r["id"]
         drivers = quartile.get(gate) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
-        if top is None:
+        saturated = is_saturated_failure(r["probability"], top)
+        if saturated:
+            driver_cell, delta_cell = "(saturated failure)", "n/a"
+        elif top is None:
             driver_cell, delta_cell = "—", "—"
         else:
             driver_cell = f"`{top['id']}`"
             delta_cell = f"{top['delta_pp']:+.1f}"
 
         req_entries = required.get(gate) or []
-        if req_entries:
+        if saturated:
+            req_cell = "saturated failure: no single input restriction can lift the pass rate; revisit bounds and threshold"
+        elif req_entries:
             req = req_entries[0]
             direction = "above" if req["direction"] == "above" else "below"
             pct = req["input_percentile_cutoff"]

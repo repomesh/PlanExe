@@ -728,12 +728,22 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
                 f"({(1 - prob) * 100:.1f}%). External commitments built on this "
                 f"gate are exposed."
             )
-        else:  # MARGINAL
-            consequence = (
-                f"The `{cond}` requirement passes {prob * 100:.1f}% of runs — "
-                f"close enough to coin-flip that downstream commitments should "
-                f"not assume it holds."
-            )
+        else:  # MARGINAL (50–80% pass rate)
+            # The MARGINAL band spans a large range. A 51% pass is genuinely
+            # coin-flip; a 79% pass is one slip from ROBUST. Bucket the
+            # wording so the language tracks the position within the band.
+            if prob >= 0.70:
+                consequence = (
+                    f"The `{cond}` requirement passes {prob * 100:.1f}% of runs — "
+                    f"just below the ROBUST band. The gate passes in most runs, "
+                    f"but downstream commitments should not treat it as secure."
+                )
+            else:
+                consequence = (
+                    f"The `{cond}` requirement passes {prob * 100:.1f}% of runs — "
+                    f"close to coin-flip. Downstream commitments should not "
+                    f"assume it holds."
+                )
         drivers = quartile.get(r["id"]) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
         if is_saturated_failure(r["probability"], top):
@@ -835,7 +845,29 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
 
 # ─── missing inputs ranked by impact ───────────────────────────────────────
 
-def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
+def saturated_doom_gates(mc: dict | None, params: dict | None) -> list[str]:
+    """Identify DOOM gates where no single quartile movement changes the
+    outcome. These gates are absent from `missing_value_priority` (no input
+    has them as its worst-affected gate, by construction). Naming them
+    explicitly above the ranking removes the ambiguity a downstream reader
+    would otherwise hit: "why is the ranking targeting other gates than the
+    worst declared one?".
+    """
+    if not mc:
+        return []
+    quartile = mc.get("quartile_analysis") or {}
+    out: list[str] = []
+    for r in threshold_entries(mc, params):
+        if r["verdict"] != "DOOM":
+            continue
+        drivers = quartile.get(r["id"]) or []
+        top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
+        if is_saturated_failure(r["probability"], top):
+            out.append(r["id"])
+    return out
+
+
+def render_missing_inputs_ranked(mc: dict | None, params: dict | None = None) -> list[str]:
     if not mc or not mc.get("missing_value_priority"):
         return []
     rows = [
@@ -843,9 +875,21 @@ def render_missing_inputs_ranked(mc: dict | None) -> list[str]:
         "",
         "The plan does not state these values; the model assumed bounds. Rank by `|Δ-pp on the worst-affected gate| × (1 − that gate's pass rate) × bound-width-ratio` — the higher, the more decision-value in pinning this input down.",
         "",
-        "| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |",
-        "|---:|---|---|---:|---:|---|",
     ]
+    saturated = saturated_doom_gates(mc, params)
+    if saturated:
+        gate_list = ", ".join(f"`{g}`" for g in saturated)
+        if len(saturated) == 1:
+            rows.append(
+                f"Note: the saturated DOOM gate {gate_list} is absent from the ranking because no single missing-input restriction can lift its pass rate under current bounds. The inputs below target the next most decision-relevant non-saturated gates; the saturated gate needs a bounds or threshold-definition audit, not a single input fix."
+            )
+        else:
+            rows.append(
+                f"Note: the saturated DOOM gates {gate_list} are absent from the ranking because no single missing-input restriction can lift their pass rates under current bounds. The inputs below target the next most decision-relevant non-saturated gates; saturated gates need a bounds or threshold-definition audit, not a single input fix."
+            )
+        rows.append("")
+    rows.append("| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |")
+    rows.append("|---:|---|---|---:|---:|---|")
     for i, e in enumerate(mc["missing_value_priority"], 1):
         basis = BASIS_FROM_SOURCE.get(e["source"], e["source"])
         rows.append(
@@ -941,13 +985,37 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
         "",
     ]
     if failing:
+        # Distinguish DOOM (<20%) from FRAGILE (20–50%) and name the worst
+        # gate by id + pass rate. "N gates fail" by itself understates a
+        # 0.0% DOOM the way "1 gate fails" understates total structural
+        # failure.
+        doom_sorted = sorted(
+            (r for r in thresholds if r["verdict"] == "DOOM"),
+            key=lambda r: r["probability"] if r["probability"] is not None else 1.0,
+        )
+        fragile_sorted = sorted(
+            (r for r in thresholds if r["verdict"] == "FRAGILE"),
+            key=lambda r: r["probability"] if r["probability"] is not None else 1.0,
+        )
+        worst = doom_sorted[0] if doom_sorted else fragile_sorted[0]
+        worst_pct = (worst["probability"] or 0) * 100
+        band_parts = []
+        if doom_sorted:
+            band_parts.append(
+                f"{len(doom_sorted)} declared gate{'s' if len(doom_sorted) != 1 else ''} in the DOOM band"
+            )
+        if fragile_sorted:
+            band_parts.append(
+                f"{len(fragile_sorted)} in the FRAGILE band"
+            )
+        band_summary = "; ".join(band_parts)
         rows.append(
-            "1. To answer whether the plan is viable, lead with the gate verdicts above — not the source plan's narrative. "
-            f"{len(failing)} gate(s) currently fail at the 50% pass-rate bar."
+            f"1. To answer whether the plan is viable, lead with the gate verdicts above — not the source plan's narrative. "
+            f"{band_summary}. Worst: `{worst['id']}` at {worst_pct:.1f}% pass rate under current bounds."
         )
     else:
         rows.append(
-            "1. To answer whether the plan is viable, lead with the gate verdicts above. No gate currently fails the 50% pass-rate bar — but read the bounds and trust boundaries before treating that as a green light."
+            "1. To answer whether the plan is viable, lead with the gate verdicts above. No declared gate is in the DOOM or FRAGILE band — but read the bounds and trust boundaries before treating that as a green light."
         )
     rows.append(
         "2. To prioritise data-gathering, inspect `missing_value_priority` in `montecarlo.json`. The top-scored entries are the cheapest improvements to the simulation's predictive value."
@@ -1011,7 +1079,7 @@ def build_assessment(params: dict | None, bounds: dict | None,
         render_gate_verdicts(mc, params),
         render_decision_implications(mc, params),
         render_failure_drivers(mc, params),
-        render_missing_inputs_ranked(mc),
+        render_missing_inputs_ranked(mc, params),
         render_confidence_and_trust(mc, validation),
         render_scenario_sanity_check(scenarios),
         render_suggested_next_actions(mc, params),

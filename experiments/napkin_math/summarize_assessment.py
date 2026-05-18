@@ -14,15 +14,15 @@ It declares:
 - which intermediary file holds what (provenance map)
 - critical findings (gates that fail, scenarios that already break, missing
   inputs, model-collapse blanks)
-- gate verdicts (DOOM / FRAGILE / MARGINAL / ROBUST) with an aggregation
-  warning when units are incompatible
+- gate verdicts (Critical / High risk / Watchlist / Robust) with an
+  aggregation warning when units are incompatible
 - failure drivers per failing gate (one row, not a full quartile table)
 - missing inputs ranked by simulation impact
 - per-output confidence and trust boundaries
 - a short scenario sanity check
 - suggested next actions for whatever consumes this file
 
-Doom verdicts are driven entirely by the user's own threshold definitions
+Verdicts are driven entirely by the user's own threshold definitions
 (operator + value). The script never inspects identifier strings, output
 names, or units to decide whether a number is good or bad — that would be
 domain-bias. It only knows: "the user said this should pass; here is how
@@ -39,28 +39,32 @@ from typing import Any
 
 ASSESSMENT_SCHEMA_VERSION = 6
 
+# Display labels for the four pass-rate bands. The canonical internal
+# enum (lowercase: doom/fragile/marginal/viable/unknown) lives in
+# `overall_risk_band` on the machine summary and is stable across releases;
+# these uppercase-ish labels are what readers see.
 VERDICT_BANDS = [
-    (0.80, "ROBUST",   "passes in the strong majority of runs"),
-    (0.50, "MARGINAL", "passes more often than not but uncomfortably close"),
-    (0.20, "FRAGILE",  "fails in the majority of runs"),
-    (0.00, "DOOM",     "rarely passes under current bounds"),
+    (0.80, "Robust",    "passes in the strong majority of runs"),
+    (0.50, "Watchlist", "passes more often than not but uncomfortably close"),
+    (0.20, "High risk", "fails in the majority of runs"),
+    (0.00, "Critical",  "rarely passes under current bounds"),
 ]
 
-VERDICT_SEVERITY = {"DOOM": 0, "FRAGILE": 1, "MARGINAL": 2, "ROBUST": 3, "UNKNOWN": 4}
+VERDICT_SEVERITY = {"Critical": 0, "High risk": 1, "Watchlist": 2, "Robust": 3, "UNKNOWN": 4}
 
 PRIMARY_MODEL_RESULT_FROM_WORST = {
-    "DOOM": "doom",
-    "FRAGILE": "fragile",
-    "MARGINAL": "marginal",
-    "ROBUST": "viable",
-    "UNKNOWN": "unknown",
+    "Critical":  "doom",
+    "High risk": "fragile",
+    "Watchlist": "marginal",
+    "Robust":    "viable",
+    "UNKNOWN":   "unknown",
 }
 
 PRIMARY_RESULT_REASON = {
-    "doom": "at least one declared gate has pass rate < 20% (DOOM band)",
-    "fragile": "at least one declared gate has pass rate in 20–50% (FRAGILE band)",
-    "marginal": "at least one declared gate has pass rate in 50–80% (MARGINAL band)",
-    "viable": "every declared gate has pass rate ≥ 80% (ROBUST band)",
+    "doom": "at least one declared gate has pass rate < 20% (Critical band)",
+    "fragile": "at least one declared gate has pass rate in 20–50% (High risk band)",
+    "marginal": "at least one declared gate has pass rate in 50–80% (Watchlist band)",
+    "viable": "every declared gate has pass rate ≥ 80% (Robust band)",
     "unknown": "no threshold pass rates available",
 }
 
@@ -82,7 +86,7 @@ VALUE_TYPE_TO_THRESHOLD_BASIS = {
 
 SCHEMA_NOTES = {
     "overall_risk_band_enum": ["viable", "marginal", "fragile", "doom", "unknown"],
-    "verdict_enum": ["ROBUST", "MARGINAL", "FRAGILE", "DOOM", "UNKNOWN"],
+    "verdict_enum": ["Robust", "Watchlist", "High risk", "Critical", "UNKNOWN"],
     # basis_enum is the union of values that may appear in the `Basis` column
     # of "Missing inputs ranked by impact" once the pipeline grows. The current
     # pipeline only emits `report_derived` and `model_assumption`; the rest
@@ -158,7 +162,7 @@ def verdict_for(probability: float | None) -> tuple[str, str]:
     for cutoff, label, note in VERDICT_BANDS:
         if probability >= cutoff:
             return label, note
-    return "DOOM", "rarely passes under current bounds"
+    return "Critical", "rarely passes under current bounds"
 
 
 def aggregate_output_ids(params: dict | None) -> set[str]:
@@ -359,7 +363,7 @@ def render_machine_summary(params: dict | None, mc: dict | None,
     plan_summary = (params or {}).get("plan_summary", {}) or {}
     thresholds = threshold_entries(mc, params)
     settings = (mc or {}).get("settings") or {}
-    failed = [r["id"] for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
+    failed = [r["id"] for r in thresholds if r["verdict"] in ("Critical", "High risk")]
     drivers = [
         e["id"] for e in (mc or {}).get("missing_value_priority", [])[:3]
     ]
@@ -544,8 +548,8 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
                              params: dict | None, bounds: dict | None) -> list[str]:
     """Severity-ordered bullets that signal the plan does not survive its own assumptions."""
     thresholds = threshold_entries(mc, params)
-    doom = [r for r in thresholds if r["verdict"] == "DOOM"]
-    fragile = [r for r in thresholds if r["verdict"] == "FRAGILE"]
+    doom = [r for r in thresholds if r["verdict"] == "Critical"]
+    fragile = [r for r in thresholds if r["verdict"] == "High risk"]
     scenario_warns = (scenarios or {}).get("warnings", []) if scenarios else []
 
     collapses: list[tuple[str, float]] = []
@@ -601,13 +605,13 @@ def render_critical_findings(mc: dict | None, scenarios: dict | None,
     for r in doom:
         fail_pct = (1 - (r["probability"] or 0)) * 100
         rows.append(
-            f"- **DOOM** — `{r['id']}` fails {r['operator']} {fmt_number(r['value'])} "
+            f"- **Critical** — `{r['id']}` fails {r['operator']} {fmt_number(r['value'])} "
             f"in {fail_pct:.1f}% of simulated runs under the current input bounds."
         )
     for r in fragile:
         pass_pct = (r["probability"] or 0) * 100
         rows.append(
-            f"- **FRAGILE** — `{r['id']}` holds in only {pass_pct:.1f}% of simulated runs "
+            f"- **High risk** — `{r['id']}` holds in only {pass_pct:.1f}% of simulated runs "
             f"under the current input bounds (fails in the majority)."
         )
     for w in scenario_warns:
@@ -636,7 +640,7 @@ def render_gate_verdicts(mc: dict | None, params: dict | None) -> list[str]:
     rows = [
         "## Gate verdicts",
         "",
-        f"Pass rate for every declared threshold over {runs_phrase}. Bands: ≥80% **ROBUST**, 50–80% **MARGINAL**, 20–50% **FRAGILE**, <20% **DOOM**. The `Threshold basis` column reports whether the threshold value came from the source report explicitly (`report_explicit`), was inferred from the report (`report_inferred`), or has no narrative anchor (`model_defined` / `unknown`). Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools — their verdict is meaningful, their raw magnitude is not.",
+        f"Pass rate for every declared threshold over {runs_phrase}. Bands: ≥80% **Robust**, 50–80% **Watchlist**, 20–50% **High risk**, <20% **Critical**. The `Threshold basis` column reports whether the threshold value came from the source report explicitly (`report_explicit`), was inferred from the report (`report_inferred`), or has no narrative anchor (`model_defined` / `unknown`). Rows with a leading `min` marker are aggregate gates computed via `min()` over independent pools — their verdict is meaningful, their raw magnitude is not.",
         "",
         "| | Output | Condition | Threshold basis | Pass rate | Verdict | Meaning |",
         "|---|---|---|---|---:|---|---|",
@@ -700,7 +704,7 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
     driver from quartile_analysis.
     """
     thresholds = threshold_entries(mc, params)
-    interpreted = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE", "MARGINAL")]
+    interpreted = [r for r in thresholds if r["verdict"] in ("Critical", "High risk", "Watchlist")]
     if not interpreted:
         return []
     quartile = (mc or {}).get("quartile_analysis") or {}
@@ -716,26 +720,26 @@ def render_decision_implications(mc: dict | None, params: dict | None) -> list[s
     for r in interpreted:
         prob = r["probability"] or 0
         cond = f"{r['operator']} {fmt_number(r['value'])}"
-        if r["verdict"] == "DOOM":
+        if r["verdict"] == "Critical":
             consequence = (
                 f"The `{cond}` requirement is not credible under current bounds: "
                 f"only {prob * 100:.1f}% of runs hold. Commitments that depend on "
                 f"this should not be made without revision."
             )
-        elif r["verdict"] == "FRAGILE":
+        elif r["verdict"] == "High risk":
             consequence = (
                 f"The `{cond}` requirement fails in the majority of runs "
                 f"({(1 - prob) * 100:.1f}%). External commitments built on this "
                 f"gate are exposed."
             )
-        else:  # MARGINAL (50–80% pass rate)
-            # The MARGINAL band spans a large range. A 51% pass is genuinely
-            # coin-flip; a 79% pass is one slip from ROBUST. Bucket the
+        else:  # Watchlist (50–80% pass rate)
+            # The Watchlist band spans a large range. A 51% pass is genuinely
+            # coin-flip; a 79% pass is one slip from Robust. Bucket the
             # wording so the language tracks the position within the band.
             if prob >= 0.70:
                 consequence = (
                     f"The `{cond}` requirement passes {prob * 100:.1f}% of runs — "
-                    f"just below the ROBUST band. The gate passes in most runs, "
+                    f"just below the Robust band. The gate passes in most runs, "
                     f"but downstream commitments should not treat it as secure."
                 )
             else:
@@ -782,7 +786,7 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
     if not mc:
         return []
     thresholds = threshold_entries(mc, params)
-    failing = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
+    failing = [r for r in thresholds if r["verdict"] in ("Critical", "High risk")]
     if not failing:
         return []
     quartile = mc.get("quartile_analysis") or {}
@@ -792,7 +796,7 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
     rows = [
         "## Failure drivers",
         "",
-        "For each failing gate (DOOM or FRAGILE): the single input with the largest pass-rate swing between its bottom and top quartile, and the conditional input restriction that would lift the gate to an 80% pass rate (when one exists). Full per-driver tables and binding-gate frequencies are in `montecarlo.json`.",
+        "For each failing gate (Critical or High risk): the single input with the largest pass-rate swing between its bottom and top quartile, and the conditional input restriction that would lift the gate to an 80% pass rate (when one exists). Full per-driver tables and binding-gate frequencies are in `montecarlo.json`.",
         "",
         "| Failing gate | Top driver | Δ-pp (bottom→top quartile) | 80% pass requires |",
         "|---|---|---:|---|",
@@ -846,7 +850,7 @@ def render_failure_drivers(mc: dict | None, params: dict | None) -> list[str]:
 # ─── missing inputs ranked by impact ───────────────────────────────────────
 
 def saturated_doom_gates(mc: dict | None, params: dict | None) -> list[str]:
-    """Identify DOOM gates where no single quartile movement changes the
+    """Identify Critical gates where no single quartile movement changes the
     outcome. These gates are absent from `missing_value_priority` (no input
     has them as its worst-affected gate, by construction). Naming them
     explicitly above the ranking removes the ambiguity a downstream reader
@@ -858,7 +862,7 @@ def saturated_doom_gates(mc: dict | None, params: dict | None) -> list[str]:
     quartile = mc.get("quartile_analysis") or {}
     out: list[str] = []
     for r in threshold_entries(mc, params):
-        if r["verdict"] != "DOOM":
+        if r["verdict"] != "Critical":
             continue
         drivers = quartile.get(r["id"]) or []
         top = max(drivers, key=lambda d: abs(d.get("delta_pp", 0)), default=None)
@@ -881,11 +885,11 @@ def render_missing_inputs_ranked(mc: dict | None, params: dict | None = None) ->
         gate_list = ", ".join(f"`{g}`" for g in saturated)
         if len(saturated) == 1:
             rows.append(
-                f"Note: the saturated DOOM gate {gate_list} is absent from the ranking because no single missing-input restriction can lift its pass rate under current bounds. The inputs below target the next most decision-relevant non-saturated gates; the saturated gate needs a bounds or threshold-definition audit, not a single input fix."
+                f"Note: the saturated Critical gate {gate_list} is absent from the ranking because no single missing-input restriction can lift its pass rate under current bounds. The inputs below target the next most decision-relevant non-saturated gates; the saturated gate needs a bounds or threshold-definition audit, not a single input fix."
             )
         else:
             rows.append(
-                f"Note: the saturated DOOM gates {gate_list} are absent from the ranking because no single missing-input restriction can lift their pass rates under current bounds. The inputs below target the next most decision-relevant non-saturated gates; saturated gates need a bounds or threshold-definition audit, not a single input fix."
+                f"Note: the saturated Critical gates {gate_list} are absent from the ranking because no single missing-input restriction can lift their pass rates under current bounds. The inputs below target the next most decision-relevant non-saturated gates; saturated gates need a bounds or threshold-definition audit, not a single input fix."
             )
         rows.append("")
     rows.append("| Rank | Input | Worst-affected gate | Score | Bound width / base | Basis |")
@@ -977,7 +981,7 @@ def render_scenario_sanity_check(scenarios: dict | None) -> list[str]:
 
 def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[str]:
     thresholds = threshold_entries(mc, params)
-    failing = [r for r in thresholds if r["verdict"] in ("DOOM", "FRAGILE")]
+    failing = [r for r in thresholds if r["verdict"] in ("Critical", "High risk")]
     rows = [
         "## Suggested next actions",
         "",
@@ -985,16 +989,16 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
         "",
     ]
     if failing:
-        # Distinguish DOOM (<20%) from FRAGILE (20–50%) and name the worst
-        # gate by id + pass rate. "N gates fail" by itself understates a
-        # 0.0% DOOM the way "1 gate fails" understates total structural
+        # Distinguish Critical (<20%) from High risk (20–50%) and name the
+        # worst gate by id + pass rate. "N gates fail" by itself understates
+        # a 0.0% Critical the way "1 gate fails" understates total structural
         # failure.
         doom_sorted = sorted(
-            (r for r in thresholds if r["verdict"] == "DOOM"),
+            (r for r in thresholds if r["verdict"] == "Critical"),
             key=lambda r: r["probability"] if r["probability"] is not None else 1.0,
         )
         fragile_sorted = sorted(
-            (r for r in thresholds if r["verdict"] == "FRAGILE"),
+            (r for r in thresholds if r["verdict"] == "High risk"),
             key=lambda r: r["probability"] if r["probability"] is not None else 1.0,
         )
         worst = doom_sorted[0] if doom_sorted else fragile_sorted[0]
@@ -1002,11 +1006,11 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
         band_parts = []
         if doom_sorted:
             band_parts.append(
-                f"{len(doom_sorted)} declared gate{'s' if len(doom_sorted) != 1 else ''} in the DOOM band"
+                f"{len(doom_sorted)} declared gate{'s' if len(doom_sorted) != 1 else ''} in the Critical band"
             )
         if fragile_sorted:
             band_parts.append(
-                f"{len(fragile_sorted)} in the FRAGILE band"
+                f"{len(fragile_sorted)} in the High risk band"
             )
         band_summary = "; ".join(band_parts)
         rows.append(
@@ -1015,7 +1019,7 @@ def render_suggested_next_actions(mc: dict | None, params: dict | None) -> list[
         )
     else:
         rows.append(
-            "1. To answer whether the plan is viable, lead with the gate verdicts above. No declared gate is in the DOOM or FRAGILE band — but read the bounds and trust boundaries before treating that as a green light."
+            "1. To answer whether the plan is viable, lead with the gate verdicts above. No declared gate is in the Critical or High risk band — but read the bounds and trust boundaries before treating that as a green light."
         )
     rows.append(
         "2. To prioritise data-gathering, inspect `missing_value_priority` in `montecarlo.json`. The top-scored entries are the cheapest improvements to the simulation's predictive value."

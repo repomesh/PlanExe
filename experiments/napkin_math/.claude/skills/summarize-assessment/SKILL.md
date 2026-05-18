@@ -1,6 +1,6 @@
 ---
 name: summarize-assessment
-description: Use after the napkin_math pipeline has produced parameters/bounds/scenarios/montecarlo JSON to generate a plan assessment (assessment.md) — a thin interpretation layer over the intermediary artifacts. Emits a JSON manifest, a provenance map, gate verdicts (DOOM / FRAGILE / MARGINAL / ROBUST), failure drivers, confidence and trust boundaries, scenario sanity check, and suggested next actions. The artifact is a navigation/judgment file, not a copy of the raw simulation data.
+description: Use after the napkin_math pipeline has produced parameters/bounds/scenarios/montecarlo JSON to generate a plan assessment (assessment.md) — a thin interpretation layer over the intermediary artifacts. Emits a JSON manifest, a provenance map, gate verdicts (Critical / High risk / Watchlist / Robust), failure drivers, confidence and trust boundaries, scenario sanity check, and suggested next actions. The artifact is a navigation/judgment file, not a copy of the raw simulation data.
 ---
 
 # Summarize napkin_math outputs into a plan assessment
@@ -13,7 +13,7 @@ A thin wrapper around `experiments/napkin_math/summarize_assessment.py`. The scr
 
 - The Monte Carlo stage has just produced `montecarlo.json` and the user wants a verdict
 - The user asks "is this plan in trouble?" or "what does the simulation say?"
-- After any iteration on bounds or calculations, to see how the doom signals moved
+- After any iteration on bounds or calculations, to see how the gate signals moved
 
 Not for: producing the simulation itself (`monte-carlo`), running scenarios (`run-scenarios`), or extracting parameters from a report.
 
@@ -36,7 +36,7 @@ Not for: producing the simulation itself (`monte-carlo`), running scenarios (`ru
 
 3. **Report back.** Tell the user the output path. If the user asks for a verdict in-conversation, read `assessment.md` and quote the gate-verdict rows and critical-findings bullets verbatim — don't paraphrase.
 
-## How doom verdicts are decided
+## How verdicts are decided
 
 Verdicts come from the user's own threshold definitions in the Monte Carlo settings. No identifier-string or unit-string interpretation — domain-bias-free.
 
@@ -44,12 +44,12 @@ Each threshold has an operator (`>=`, `<=`, etc.) and a value. The user wrote th
 
 | Band | Pass probability | Verdict | Note |
 |---|---|---|---|
-| ≥ 80% | strong majority | **ROBUST** | passes in the strong majority of runs |
-| 50–80% | uncomfortable | **MARGINAL** | passes more often than not but uncomfortably close |
-| 20–50% | minority pass | **FRAGILE** | fails in the majority of runs |
-| < 20% | rarely passes | **DOOM** | rarely passes under current bounds |
+| ≥ 80% | strong majority | **Robust** | passes in the strong majority of runs |
+| 50–80% | uncomfortable | **Watchlist** | passes more often than not but uncomfortably close |
+| 20–50% | minority pass | **High risk** | fails in the majority of runs |
+| < 20% | rarely passes | **Critical** | rarely passes under current bounds |
 
-Any output classified DOOM or FRAGILE also gets a "bottom line" callout at the top of the report.
+Any output classified Critical or High risk also gets a "bottom line" callout at the top of the report.
 
 The script does **not** invent thresholds for outputs the user did not declare. To get a verdict on an output, declare a threshold on it in the Monte Carlo settings file.
 
@@ -70,7 +70,7 @@ What that means concretely:
 
 These are not stylistic preferences. They are how this skill is meant to communicate.
 
-1. **Critical findings first.** After the artifact contract, machine summary, provenance map, modelling frame, and simulation settings, the first interpretation section is `## Critical findings`. It consolidates every signal that the plan does not survive its own assumptions: DOOM and FRAGILE thresholds, scenario warnings, numbers the model could not compute, and inputs the plan does not supply at all. If nothing qualifies, the section is omitted entirely — silence is the only acceptable form of good news.
+1. **Critical findings first.** After the artifact contract, machine summary, provenance map, modelling frame, and simulation settings, the first interpretation section is `## Critical findings`. It consolidates every signal that the plan does not survive its own assumptions: Critical and High risk thresholds, scenario warnings, numbers the model could not compute, and inputs the plan does not supply at all. If nothing qualifies, the section is omitted entirely — silence is the only acceptable form of good news.
 
 2. **No sugar-coating.** A 5% pass probability is "rarely passes under current bounds", not "shows some challenges". A base-scenario value on the wrong side of a declared threshold is "the gate fails at the plan's own central assumptions", not "may warrant further attention". Use the strongest accurate language without overclaiming epistemic certainty — never "the math says it certainly will" — but never soften the result either; if the script's wording softens a result, fix the script.
 
@@ -84,7 +84,7 @@ These are not stylistic preferences. They are how this skill is meant to communi
 
 5. **Hedges about data vs hedges about the speaker.** Hedges that point at the underlying simulation are fine: "the simulation shows", "based on the bounds we have", "within the assumed ranges". Hedges that point at the writer's posture are not.
 
-6. **Quote the verdicts; don't paraphrase.** When the script emits `**DOOM** — rarely passes under current bounds`, report it as `DOOM — rarely passes under current bounds`. Don't summarise it as "this one is concerning". The verdict bands are precise and load-bearing.
+6. **Quote the verdicts; don't paraphrase.** When the script emits `**Critical** — rarely passes under current bounds`, report it as `Critical — rarely passes under current bounds`. Don't summarise it as "this one is concerning". The verdict bands are precise and load-bearing.
 
 ## Sections in the generated assessment.md
 
@@ -97,10 +97,10 @@ Order is deliberate. Stable section names — programmatic consumers retrieve by
 - **`## Modelling frame`** — the source plan's own statement of what the model is testing, lifted verbatim from `parameters.plan_summary.modelling_frame`. When `parameters.unmodelled_gates` is non-empty, this section gains a bold **Note** caveat naming the count of unmodelled existential gates and telling the reader the gate-verdict pass rates are conditional on those gates holding.
 - **`## Known unmodelled existential gates`** — table of gates the extractor flagged as existential to the plan but unmodelable by deterministic Python (legal authorization, political reversal, AML/banking compliance, external-actor commitments). Columns: Gate, Why it matters, Source anchor (which source section names it), Consequence if false. Section omitted entirely when `parameters.unmodelled_gates` is empty or absent.
 - **`## Simulation settings`** — n_runs, seed, distribution_default, validation status.
-- **`## Critical findings`** — bullets in severity order. When `parameters.unmodelled_gates` is non-empty, a **SCOPE WARNING** bullet leads the section naming the unmodelled gate labels and pointing at the dedicated section. Then: DOOM gates, FRAGILE gates, scenario warnings, numbers the model could not compute (≥5% blank runs), still-missing inputs. Section omitted entirely when nothing qualifies.
+- **`## Critical findings`** — bullets in severity order. When `parameters.unmodelled_gates` is non-empty, a **SCOPE WARNING** bullet leads the section naming the unmodelled gate labels and pointing at the dedicated section. Then: Critical gates, High risk gates, scenario warnings, numbers the model could not compute (≥5% blank runs), still-missing inputs. Section omitted entirely when nothing qualifies.
 - **`## Gate verdicts`** — every declared threshold, worst-first, with the `min` marker on aggregate gates. Columns: marker, output, condition, **threshold basis** (`report_explicit` / `report_inferred` / `model_defined` / `unknown` — derived from the corresponding key_value's `value_type`), pass rate, verdict, meaning. Includes an `### Aggregation warning` sub-section when the thresholds use incompatible units and the plan declares no `min()` aggregate.
-- **`## Decision implications`** — one row per gate with verdict in DOOM/FRAGILE/MARGINAL. Five columns: Gate, Verdict, **Planning consequence** (templated by verdict), **Structural lever** (the top driver from `quartile_analysis` with the direction implied by its sign of Δ-pp), **Gate meaning** (the gate's own rationale lifted from `parameters.recommended_first_calculations[].why_first` or `derived_questions[].why_it_matters`, plus the threshold parameter the formula tests against). The Gate-meaning column surfaces plan-specific framing without inventing tactical advice; concrete revisions should be derived by reading the source report and the relevant intermediary artifacts.
-- **`## Failure drivers`** — one row per failing gate (DOOM or FRAGILE): top driver from `quartile_analysis` (max abs Δ-pp) and the conditional input restriction from `required_input_thresholds` that would lift the gate to 80%. Binding-gate frequencies for aggregates appear as bullets below the table.
+- **`## Decision implications`** — one row per gate with verdict in Critical/High risk/Watchlist. Five columns: Gate, Verdict, **Planning consequence** (templated by verdict), **Structural lever** (the top driver from `quartile_analysis` with the direction implied by its sign of Δ-pp), **Gate meaning** (the gate's own rationale lifted from `parameters.recommended_first_calculations[].why_first` or `derived_questions[].why_it_matters`, plus the threshold parameter the formula tests against). The Gate-meaning column surfaces plan-specific framing without inventing tactical advice; concrete revisions should be derived by reading the source report and the relevant intermediary artifacts.
+- **`## Failure drivers`** — one row per failing gate (Critical or High risk): top driver from `quartile_analysis` (max abs Δ-pp) and the conditional input restriction from `required_input_thresholds` that would lift the gate to 80%. Binding-gate frequencies for aggregates appear as bullets below the table.
 - **`## Missing inputs ranked by impact`** — the `missing_value_priority` table. The `Basis` column translates the bounds.json `source` label (`data` → `report_derived`, `assumption` → `model_assumption`) so it isn't mistaken for empirically observed real-world data.
 - **`## Confidence and trust boundaries`** — Validated (a one-line list of `validation.json` checks_performed), Not validated (a canonical list: real-world accuracy of bounds, independence assumptions, external feasibility, factual truth of source claims), Per-output confidence (HIGH/MEDIUM/LOW grade table from `model_confidence`). The grade-table column is `Declared-source inputs` — the share of input bounds anchored in the source report's narrative; the rest are modelling assumptions. Neither is empirical real-world data.
 - **`## Scenario sanity check`** — short low/base/high deterministic comparison table. Columns: `Low inputs` / `Base inputs` / `High inputs`, matching the keys in `scenarios.json`.
@@ -114,7 +114,7 @@ Order is deliberate. Stable section names — programmatic consumers retrieve by
 | Running before `montecarlo.json` exists | Gate verdicts, failure drivers, and the machine summary's `primary_model_result` all depend on simulation output. Run the Monte Carlo stage first. |
 | Reading the markdown and paraphrasing the gate verdicts | Quote them. The cutoff bands and phrasing are deliberate. |
 | Treating the machine summary as authoritative without reading the prose | The JSON manifest is a compact pointer, not a proof. The aggregation warning, trust boundaries, and failure-driver rows are load-bearing context. |
-| Treating a MARGINAL verdict as good news | MARGINAL means "passes in 50–80% of runs" — that's the same as "fails up to 50% of the time". |
+| Treating a Watchlist verdict as good news | Watchlist means "passes in 50–80% of runs" — that's the same as "fails up to 50% of the time". |
 | Inventing a threshold to make a number look good | Thresholds reflect the user's success criteria. Don't fabricate them after the fact. |
 
 ## Reference

@@ -73,8 +73,8 @@ configured `n_runs` (defaulting to 10,000) trials:
    is the empirical probability that the declared gate holds under the
    declared bounds. Bands:
    - **Robust** if pass rate ≥ 80%.
-   - **Watchlist** if 50% ≤ pass rate < 80%.
-   - **High risk** if 20% ≤ pass rate < 50%.
+   - **Marginal** if 50% ≤ pass rate < 80%.
+   - **Fragile** if 20% ≤ pass rate < 50%.
    - **Critical** if pass rate < 20%.
    The plan's overall risk band is the band of its worst declared gate.
 
@@ -173,7 +173,7 @@ The assessment also lists *unmodelled existential gates* — gates whose
 failure would end the plan independently of any financial or operational
 margin (regulatory approval, political signoff, supply continuity,
 counterparty acceptance). These never enter the Monte Carlo. They are
-listed so a reader sees at a glance that the modelled Critical/High risk
+listed so a reader sees at a glance that the modelled Critical/Fragile
 verdict is conditional on those existential gates holding.
 
 ---
@@ -193,7 +193,7 @@ roster slides land on a reader who already trusts the pipeline.
   declared threshold.
 - Same seed (`12345`) reproduces the run exactly.
 - The pass rate over 10,000 runs lands the gate in one of four bands:
-  ≥80% **Robust**, 50–80% **Watchlist**, 20–50% **High risk**, <20% **Critical**.
+  ≥80% **Robust**, 50–80% **Marginal**, 20–50% **Fragile**, <20% **Critical**.
 - The plan's **overall risk band is the band of its worst declared gate**.
   A budget gate passing 100% does not paper over a coverage gate passing
   1%; the min-over-gates rule respects that each declared commitment must

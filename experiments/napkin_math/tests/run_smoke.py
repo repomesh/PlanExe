@@ -218,7 +218,7 @@ def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
     _check("assessment.md schema version field is present",
            "\"assessment_schema_version\": 6" in body)
     _check("assessment.md classifies one threshold as Robust (taster ≥ 100 with p=0.6 → ~150 expected)",
-           "Robust" in body or "Watchlist" in body)
+           "Robust" in body or "Marginal" in body)
 
 
 def check_validate_parameters_end_to_end(tmpdir: Path) -> None:

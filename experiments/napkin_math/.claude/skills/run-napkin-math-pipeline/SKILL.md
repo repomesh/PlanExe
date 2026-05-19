@@ -17,6 +17,52 @@ PlanExe source reports live under `/Users/neoneye/git/PlanExe-web/`
 Outputs land under
 `experiments/napkin_math/output/<version>/<plan-slug>/`.
 
+## What the orchestrator does and does not do
+
+The orchestrator is **dispatch-only**. It looks at filenames in the target
+directory, decides which stage is missing, and delegates the work to the
+appropriate sibling skill (via a subagent) or Python runner. It does **not**
+read the content of large input files into its own context.
+
+**Do not read into orchestrator context:**
+
+- `extract_parameters_input.md` (the digest — typically ~25K tokens)
+- `compress_*.md` or `compress_*_raw.json` files
+- The raw PlanExe HTML report
+- The full `parameters.json`, `bounds.json`, `scenarios.json`, `montecarlo.json` (except quick `jq`/Python extraction of a single field)
+
+**OK to read into orchestrator context:**
+
+- Directory listings (filenames only)
+- `validation.json` exit status (via Python one-liner, not full file)
+- `montecarlo.json` per-threshold `probability` values (via Python one-liner)
+- Sibling skill SKILL.md / system-prompt.txt **only when updating the skill itself**
+
+Pulling a digest into orchestrator context defeats the architecture. Each
+stage's sibling skill knows how to read its own inputs; the orchestrator's
+job is to invoke that skill, not to do its work.
+
+## Per-stage delegation
+
+For each missing stage, dispatch as follows. Pass the agent the file
+paths and a one-line task; do not paste file contents into the prompt.
+
+| Stage | How to dispatch |
+|---|---|
+| 0. Digest | `Bash` → `prepare_extract_input.py --planexe-dir <PlanExe-web/...> --output-dir <target>` |
+| 1. Parameters | `Agent` with the sibling skill name `extract-parameters-from-digest`; prompt: "Read `<target>/extract_parameters_input.md` per `system-prompt.txt`, write the result to `<target>/parameters.json`." |
+| 2. Validation | `Bash` → `validate_parameters.py --parameters … --output …` |
+| 3. Bounds | `Agent` with `generate-bounds`; prompt: "Read `<target>/parameters.json` per the generate-bounds rules, write `<target>/bounds.json`." |
+| 4. Calculations | `Agent` with `generate-calculations`; prompt: "Read `<target>/parameters.json`, write `<target>/calculations.py` per the skill rules." |
+| 5. Scenarios | `Agent` with `run-scenarios`; prompt: "Read parameters.json, bounds.json, calculations.py, write `<target>/scenarios.json`." |
+| 6. MC settings | Small hand-written JSON file based on `parameters.json` — extract `output_name`s via Python one-liner, write thresholds with `>= 0`. No content reading needed. |
+| 7. Monte Carlo | `Bash` → `run_monte_carlo.py …` |
+| 8. Assessment | `Bash` → `summarize_assessment.py …` |
+
+After each agent returns, verify the output file exists and is non-empty,
+then move on. If validation fails after Stage 1, dispatch a repair agent
+with the validation report — do not pull the parameters into context yourself.
+
 ## Why resume mode exists
 
 Resume is not a convenience. It is the experimental control for this

@@ -64,7 +64,7 @@ Always `low ≤ base ≤ high`. Fractions stay in `[0, 1]`. Counts of discrete t
     "low": 0.10,
     "base": 0.20,
     "high": 0.30,
-    "rationale": "Short, ≤30 words, one or two sentences.",
+    "rationale": "Short, ≤50 words. Include required disclosures when applicable.",
     "source": "data" | "assumption",
     "sampling_discipline": "fraction",
     "non_negative": true,
@@ -106,6 +106,7 @@ If no variable needs bounds, return `{}`.
 | Ignoring the parameter's `uncertainty` and giving everything the same ±20% spread | Anchor the spread on the parameter's stated uncertainty level |
 | Rationale cites a numbered artifact (Risk N, Issue N, Decision N) that does not substantively support the claim | Re-read the cited artifact. The number must match content, not just exist in the report. If you cannot find a substantively correct citation, drop the citation and mark `source: "assumption"`. |
 | Shifting `actual_X` base past the `X_target` threshold without a report-internal anchor | Center base at the committed value unless a named Risk / Issue / Decision / premortem / expert-criticism passage forecasts a gap between commitment and reality. "Realistic execution" and "operational drift" are not anchors. |
+| Generating bounds for a threshold or target variable (ids ending in `_threshold`, `_target`, `_ceiling`, `_floor`, `_limit`) | Thresholds enter the simulation as their stated single value. Randomising them silently changes what `pass_rate` measures and breaks the `threshold_basis = report_explicit` contract. Skip these variables. |
 
 ## Reference
 

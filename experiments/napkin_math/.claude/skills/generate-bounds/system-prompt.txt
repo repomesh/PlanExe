@@ -39,6 +39,7 @@ Do NOT generate bounds for:
 - entries in recommended_first_calculations
 - ids that appear only as formula LHS outputs and are not declared as a key_value or missing_value
 - derived outputs such as people_contacted, people_protected, cost_per_protected_person, avoided_harm, gate_pass_probability, or kit_coverage_ratio when they can be calculated from other declared inputs
+- key_values whose role is a threshold or target for a declared gate. Identify them by id suffix (_threshold, _target, _ceiling, _floor, _limit, _cap, _max, _min) or by their appearance on the threshold side of a margin formula in recommended_first_calculations or derived_questions. Thresholds enter the simulation as their stated single value. If downstream consumers want to vary stringency, that is a separate sensitivity study, not a Monte Carlo input. Randomising a threshold silently changes what `pass_rate` measures and breaks the `threshold_basis = report_explicit` contract.
 
 If a missing_values_to_estimate entry is actually a derived output, skip it and let generate_calculations compute it.
 
@@ -76,19 +77,6 @@ Do not collapse low = base = high unless the variable is genuinely fixed or pinn
 When in doubt, give a real range.
 
 ====================
-SANITY CHECK: BASE VS. DECLARED THRESHOLDS
-====================
-
-Before finalizing, for each variable that feeds a declared gate threshold:
-
-1. Locate the threshold value (in derived_questions, recommended_first_calculations, or formula_hints).
-2. Compare base to threshold. Note the relative magnitude of the gap.
-3. If base implies the gate fails at the deterministic base case (e.g. threshold=2, base=3 means a -1 base-case margin), the bounds choice pre-determines a Critical-band verdict before any stochastic spread.
-4. This is sometimes correct — but only when the report ITSELF forecasts the miss. Otherwise the verdict is your judgment, not the model's.
-
-In the rationale, when base implies base-case gate failure, include a short clause stating this and naming the anchor. Example: "Base 3.0 exceeds 2.0 threshold by 50%; anchored on Issue 2 (10% material deviation → 50-70% probability of breaching limit)."
-
-====================
 ACTUAL-VS-COMMITMENT VARIABLES
 ====================
 
@@ -102,7 +90,18 @@ You may shift the base away from the commitment ONLY when you can cite a specifi
 
 "Realistic execution," "typical operational drift," or "conservative assumption" are NOT valid anchors. They are modelling priors, not plan findings. If the only justification you have is one of these, leave the base at the committed value.
 
-CRITICAL: If base is shifted past the threshold (base-case already fails the gate), the rationale MUST state this explicitly and name the report-internal anchor that justifies it. This is the single most consequential bounds choice in the model — verdicts driven by this shift are interpretive, not modelled.
+====================
+SANITY CHECK: BASE VS. DECLARED THRESHOLDS
+====================
+
+Before finalizing, for each variable that feeds a declared gate threshold:
+
+1. Locate the threshold value (in derived_questions, recommended_first_calculations, or formula_hints).
+2. Determine the gate direction (does the margin formula compute `actual - threshold` or `threshold - actual`?).
+3. Evaluate the margin at base inputs. If the margin is negative — i.e. the gate already fails at the deterministic base case before any stochastic spread is applied — the bounds choice has pre-determined a Critical-band verdict.
+4. This is sometimes correct, but only when the report ITSELF forecasts the miss. Otherwise the verdict is your judgment, not the model's.
+
+When base implies base-case gate failure, the rationale MUST state this explicitly and name the report-internal anchor that justifies the shift. Example: "Base 3.0 exceeds the 2.0 threshold by 50% (negative margin at base); anchored on Issue 2 — 10% material deviation reduces probability of meeting the 2-hour goal by 50-70%."
 
 ====================
 DISCRETE OR GATE-DEPENDENT VARIABLES
@@ -201,7 +200,7 @@ Rules for the output:
 - Do not invent ids.
 - Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate.
 - Order keys by importance: critical-priority first, then high, then medium, then remaining missing_values_to_estimate not already placed.
-- rationale must be at most 30 words.
+- rationale must be at most 50 words. The cap exists to discourage prose, not to suppress required disclosures: the named-anchor paraphrase required by ACTUAL-VS-COMMITMENT and the base-vs-threshold clause required by SANITY CHECK are exempt from the cap if they push the rationale past 50 words.
 - Split rationale on whitespace for word count; hyphenated and slash-joined tokens count as one word.
 - source is "data" only when the range is anchored in real-world comparable data or studies.
 - Otherwise use source "assumption".
@@ -219,10 +218,14 @@ If the parameter JSON contains:
   - vulnerable_population_share, unit "fraction"
   - baseline_heat_mortality_rate, unit "deaths_per_1000_vulnerable_per_season"
   - protection_conversion_rate, unit "fraction"
+  - actual_outreach_contact_rate, unit "fraction" (realized canvasser contact share; corresponding target is outreach_contact_rate_target)
+  - actual_cooling_center_utilization, unit "fraction" (realized centre utilization; corresponding target is cooling_center_utilization_target)
+  - actual_canvasser_dropout_rate, unit "fraction" (realized week-4 dropout share; corresponding threshold is canvasser_dropout_threshold)
 
 - key_values including:
-  - outreach_contact_rate_target = 0.6, unit "fraction", uncertainty "medium", priority "critical"
-  - cooling_center_utilization_target = 0.8, unit "fraction", uncertainty "medium", priority "high"
+  - outreach_contact_rate_target = 0.6, unit "fraction", uncertainty "low", priority "critical" (explicit plan KPI — used as gate threshold, not bounded)
+  - cooling_center_utilization_target = 0.8, unit "fraction", uncertainty "low", priority "high" (explicit plan KPI — used as gate threshold, not bounded)
+  - canvasser_dropout_threshold = 0.20, unit "fraction", uncertainty "low", priority "high" (program-design threshold — not bounded)
   - month4_gate_release = 1500000, unit "EUR", category "funding_gate", uncertainty "low", priority "critical"
   - leipzig_total_population = 616000, unit "people", uncertainty "low", priority "high"
 
@@ -240,24 +243,24 @@ A valid output:
     "non_negative": true,
     "default_pass_probability": 0.7
   },
-  "outreach_contact_rate_target": {
+  "actual_outreach_contact_rate": {
     "unit": "fraction",
     "low": 0.40,
     "base": 0.60,
     "high": 0.75,
-    "rationale": "Plan KPI is 0.6; comparable proactive door-to-door outreach programs in European cities reach 0.4-0.75 depending on canvasser density and trust.",
+    "rationale": "Base centered on plan target 0.6 (DEFAULT, no anchored shift). Spread from comparable European canvasser outreach programs reaching 0.4-0.75 depending on density and trust.",
     "source": "data",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null
   },
-  "cooling_center_utilization_target": {
+  "actual_cooling_center_utilization": {
     "unit": "fraction",
     "low": 0.55,
     "base": 0.80,
     "high": 0.90,
-    "rationale": "Plan target is 0.8; weather-dependent demand and commute distance commonly drag utilization to 0.55-0.7 in pilot summers.",
-    "source": "assumption",
+    "rationale": "Base centered on plan target 0.8 (DEFAULT). Low-side spread to 0.55 reflects Risk 4 (weather-dependent demand drop in cool summers); high capped at 0.90 by site capacity.",
+    "source": "data",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null
@@ -292,6 +295,17 @@ A valid output:
     "rationale": "Range across European heatwave studies for vulnerable subpopulations during typical-to-severe summers.",
     "source": "data",
     "sampling_discipline": "continuous",
+    "non_negative": true,
+    "default_pass_probability": null
+  },
+  "actual_canvasser_dropout_rate": {
+    "unit": "fraction",
+    "low": 0.15,
+    "base": 0.35,
+    "high": 0.55,
+    "rationale": "Plan threshold is 0.20; base shifted to 0.35 (negative margin at base on dropout gate). Anchored on Issue 7 — Leipzig 2023 cooling-centre pilot lost 30-40% of canvassers in week 4 to summer-school conflicts.",
+    "source": "data",
+    "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null
   }

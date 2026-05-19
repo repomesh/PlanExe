@@ -25,7 +25,13 @@ Not for: regenerating the parameter JSON (use `extract-parameters-from-full`), v
 2. **Read `system-prompt.txt`** (sibling of this SKILL.md). Its selection rules and spread heuristics are authoritative.
 3. **Read the parameter JSON.** Assume it has already passed `validate-parameters`; if it visibly hasn't, tell the user and offer to validate first.
 4. **Produce the bounds JSON** per the system prompt.
-5. **Output destination.** Default: print the JSON to chat. If the user asks for a file, write to the path they specify. Suggested default file path: `<input-basename>.bounds.json` next to the input.
+5. **Self-audit before output.** For each bound entry, verify:
+   - Every numbered citation in `rationale` (Risk N, Issue N, Decision N) refers to content that substantively supports the claim — not just lexically present.
+   - For variables feeding a declared gate threshold, the base-vs-threshold relationship is consistent with the rationale. If base implies base-case gate failure, the rationale names a report-internal anchor that justifies the shift.
+   - `source: "data"` entries name an explicit anchor in the rationale.
+   - For asymmetric bounds, the rationale notes the asymmetry's source.
+   If any check fails, revise the bound; do not ship inconsistent state.
+6. **Output destination.** Default: print the JSON to chat. If the user asks for a file, write to the path they specify. Suggested default file path: `<input-basename>.bounds.json` next to the input.
 
 ## Selection Rules (re-stated for emphasis — see system prompt for full detail)
 
@@ -98,6 +104,8 @@ If no variable needs bounds, return `{}`.
 | Inventing ids that are not declared in the parameter JSON | Every key must correspond to a declared id in `key_values` or `missing_values_to_estimate` |
 | Picking fractions outside `[0, 1]` (e.g. base 1.5 for a rate) | Clamp to the unit's natural range |
 | Ignoring the parameter's `uncertainty` and giving everything the same ±20% spread | Anchor the spread on the parameter's stated uncertainty level |
+| Rationale cites a numbered artifact (Risk N, Issue N, Decision N) that does not substantively support the claim | Re-read the cited artifact. The number must match content, not just exist in the report. If you cannot find a substantively correct citation, drop the citation and mark `source: "assumption"`. |
+| Shifting `actual_X` base past the `X_target` threshold without a report-internal anchor | Center base at the committed value unless a named Risk / Issue / Decision / premortem / expert-criticism passage forecasts a gap between commitment and reality. "Realistic execution" and "operational drift" are not anchors. |
 
 ## Reference
 

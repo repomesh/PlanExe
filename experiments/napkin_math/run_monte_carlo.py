@@ -17,6 +17,7 @@ import importlib.util
 import inspect
 import json
 import math
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,15 @@ DEFAULT_SETTINGS: dict[str, Any] = {
 }
 
 VALID_DISCIPLINES = {"fixed", "bernoulli_gate", "integer", "fraction", "continuous"}
+
+THRESHOLD_SUFFIXES = (
+    "_threshold", "_target", "_ceiling", "_floor",
+    "_limit", "_cap", "_max", "_min",
+)
+
+_MARGIN_PATTERN = re.compile(
+    r"^\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*-\s*([a-zA-Z_][a-zA-Z_0-9]*)\s*$"
+)
 
 THRESHOLD_OPS = {
     ">":  lambda a, b: a >  b,
@@ -92,6 +102,84 @@ def merge_settings(user: dict | None) -> tuple[dict, list[str]]:
         if k in user and user[k] is not None:
             out[k] = user[k]
     return out, warnings
+
+
+def _margin_operands(formula_hint: str) -> tuple[str, str] | None:
+    """If formula is `A - B` (after stripping any `LHS =`), return (A, B)."""
+    rhs = formula_hint.split("=", 1)[1] if "=" in formula_hint else formula_hint
+    m = _MARGIN_PATTERN.fullmatch(rhs)
+    if m is None:
+        return None
+    return m.group(1), m.group(2)
+
+
+def _collect_formula_threshold_ids(parameters: dict) -> set[str]:
+    """IDs that appear as the non-`actual_` operand in a binary-subtraction
+    margin formula. Multiplicative formulas and `min()` aggregates are
+    skipped — their operands are coefficients or sub-margins, not thresholds.
+    """
+    threshold_ids: set[str] = set()
+    for src in ("recommended_first_calculations", "derived_questions"):
+        for entry in parameters.get(src, []) or []:
+            hint = entry.get("formula_hint") or ""
+            operands = _margin_operands(hint)
+            if operands is None:
+                continue
+            left, right = operands
+            left_actual = left.startswith("actual_")
+            right_actual = right.startswith("actual_")
+            if left_actual and not right_actual:
+                threshold_ids.add(right)
+            elif right_actual and not left_actual:
+                threshold_ids.add(left)
+    return threshold_ids
+
+
+def strip_threshold_bounds(
+    bounds: dict, parameters: dict,
+) -> tuple[dict, list[dict]]:
+    """Remove bounds entries for threshold/target variables.
+
+    Bounds entries on threshold variables silently change what `pass_rate`
+    measures from "does actual >= stated_threshold" to
+    "does actual >= randomized_threshold". The simulation should test against
+    the literal stated threshold value — the fixed-value fallback in
+    `collect_input_specs` does this automatically when the threshold variable
+    is absent from bounds. This function enforces that absence.
+
+    Deterministic backstop for the rule documented in
+    `.claude/skills/generate-bounds/system-prompt.txt`. The LLM is asked to
+    skip threshold variables but does not reliably do so when parameter-JSON
+    metadata (medium uncertainty + critical/high priority) signals strongly
+    to include them.
+
+    Identification:
+      1. id suffix match against `THRESHOLD_SUFFIXES`
+      2. id appears as the non-`actual_` operand in a binary-subtraction
+         margin formula declared in `recommended_first_calculations` or
+         `derived_questions`
+
+    Variables prefixed `actual_` are never stripped.
+
+    Returns ``(cleaned_bounds, stripped)``. ``stripped`` is an ordered list
+    of ``{"id": str, "reason": "suffix" | "formula-side"}`` records. The
+    input ``bounds`` is not mutated.
+    """
+    formula_threshold_ids = _collect_formula_threshold_ids(parameters)
+    cleaned: dict = {}
+    stripped: list[dict] = []
+    for bound_id, bound in bounds.items():
+        if bound_id.startswith("actual_"):
+            cleaned[bound_id] = bound
+            continue
+        if bound_id.endswith(THRESHOLD_SUFFIXES):
+            stripped.append({"id": bound_id, "reason": "suffix"})
+            continue
+        if bound_id in formula_threshold_ids:
+            stripped.append({"id": bound_id, "reason": "formula-side"})
+            continue
+        cleaned[bound_id] = bound
+    return cleaned, stripped
 
 
 def validate_bound(var_id: str, bound: dict) -> None:
@@ -336,6 +424,14 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
     rng = np.random.default_rng(settings["seed"])
 
     warnings_text: list[str] = list(setting_warnings)
+
+    bounds, stripped_threshold_bounds = strip_threshold_bounds(bounds, params)
+    for entry in stripped_threshold_bounds:
+        warnings_text.append(
+            f"stripped threshold variable '{entry['id']}' from bounds "
+            f"(reason: {entry['reason']}); simulation will use the stated value "
+            f"from parameters.json"
+        )
 
     input_specs = collect_input_specs(params, bounds)
     plan, plan_warnings = build_calculation_plan(params, module)
@@ -631,6 +727,9 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
         "required_input_thresholds": required_input_thresholds,
         "missing_value_priority": missing_value_priority,
         "model_confidence": model_confidence,
+        "bounds_post_processor": {
+            "stripped_threshold_ids": stripped_threshold_bounds,
+        },
         "warnings": [
             {"stage": "monte_carlo", "run": None, "calculation": None,
              "message": msg, "severity": "WARN"}

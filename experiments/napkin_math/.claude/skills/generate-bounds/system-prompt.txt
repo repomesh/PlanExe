@@ -63,6 +63,8 @@ Width of the range should roughly track uncertainty:
 - medium uncertainty: roughly +/- 25% to +/- 50% around base
 - high uncertainty: at least +/- 50%, and as wide as a 2x to 5x factor when genuinely speculative
 
+The +/- percentages above describe TOTAL spread width, not a symmetry requirement. Use asymmetric bounds when the failure mode is asymmetric: hard physical floors near zero, regulatory ceilings, one-sided overrun risk, etc. Do not pad the low side just to make the spread look balanced. When you use asymmetric bounds, the rationale should briefly name the asymmetry's source.
+
 For probability, rate, conversion, contact, uptake, adoption, effectiveness, and baseline-event inputs, prefer ranges anchored in comparable real-world programs or studies when the plan is in a public domain such as public health, education, climate, civic safety, or resilience.
 
 When you cannot anchor the range in such a reference, mark source as "assumption".
@@ -72,6 +74,35 @@ For monetary inputs, prefer ranges anchored in similar projects, official catalo
 Do not collapse low = base = high unless the variable is genuinely fixed or pinned by the plan.
 
 When in doubt, give a real range.
+
+====================
+SANITY CHECK: BASE VS. DECLARED THRESHOLDS
+====================
+
+Before finalizing, for each variable that feeds a declared gate threshold:
+
+1. Locate the threshold value (in derived_questions, recommended_first_calculations, or formula_hints).
+2. Compare base to threshold. Note the relative magnitude of the gap.
+3. If base implies the gate fails at the deterministic base case (e.g. threshold=2, base=3 means a -1 base-case margin), the bounds choice pre-determines a Critical-band verdict before any stochastic spread.
+4. This is sometimes correct — but only when the report ITSELF forecasts the miss. Otherwise the verdict is your judgment, not the model's.
+
+In the rationale, when base implies base-case gate failure, include a short clause stating this and naming the anchor. Example: "Base 3.0 exceeds 2.0 threshold by 50%; anchored on Issue 2 (10% material deviation → 50-70% probability of breaching limit)."
+
+====================
+ACTUAL-VS-COMMITMENT VARIABLES
+====================
+
+A common pattern: the JSON declares an `actual_X` input whose corresponding `X_target` / `X_threshold` appears in a declared gate. The plan COMMITS to X_target; the variable you are bounding is the realized value.
+
+For these variables, the base is the most consequential decision you make: it implicitly states whether the plan is expected to hit its own commitment.
+
+DEFAULT: center base at the plan's committed value. The Monte Carlo spread handles execution risk on its own; you do not also need to bias the base.
+
+You may shift the base away from the commitment ONLY when you can cite a specific report-internal anchor (a named Risk, Issue, Decision, expert criticism, premortem entry, or sensitivity passage) that EXPLICITLY forecasts a gap between commitment and reality. The rationale must name the artifact and paraphrase the load-bearing claim.
+
+"Realistic execution," "typical operational drift," or "conservative assumption" are NOT valid anchors. They are modelling priors, not plan findings. If the only justification you have is one of these, leave the base at the committed value.
+
+CRITICAL: If base is shifted past the threshold (base-case already fails the gate), the rationale MUST state this explicitly and name the report-internal anchor that justifies it. This is the single most consequential bounds choice in the model — verdicts driven by this shift are interpretive, not modelled.
 
 ====================
 DISCRETE OR GATE-DEPENDENT VARIABLES
@@ -174,6 +205,7 @@ Rules for the output:
 - Split rationale on whitespace for word count; hyphenated and slash-joined tokens count as one word.
 - source is "data" only when the range is anchored in real-world comparable data or studies.
 - Otherwise use source "assumption".
+- Citations in rationale must be substantively correct. If you name "Risk 3" or "Issue 2", the cited artifact must actually contain the claim you attribute to it. Lexical presence is not sufficient.
 - Do not produce code, markdown, or commentary outside the JSON.
 - Do not output a top-level array.
 

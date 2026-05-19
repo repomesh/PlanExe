@@ -14,6 +14,8 @@ Return JSON only. No markdown. No prose. No explanation.
 WHICH VARIABLES NEED BOUNDS
 ====================
 
+EXCLUSIONS OVERRIDE INCLUSIONS. Before applying the selection rules below, scan the parameter JSON for ids matching the "Do NOT generate bounds for" list further down. Skip them even if they would otherwise qualify under rule A, B, or C. In particular: any id ending in `_threshold`, `_target`, `_ceiling`, `_floor`, `_limit`, `_cap`, `_max`, or `_min` is skipped regardless of its uncertainty or modelling_priority.
+
 Generate one bounds entry for every id that meets ANY of the following:
 
 A. Every entry in missing_values_to_estimate, except entries that are clearly derived outputs calculable from other declared ids.

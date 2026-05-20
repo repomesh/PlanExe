@@ -49,6 +49,110 @@ from pydantic import BaseModel, Field, ValidationError
 logger = logging.getLogger(__name__)
 
 
+OPTIMIZE_INSTRUCTIONS = """\
+Goal: produce digests that preserve the modelling signal a downstream
+parameter-extraction LLM needs, without leaking the contents of the
+evaluation corpus into the prompts themselves.
+
+Pipeline context
+----------------
+This module is Stage 1 of the napkin_math pipeline:
+
+  1. compress_report_section          ← you are here (4 sections × 6 buckets)
+  2. extract-parameters-from-digest   — reads the compressed digest
+  3. validate-parameters              — deterministic structural checks
+  4. generate-bounds                  — low/base/high per variable
+  5. generate-calculations            — Python module of formulas
+  6. run-scenarios                    — deterministic three-point
+  7. monte-carlo                      — sampled distributions
+  8. summarize-assessment             — gate verdicts, slideshow
+
+Each downstream stage assumes the bucket schema and field semantics
+encoded here. A change to a bucket prompt is a change to the contract
+the whole pipeline relies on — re-run the napkin_math 14-plan
+baseline before merging, not just unit tests.
+
+Anti-overfitting: NEVER bake corpus content into the prompts
+-------------------------------------------------------------
+The 14-plan napkin_math baseline (paperclip pilot, datacenter, and the
+twelve other reports used by Self-Improve and the smoke fixtures) is
+the evaluation set for these prompts. Specific phrases from any of
+those plans MUST NOT appear in the prompt text. That includes — but is
+not limited to:
+
+- Concrete numeric values from a baseline plan ('€257.6M/yr',
+  '32.2 km²', '9 GW', '11 GVA', '128.8 km²'). If the prompt example
+  paraphrases a value the test plan also contains, the model is being
+  told the answer, not taught the pattern.
+- Named entities or acronyms from a baseline plan ('RTE', 'DGSI',
+  'DREAL', 'OPC UA', 'Risk-5', 'Assumption Q5', 'Phase 1 CAPEX
+  surplus'). These leak the structure of the test inputs even when
+  the numbers are abstracted.
+- Variable names that match what extract is expected to emit
+  ('holding_cost', 'buildable_area_surplus', 'phase1_capex_surplus').
+  Putting the desired output name in the prompt collapses the test
+  from "did the extract pick the right decomposition?" to "did it
+  copy the suggested name?"
+- Domain-specific framings that fit only one or two corpus plans
+  ('hyperscale grid headroom', 'cleanroom throughput', 'paperclip
+  R&D cell'). Even if no number leaks, the framing tells the model
+  which corpus member the prompt is targeting.
+
+Use abstract placeholder shapes only: '<rate>', '<denominator>',
+'<requirement>', '<consequence>', '<period>'. The structural rule
+must read identically whether the model is summarising a renewable-
+energy plan, a renovation project, a public-benefit policy, or a
+language no one on the team reads. PlanExe inputs are multilingual
+and span domains; English-only or commercially-biased examples in a
+prompt are themselves a form of overfitting.
+
+If a concrete example feels necessary to anchor a rule, pick a domain
+that demonstrably does NOT appear in the napkin_math baseline AND
+flag it as illustrative. The safer default is to skip the example
+and let the abstract template do the work.
+
+Known failure patterns to guard against
+---------------------------------------
+- Flattened per-period rates. The source states 'X per period', the
+  numeric_values line records the bare amount, the denominator is
+  lost, and downstream extract emits a flat bounded variable instead
+  of the rate × duration decomposition. Fix: require the denominator
+  in the label or unit field of any rate entry.
+- Capacity requirements lost as gates. The source frames a minimum
+  needed for a target capacity as a sizing calculation rather than a
+  pass/fail. The gates_and_thresholds bucket skips it, the extract
+  defaults the threshold to '>= 0', and the gate stops testing the
+  real failure scenario. Fix: capacity requirements are gates,
+  rewritten into if/then form by the compress stage.
+- Burn rate / duration separation across sections. The rate lives in
+  one PlanExe section, the matching duration in another. Compress
+  sees one section at a time. Each section's missing_data bucket
+  must therefore surface the *other half* of any rate × duration
+  pair the section names, so extract sees both pieces in the digest.
+- Per-period unit substitution. Models sometimes translate '/yr' to
+  'annual' (or vice versa) in the label, silently. The verbatim rule
+  for the value field already protects the unit field; the label
+  must mirror the same discipline.
+- Hardcoded English keywords in prompts. PlanExe receives reports in
+  many languages; prompts that depend on English-only stems ('cost',
+  'fee', 'overhead', 'budget') reject perfectly valid digests in
+  other languages. Prefer structural cues ('a value divided by a
+  period') over keyword lists.
+- Numeric-example drift. Whenever a prompt mentions a number, ask:
+  does this number appear in any baseline report? If yes — even
+  approximately — replace it with a placeholder. Numbers that
+  resemble corpus content are the most reliable signal of a
+  prompt-eval leak.
+
+When in doubt
+-------------
+Read the prompt edit and ask: "would a reader who has seen the
+baseline plans guess which plan I had in mind when writing this?"
+If yes, abstract harder. The prompt is for the model, not for a
+human reviewing the baseline.
+"""
+
+
 class LenientJsonModel(BaseModel):
     """BaseModel whose `model_validate_json` tolerates trailing characters.
 
@@ -509,11 +613,23 @@ The 'line' field for this bucket MUST follow the form
 Bare values are invalid: a percent on its own, an amount in any currency on
 its own, or a date on its own.
 
+Per-period and per-unit rates (important): when the source expresses a
+quantity as a rate (a value divided by some period or some other unit),
+the label MUST carry the denominator so the rate stays visible
+downstream. Write the label as '<quantity> per <denominator>' or
+include the denominator in the unit field (e.g. '<unit>/<denominator>').
+A flat label that drops the denominator is invalid when the source
+states one — the downstream extract can no longer reconstruct the
+multiplication. For these rate entries the modelling role should
+describe the multiplication structure rather than just naming the cost,
+so a downstream stage can identify the matching scaling input.
+
 Template shape (substitute values from the source — DO NOT copy these
 placeholders or any unit from them):
 - '<what the number is>: <amount> <currency-from-source> — <modelling role>.'
 - '<what the number is>: <percent>% — <modelling role>.'
 - '<what the number is>: <date-from-source> — <modelling role>.'
+- '<what the rate is> per <denominator>: <amount> <unit-from-source>/<denominator> — <modelling role describing what it scales with>.'
 
 If the source contains conflicting values for the same quantity, list each
 with a disambiguating label (e.g. 'minimum', 'aspirational') rather than
@@ -561,6 +677,15 @@ deficit. If something is a qualitative trade-off without a pass/fail edge,
 leave it out. If a condition is named but no numeric threshold is given in
 the source, put the missing threshold in missing_data_to_estimate rather
 than emitting a vague gate like 'must meet a threshold'.
+
+Capacity requirements count as gates. When the source states a numeric
+minimum needed to physically support a declared capacity, output, or
+service level, the requirement IS the gate — even when the source
+frames it as a sizing calculation rather than an explicit pass/fail
+condition. Write it in the if/then form: 'If <quantity> falls below
+<required value>, then <the supported capacity cannot be achieved>.'
+Do not skip such requirements just because the source phrases them as
+sizing math instead of a gate.
 
 At most 8 items.
 """.strip() + "\n\n" + SCORING_DISCIPLINE
@@ -619,6 +744,11 @@ missing counterpart here. Patterns to look for:
   needs the per-week or per-day revenue exposure the failure interrupts.
 - An overhead coverage threshold ('cover 75% of X') needs the absolute
   X amount per period.
+- A per-period burn rate (any cost or output expressed as a value per
+  unit of time) needs the matching duration the rate will be
+  multiplied by — the count of those time units the burn applies for.
+  Without the duration, the rate cannot be turned into a total and the
+  multiplication is lost downstream.
 Do not invent a value; just name the missing primitive and how it
 would be estimated. Skip this pairing only when the section already
 supplies the denominator elsewhere.

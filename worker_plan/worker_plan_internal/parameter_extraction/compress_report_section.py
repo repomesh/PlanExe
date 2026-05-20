@@ -116,6 +116,46 @@ that demonstrably does NOT appear in the napkin_math baseline AND
 flag it as illustrative. The safer default is to skip the example
 and let the abstract template do the work.
 
+Regression probes are not acceptance criteria
+---------------------------------------------
+The baseline plans exist to surface failure patterns, NOT to define
+what these prompts should target. A prompt edit that "fixes plan X" by
+encoding plan X's specifics is overfitting in another form: even if
+plan X's literals never enter the prompt verbatim, picking the rule
+shape from one plan's behaviour without testing against many will fit
+one and miss the others.
+
+When a baseline plan reveals a failure mode:
+1. Diagnose the abstract pattern, not the plan-specific symptom. Ask
+   "what category of source content is being mishandled?" rather than
+   "what does plan X need this bucket to do?"
+2. Write the rule in corpus-agnostic language: structural categories
+   (rate, denominator, threshold, gate, capacity, sum, decomposition),
+   not domain nouns. Multilingual, multi-domain, multi-scale.
+3. Verify the rule moves behaviour across MULTIPLE probe plans, not
+   just the one that originally failed. A rule that lifts plan X but
+   flattens plan Y is a tradeoff, not progress, and needs an explicit
+   structural justification.
+
+Report a prompt edit's effect in terms of:
+- Which structural rule changed.
+- Which corpus-agnostic behaviour it should improve.
+- Which regression probes improved or worsened (across multiple
+  plans, not one).
+- Whether any baseline signal was dropped, and the structural reason
+  the drop is acceptable.
+
+Do not claim success because a single probe plan got a desired
+variable. Claim success only when the general rule improves multiple
+probes without adding corpus leakage and without silently losing
+source-level signal elsewhere in the baseline.
+
+Compress-LLM run-to-run variance is its own structural problem; do
+NOT try to "fix" it by sharpening a bucket prompt to nudge the model
+toward a specific selection it sometimes makes. Variance handling
+belongs in orchestration (deterministic retry/merge across passes,
+lower-temperature reruns for high-impact buckets), not in this file.
+
 Known failure patterns to guard against
 ---------------------------------------
 - Flattened per-period rates. The source states 'X per period', the

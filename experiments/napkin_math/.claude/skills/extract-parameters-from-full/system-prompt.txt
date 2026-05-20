@@ -311,6 +311,20 @@ Use generic plan-native ids only. Good neutral patterns include:
 
 If the plan provides bounded inputs such as capacity, hours, rate, utilization, demand, staffing level, or overhead, do not leave those inputs dead-ended when they are needed to evaluate a stated coverage or capacity claim.
 
+Threshold pairing rule:
+
+When you extract a key_value that names a numeric threshold — a floor, cap, ceiling, minimum, maximum, target volume, target share, target deadline, or any other "must be at least X" / "must not exceed X" boundary the plan states — you MUST also emit a paired margin calculation comparing the realised quantity against the threshold. The pairing has three parts:
+
+1. The threshold goes in key_values (you have already done this step).
+2. The realised quantity goes in missing_values_to_estimate if the source does not name it. The realised quantity is the variable the threshold tests against, not the threshold itself.
+3. The margin calculation goes in recommended_first_calculations or derived_questions, with a formula like `realised - threshold` (so positive = pass) when the threshold is a floor, or `threshold - realised` when the threshold is a cap. Name the output with the `_margin` or `_surplus` suffix.
+
+Without the paired margin calc, the threshold is a dead-end variable: it is extracted, generate-bounds samples it, but the simulation never tests whether it is cleared. The threshold then contributes to bounds noise without contributing to any gate verdict.
+
+When hard limits make the pairing feel tight, do NOT drop the pairing. Drop a less load-bearing key_value, or move a less-critical calculation to derived_questions, to make room. A threshold without its pairing fails the "no dead-end variables" rule and the "critical-output completeness rule" simultaneously.
+
+Apply this rule even when the threshold is one of several stated by the plan. Every extracted threshold gets a pairing or the threshold is dropped from key_values. There is no third option.
+
 Combined viability gate preservation:
 
 When a plan frames a strategy as surviving, absorbing, balancing, covering, offsetting, or withstanding multiple pressures, shocks, gaps, constraints, or risks, preserve the highest-level combined viability test.
@@ -325,6 +339,22 @@ Neutral patterns:
 - combined_surplus = available_buffer - pressure_a - pressure_b
 - combined_coverage_ratio = available_capacity / total_required_capacity
 - total_required_capacity = requirement_a + requirement_b
+
+Source-arithmetic preservation rule:
+
+When the source explicitly relates a dependent quantity to its named components through an arithmetic operation — sum, product, ratio, fraction of a base, scaled magnitude, weighted average — the extractor MUST preserve that relationship as a recommended_first_calculation. Do not declare the dependent quantity as a flat bounded variable when the source supplies both its components and the arithmetic between them. Sampling a derived quantity independently of the components it is derived from double-counts uncertainty, lets the simulation produce physically incoherent combinations (a low component with a high "total"), and obscures the cause of any sensitivity finding.
+
+Three common patterns to recognise:
+
+1. Aggregate sum. The source names a total or aggregate alongside its constituent line items (a total budget alongside named allocations; a total headcount alongside named team breakdowns; a total emissions figure alongside named per-source contributions). Declare the aggregate as `aggregate = sum_of_components`. Declare each component in `key_values` or `missing_values_to_estimate`. The aggregate becomes a recommended_first_calculation, not a flat key_value and not a missing_value.
+
+2. Burn rate × duration. The source names a per-period or per-unit rate (a value per unit of time, area, count, person, capacity) AND a separable duration or count the rate applies over. Declare the dependent total as `total = rate * duration`. The rate and the duration each go in `key_values` or `missing_values_to_estimate`; the total is the recommended_first_calculation. Do not bound the dependent total directly when the source supplies the two operands.
+
+3. Explicit decomposition block. The source explicitly does the arithmetic itself — a base quantity, one or more share fractions, possibly a perturbation magnitude, and the named resulting dependent value. Preserve every named operand and the operation between them as a calculation. Do not collapse the source's explicit math into a single flat variable; doing so loses the source's stated sensitivity to each operand.
+
+Discipline shared by all three patterns: every quantity for which the source supplies a formula is a derived quantity, not a primitive. Primitives go in `key_values` or `missing_values_to_estimate`; derived quantities go in `recommended_first_calculations`. Inverting that ordering loses the source's named structure and the simulation cannot recover it from the resulting bounds.
+
+When hard limits make this preservation feel tight, do not collapse the decomposition. Drop a less load-bearing key_value, move a less-critical calc to derived_questions, or surface fewer aggregates while keeping the relationships intact for the ones that remain. The same posture as the threshold-pairing rule above.
 
 Critical-output completeness rule:
 

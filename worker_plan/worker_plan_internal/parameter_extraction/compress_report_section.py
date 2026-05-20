@@ -624,6 +624,24 @@ multiplication. For these rate entries the modelling role should
 describe the multiplication structure rather than just naming the cost,
 so a downstream stage can identify the matching scaling input.
 
+Source-stated rates belong in this bucket, not in missing_data. If the
+source names a per-period or per-unit rate at all — explicitly,
+inferred, as a recommended range, or as a stress_test magnitude — emit
+it as a numeric_value with the denominator preserved. Setting
+source_status to 'inferred' or 'stress_test' is fine when the source's
+framing fits; do NOT route a rate-like quantity to missing_data merely
+because the source gives it as a range, a recommendation, or an
+expert's estimate rather than as a single committed value.
+missing_data_to_estimate is reserved for primitives the source does NOT
+name. A rate the source mentions, even imprecisely, has been named and
+must surface here with its denominator intact.
+
+A total cost that the source ALSO frames as a per-period burn must
+appear here in BOTH forms when the source supplies both: one entry for
+the total (with its absolute label) and one entry for the rate (with
+the per-period denominator). Listing only the total flattens the burn
+structure; listing only the rate hides the source's own committed total.
+
 Template shape (substitute values from the source — DO NOT copy these
 placeholders or any unit from them):
 - '<what the number is>: <amount> <currency-from-source> — <modelling role>.'

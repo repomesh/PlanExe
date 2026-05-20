@@ -74,28 +74,27 @@ baseline before merging, not just unit tests.
 
 Anti-overfitting: NEVER bake corpus content into the prompts
 -------------------------------------------------------------
-The 14-plan napkin_math baseline (paperclip pilot, datacenter, and the
-twelve other reports used by Self-Improve and the smoke fixtures) is
-the evaluation set for these prompts. Specific phrases from any of
-those plans MUST NOT appear in the prompt text. That includes — but is
-not limited to:
+These prompts are evaluated against the napkin_math plan baseline used
+by Self-Improve and the smoke fixtures. Specific phrases from any
+baseline plan MUST NOT appear in the prompt text. That includes — but
+is not limited to:
 
-- Concrete numeric values from a baseline plan ('€257.6M/yr',
-  '32.2 km²', '9 GW', '11 GVA', '128.8 km²'). If the prompt example
-  paraphrases a value the test plan also contains, the model is being
-  told the answer, not taught the pattern.
-- Named entities or acronyms from a baseline plan ('RTE', 'DGSI',
-  'DREAL', 'OPC UA', 'Risk-5', 'Assumption Q5', 'Phase 1 CAPEX
-  surplus'). These leak the structure of the test inputs even when
+- Concrete numeric values from any baseline plan (a currency amount,
+  an area figure, a capacity figure, a deadline). If the prompt
+  example paraphrases a value the test plan also contains, the model
+  is being told the answer, not taught the pattern.
+- Named entities or acronyms from any baseline plan (the name of a
+  regulator, a protocol, a project phase, an industry-specific
+  artefact). These leak the structure of the test inputs even when
   the numbers are abstracted.
-- Variable names that match what extract is expected to emit
-  ('holding_cost', 'buildable_area_surplus', 'phase1_capex_surplus').
-  Putting the desired output name in the prompt collapses the test
-  from "did the extract pick the right decomposition?" to "did it
-  copy the suggested name?"
+- Variable names that match what the downstream extract is expected
+  to emit (the specific snake_case ids the calculations stage will
+  call by name). Putting the desired output name in the prompt
+  collapses the test from "did the extract pick the right
+  decomposition?" to "did it copy the suggested name?"
 - Domain-specific framings that fit only one or two corpus plans
-  ('hyperscale grid headroom', 'cleanroom throughput', 'paperclip
-  R&D cell'). Even if no number leaks, the framing tells the model
+  (the jargon of a single industry, the failure mode of a single
+  project). Even if no number leaks, the framing tells the model
   which corpus member the prompt is targeting.
 
 Use abstract placeholder shapes only: '<rate>', '<denominator>',
@@ -105,6 +104,12 @@ energy plan, a renovation project, a public-benefit policy, or a
 language no one on the team reads. PlanExe inputs are multilingual
 and span domains; English-only or commercially-biased examples in a
 prompt are themselves a form of overfitting.
+
+This banner itself is held to the same rule: it lists categories of
+forbidden content but does NOT cite concrete examples from the
+evaluation corpus. A list of literal corpus terms here would rot the
+moment the baseline shifts and would itself be a corpus leak in the
+source file — exactly the failure mode the rule forbids.
 
 If a concrete example feels necessary to anchor a rule, pick a domain
 that demonstrably does NOT appear in the napkin_math baseline AND

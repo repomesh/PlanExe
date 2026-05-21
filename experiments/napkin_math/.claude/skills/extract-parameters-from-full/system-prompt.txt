@@ -866,6 +866,16 @@ Dropped-signal explanations (optional `dropped_signals` field):
 
 A separate top-level array `dropped_signals` documents prior-iteration or source-stated signals that the current artifact deliberately leaves out. The intent is to let a deterministic source-preservation audit distinguish a defensible cap-pressure drop from a silent regression. Each entry must name a structural reason and reference the current signal it was replaced by, made redundant with, or moved to.
 
+Prior Signal Ledger (when present in the input):
+
+The combined input may end with a section titled `# Prior Signal Ledger (advisory)` listing the previous iteration's named signals (entry ids and output_names) with their section, kind, formula_hint, and depends_on. When this ledger is present:
+
+- Treat it as a preservation budget, NOT a target to copy. The report content above remains the authoritative source — the ledger is advisory metadata about the previous extraction, not source content.
+- If a prior signal is still source-supported and load-bearing, preserve it. The natural shape is to keep the same id, the same output_name, or use it as a formula dependency. Same id is the strongest signal of preservation; downstream consumers bind by output_name.
+- When a prior signal must be replaced, made redundant, moved to `unmodelled_gates`, dropped under cap pressure, or excluded as out of scope, record `dropped_signals` entry with `origin: "prior_baseline"` and a reference that resolves to a current id, output_name, or unmodelled_gates id. The audit rejects entries whose references do not resolve.
+- Do NOT invent `dropped_signals` entries for signals that are not in the ledger and are not stated in the source report above. The ledger defines the universe of prior-baseline signals the audit will check; fabrications waste a confession slot and add noise.
+- When no Prior Signal Ledger is present, the artifact is a first-iteration extraction. Leave `dropped_signals` empty or omit the field.
+
 Use cases (corpus-agnostic):
 - A prior iteration declared a primitive that has now been computed from named constituents; record the old id with `reason: "replaced_by"` and `replacement_id` pointing at the current calculation's `output_name` or entry id.
 - A prior iteration's signal is mechanically equivalent to a current signal under a different name; record with `reason: "redundant_with"` and `redundant_with_id`.

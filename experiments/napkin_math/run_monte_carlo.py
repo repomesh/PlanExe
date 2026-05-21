@@ -504,6 +504,16 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
                 f"from parameters.json"
             )
 
+    correlations_block = bounds.get("correlations")
+    if correlations_block:
+        group_count = len(correlations_block) if isinstance(correlations_block, list) else 1
+        warnings_text.append(
+            f"bounds declares {group_count} correlation group(s) but the "
+            f"Gaussian-copula sampler is not yet implemented (Phase 8); "
+            f"variables will be sampled independently for this run — joint-tail "
+            f"risk is structurally understated until the sampler ships"
+        )
+
     input_specs = collect_input_specs(params, bounds)
     plan, plan_warnings = build_calculation_plan(params, module)
     warnings_text.extend(plan_warnings)

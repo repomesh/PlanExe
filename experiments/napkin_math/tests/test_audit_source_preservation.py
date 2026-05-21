@@ -91,7 +91,7 @@ def test_preserved_by_id_when_same_id_present_in_current() -> None:
     report = mod.audit(prior, current)
     assert report["summary"]["preserved_by_id"] == 2
     assert report["summary"]["absent_unexplained"] == 0
-    statuses = {d["prior_id"]: d["status"] for d in report["details"]}
+    statuses = {d["prior_name"]: d["status"] for d in report["details"]}
     assert statuses == {"alpha": "preserved_by_id", "beta": "preserved_by_id"}
 
 
@@ -161,7 +161,7 @@ def test_likely_renamed_when_token_overlap_above_threshold() -> None:
     report = mod.audit(prior, current)
     assert report["summary"]["likely_renamed"] == 1
     detail = next(d for d in report["details"] if d["status"] == "likely_renamed")
-    assert detail["prior_id"] == "actual_outreach_contact_rate"
+    assert detail["prior_name"] == "actual_outreach_contact_rate"
     cand_ids = [c["id"] for c in detail["candidates"]]
     assert "outreach_contact_rate_target" in cand_ids
 
@@ -195,7 +195,7 @@ def test_absent_unexplained_when_no_overlap() -> None:
     assert report["summary"]["absent_unexplained"] == 1
     detail = next(d for d in report["details"]
                   if d["status"] == "absent_unexplained")
-    assert detail["prior_id"] == "orphan_alpha_token"
+    assert detail["prior_name"] == "orphan_alpha_token"
 
 
 def test_absent_unexplained_when_current_is_empty() -> None:
@@ -260,6 +260,75 @@ def test_text_report_renders_summary_and_sections() -> None:
     assert "ABSENT UNEXPLAINED:" in text
     assert "orphan_x" in text
     assert "renamed_alpha_beta" in text
+
+
+# ─── output_name as first-class signal ────────────────────────────────────
+
+def test_output_name_drift_on_preserved_id_is_reported() -> None:
+    """Review feedback on PR #751 (first round): a calc whose entry id
+    survives but whose output_name changes is a genuine signal
+    regression — downstream binders bind by output_name, not by entry
+    id. The audit must report the lost prior output_name as a separate
+    signal, even though the id is preserved."""
+    prior = _build(
+        derived_questions=[{
+            "id": "q_margin",
+            "question": "What is the margin?",
+            "why_it_matters": "test",
+            "formula_hint": "old_margin = actual - threshold",
+            "output_name": "old_margin",
+            "output_unit": "test_unit",
+            "depends_on": ["actual", "threshold"],
+        }],
+    )
+    current = _build(
+        derived_questions=[{
+            "id": "q_margin",
+            "question": "What is the margin?",
+            "why_it_matters": "test",
+            "formula_hint": "new_margin = actual - threshold",
+            "output_name": "new_margin",
+            "output_unit": "test_unit",
+            "depends_on": ["actual", "threshold"],
+        }],
+    )
+    report = mod.audit(prior, current)
+    # Two prior signals: the entry id ``q_margin`` and the output_name
+    # ``old_margin``. The id survives; the output_name does not.
+    assert report["summary"]["prior_total"] == 2
+    statuses = {d["prior_name"]: d["status"] for d in report["details"]}
+    assert statuses["q_margin"] == "preserved_by_id"
+    assert statuses["old_margin"] == "absent_unexplained"
+    old_margin_detail = next(
+        d for d in report["details"] if d["prior_name"] == "old_margin"
+    )
+    assert old_margin_detail["prior_kind"] == "output_name"
+
+
+def test_rename_candidates_drawn_from_output_names_too() -> None:
+    """Mars-style restructures often rename a prior id to a new
+    output_name. Rename candidates must be searchable across both
+    current ids and current output_names so the audit can suggest the
+    output_name as a plausible target."""
+    prior = _build(key_values=[_kv("year1_revenue_surplus_usd")])
+    current = _build(
+        recommended_first_calculations=[
+            _calc(
+                "c_surplus",
+                output_name="year1_viability_surplus_usd",
+                formula="year1_viability_surplus_usd = revenue - cost",
+                depends_on=["revenue", "cost"],
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    detail = next(
+        d for d in report["details"]
+        if d["prior_name"] == "year1_revenue_surplus_usd"
+    )
+    assert detail["status"] == "likely_renamed"
+    cand_ids = [c["id"] for c in detail["candidates"]]
+    assert "year1_viability_surplus_usd" in cand_ids
 
 
 # ─── jaccard primitive ────────────────────────────────────────────────────

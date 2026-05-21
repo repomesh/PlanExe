@@ -107,6 +107,10 @@ FORMULA_BUILTINS = {"min", "max", "abs", "sum", "round", "int", "float"}
 # elsewhere.
 THRESHOLD_UNFRIENDLY_PATTERN = re.compile(r"_(gap|deficit|shortfall)(_[a-z0-9_]+)?$")
 
+# Output-name suffixes recognised as a realised-vs-required margin shape.
+# Matched as a token at the end or just before a unit/qualifier suffix.
+MARGIN_SUFFIX_PATTERN = re.compile(r"_(margin|surplus|buffer|coverage)(_[a-z0-9_]+)?$")
+
 
 def violation(rule_id: str, severity: str, path: str,
               message: str, suggested_fix: str) -> dict:
@@ -528,15 +532,24 @@ def check_aggregate_not_bounded(params: dict, violations: list) -> None:
 
 def check_requirement_has_margin(params: dict, violations: list) -> None:
     """A key_value whose id ends in ``_required`` names a stated
-    requirement floor. At least one calculation in derived_questions or
-    recommended_first_calculations must reference it (formula RHS or
-    depends_on), so that the realised-vs-required margin variable is
-    declared.
+    requirement floor. At least one calculation must declare a real
+    realised-vs-required margin against it. Three properties together
+    constitute a margin:
 
-    Without this pairing the simulation defaults to ``>= 0`` against an
-    absolute quantity that has not been compared to its requirement —
-    the threshold then passes for any non-negative realisation, even
-    when the realised value falls below the requirement.
+    1. The requirement id appears on the formula RHS (the calculation
+       actually consumes the required value).
+    2. The formula contains a subtraction or ratio operator (the
+       calculation compares the realised quantity to the requirement,
+       rather than adding the requirement into an aggregate).
+    3. The output_name carries a positive-pass margin suffix
+       (``_margin``/``_surplus``/``_buffer``/``_coverage``), so a
+       downstream ``>= 0`` threshold reads correctly.
+
+    A bare reference inside a sum (e.g. ``combined = actual + required``)
+    consumes the value but does not test whether the realised quantity
+    meets the requirement. Without a real margin, the gate defaults to
+    ``>= 0`` against an absolute quantity and passes for any non-negative
+    realisation regardless of whether it meets the requirement.
     """
     required_kv: list[tuple[int, str]] = []
     for i, entry in enumerate(params.get("key_values", []) or []):
@@ -547,28 +560,43 @@ def check_requirement_has_margin(params: dict, violations: list) -> None:
             required_kv.append((i, eid))
     if not required_kv:
         return
-    referenced: set[str] = set()
-    for section in ("derived_questions", "recommended_first_calculations"):
-        for entry in params.get(section, []) or []:
-            if not isinstance(entry, dict):
-                continue
-            for d in entry.get("depends_on", []) or []:
-                if isinstance(d, str):
-                    referenced.add(d)
-            formula = entry.get("formula_hint")
-            if formula:
-                referenced |= parse_rhs_vars(formula)
     for i, rid in required_kv:
-        if rid in referenced:
+        satisfied = False
+        for section in ("derived_questions", "recommended_first_calculations"):
+            for entry in params.get(section, []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                formula = entry.get("formula_hint")
+                if not isinstance(formula, str) or not formula:
+                    continue
+                if rid not in parse_rhs_vars(formula):
+                    continue
+                rhs = formula.split("=", 1)[1] if "=" in formula else formula
+                if "-" not in rhs and "/" not in rhs:
+                    continue
+                output_name = entry.get("output_name")
+                if not isinstance(output_name, str):
+                    continue
+                if not MARGIN_SUFFIX_PATTERN.search(output_name):
+                    continue
+                satisfied = True
+                break
+            if satisfied:
+                break
+        if satisfied:
             continue
         violations.append(violation(
             "requirement_has_margin", "ERROR",
             f"$.key_values[{i}].id",
-            f"key_value `{rid}` names a requirement but no calculation references it; the "
-            f"realised-vs-required margin variable is missing",
-            f"add a derived_question or recommended_first_calculation that consumes `{rid}` "
-            f"(e.g. compute a `*_surplus`/`*_margin` of realised minus required), or rename "
-            f"the key_value if it isn't actually a requirement",
+            f"key_value `{rid}` names a requirement but no calculation declares a "
+            f"realised-vs-required margin against it; expected a derived_question or "
+            f"recommended_first_calculation whose formula references `{rid}` with a "
+            f"subtraction or ratio operator AND whose output_name ends in "
+            f"_margin/_surplus/_buffer/_coverage",
+            f"add a calculation like `<base>_margin = <actual> - {rid}` (or "
+            f"`<base>_coverage = <actual> / {rid}`) so a >= 0 / >= 1 threshold tests the "
+            f"realised value against the requirement; or rename the key_value if it "
+            f"isn't actually a requirement",
         ))
 
 

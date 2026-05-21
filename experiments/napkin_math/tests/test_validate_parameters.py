@@ -310,6 +310,161 @@ def test_requirement_has_margin_silent_when_referenced_in_formula_rhs_only() -> 
     assert _violations_for(report, "requirement_has_margin") == []
 
 
+def test_requirement_has_margin_fires_when_reference_is_inside_a_sum() -> None:
+    """Regression for review feedback on PR #746: a reference inside a
+    pure sum (``combined_area = actual_area + buildable_area_required``)
+    consumes the value but does not test the realised-vs-required margin.
+    Pre-tightening this validated clean; the rule must now fire."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "buildable_area_required",
+                "label": "Buildable area required",
+                "category": "capacity",
+                "value_type": "explicit",
+                "unit": "km2",
+                "value": 32.2,
+                "comment": "Stated requirement",
+                "formula_hint": None,
+                "output_name": None,
+                "output_unit": None,
+                "depends_on": [],
+                "modelling_priority": "critical",
+                "uncertainty": "low",
+                "source_text": "Requires 32.2 km2 to support 9 GW.",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [
+            {
+                "id": "actual_area",
+                "label": "Realised area",
+                "unit": "km2",
+                "why_needed": "addend",
+                "suggested_estimation_method": "site survey",
+            },
+        ],
+        "recommended_first_calculations": [
+            {
+                "id": "calc_combined_area",
+                "label": "Combined area",
+                "formula_hint": "combined_area = actual_area + buildable_area_required",
+                "output_name": "combined_area",
+                "output_unit": "km2",
+                "depends_on": ["actual_area", "buildable_area_required"],
+                "why_first": "headline",
+            },
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "requirement_has_margin")
+    assert len(fired) == 1
+    assert "buildable_area_required" in fired[0]["message"]
+
+
+def test_requirement_has_margin_fires_when_subtraction_but_no_margin_suffix() -> None:
+    """A real subtraction without a positive-pass output suffix reads
+    ambiguously when a downstream gate tests it against >= 0. The
+    threshold-friendly naming rule warns on `_gap/_deficit/_shortfall`;
+    here we require the converse — a clear margin-shape suffix."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "buildable_area_required",
+                "label": "Buildable area required",
+                "category": "capacity",
+                "value_type": "explicit",
+                "unit": "km2",
+                "value": 32.2,
+                "comment": "Stated requirement",
+                "formula_hint": None,
+                "output_name": None,
+                "output_unit": None,
+                "depends_on": [],
+                "modelling_priority": "critical",
+                "uncertainty": "low",
+                "source_text": "Requires 32.2 km2 to support 9 GW.",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [
+            {
+                "id": "actual_area",
+                "label": "Realised area",
+                "unit": "km2",
+                "why_needed": "subtrahend",
+                "suggested_estimation_method": "site survey",
+            },
+        ],
+        "recommended_first_calculations": [
+            {
+                "id": "calc_area_delta",
+                "label": "Area delta",
+                "formula_hint": "area_delta = actual_area - buildable_area_required",
+                "output_name": "area_delta",
+                "output_unit": "km2",
+                "depends_on": ["actual_area", "buildable_area_required"],
+                "why_first": "delta",
+            },
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "requirement_has_margin")
+    assert len(fired) == 1
+
+
+def test_requirement_has_margin_silent_for_ratio_coverage() -> None:
+    """A coverage ratio (``actual / required``) with an ``_coverage``
+    output_name is an acceptable margin-shape: positive_pass = coverage
+    meets/exceeds the required threshold (typically >= 1.0)."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "buildable_area_required",
+                "label": "Buildable area required",
+                "category": "capacity",
+                "value_type": "explicit",
+                "unit": "km2",
+                "value": 32.2,
+                "comment": "Stated requirement",
+                "formula_hint": None,
+                "output_name": None,
+                "output_unit": None,
+                "depends_on": [],
+                "modelling_priority": "critical",
+                "uncertainty": "low",
+                "source_text": "Requires 32.2 km2 to support 9 GW.",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [
+            {
+                "id": "actual_area",
+                "label": "Realised area",
+                "unit": "km2",
+                "why_needed": "numerator",
+                "suggested_estimation_method": "site survey",
+            },
+        ],
+        "recommended_first_calculations": [
+            {
+                "id": "calc_area_coverage",
+                "label": "Area coverage ratio",
+                "formula_hint": "buildable_area_coverage = actual_area / buildable_area_required",
+                "output_name": "buildable_area_coverage",
+                "output_unit": "fraction",
+                "depends_on": ["actual_area", "buildable_area_required"],
+                "why_first": "coverage",
+            },
+        ],
+    }
+    report = validate(params)
+    assert _violations_for(report, "requirement_has_margin") == []
+
+
 def test_requirement_has_margin_silent_when_no_required_key_value() -> None:
     """No `_required` key_value at all → rule is silent. Avoids false
     positives on plans that don't state hard requirements."""

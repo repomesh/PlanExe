@@ -223,7 +223,7 @@ def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
 
 def check_validate_parameters_end_to_end(tmpdir: Path) -> None:
     """Run validate_parameters.py against the smoke fixture and verify it
-    produces a clean validation.json (exit 0, valid: true, 16 checks listed).
+    produces a clean validation.json (exit 0, valid: true, 18 checks listed).
     """
     out = tmpdir / "validation.json"
     validator = NAPKIN_DIR / "validate_parameters.py"

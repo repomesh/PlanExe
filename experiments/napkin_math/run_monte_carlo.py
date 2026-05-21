@@ -35,7 +35,26 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "correlation_groups": [],
 }
 
-VALID_DISCIPLINES = {"fixed", "bernoulli_gate", "integer", "fraction", "continuous"}
+VALID_DISCIPLINES = {
+    "fixed", "bernoulli_gate", "integer", "fraction", "continuous",
+    # Phase 4 reserved; sampler raises NotImplementedError until Phase 8
+    # implements the matching samplers. Validation passes so that
+    # generate-bounds can begin emitting these for plan_type-driven
+    # megaproject CAPEX without a downstream schema error.
+    "lognormal", "pert",
+}
+
+# Disciplines whose schema is reserved but whose sampler is not yet
+# implemented. ``sample_one`` raises ``NotImplementedError`` loudly so a
+# user trying to run Monte Carlo against bounds that use them gets an
+# explicit failure rather than a silent fall-back to triangular.
+UNIMPLEMENTED_DISCIPLINES = frozenset({"lognormal", "pert"})
+
+# Top-level keys in ``bounds.json`` that are not per-variable bound
+# entries. ``correlations`` carries the optional R1.3 declared-correlation
+# groups; it is preserved as-is through ``strip_threshold_bounds`` and
+# never reaches per-variable validation or sampling.
+RESERVED_TOP_LEVEL_KEYS = frozenset({"correlations"})
 
 THRESHOLD_SUFFIXES = (
     "_threshold", "_target", "_ceiling", "_floor",
@@ -135,10 +154,30 @@ def _collect_formula_threshold_ids(parameters: dict) -> set[str]:
     return threshold_ids
 
 
+def _collect_calculation_output_names(parameters: dict) -> set[str]:
+    """``output_name`` values declared by any calculation in
+    ``recommended_first_calculations`` or ``derived_questions``. These
+    names refer to *computed* quantities — a bound on the output would
+    sample the aggregate independently of its formula's named inputs,
+    so a single Monte Carlo trial can pair sub-component p95s with a
+    total p05 (Gemini R1.1, disconnected aggregates).
+    """
+    out: set[str] = set()
+    for src in ("recommended_first_calculations", "derived_questions"):
+        for entry in parameters.get(src, []) or []:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("output_name")
+            if isinstance(name, str) and name:
+                out.add(name)
+    return out
+
+
 def strip_threshold_bounds(
     bounds: dict, parameters: dict,
 ) -> tuple[dict, list[dict]]:
-    """Remove bounds entries for threshold/target variables.
+    """Remove bounds entries for threshold/target variables and for
+    variables that are calculation outputs.
 
     Bounds entries on threshold variables silently change what `pass_rate`
     measures from "does actual >= stated_threshold" to
@@ -147,28 +186,41 @@ def strip_threshold_bounds(
     `collect_input_specs` does this automatically when the threshold variable
     is absent from bounds. This function enforces that absence.
 
+    Bounds entries on calculation outputs (variables that appear as a
+    declared ``output_name`` in ``recommended_first_calculations`` or
+    ``derived_questions``) would let a single Monte Carlo trial pair
+    sub-component p95s with a total p05; the output is computed from its
+    inputs, not sampled.
+
     Deterministic backstop for the rule documented in
     `.claude/skills/generate-bounds/system-prompt.txt`. The LLM is asked to
-    skip threshold variables but does not reliably do so when parameter-JSON
-    metadata (medium uncertainty + critical/high priority) signals strongly
-    to include them.
+    skip threshold and aggregate variables but does not reliably do so when
+    parameter-JSON metadata (medium uncertainty + critical/high priority)
+    signals strongly to include them.
 
     Identification:
       1. id suffix match against `THRESHOLD_SUFFIXES`
       2. id appears as the non-`actual_` operand in a binary-subtraction
          margin formula declared in `recommended_first_calculations` or
          `derived_questions`
+      3. id matches the ``output_name`` of any declared calculation
 
-    Variables prefixed `actual_` are never stripped.
+    Variables prefixed `actual_` are never stripped. Reserved top-level
+    keys (currently ``correlations``) pass through unchanged so the
+    optional correlations block survives this pre-processor.
 
     Returns ``(cleaned_bounds, stripped)``. ``stripped`` is an ordered list
-    of ``{"id": str, "reason": "suffix" | "formula-side"}`` records. The
-    input ``bounds`` is not mutated.
+    of ``{"id": str, "reason": "suffix" | "formula-side" | "calculation-output"}``
+    records. The input ``bounds`` is not mutated.
     """
     formula_threshold_ids = _collect_formula_threshold_ids(parameters)
+    calculation_output_names = _collect_calculation_output_names(parameters)
     cleaned: dict = {}
     stripped: list[dict] = []
     for bound_id, bound in bounds.items():
+        if bound_id in RESERVED_TOP_LEVEL_KEYS:
+            cleaned[bound_id] = bound
+            continue
         if bound_id.startswith("actual_"):
             cleaned[bound_id] = bound
             continue
@@ -177,6 +229,9 @@ def strip_threshold_bounds(
             continue
         if bound_id in formula_threshold_ids:
             stripped.append({"id": bound_id, "reason": "formula-side"})
+            continue
+        if bound_id in calculation_output_names:
+            stripped.append({"id": bound_id, "reason": "calculation-output"})
             continue
         cleaned[bound_id] = bound
     return cleaned, stripped
@@ -225,6 +280,15 @@ def sample_one(rng: np.random.Generator, bound: dict, distribution_default: str,
     if discipline == "bernoulli_gate":
         p = gate_probabilities.get(var_id, bound["default_pass_probability"])
         return high if rng.random() < p else low
+
+    if discipline in UNIMPLEMENTED_DISCIPLINES:
+        raise NotImplementedError(
+            f"bound '{var_id}' has sampling_discipline {discipline!r}; "
+            f"the matching sampler is not yet implemented in run_monte_carlo. "
+            f"This value is accepted by the schema (Phase 4) but the sampler "
+            f"lands in Phase 8 — switch to triangular/continuous in bounds.json "
+            f"or wait for Phase 8."
+        )
 
     if low == high:
         val = low

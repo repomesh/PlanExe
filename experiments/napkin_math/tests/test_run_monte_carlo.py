@@ -186,6 +186,38 @@ class TestSamplingDiscipline(unittest.TestCase):
         self.assertTrue(any(v < 0 for v in out))
         self.assertTrue(all(-10 <= v <= 10 for v in out))
 
+    def test_lognormal_passes_schema_validation(self):
+        """The schema accepts lognormal so that generate-bounds can begin
+        emitting it (Phase 4 readiness for the megaproject CAPEX default
+        that lands in the prompt-side follow-up)."""
+        bound = make_bound(unit="EUR", low=1e6, base=5e6, high=2e7,
+                           sampling_discipline="lognormal")
+        rmc.validate_bound("capex", bound)
+
+    def test_pert_passes_schema_validation(self):
+        bound = make_bound(unit="EUR", low=1e6, base=5e6, high=2e7,
+                           sampling_discipline="pert")
+        rmc.validate_bound("opex", bound)
+
+    def test_lognormal_sampler_raises_not_implemented(self):
+        """Sampling raises loudly until Phase 8 lands the sampler. A silent
+        fall-back to triangular would let the user see "100% Robust" on a
+        megaproject whose CAPEX bounds are actually fat-tailed — exactly
+        the megaproject illusion Phase 4 is laying groundwork to fix."""
+        bound = make_bound(unit="EUR", low=1e6, base=5e6, high=2e7,
+                           sampling_discipline="lognormal")
+        with self.assertRaises(NotImplementedError) as ctx:
+            rmc.sample_one(self.rng, bound, "triangular", {}, "capex")
+        self.assertIn("lognormal", str(ctx.exception))
+        self.assertIn("Phase 8", str(ctx.exception))
+
+    def test_pert_sampler_raises_not_implemented(self):
+        bound = make_bound(unit="EUR", low=1e6, base=5e6, high=2e7,
+                           sampling_discipline="pert")
+        with self.assertRaises(NotImplementedError) as ctx:
+            rmc.sample_one(self.rng, bound, "triangular", {}, "opex")
+        self.assertIn("pert", str(ctx.exception))
+
 
 class TestSchemaValidation(unittest.TestCase):
     def test_missing_sampling_discipline(self):

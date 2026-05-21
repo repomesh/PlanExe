@@ -662,6 +662,40 @@ def test_gate_shape_promotion_passes_through_canonical_if_then() -> None:
     assert gate_shape_promotion(line) == line
 
 
+def test_gate_shape_promotion_preserves_acronyms_in_subject() -> None:
+    """Subject acronyms like ``API`` / ``OPC UA`` must NOT be lowercased
+    by the rewrite — that would damage the readable form. The case
+    adjustment only fires on regular capitalised words (uppercase
+    followed by lowercase), not on acronyms (uppercase followed by
+    uppercase)."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = (
+        "API job queue latency exceeds 100ms, "
+        "requiring control board upgrades to meet the responsiveness target."
+    )
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If API "), rewritten
+    assert "aPI" not in rewritten
+
+
+def test_gate_shape_promotion_lowercases_regular_capitalised_subject() -> None:
+    """Counterpart to the acronym test: a regular capitalised subject
+    SHOULD be lowercased mid-sentence so the rewritten if/then reads
+    naturally. ``Middleware`` → ``middleware`` is the canonical case."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = "Middleware development bid exceeds $75,000, scope is cut."
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If middleware development bid "), rewritten
+
+
 def test_promote_gate_shaped_risks_moves_misfiled_gate() -> None:
     """Focal v53c scenario: gates emitted some items but missed a tripwire;
     risks emitted the tripwire with if/then numeric shape. Promotion

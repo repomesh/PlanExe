@@ -1105,6 +1105,21 @@ DECLARATIVE_GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
 )
 
 
+def _lowercase_first_preserving_acronyms(text: str) -> str:
+    """Lowercase the first character of ``text`` only when doing so does
+    not damage an acronym. Heuristic: lowercase only when the first
+    character is an uppercase letter AND the second character is a
+    lowercase letter (a regular capitalized word like ``Middleware``).
+    For tokens like ``API`` / ``OPC UA`` / ``5G`` the next character is
+    not a lowercase letter, so the casing is preserved.
+    """
+    if len(text) < 2:
+        return text
+    if text[0].isupper() and text[1].islower():
+        return text[0].lower() + text[1:]
+    return text
+
+
 def gate_shape_promotion(line: str) -> Optional[str]:
     """Return the if/then form of ``line`` if it has any recognised gate
     structural shape, else ``None``.
@@ -1126,6 +1141,12 @@ def gate_shape_promotion(line: str) -> Optional[str]:
     ``If middleware development bid exceeds $75,000, then consuming
     budget...`` so the downstream consumer reads a uniformly-shaped gate.
 
+    Casing in the rewrite is preserved for acronyms and proper nouns —
+    ``API job queue latency...`` becomes ``If API job queue latency...``,
+    not ``If aPI...``. The case adjustment only fires on regular
+    capitalised words where the first letter being lowercased reads
+    naturally mid-sentence.
+
     Returns ``None`` when the line matches neither shape — the promoter
     must not steal qualitative risks (triggers with a non-numeric source
     side, or risks framed without a comparison verb) into the gates pool.
@@ -1140,14 +1161,10 @@ def gate_shape_promotion(line: str) -> Optional[str]:
     m = DECLARATIVE_GATE_SHAPE_PATTERN.match(s)
     if m is None:
         return None
-    subject = m.group("subject").strip()
+    subject = _lowercase_first_preserving_acronyms(m.group("subject").strip())
     verb = " ".join(m.group("verb").split())
     threshold = m.group("threshold").strip()
-    consequence = m.group("consequence").strip()
-    if subject and subject[0].isupper():
-        subject = subject[0].lower() + subject[1:]
-    if consequence and consequence[0].isupper():
-        consequence = consequence[0].lower() + consequence[1:]
+    consequence = _lowercase_first_preserving_acronyms(m.group("consequence").strip())
     return f"If {subject} {verb} {threshold}, then {consequence}"
 
 

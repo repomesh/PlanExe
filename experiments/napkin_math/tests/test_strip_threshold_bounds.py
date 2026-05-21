@@ -184,6 +184,103 @@ class StripByFormulaSideTests(unittest.TestCase):
         )
 
 
+class StripByCalculationOutputTests(unittest.TestCase):
+    """A variable that is the declared ``output_name`` of a calculation is
+    a computed quantity, not a primitive input. Bounding it independently
+    lets a single Monte Carlo trial pair sub-component p95s with a total
+    p05 (Gemini R1.1)."""
+
+    def test_strips_calculation_output_in_recommended_first_calculations(self):
+        params = {
+            "recommended_first_calculations": [{
+                "id": "calc_total_cost",
+                "formula_hint": "total_cost = civil_works + remediation + hardware",
+                "output_name": "total_cost",
+                "output_unit": "EUR",
+            }],
+        }
+        bounds = {
+            "civil_works": _bound(),
+            "remediation": _bound(),
+            "hardware": _bound(),
+            "total_cost": _bound(),
+        }
+        cleaned, stripped = rmc.strip_threshold_bounds(bounds, params)
+        self.assertEqual(set(cleaned), {"civil_works", "remediation", "hardware"})
+        self.assertEqual(stripped, [{"id": "total_cost", "reason": "calculation-output"}])
+
+    def test_strips_calculation_output_in_derived_questions(self):
+        params = {
+            "derived_questions": [{
+                "id": "q_holding_cost",
+                "formula_hint": "holding_cost = annual_burn * delay_years",
+                "output_name": "holding_cost",
+                "output_unit": "EUR",
+            }],
+        }
+        bounds = {
+            "annual_burn": _bound(),
+            "delay_years": _bound(),
+            "holding_cost": _bound(),
+        }
+        cleaned, stripped = rmc.strip_threshold_bounds(bounds, params)
+        self.assertEqual(set(cleaned), {"annual_burn", "delay_years"})
+        self.assertEqual(stripped, [{"id": "holding_cost", "reason": "calculation-output"}])
+
+    def test_actual_prefix_overrides_calculation_output(self):
+        """Defensive: ``actual_*`` is preserved even when it collides with a
+        declared output_name. The plan author should never name a primitive
+        actual_X with the same id as a calculation output, but if it
+        happens the actual_ rule wins so the realised input survives."""
+        params = {
+            "recommended_first_calculations": [{
+                "id": "calc",
+                "formula_hint": "x = a + b",
+                "output_name": "actual_total",
+                "output_unit": "EUR",
+            }],
+        }
+        bounds = {"actual_total": _bound()}
+        cleaned, stripped = rmc.strip_threshold_bounds(bounds, params)
+        self.assertEqual(set(cleaned), {"actual_total"})
+        self.assertEqual(stripped, [])
+
+    def test_does_not_strip_variables_that_are_not_outputs(self):
+        params = {
+            "recommended_first_calculations": [{
+                "id": "calc_total",
+                "formula_hint": "total = a + b",
+                "output_name": "total",
+                "output_unit": "EUR",
+            }],
+        }
+        bounds = {"a": _bound(), "b": _bound()}
+        cleaned, stripped = rmc.strip_threshold_bounds(bounds, params)
+        self.assertEqual(set(cleaned), {"a", "b"})
+        self.assertEqual(stripped, [])
+
+
+class ReservedTopLevelKeysTests(unittest.TestCase):
+    """The optional ``correlations`` top-level key carries cross-variable
+    correlation groups. It is preserved through the stripper as-is — it
+    isn't a bound entry, it isn't a threshold, and it must survive into
+    Phase 8 where the copula sampler reads it."""
+
+    def test_correlations_key_passes_through_unchanged(self):
+        correlations_payload = [
+            {"group_id": "capex_cluster", "variables": ["civil_works", "hardware"], "rho": 0.7},
+        ]
+        bounds = {
+            "civil_works": _bound(),
+            "hardware": _bound(),
+            "correlations": correlations_payload,
+        }
+        cleaned, stripped = rmc.strip_threshold_bounds(bounds, {})
+        self.assertEqual(stripped, [])
+        self.assertIs(cleaned["correlations"], correlations_payload)
+        self.assertEqual(set(cleaned), {"civil_works", "hardware", "correlations"})
+
+
 class CombinedTests(unittest.TestCase):
     def test_does_not_mutate_input(self):
         bounds = {"x_threshold": _bound(), "actual_x": _bound()}

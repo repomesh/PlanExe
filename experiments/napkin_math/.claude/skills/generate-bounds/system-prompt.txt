@@ -187,6 +187,8 @@ sampling_discipline must be one of:
 - "integer"         — countable units (people, households, days, kits, sites, …); downstream samplers round draws to the nearest integer and re-clamp to [low, high]
 - "fraction"        — bounded in [0, 1]; downstream samplers clamp draws to that interval
 - "continuous"      — real-valued; downstream samplers do not round or clamp beyond the [low, high] range
+- "lognormal"       — fat-tailed real-valued draw whose [low, high] mean P5 / P95, not hard cutoffs. **Schema-reserved: the Monte Carlo runner accepts this value at validation time but raises NotImplementedError at sample time until Phase 8 lands the matching sampler.** Do not emit yet unless a follow-up rule (megaproject CAPEX default) explicitly directs you to.
+- "pert"            — three-point modified-beta draw centered on base with low/high as the supports. **Schema-reserved with the same Phase-8 caveat as lognormal.** Do not emit yet.
 
 Choose sampling_discipline by the variable's nature, not by lexical tokens in its id or unit. The downstream Monte Carlo runner does not pattern-match on unit strings; it reads sampling_discipline directly. There must be no fallback path that re-guesses the discipline.
 
@@ -196,11 +198,13 @@ default_pass_probability:
 - For sampling_discipline "bernoulli_gate": must be a number in [0, 1]; this is the assumed pass probability when the caller does not override it
 - For every other sampling_discipline: must be null
 
+A single optional top-level key `correlations` is reserved alongside the per-variable entries for declaring cross-variable correlation groups. **Schema-reserved with the same Phase-8 caveat as lognormal/pert: the runner preserves the key but does not yet apply correlated sampling.** Do not emit a `correlations` block yet; the detailed selection rules will land alongside the copula sampler.
+
 Rules for the output:
 
 - Output only variables selected by the rules above.
 - Do not invent ids.
-- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate.
+- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate (except for the reserved `correlations` key described above, which is not yet emitted).
 - Order keys by importance: critical-priority first, then high, then medium, then remaining missing_values_to_estimate not already placed.
 - rationale must be at most 50 words. The cap exists to discourage prose, not to suppress required disclosures: the named-anchor paraphrase required by ACTUAL-VS-COMMITMENT and the base-vs-threshold clause required by SANITY CHECK are exempt from the cap if they push the rationale past 50 words.
 - Split rationale on whitespace for word count; hyphenated and slash-joined tokens count as one word.

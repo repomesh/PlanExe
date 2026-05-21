@@ -498,10 +498,11 @@ def test_requirement_has_margin_silent_when_no_required_key_value() -> None:
 
 # ─── checks_performed enumeration ─────────────────────────────────────────
 
-def test_validate_lists_all_18_checks() -> None:
-    """The validator must report all 18 checks_performed, including the
-    two new structural rules. Downstream consumers (summarize_assessment)
-    use this list to render the validation card."""
+def test_validate_lists_all_19_checks() -> None:
+    """The validator must report all 19 checks_performed, including the
+    two PR #746 structural rules and the PR #2 ``dropped_signals_schema``
+    rule. Downstream consumers (summarize_assessment) use this list to
+    render the validation card."""
     report = validate({
         "plan_summary": PLAN_SUMMARY,
         "key_values": [],
@@ -510,6 +511,238 @@ def test_validate_lists_all_18_checks() -> None:
         "recommended_first_calculations": [],
     })
     checks = report["summary"]["checks_performed"]
-    assert len(checks) == 18
+    assert len(checks) == 19
     assert "aggregate_not_bounded" in checks
     assert "requirement_has_margin" in checks
+    assert "dropped_signals_schema" in checks
+
+
+# ─── dropped_signals_schema ──────────────────────────────────────────────
+
+def _make_dropped(eid: str, **overrides) -> dict:
+    base = {
+        "id": eid,
+        "origin": "prior_baseline",
+        "source_anchor": "prior_baseline",
+        "expected_section": "key_values",
+        "dropped_from": "key_values",
+        "reason": "replaced_by",
+        "replacement_id": "alpha",
+        "redundant_with_id": None,
+        "cap_kind": None,
+        "rationale": "replaced by an equivalent computed quantity",
+    }
+    base.update(overrides)
+    return base
+
+
+def test_dropped_signals_absent_is_clean() -> None:
+    """The field is optional. Artifacts without dropped_signals validate
+    clean (matches every existing v51 parameters.json)."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+    }
+    report = validate(params)
+    assert _violations_for(report, "dropped_signals_schema") == []
+
+
+def test_dropped_signals_replaced_by_resolves_clean() -> None:
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "alpha", "label": "alpha", "category": "test",
+                "value_type": "explicit", "unit": "test", "value": 1.0,
+                "comment": "", "formula_hint": None, "output_name": None,
+                "output_unit": None, "depends_on": [],
+                "modelling_priority": "low", "uncertainty": "low",
+                "source_text": "",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped("old_alpha", replacement_id="alpha"),
+        ],
+    }
+    report = validate(params)
+    assert _violations_for(report, "dropped_signals_schema") == []
+
+
+def test_dropped_signals_unknown_reason_fires() -> None:
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [_make_dropped("orphan", reason="some_garbage")],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("reason" in v["message"] for v in fired)
+
+
+def test_dropped_signals_unresolved_replacement_id_fires() -> None:
+    """replacement_id must reference an existing current id or output_name."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped("old_alpha", replacement_id="never_declared"),
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("replacement_id" in v["message"] for v in fired)
+
+
+def test_dropped_signals_cap_pressure_requires_array_at_cap() -> None:
+    """A cap_pressure claim is only justified when the capped array is
+    actually at its cap. If the array has room, the dropped signal could
+    have been kept — the claim is rejected."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        # key_values is at 1 entry; cap is 8. cap_pressure is not justified.
+        "key_values": [
+            {
+                "id": "alpha", "label": "alpha", "category": "test",
+                "value_type": "explicit", "unit": "test", "value": 1.0,
+                "comment": "", "formula_hint": None, "output_name": None,
+                "output_unit": None, "depends_on": [],
+                "modelling_priority": "low", "uncertainty": "low",
+                "source_text": "",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped(
+                "old_beta",
+                reason="cap_pressure",
+                cap_kind="key_values",
+                replacement_id=None,
+                rationale="dropped under cap pressure",
+            ),
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("cap_pressure" in v["message"] for v in fired)
+
+
+def test_dropped_signals_redundant_with_unresolved_fires() -> None:
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped(
+                "old_redundant",
+                reason="redundant_with",
+                replacement_id=None,
+                redundant_with_id="never_declared",
+                rationale="this is redundant with the new thing",
+            ),
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("redundant_with_id" in v["message"] for v in fired)
+
+
+def test_dropped_signals_moved_to_unmodelled_gate_requires_gate_id() -> None:
+    """moved_to_unmodelled_gate replacement_id must point at an actual
+    unmodelled_gates entry — not at a regular key_value/output_name."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "alpha", "label": "alpha", "category": "test",
+                "value_type": "explicit", "unit": "test", "value": 1.0,
+                "comment": "", "formula_hint": None, "output_name": None,
+                "output_unit": None, "depends_on": [],
+                "modelling_priority": "low", "uncertainty": "low",
+                "source_text": "",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "unmodelled_gates": [],
+        "dropped_signals": [
+            _make_dropped(
+                "old_gate_candidate",
+                reason="moved_to_unmodelled_gate",
+                # alpha is a key_value, not an unmodelled_gates id.
+                replacement_id="alpha",
+                rationale="moved to unmodelled gates layer",
+            ),
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("unmodelled_gates" in v["message"] for v in fired)
+
+
+def test_dropped_signals_rationale_word_cap() -> None:
+    long_rationale = " ".join(["word"] * 40)
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "alpha", "label": "alpha", "category": "test",
+                "value_type": "explicit", "unit": "test", "value": 1.0,
+                "comment": "", "formula_hint": None, "output_name": None,
+                "output_unit": None, "depends_on": [],
+                "modelling_priority": "low", "uncertainty": "low",
+                "source_text": "",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped("old_alpha", replacement_id="alpha", rationale=long_rationale),
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("rationale" in v["message"] for v in fired)
+
+
+def test_dropped_signals_over_cap_fires() -> None:
+    """At most 8 dropped_signals entries; 9 should fire."""
+    params = {
+        "plan_summary": PLAN_SUMMARY,
+        "key_values": [
+            {
+                "id": "alpha", "label": "alpha", "category": "test",
+                "value_type": "explicit", "unit": "test", "value": 1.0,
+                "comment": "", "formula_hint": None, "output_name": None,
+                "output_unit": None, "depends_on": [],
+                "modelling_priority": "low", "uncertainty": "low",
+                "source_text": "",
+            },
+        ],
+        "derived_questions": [],
+        "missing_values_to_estimate": [],
+        "recommended_first_calculations": [],
+        "dropped_signals": [
+            _make_dropped(f"old_{i}", replacement_id="alpha") for i in range(9)
+        ],
+    }
+    report = validate(params)
+    fired = _violations_for(report, "dropped_signals_schema")
+    assert any("9 entries" in v["message"] for v in fired)

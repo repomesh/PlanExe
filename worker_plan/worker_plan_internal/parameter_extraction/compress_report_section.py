@@ -1079,21 +1079,84 @@ GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
     re.IGNORECASE | re.DOTALL,
 )
 
+# Declarative comparison form the risks bucket sometimes uses for what is
+# structurally a gate. Subject phrase, then a comparison verb naming the
+# direction of the threshold check, then a threshold containing a digit
+# token, then a comma or colon separator, then the consequence. The
+# alternatives below are language-neutral structural cues — digits in any
+# locale, and the comparison verbs are required by the risks bucket
+# prompt's own 'trigger plus impact' template when the trigger itself is
+# numerically gated. Function-word membership (``exceeds`` / ``falls
+# below`` / etc) is the structural cue, not domain vocabulary.
+DECLARATIVE_GATE_COMPARISON_VERBS: str = (
+    r"exceeds?|falls?\s+below|drops?\s+below|rises?\s+above|breaches?|"
+    r"is\s+(?:above|below|greater\s+than|less\s+than|more\s+than)|"
+    r"reaches?|surpass(?:es)?"
+)
+DECLARATIVE_GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
+    r"^(?P<subject>.+?)\s+"
+    rf"(?P<verb>{DECLARATIVE_GATE_COMPARISON_VERBS})\s+"
+    # Threshold must contain a digit token; commas/colons INSIDE a number
+    # (e.g. ``$75,000``) are accepted by requiring the separator comma to
+    # be followed by whitespace and NOT preceded by a digit.
+    r"(?P<threshold>.*?\d.*?)\s*(?:[,:](?!\d))\s+"
+    r"(?P<consequence>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
 
-def has_gate_shape(line: str) -> bool:
-    """A line has the gate structural shape when its surface form reads
-    ``If <something with a numeric token> ... then <consequence>``.
 
-    Used by the cross-bucket promoter: a sentence with this shape is a
-    deterministic pass/fail check the downstream model needs to evaluate,
-    regardless of which bucket the LLM filed it under. Detection is
-    syntactic and language-neutral — digits are digits in any locale,
-    and the ``if`` / ``then`` keywords are required by the bucket prompt's
-    own template instructions.
+def gate_shape_promotion(line: str) -> Optional[str]:
+    """Return the if/then form of ``line`` if it has any recognised gate
+    structural shape, else ``None``.
+
+    Two shapes are recognised:
+
+    1. **Canonical if/then numeric** (``If <... digit ...> then <...>``) —
+       the line is returned unchanged.
+    2. **Declarative comparison numeric** (``<subject> exceeds <threshold>,
+       <consequence>`` and variants) — the line is rewritten as ``If
+       <subject> <verb> <threshold>, then <consequence>``.
+
+    The rewrite preserves the gates_and_thresholds bucket's output contract
+    (every gate is in if/then form). The declarative shape is exactly what
+    the risks bucket sometimes produces for what is structurally a gate —
+    see the v53c paperclip case, where the LLM filed
+    ``Middleware development bid exceeds $75,000, consuming budget...``
+    under risks instead of gates. The promoter rewrites this into
+    ``If middleware development bid exceeds $75,000, then consuming
+    budget...`` so the downstream consumer reads a uniformly-shaped gate.
+
+    Returns ``None`` when the line matches neither shape — the promoter
+    must not steal qualitative risks (triggers with a non-numeric source
+    side, or risks framed without a comparison verb) into the gates pool.
     """
     if not isinstance(line, str):
-        return False
-    return bool(GATE_SHAPE_PATTERN.search(line))
+        return None
+    s = line.strip()
+    if not s:
+        return None
+    if GATE_SHAPE_PATTERN.search(s):
+        return s
+    m = DECLARATIVE_GATE_SHAPE_PATTERN.match(s)
+    if m is None:
+        return None
+    subject = m.group("subject").strip()
+    verb = " ".join(m.group("verb").split())
+    threshold = m.group("threshold").strip()
+    consequence = m.group("consequence").strip()
+    if subject and subject[0].isupper():
+        subject = subject[0].lower() + subject[1:]
+    if consequence and consequence[0].isupper():
+        consequence = consequence[0].lower() + consequence[1:]
+    return f"If {subject} {verb} {threshold}, then {consequence}"
+
+
+def has_gate_shape(line: str) -> bool:
+    """True when ``line`` has a gate structural shape — either canonical
+    if/then numeric, or declarative comparison-verb numeric that the
+    promoter can deterministically rewrite into if/then form.
+    """
+    return gate_shape_promotion(line) is not None
 
 
 def promote_gate_shaped_risks(
@@ -1153,7 +1216,8 @@ def promote_gate_shaped_risks(
         if not isinstance(risk_item, ScoredItem):
             remaining_risks.append(risk_item)
             continue
-        if not has_gate_shape(risk_item.line_english):
+        rewritten_line = gate_shape_promotion(risk_item.line_english)
+        if rewritten_line is None:
             remaining_risks.append(risk_item)
             continue
         if not risk_item.source_quote:
@@ -1163,7 +1227,13 @@ def promote_gate_shaped_risks(
         if normalised in existing_gate_quotes:
             remaining_risks.append(risk_item)
             continue
-        augmented_gates.append(risk_item)
+        # Promote with the if/then-form line. ``line_original`` is kept as
+        # the source's native phrasing — the rewrite is a structural
+        # adapter for the gates bucket output contract only, not a
+        # claim about the source language. Scores, status, and quote
+        # carry over unchanged.
+        promoted_item = risk_item.model_copy(update={"line_english": rewritten_line})
+        augmented_gates.append(promoted_item)
         existing_gate_quotes.add(normalised)
         promoted_count += 1
     return augmented_gates, remaining_risks, promoted_count

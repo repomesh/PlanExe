@@ -598,6 +598,70 @@ def test_has_gate_shape_rejects_non_string() -> None:
     assert has_gate_shape("") is False
 
 
+def test_has_gate_shape_accepts_declarative_v53c_form() -> None:
+    """Regression test for the actual v53c failure: the LLM filed
+    ``Middleware development bid exceeds $75,000, consuming budget...``
+    under risks_and_shocks. The historical phrasing is declarative
+    (subject + comparison verb + threshold + consequence), not if/then.
+    The promoter must recognise this shape so the v53c miscategorisation
+    can be rerouted to gates."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    line = (
+        "Middleware development bid exceeds $75,000, "
+        "consuming budget planned for the physical handoff accumulation system."
+    )
+    assert has_gate_shape(line) is True
+
+
+def test_has_gate_shape_rejects_genuine_risk_with_colon_delay() -> None:
+    """Negative regression: a genuine risk like 'Supply chain disruption:
+    4 to 6 weeks delay and $15,000 cost increase.' has no comparison
+    verb between subject and digit, so it must NOT be classified as a
+    gate. The promoter must not steal genuine risks into the gates pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    line = "Supply chain disruption: 4 to 6 weeks delay and $15,000 cost increase."
+    assert has_gate_shape(line) is False
+
+
+def test_gate_shape_promotion_rewrites_declarative_to_if_then() -> None:
+    """The declarative v53c form is rewritten into if/then so the
+    gates bucket's output contract (every gate is in if/then form)
+    is preserved."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = (
+        "Middleware development bid exceeds $75,000, "
+        "consuming budget planned for the physical handoff accumulation system."
+    )
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If "), rewritten
+    assert ", then " in rewritten
+    assert "middleware development bid" in rewritten
+    assert "exceeds" in rewritten
+    assert "$75,000" in rewritten
+    assert "budget planned" in rewritten
+
+
+def test_gate_shape_promotion_passes_through_canonical_if_then() -> None:
+    """A canonical if/then numeric line should be returned unchanged —
+    the rewrite only triggers on the declarative shape."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = "If manual work exceeds 2 hours per week, then the goal fails."
+    assert gate_shape_promotion(line) == line
+
+
 def test_promote_gate_shaped_risks_moves_misfiled_gate() -> None:
     """Focal v53c scenario: gates emitted some items but missed a tripwire;
     risks emitted the tripwire with if/then numeric shape. Promotion
@@ -628,6 +692,46 @@ def test_promote_gate_shaped_risks_moves_misfiled_gate() -> None:
     assert promoted == 1
     assert len(augmented) == 2
     assert augmented[-1].source_quote == "lowest qualified bid exceeds $75,000"
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_rewrites_declarative_v53c_form() -> None:
+    """End-to-end on the exact v53c risk-bucket phrasing: the promoter
+    must (a) recognise the declarative shape, (b) rewrite line_english
+    to if/then form, (c) preserve source_quote, scores, status, and (d)
+    remove the item from the risks pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    risk = ScoredItem(
+        line_english=(
+            "Middleware development bid exceeds $75,000, "
+            "consuming budget planned for the physical handoff accumulation system."
+        ),
+        line_original=(
+            "Middleware development bid exceeds $75,000, "
+            "consuming budget planned for the physical handoff accumulation system."
+        ),
+        modelling_relevance=4,
+        source_evidence=5,
+        source_status="stress_test",
+        source_quote="lowest qualified bid for middleware development exceeds $75,000",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [risk])
+    assert promoted == 1
+    assert len(augmented) == 1
+    promoted_item = augmented[0]
+    assert promoted_item.line_english.startswith("If ")
+    assert ", then " in promoted_item.line_english
+    assert promoted_item.source_quote == risk.source_quote
+    assert promoted_item.source_status == risk.source_status
+    assert promoted_item.source_evidence == risk.source_evidence
+    assert promoted_item.modelling_relevance == risk.modelling_relevance
+    # line_original is intentionally NOT rewritten — it preserves the
+    # source's native phrasing for downstream consumers that need it.
+    assert promoted_item.line_original == risk.line_original
     assert remaining == []
 
 

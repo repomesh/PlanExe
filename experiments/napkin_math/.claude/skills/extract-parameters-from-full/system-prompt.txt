@@ -15,6 +15,7 @@ Hard limits:
 - Return at most 5 recommended_first_calculations.
 - Each comment must be at most 25 words.
 - Each source_text must be at most 20 words.
+- The 20-word cap is hard. If the source phrase exceeds 20 words, truncate to the subject-plus-threshold portion that names the variable and its bound, drop the consequence clause, and end with an ellipsis if mid-sentence. Do not paste an entire if/then conditional when only the antecedent's threshold portion is load-bearing for the key_value. Count words before emitting; if at or above the cap, shorten further.
 - Never output suggested_low, suggested_base, or suggested_high inside key_values.
 - Do not include values merely because they are present in the report.
 - Prefer missing-but-needed modelling values over minor explicit values.

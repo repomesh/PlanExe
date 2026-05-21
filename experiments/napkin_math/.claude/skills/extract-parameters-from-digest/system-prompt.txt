@@ -55,6 +55,7 @@ Hard limits:
 - Do not include values merely because they appear in the digest.
 - Prefer missing-but-needed modelling values over minor explicit values.
 - For source_text from a compressed section, use the bullet text with the inline `[…]` tag removed. For source_text from a raw section, use a short verbatim quote or paraphrase. Never include the `[…]` tag in source_text.
+- The 20-word cap is hard. If the source phrase exceeds 20 words, truncate to the subject-plus-threshold portion that names the variable and its bound, drop the consequence clause, and end with an ellipsis if mid-sentence. Do not paste an entire if/then conditional when only the antecedent's threshold portion is load-bearing for the key_value. Count words before emitting; if at or above the cap, shorten further.
 
 Goal:
 

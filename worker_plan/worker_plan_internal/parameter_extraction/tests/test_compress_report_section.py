@@ -557,3 +557,310 @@ def test_quote_is_in_source_rejects_short_unrelated_quote() -> None:
 
     source = "lowest qualified bid for OPC UA middleware exceeds $75,000"
     assert quote_is_in_source("middleware bid", source) is False
+
+
+def test_has_gate_shape_accepts_canonical_if_then_numeric() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("If the cost exceeds $75,000, then the project re-scopes.") is True
+    assert has_gate_shape("If manual work exceeds 2 hours per week, then the goal fails.") is True
+
+
+def test_has_gate_shape_rejects_qualitative_if_then() -> None:
+    """No numeric token between if and then → not a gate shape. Such
+    sentences may still be legitimate gates (categorical / approval
+    gates) but the cross-bucket promoter only fires on the numeric
+    pattern to avoid stealing genuine risks."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("If the regulator rejects the application, then the timeline slips.") is False
+
+
+def test_has_gate_shape_rejects_no_then() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("Costs above $75,000 force a scope cut.") is False
+
+
+def test_has_gate_shape_rejects_non_string() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape(None) is False
+    assert has_gate_shape(123) is False
+    assert has_gate_shape("") is False
+
+
+def test_has_gate_shape_accepts_declarative_v53c_form() -> None:
+    """Regression test for the actual v53c failure: the LLM filed
+    ``Middleware development bid exceeds $75,000, consuming budget...``
+    under risks_and_shocks. The historical phrasing is declarative
+    (subject + comparison verb + threshold + consequence), not if/then.
+    The promoter must recognise this shape so the v53c miscategorisation
+    can be rerouted to gates."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    line = (
+        "Middleware development bid exceeds $75,000, "
+        "consuming budget planned for the physical handoff accumulation system."
+    )
+    assert has_gate_shape(line) is True
+
+
+def test_has_gate_shape_rejects_genuine_risk_with_colon_delay() -> None:
+    """Negative regression: a genuine risk like 'Supply chain disruption:
+    4 to 6 weeks delay and $15,000 cost increase.' has no comparison
+    verb between subject and digit, so it must NOT be classified as a
+    gate. The promoter must not steal genuine risks into the gates pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    line = "Supply chain disruption: 4 to 6 weeks delay and $15,000 cost increase."
+    assert has_gate_shape(line) is False
+
+
+def test_gate_shape_promotion_rewrites_declarative_to_if_then() -> None:
+    """The declarative v53c form is rewritten into if/then so the
+    gates bucket's output contract (every gate is in if/then form)
+    is preserved."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = (
+        "Middleware development bid exceeds $75,000, "
+        "consuming budget planned for the physical handoff accumulation system."
+    )
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If "), rewritten
+    assert ", then " in rewritten
+    assert "middleware development bid" in rewritten
+    assert "exceeds" in rewritten
+    assert "$75,000" in rewritten
+    assert "budget planned" in rewritten
+
+
+def test_gate_shape_promotion_passes_through_canonical_if_then() -> None:
+    """A canonical if/then numeric line should be returned unchanged —
+    the rewrite only triggers on the declarative shape."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = "If manual work exceeds 2 hours per week, then the goal fails."
+    assert gate_shape_promotion(line) == line
+
+
+def test_gate_shape_promotion_preserves_acronyms_in_subject() -> None:
+    """Subject acronyms like ``API`` / ``OPC UA`` must NOT be lowercased
+    by the rewrite — that would damage the readable form. The case
+    adjustment only fires on regular capitalised words (uppercase
+    followed by lowercase), not on acronyms (uppercase followed by
+    uppercase)."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = (
+        "API job queue latency exceeds 100ms, "
+        "requiring control board upgrades to meet the responsiveness target."
+    )
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If API "), rewritten
+    assert "aPI" not in rewritten
+
+
+def test_gate_shape_promotion_lowercases_regular_capitalised_subject() -> None:
+    """Counterpart to the acronym test: a regular capitalised subject
+    SHOULD be lowercased mid-sentence so the rewritten if/then reads
+    naturally. ``Middleware`` → ``middleware`` is the canonical case."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        gate_shape_promotion,
+    )
+
+    line = "Middleware development bid exceeds $75,000, scope is cut."
+    rewritten = gate_shape_promotion(line)
+    assert rewritten is not None
+    assert rewritten.startswith("If middleware development bid "), rewritten
+
+
+def test_promote_gate_shaped_risks_moves_misfiled_gate() -> None:
+    """Focal v53c scenario: gates emitted some items but missed a tripwire;
+    risks emitted the tripwire with if/then numeric shape. Promotion
+    should move the misfiled item into the gates pool and remove it
+    from risks (the slot is reclaimed)."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    existing_gate = ScoredItem(
+        line_english="If manual work exceeds 2 hours per week, then the goal fails.",
+        line_original="If manual work exceeds 2 hours per week, then the goal fails.",
+        modelling_relevance=5,
+        source_evidence=4,
+        source_status="explicit",
+        source_quote="manual work exceeds 2 hours per week",
+    )
+    misfiled = ScoredItem(
+        line_english="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        line_original="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        modelling_relevance=5,
+        source_evidence=3,
+        source_status="stress_test",
+        source_quote="lowest qualified bid exceeds $75,000",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([existing_gate], [misfiled])
+    assert promoted == 1
+    assert len(augmented) == 2
+    assert augmented[-1].source_quote == "lowest qualified bid exceeds $75,000"
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_rewrites_declarative_v53c_form() -> None:
+    """End-to-end on the exact v53c risk-bucket phrasing: the promoter
+    must (a) recognise the declarative shape, (b) rewrite line_english
+    to if/then form, (c) preserve source_quote, scores, status, and (d)
+    remove the item from the risks pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    risk = ScoredItem(
+        line_english=(
+            "Middleware development bid exceeds $75,000, "
+            "consuming budget planned for the physical handoff accumulation system."
+        ),
+        line_original=(
+            "Middleware development bid exceeds $75,000, "
+            "consuming budget planned for the physical handoff accumulation system."
+        ),
+        modelling_relevance=4,
+        source_evidence=5,
+        source_status="stress_test",
+        source_quote="lowest qualified bid for middleware development exceeds $75,000",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [risk])
+    assert promoted == 1
+    assert len(augmented) == 1
+    promoted_item = augmented[0]
+    assert promoted_item.line_english.startswith("If ")
+    assert ", then " in promoted_item.line_english
+    assert promoted_item.source_quote == risk.source_quote
+    assert promoted_item.source_status == risk.source_status
+    assert promoted_item.source_evidence == risk.source_evidence
+    assert promoted_item.modelling_relevance == risk.modelling_relevance
+    # line_original is intentionally NOT rewritten — it preserves the
+    # source's native phrasing for downstream consumers that need it.
+    assert promoted_item.line_original == risk.line_original
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_skips_qualitative_risks() -> None:
+    """A risks item whose surface form does not match the if/then
+    numeric-threshold shape is left in risks untouched — the promoter
+    must not steal genuine risks (triggers with a qualitative source side
+    and quantitative consequence) into the gates pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    qualitative_risk = ScoredItem(
+        line_english="Supply chain disruption: 4 to 6 weeks development delay and $15,000 cost increase.",
+        line_original="Supply chain disruption: 4 to 6 weeks development delay and $15,000 cost increase.",
+        modelling_relevance=4,
+        source_evidence=4,
+        source_status="stress_test",
+        source_quote="supply chain delays cause weeks of delay",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [qualitative_risk])
+    assert promoted == 0
+    assert augmented == []
+    assert remaining == [qualitative_risk]
+
+
+def test_promote_gate_shaped_risks_skips_duplicate_quote_in_gates() -> None:
+    """If the same source_quote is already represented in gates (LLM
+    violated do-not-restate), the risks item is left in risks rather
+    than added to gates again. Within-bucket dedupe is a separate
+    concern handled at top-N time."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    quote = "lowest qualified bid exceeds $75,000"
+    in_gates = ScoredItem(
+        line_english="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        line_original="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        modelling_relevance=5,
+        source_evidence=4,
+        source_status="stress_test",
+        source_quote=quote,
+    )
+    same_in_risks = ScoredItem(
+        line_english="If the middleware bid exceeds $75,000, then the architecture is re-scoped.",
+        line_original="If the middleware bid exceeds $75,000, then the architecture is re-scoped.",
+        modelling_relevance=4,
+        source_evidence=3,
+        source_status="stress_test",
+        source_quote=quote,
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([in_gates], [same_in_risks])
+    assert promoted == 0
+    assert len(augmented) == 1
+    assert remaining == [same_in_risks]
+
+
+def test_promote_gate_shaped_risks_handles_empty_inputs() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        promote_gate_shaped_risks,
+    )
+
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [])
+    assert promoted == 0
+    assert augmented == []
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_does_not_mutate_inputs() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    gates = [
+        ScoredItem(
+            line_english="If A exceeds 100, then B.",
+            line_original="If A exceeds 100, then B.",
+            modelling_relevance=5, source_evidence=5,
+            source_status="explicit", source_quote="A exceeds 100",
+        ),
+    ]
+    risks = [
+        ScoredItem(
+            line_english="If C exceeds 50, then D.",
+            line_original="If C exceeds 50, then D.",
+            modelling_relevance=4, source_evidence=4,
+            source_status="stress_test", source_quote="C exceeds 50",
+        ),
+    ]
+    promote_gate_shaped_risks(gates, risks)
+    assert len(gates) == 1
+    assert len(risks) == 1
+    assert gates[0].source_quote == "A exceeds 100"
+    assert risks[0].source_quote == "C exceeds 50"

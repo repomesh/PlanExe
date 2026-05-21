@@ -893,6 +893,15 @@ SCORED_LIST_FIELDS: tuple[str, ...] = (
     "missing_data_to_estimate",
 )
 
+# Buckets whose top-N filter is deferred until both have emitted, so a
+# cross-bucket promoter can move gate-shaped items from risks_and_shocks
+# into the gates_and_thresholds candidate pool before either is filtered
+# down to its public top-N.
+CROSS_BUCKET_PROMOTION_FIELDS: tuple[str, ...] = (
+    "gates_and_thresholds",
+    "risks_and_shocks",
+)
+
 # For buckets where the bucket name already determines the right
 # source_status, override whatever the LLM emitted. The
 # missing_data_to_estimate bucket is by definition about absent values, so
@@ -1065,6 +1074,188 @@ SECOND_PASS_USER_PROMPT_TEMPLATE = (
 )
 
 
+GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
+    r"\bif\b.*?\d.*?\bthen\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+# Declarative comparison form the risks bucket sometimes uses for what is
+# structurally a gate. Subject phrase, then a comparison verb naming the
+# direction of the threshold check, then a threshold containing a digit
+# token, then a comma or colon separator, then the consequence. The
+# alternatives below are language-neutral structural cues — digits in any
+# locale, and the comparison verbs are required by the risks bucket
+# prompt's own 'trigger plus impact' template when the trigger itself is
+# numerically gated. Function-word membership (``exceeds`` / ``falls
+# below`` / etc) is the structural cue, not domain vocabulary.
+DECLARATIVE_GATE_COMPARISON_VERBS: str = (
+    r"exceeds?|falls?\s+below|drops?\s+below|rises?\s+above|breaches?|"
+    r"is\s+(?:above|below|greater\s+than|less\s+than|more\s+than)|"
+    r"reaches?|surpass(?:es)?"
+)
+DECLARATIVE_GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
+    r"^(?P<subject>.+?)\s+"
+    rf"(?P<verb>{DECLARATIVE_GATE_COMPARISON_VERBS})\s+"
+    # Threshold must contain a digit token; commas/colons INSIDE a number
+    # (e.g. ``$75,000``) are accepted by requiring the separator comma to
+    # be followed by whitespace and NOT preceded by a digit.
+    r"(?P<threshold>.*?\d.*?)\s*(?:[,:](?!\d))\s+"
+    r"(?P<consequence>.+)$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _lowercase_first_preserving_acronyms(text: str) -> str:
+    """Lowercase the first character of ``text`` only when doing so does
+    not damage an acronym. Heuristic: lowercase only when the first
+    character is an uppercase letter AND the second character is a
+    lowercase letter (a regular capitalized word like ``Middleware``).
+    For tokens like ``API`` / ``OPC UA`` / ``5G`` the next character is
+    not a lowercase letter, so the casing is preserved.
+    """
+    if len(text) < 2:
+        return text
+    if text[0].isupper() and text[1].islower():
+        return text[0].lower() + text[1:]
+    return text
+
+
+def gate_shape_promotion(line: str) -> Optional[str]:
+    """Return the if/then form of ``line`` if it has any recognised gate
+    structural shape, else ``None``.
+
+    Two shapes are recognised:
+
+    1. **Canonical if/then numeric** (``If <... digit ...> then <...>``) —
+       the line is returned unchanged.
+    2. **Declarative comparison numeric** (``<subject> exceeds <threshold>,
+       <consequence>`` and variants) — the line is rewritten as ``If
+       <subject> <verb> <threshold>, then <consequence>``.
+
+    The rewrite preserves the gates_and_thresholds bucket's output contract
+    (every gate is in if/then form). The declarative shape is exactly what
+    the risks bucket sometimes produces for what is structurally a gate —
+    see the v53c paperclip case, where the LLM filed
+    ``Middleware development bid exceeds $75,000, consuming budget...``
+    under risks instead of gates. The promoter rewrites this into
+    ``If middleware development bid exceeds $75,000, then consuming
+    budget...`` so the downstream consumer reads a uniformly-shaped gate.
+
+    Casing in the rewrite is preserved for acronyms and proper nouns —
+    ``API job queue latency...`` becomes ``If API job queue latency...``,
+    not ``If aPI...``. The case adjustment only fires on regular
+    capitalised words where the first letter being lowercased reads
+    naturally mid-sentence.
+
+    Returns ``None`` when the line matches neither shape — the promoter
+    must not steal qualitative risks (triggers with a non-numeric source
+    side, or risks framed without a comparison verb) into the gates pool.
+    """
+    if not isinstance(line, str):
+        return None
+    s = line.strip()
+    if not s:
+        return None
+    if GATE_SHAPE_PATTERN.search(s):
+        return s
+    m = DECLARATIVE_GATE_SHAPE_PATTERN.match(s)
+    if m is None:
+        return None
+    subject = _lowercase_first_preserving_acronyms(m.group("subject").strip())
+    verb = " ".join(m.group("verb").split())
+    threshold = m.group("threshold").strip()
+    consequence = _lowercase_first_preserving_acronyms(m.group("consequence").strip())
+    return f"If {subject} {verb} {threshold}, then {consequence}"
+
+
+def has_gate_shape(line: str) -> bool:
+    """True when ``line`` has a gate structural shape — either canonical
+    if/then numeric, or declarative comparison-verb numeric that the
+    promoter can deterministically rewrite into if/then form.
+    """
+    return gate_shape_promotion(line) is not None
+
+
+def promote_gate_shaped_risks(
+    gates_items: list[ScoredItem],
+    risks_items: list[ScoredItem],
+) -> tuple[list[ScoredItem], list[ScoredItem], int]:
+    """Move risks_and_shocks items whose surface form has the if/then
+    numeric-threshold gate shape into the gates_and_thresholds candidate
+    pool, when the same source_quote is not already represented there.
+
+    Background: the gates bucket emits before risks in BUCKET_SPECS, so
+    the LLM occasionally files a tripwire ('If $X exceeds Y, then
+    re-scope') under risks instead of gates — sometimes because the
+    consequence is downside-framed and the LLM keys on the framing
+    rather than the structural shape. The deterministic top-N filter
+    then runs per bucket; the misfiled item competes against actual
+    risks rather than against actual gates, and can fall out of the
+    public output entirely.
+
+    A prompt-side rule on the risks bucket cannot fix this (risks runs
+    after gates, so a risks-side rule can only suppress emission, not
+    cause it elsewhere) and risks creating a worse failure mode where
+    both buckets miss the item. A deterministic post-processor on the
+    combined candidate pools is the right shape: it sees what the LLM
+    actually produced and reroutes by structural shape.
+
+    Rules:
+    - A risk item is promoted when ``has_gate_shape(line_english)`` is
+      true AND its normalised source_quote is NOT already represented in
+      the gates pool.
+    - Promoted items are removed from the risks pool (the slot is
+      reclaimed for an actual risk; the public output should not show
+      the same source claim in both buckets).
+    - A risk item that is gate-shaped but whose quote IS already in
+      gates is left in risks untouched — that within-bucket duplication
+      is a separate concern handled by the existing 'do not restate'
+      rule in the risks prompt and the per-bucket dedupe at top-N time.
+    - The augmented gates pool is returned with the promoted items
+      appended; the per-bucket ``annotate_scored_items`` call then
+      scores them against the rest of the gates field and picks the
+      top-N survivors. A promoted item that scores below the existing
+      gates field is dropped at top-N filter time, same as any other
+      candidate.
+
+    Returns ``(augmented_gates, remaining_risks, promoted_count)``. The
+    input lists are NOT mutated.
+    """
+    existing_gate_quotes: set[str] = {
+        normalise_for_quote_match(g.source_quote)
+        for g in gates_items
+        if isinstance(g, ScoredItem) and g.source_quote
+    }
+    augmented_gates: list[ScoredItem] = list(gates_items)
+    remaining_risks: list[ScoredItem] = []
+    promoted_count = 0
+    for risk_item in risks_items:
+        if not isinstance(risk_item, ScoredItem):
+            remaining_risks.append(risk_item)
+            continue
+        rewritten_line = gate_shape_promotion(risk_item.line_english)
+        if rewritten_line is None:
+            remaining_risks.append(risk_item)
+            continue
+        if not risk_item.source_quote:
+            remaining_risks.append(risk_item)
+            continue
+        normalised = normalise_for_quote_match(risk_item.source_quote)
+        if normalised in existing_gate_quotes:
+            remaining_risks.append(risk_item)
+            continue
+        # Promote with the if/then-form line. ``line_original`` is kept as
+        # the source's native phrasing — the rewrite is a structural
+        # adapter for the gates bucket output contract only, not a
+        # claim about the source language. Scores, status, and quote
+        # carry over unchanged.
+        promoted_item = risk_item.model_copy(update={"line_english": rewritten_line})
+        augmented_gates.append(promoted_item)
+        existing_gate_quotes.add(normalised)
+        promoted_count += 1
+    return augmented_gates, remaining_risks, promoted_count
+
+
 def merge_second_pass_items(
     first_pass: list[ScoredItem],
     second_pass: list[ScoredItem],
@@ -1181,6 +1372,8 @@ class CompressReportSection:
 
         bucket_values: dict[str, Any] = {}
         per_bucket_metadata: dict[str, dict[str, Any]] = {}
+        deferred_cross_bucket_items: dict[str, list[ScoredItem]] = {}
+        deferred_cross_bucket_metadata: dict[str, dict[str, Any]] = {}
         total_start = time.perf_counter()
 
         for turn_index, spec in enumerate(BUCKET_SPECS):
@@ -1338,15 +1531,43 @@ class CompressReportSection:
                     }
                 )
 
-            if spec.field_name in SCORED_LIST_FIELDS:
+            if spec.field_name in CROSS_BUCKET_PROMOTION_FIELDS:
+                # Defer the top-N filter for gates_and_thresholds and
+                # risks_and_shocks; the cross-bucket promoter (below)
+                # needs to see the full merged candidate pools of BOTH
+                # buckets before either is filtered down to top-N. The
+                # promoter runs after the bucket loop finishes.
+                deferred_cross_bucket_items[spec.field_name] = raw_field_value
+                deferred_cross_bucket_metadata[spec.field_name] = bucket_metadata
+            elif spec.field_name in SCORED_LIST_FIELDS:
                 bucket_values[spec.field_name], scored_items = annotate_scored_items(
                     raw_field_value, section_markdown, spec.field_name
                 )
                 bucket_metadata["scored_items"] = scored_items
+                per_bucket_metadata[spec.field_name] = bucket_metadata
             else:
                 bucket_values[spec.field_name] = raw_field_value
+                per_bucket_metadata[spec.field_name] = bucket_metadata
 
-            per_bucket_metadata[spec.field_name] = bucket_metadata
+        gates_raw = deferred_cross_bucket_items.get("gates_and_thresholds", []) or []
+        risks_raw = deferred_cross_bucket_items.get("risks_and_shocks", []) or []
+        augmented_gates, remaining_risks, promoted_count = promote_gate_shaped_risks(
+            gates_raw, risks_raw
+        )
+        for field_name, pool in (
+            ("gates_and_thresholds", augmented_gates),
+            ("risks_and_shocks", remaining_risks),
+        ):
+            if field_name not in deferred_cross_bucket_items:
+                continue
+            kept, scored_items = annotate_scored_items(
+                pool, section_markdown, field_name
+            )
+            bucket_values[field_name] = kept
+            bucket_metadata = deferred_cross_bucket_metadata[field_name]
+            bucket_metadata["scored_items"] = scored_items
+            bucket_metadata["cross_bucket_promoted_count"] = promoted_count
+            per_bucket_metadata[field_name] = bucket_metadata
 
         total_duration = int(ceil(time.perf_counter() - total_start))
 

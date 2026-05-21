@@ -918,12 +918,46 @@ def normalise_for_quote_match(text: str) -> str:
     return " ".join(text.split())
 
 
+WORD_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"\w+", re.UNICODE)
+
+QUOTE_MATCH_MIN_TOKENS: int = 3
+
+
+def tokenize_for_quote_match(text: str) -> list[str]:
+    """Tokenize on Unicode word boundaries after the standard normalisation.
+
+    Language- and domain-neutral: it splits on whatever the Unicode word
+    class considers a word character. Numeric tokens like ``$75,000`` split
+    into ``["75", "000"]`` consistently in both quote and source.
+    """
+    return WORD_TOKEN_PATTERN.findall(normalise_for_quote_match(text))
+
+
 def quote_is_in_source(quote: str, section_markdown: str) -> bool:
+    """Check that the LLM's ``source_quote`` is grounded in the section.
+
+    Fast path is the existing substring check after normalisation. When the
+    LLM paraphrases (drops intermediate words, reorders the noun phrase),
+    that fast path misses even though every content token came from the
+    source. The fallback requires every quote token to appear in the source
+    token set, which accepts reordering and elision but rejects any
+    substituted word — including numeric substitutions, since digit-bearing
+    tokens fall under the same all-tokens rule. A short-quote floor avoids
+    trivial overlap on a large source.
+    """
     if not quote:
         return False
     if quote.strip().upper() == "NOT IN SOURCE":
         return False
-    return normalise_for_quote_match(quote) in normalise_for_quote_match(section_markdown)
+    norm_quote = normalise_for_quote_match(quote)
+    norm_source = normalise_for_quote_match(section_markdown)
+    if norm_quote in norm_source:
+        return True
+    quote_tokens = tokenize_for_quote_match(quote)
+    if len(quote_tokens) < QUOTE_MATCH_MIN_TOKENS:
+        return False
+    source_tokens = set(tokenize_for_quote_match(section_markdown))
+    return all(tok in source_tokens for tok in quote_tokens)
 
 
 def numeric_density_bonus(text: str) -> float:

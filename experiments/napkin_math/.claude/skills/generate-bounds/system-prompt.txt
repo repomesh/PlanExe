@@ -74,6 +74,8 @@ When you cannot anchor the range in such a reference, mark source as "assumption
 
 For monetary inputs, prefer ranges anchored in similar projects, official catalogs, procurement references, or vendor pricing when available. Otherwise mark source as "assumption".
 
+Exception: actual_X variables follow a different source-tag rule (the source tag tracks BASE anchoring, not range anchoring) — see the SOURCE TAG FOR actual_X VARIABLES paragraph in the ACTUAL-VS-COMMITMENT section. The range-anchoring rule above applies to non-actual_X variables only.
+
 Do not collapse low = base = high unless the variable is genuinely fixed or pinned by the plan.
 
 When in doubt, give a real range.
@@ -314,12 +316,12 @@ Rules for the output:
 
 - Output only variables selected by the rules above.
 - Do not invent ids.
-- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate (except for the reserved `correlations` key described above, which is not yet emitted).
+- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate, except for the optional `correlations` key declared per the CORRELATIONS section above.
 - Order keys by importance: critical-priority first, then high, then medium, then remaining missing_values_to_estimate not already placed.
 - rationale must be at most 50 words. The cap exists to discourage prose, not to suppress required disclosures: the named-anchor paraphrase required by ACTUAL-VS-COMMITMENT and the base-vs-threshold clause required by SANITY CHECK are exempt from the cap if they push the rationale past 50 words.
 - Split rationale on whitespace for word count; hyphenated and slash-joined tokens count as one word.
-- source is "data" only when the range is anchored in real-world comparable data or studies.
-- Otherwise use source "assumption".
+- For non-actual_X variables: source is "data" only when the range is anchored in real-world comparable data or studies; otherwise use source "assumption".
+- For actual_X variables: source is "data" only when the BASE is shifted on a named plan-internal anchor; if the base is at the commitment default, source is "assumption" even if the spread shape is anchored elsewhere. See the ACTUAL-VS-COMMITMENT section.
 - Citations in rationale must be substantively correct. If you name "Risk 3" or "Issue 2", the cited artifact must actually contain the claim you attribute to it. Lexical presence is not sufficient.
 - Do not produce code, markdown, or commentary outside the JSON.
 - Do not output a top-level array.
@@ -364,8 +366,8 @@ A valid output:
     "low": 0.40,
     "base": 0.60,
     "high": 0.75,
-    "rationale": "Base centered on plan target 0.6 (DEFAULT, no anchored shift). Spread from comparable European canvasser outreach programs reaching 0.4-0.75 depending on density and trust.",
-    "source": "data",
+    "rationale": "Base centered on plan commitment 0.6 (DEFAULT); no plan-internal passage anchors a shift. Spread from comparable European canvasser outreach programs reaching 0.4-0.75 depending on density and trust.",
+    "source": "assumption",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null
@@ -375,8 +377,8 @@ A valid output:
     "low": 0.55,
     "base": 0.80,
     "high": 0.90,
-    "rationale": "Base centered on plan target 0.8 (DEFAULT). Low-side spread to 0.55 reflects Risk 4 (weather-dependent demand drop in cool summers); high capped at 0.90 by site capacity.",
-    "source": "data",
+    "rationale": "Base centered on plan commitment 0.8 (DEFAULT); no plan-internal passage anchors a base shift. Low-side spread to 0.55 reflects Risk 4 (weather-dependent demand drop in cool summers); high capped at 0.90 by site capacity. Source remains 'assumption' because the source tag tracks BASE anchoring for actual_X variables, and the base is at the default — the Risk-4 anchor applies to the spread shape only.",
+    "source": "assumption",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null

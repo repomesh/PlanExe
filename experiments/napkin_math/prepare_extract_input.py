@@ -33,10 +33,12 @@ PROMPT> python experiments/napkin_math/prepare_extract_input.py \\
             --planexe-dir /Users/neoneye/git/PlanExe-web/20260215_nuuk_clay_workshop
 """
 import argparse
+import json
 import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 WORKER_PLAN_DIR = REPO_ROOT / "worker_plan"
@@ -118,12 +120,114 @@ def run_compress(planexe_dir: Path, output_dir: Path, llm: str | None) -> None:
     subprocess.run(cmd, env=env, cwd=str(WORKER_PLAN_DIR), check=True)
 
 
-def build_combined_digest(planexe_dir: Path, output_dir: Path) -> Path:
+SECTIONS_WITH_IDS_FOR_LEDGER: tuple[str, ...] = (
+    "key_values",
+    "missing_values_to_estimate",
+    "derived_questions",
+    "recommended_first_calculations",
+    "unmodelled_gates",
+)
+
+SECTIONS_WITH_OUTPUT_NAMES_FOR_LEDGER: tuple[str, ...] = (
+    "key_values",
+    "derived_questions",
+    "recommended_first_calculations",
+)
+
+PRIOR_LEDGER_HEADER: str = """\
+# Prior Signal Ledger (advisory)
+
+This ledger lists the prior iteration's named signals — entry ids and
+output_names from a previous `parameters.json`. Treat it as a
+preservation budget, NOT a target to copy. The source digest above is
+the authoritative input.
+
+If a prior signal is still source-supported and load-bearing, preserve
+it: keep the same id, the same output_name, or use it as a formula
+dependency. When a prior signal must be replaced, made redundant, moved
+to `unmodelled_gates`, dropped under cap pressure, or excluded as out
+of scope, record the explanation in `dropped_signals` per the schema —
+with `origin: "prior_baseline"` and a reference that resolves to a
+current id / output_name / unmodelled_gates id.
+
+Do not invent `dropped_signals` entries for signals that are not in
+this ledger and are not stated in the source digest above. The ledger
+defines the universe of prior-baseline signals the audit will check.
+"""
+
+
+def build_prior_signal_ledger(prior_params: dict) -> str:
+    """Build a compact markdown ledger listing the prior baseline's
+    named signals — entry ids and output_names across the five sections
+    that carry them. Intentionally narrow: no source_text, no labels,
+    no comments. The LLM gets a preservation budget to compare against
+    the source digest, not a phrasing target to anchor on.
+
+    Each signal is listed with its section, kind (id or output_name),
+    formula_hint (when present), and depends_on (when non-empty) so
+    structural relationships survive. Signals are deduplicated: a name
+    that appears as both an id and an output_name is listed once with
+    kind = ``id`` (the more authoritative reading).
+    """
+    seen: dict[str, dict[str, Any]] = {}
+    for section in SECTIONS_WITH_IDS_FOR_LEDGER:
+        for entry in prior_params.get(section, []) or []:
+            if not isinstance(entry, dict):
+                continue
+            eid = entry.get("id")
+            if not isinstance(eid, str) or not eid:
+                continue
+            seen.setdefault(eid, {
+                "kind": "id",
+                "section": section,
+                "formula_hint": entry.get("formula_hint"),
+                "depends_on": entry.get("depends_on") or [],
+            })
+    for section in SECTIONS_WITH_OUTPUT_NAMES_FOR_LEDGER:
+        for entry in prior_params.get(section, []) or []:
+            if not isinstance(entry, dict):
+                continue
+            name = entry.get("output_name")
+            if not isinstance(name, str) or not name:
+                continue
+            seen.setdefault(name, {
+                "kind": "output_name",
+                "section": section,
+                "formula_hint": entry.get("formula_hint"),
+                "depends_on": entry.get("depends_on") or [],
+            })
+    lines: list[str] = [PRIOR_LEDGER_HEADER.rstrip(), "", "## Signals", ""]
+    for name in sorted(seen):
+        meta = seen[name]
+        lines.append(f"- `{name}` [{meta['section']}/{meta['kind']}]")
+        formula = meta.get("formula_hint")
+        if isinstance(formula, str) and formula.strip():
+            lines.append(f"  - formula_hint: `{formula.strip()}`")
+        depends = meta.get("depends_on") or []
+        depends = [d for d in depends if isinstance(d, str) and d]
+        if depends:
+            lines.append(f"  - depends_on: {', '.join('`' + d + '`' for d in depends)}")
+    if not seen:
+        lines.append("(no prior signals — first-iteration baseline)")
+    return "\n".join(lines) + "\n"
+
+
+def build_combined_digest(
+    planexe_dir: Path, output_dir: Path, prior_params: dict | None = None,
+) -> Path:
     """Concatenate the 137-recommended extraction bundle, in 137's order, with
     a legend at the top. Compressed sections come from ``output_dir/compress_*.md``;
     raw sections come straight from ``planexe_dir``. Missing sections are
     skipped with a warning rather than aborting, so partial output is still
     usable.
+
+    When ``prior_params`` is provided (the parsed contents of a prior
+    ``parameters.json``), a compact prior-signal ledger is appended after
+    the regular bundle so the extract LLM can decide which prior signals
+    to preserve and which to record in ``dropped_signals``. The ledger is
+    intentionally narrow — names, sections, formula_hints and depends_on
+    only — so it acts as a preservation budget rather than a phrasing
+    target.
     """
     parts: list[str] = [LEGEND.rstrip(), "", "---", ""]
     found_any = False
@@ -153,6 +257,9 @@ def build_combined_digest(planexe_dir: Path, output_dir: Path) -> Path:
             f"run_compress_full output above for compression errors, and verify "
             f"that the raw section files exist under {planexe_dir}."
         )
+    if prior_params is not None:
+        parts.append(build_prior_signal_ledger(prior_params).rstrip())
+        parts.append("")
     combined = output_dir / "extract_parameters_input.md"
     combined.write_text("\n".join(parts).rstrip() + "\n", encoding="utf-8")
     return combined
@@ -182,6 +289,19 @@ def main() -> None:
         help="LLM name passed through to run_compress_full via "
         "COMPRESS_FULL_LLM. Default: run_compress_full's own default model.",
     )
+    ap.add_argument(
+        "--prior",
+        type=Path,
+        default=None,
+        help="Optional path to a prior iteration's parameters.json. When "
+        "provided, a compact Prior Signal Ledger is appended to the "
+        "combined digest so the extract LLM can decide which prior "
+        "signals to preserve and which to record in dropped_signals "
+        "(proposal 141 PR 3). The ledger contains only signal names, "
+        "sections, formula_hints, and depends_on — no source_text or "
+        "labels — so it acts as a preservation budget rather than a "
+        "phrasing target. Omit for first-iteration extractions.",
+    )
     args = ap.parse_args()
 
     planexe_dir: Path = args.planexe_dir.resolve()
@@ -199,11 +319,24 @@ def main() -> None:
     print(f"Output dir  : {output_dir}")
     print(f"LLM         : {args.llm or '(run_compress_full default)'}\n")
 
+    prior_params: dict | None = None
+    if args.prior is not None:
+        prior_path: Path = args.prior.resolve()
+        if not prior_path.is_file():
+            raise SystemExit(f"--prior not found or not a file: {prior_path}")
+        try:
+            prior_params = json.loads(prior_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"--prior is not valid JSON: {exc}") from exc
+        print(f"Prior        : {prior_path}\n")
+
     run_compress(planexe_dir, output_dir, args.llm)
-    combined = build_combined_digest(planexe_dir, output_dir)
+    combined = build_combined_digest(planexe_dir, output_dir, prior_params=prior_params)
 
     print(f"\nWrote combined digest: {combined}")
     print("Feed this file to the extract-parameters-from-digest skill.")
+    if prior_params is not None:
+        print("Includes a Prior Signal Ledger appended after the bundle.")
 
 
 if __name__ == "__main__":

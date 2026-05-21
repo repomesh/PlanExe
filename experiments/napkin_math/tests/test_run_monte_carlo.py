@@ -276,6 +276,76 @@ class TestStrippedBoundsWarnings(unittest.TestCase):
         self.assertNotIn("threshold variable", warning)
         self.assertNotIn("stated value", warning)
 
+    def test_correlations_block_emits_warning_until_phase8(self):
+        """Until Phase 8 ships the Gaussian-copula sampler, the runner
+        preserves any declared correlations block but samples each
+        variable independently. The warning must be emitted so the user
+        is not silently misled into thinking joint-tail risk is modelled."""
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            calc = "def out(x: float) -> float:\n    return x\n"
+            bound = make_bound(unit="EUR", low=1, base=2, high=3,
+                               sampling_discipline="continuous")
+            correlations_payload = [
+                {
+                    "group_id": "shared_driver_g",
+                    "variables": ["x"],
+                    "rho": 0.6,
+                    "rationale": "test",
+                },
+            ]
+            result = run_with_fixture(
+                tmpdir,
+                missing_values=[{"id": "x", "label": "x", "unit": "EUR",
+                                 "why_needed": "x", "suggested_estimation_method": "x"}],
+                recommended=[{
+                    "id": "c", "label": "c",
+                    "formula_hint": "out = x",
+                    "output_name": "out", "output_unit": "EUR",
+                    "depends_on": ["x"], "why_first": "x",
+                }],
+                bounds={"x": bound, "correlations": correlations_payload},
+                calc_source=calc,
+                _settings={"n_runs": 100, "seed": 1},
+            )
+
+        messages = [w["message"] for w in result["warnings"]]
+        corr_warnings = [m for m in messages if "correlation group" in m]
+        self.assertEqual(len(corr_warnings), 1, msg=messages)
+        warning = corr_warnings[0]
+        self.assertIn("1 correlation group", warning)
+        self.assertIn("Phase 8", warning)
+        self.assertIn("independently", warning)
+        # The warning must NOT silently downplay the modelling gap; the
+        # user has to be told joint-tail risk is structurally understated.
+        self.assertIn("joint-tail", warning)
+
+    def test_correlations_absent_no_warning(self):
+        """Sibling guard: when bounds has no correlations block, the
+        correlations warning is NOT emitted."""
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            calc = "def out(x: float) -> float:\n    return x\n"
+            bound = make_bound(unit="EUR", low=1, base=2, high=3,
+                               sampling_discipline="continuous")
+            result = run_with_fixture(
+                tmpdir,
+                missing_values=[{"id": "x", "label": "x", "unit": "EUR",
+                                 "why_needed": "x", "suggested_estimation_method": "x"}],
+                recommended=[{
+                    "id": "c", "label": "c",
+                    "formula_hint": "out = x",
+                    "output_name": "out", "output_unit": "EUR",
+                    "depends_on": ["x"], "why_first": "x",
+                }],
+                bounds={"x": bound},
+                calc_source=calc,
+                _settings={"n_runs": 100, "seed": 1},
+            )
+        messages = [w["message"] for w in result["warnings"]]
+        self.assertFalse(any("correlation group" in m for m in messages),
+                         msg=messages)
+
     def test_threshold_strip_warning_unchanged(self):
         """Sibling guard: the original threshold-variable wording is
         preserved for suffix/formula-side strips."""

@@ -74,6 +74,8 @@ When you cannot anchor the range in such a reference, mark source as "assumption
 
 For monetary inputs, prefer ranges anchored in similar projects, official catalogs, procurement references, or vendor pricing when available. Otherwise mark source as "assumption".
 
+Exception: actual_X variables follow a different source-tag rule (the source tag tracks BASE anchoring, not range anchoring) — see the SOURCE TAG FOR actual_X VARIABLES paragraph in the ACTUAL-VS-COMMITMENT section. The range-anchoring rule above applies to non-actual_X variables only.
+
 Do not collapse low = base = high unless the variable is genuinely fixed or pinned by the plan.
 
 When in doubt, give a real range.
@@ -92,6 +94,22 @@ You may shift the base away from the commitment ONLY when you can cite a specifi
 
 "Realistic execution," "typical operational drift," or "conservative assumption" are NOT valid anchors. They are modelling priors, not plan findings. If the only justification you have is one of these, leave the base at the committed value.
 
+SOURCE TAG FOR actual_X VARIABLES (asymmetry between anchored and default):
+
+The `source` field carries different information for actual_X variables than for general variables. The asymmetry MUST be visible in the rationale and in the source tag.
+
+- Base shifted on a named plan-internal anchor (a specific Premortem entry, Risk N, Issue N, Decision N, expert-criticism passage, or sensitivity passage that EXPLICITLY forecasts a gap):
+    * `source: "data"`
+    * Rationale names the artifact verbatim and paraphrases its load-bearing claim.
+
+- Base left at the commitment default with no named plan-internal anchor:
+    * `source: "assumption"` (NOT `"data"` — the base reflects no plan finding, only a modelling default)
+    * Rationale states explicitly: "base centered on plan commitment; no plan-internal passage anchors a shift."
+
+A downstream reader inspecting the bound MUST be able to tell at a glance whether the base reflects a plan finding or a modelling default. If both branches of the rule above tag `source: "data"`, the distinction is lost and the slideshow cannot honestly disclose where the base came from.
+
+Note: this rule applies to the `source` tag on actual_X variables specifically. For non-actual variables, source follows the range-anchoring rule (data if the range anchors in real-world studies / comparable programs, assumption otherwise). For actual_X variables, source tracks the BASE anchoring, because the base is the consequential decision; range-anchoring for the spread is a secondary signal that lives in the rationale text.
+
 ====================
 SANITY CHECK: BASE VS. DECLARED THRESHOLDS
 ====================
@@ -104,6 +122,30 @@ Before finalizing, for each variable that feeds a declared gate threshold:
 4. This is sometimes correct, but only when the report ITSELF forecasts the miss. Otherwise the verdict is your judgment, not the model's.
 
 When base implies base-case gate failure, the rationale MUST state this explicitly and name the report-internal anchor that justifies the shift. Example: "Base 3.0 exceeds the 2.0 threshold by 50% (negative margin at base); anchored on Issue 2 — 10% material deviation reduces probability of meeting the 2-hour goal by 50-70%."
+
+====================
+SELF-AUDIT: CITATION CONTEXT-LEAK
+====================
+
+Before finalizing each bound, scan every numbered citation in `rationale` (Risk N, Issue N, Decision N, Premortem N, expert-criticism N) and verify that the cited artifact substantively supports the claim — not just lexically.
+
+Failure mode: the rationale cites "Risk N" because the plan has a Risk N, but Risk N is about a different topic than the claim being supported. The citation is lexically present (the number exists) but substantively wrong (the section is about something else). The downstream reader treats the bound as report-anchored when in fact the citation is a context-leak.
+
+Abstract examples of the failure mode:
+
+- Rationale: "base shifted on Risk N — variance in operator skill." The cited Risk N in the source plan is actually about supply-chain delays. The citation is lexical only; the substance has nothing to do with operator skill.
+- Rationale: "spread anchored on Issue N — vendor pricing volatility." The cited Issue N in the source plan describes a regulatory deadline, not vendor pricing. Same failure mode.
+- Rationale: "high-side spread reflects Decision N — multi-quarter delay." The cited Decision N is about staffing structure, not timeline. Same failure mode.
+
+In every case the failure mode is the same: the number is correct (the plan has that numbered artifact) but the topic is wrong (the artifact is about something else). Lexical presence is never sufficient.
+
+When a citation fails the substantive-support check:
+
+1. Re-read the cited section in the source report.
+2. If a substantively correct citation exists elsewhere in the report, replace the citation in the rationale.
+3. If no substantively correct citation exists in the report, drop the citation entirely from the rationale, set `source: "assumption"`, and re-evaluate whether the base/range shift is justified at all. A base shift with no substantively correct anchor is a modeller-prior dressed up as a plan finding — back the base off to the commitment default unless the spread itself has independent justification.
+
+When in doubt about whether a citation substantively supports a claim, drop the citation rather than risk a context-leak.
 
 ====================
 DISCRETE OR GATE-DEPENDENT VARIABLES
@@ -127,6 +169,76 @@ non_negative = true
 This is allowed and does not violate the normal preference for non-collapsed ranges.
 
 For count variables that are discrete but not binary, use integer low/base/high values AND set sampling_discipline to "integer". For fraction-bounded variables, use sampling_discipline "fraction". Do not rely on the unit string to communicate this; downstream consumers read sampling_discipline only.
+
+====================
+DISTRIBUTION DEFAULT BY PLAN SCALE
+====================
+
+The default sampling_discipline for cost variables is "continuous", which the Monte Carlo runner samples with a triangular distribution between low and high. Triangular's hard ceiling at high is the right shape for small-scale, time-bounded, single-stakeholder projects where overruns are bounded by a stated cap or executed-vendor contract.
+
+For plans at MEGAPROJECT scale, the iron law of megaprojects applies: cost overruns are systematically right-skewed with fat tails. The triangular distribution understates the tail. CAPEX and major OPEX variables on these plans default to `sampling_discipline: "lognormal"`, with low and high interpreted as P5 and P95 (not hard cutoffs).
+
+How to identify megaproject scale (criteria, not enum):
+
+A plan is at megaproject scale when several of these characteristics combine — not when any one matches in isolation. Read the parameter JSON's `plan_summary` (modelling_frame, primary_goal), the magnitude of declared key_values (budget, cost, schedule), and the count and weight of `unmodelled_gates`.
+
+- Multi-billion (or sovereign-funding-level) total budget commitment.
+- Multi-year execution horizon, typically five years or more.
+- Multiple binding regulatory, geopolitical, or land-use dependencies named in `unmodelled_gates` or as load-bearing assumptions.
+- First-of-kind execution at the declared scale (no comparable past project at similar scale executed cleanly).
+- Cost overrun is openly discussed in Premortem / Expert Criticism as a structural risk, not just an execution risk.
+
+The `plan_summary.plan_type` string is one signal. It is free-form and only some plans tag themselves with megaproject language explicitly. Do not treat plan_type as the sole criterion; a plan whose declared budget is in the multi-billion range and whose execution depends on multiple existential regulatory clearances is at megaproject scale even if its plan_type string is generic. Conversely, a plan whose plan_type happens to include megaproject-sounding tokens but whose actual scale is a pilot is NOT at megaproject scale.
+
+When the plan is at megaproject scale:
+
+- CAPEX variables (any continuous monetary variable feeding the top-line capital budget): default to `sampling_discipline: "lognormal"`. Low and high are P5 and P95.
+- Major OPEX variables (continuous monetary variables whose annual magnitude is a material fraction of CAPEX): same default.
+- Sub-component cost variables that are themselves bounded by a stated cap or executed-vendor contract may stay triangular if the rationale names the binding cap. The cap turns the variable into a bounded distribution; lognormal is the wrong shape there.
+- Non-monetary variables (counts, fractions, durations) stay on their natural discipline (integer / fraction / continuous). Lognormal is for monetary CAPEX / OPEX, not for everything.
+
+When the plan is NOT at megaproject scale:
+
+- Stay on continuous / triangular for cost variables.
+- Do NOT emit lognormal. The default is calibrated for small-to-mid-scale plans.
+
+Sampler implementation status: the lognormal sampler lands in Phase 8 of the napkin_math methodology plan. Until Phase 8 ships, the runner accepts `sampling_discipline: "lognormal"` at schema validation but raises NotImplementedError at sample time. Emit lognormal on megaproject CAPEX as this section directs; the runner's loud failure is the intentional bridge to Phase 8. Do not work around the failure with a silent fall-back to triangular — that hides the fat-tail mismatch the rule exists to expose.
+
+====================
+CORRELATIONS (OPTIONAL TOP-LEVEL BLOCK)
+====================
+
+When two or more bounded variables share a plan-internal driver — a single Risk, Issue, Decision, Premortem entry, or stress passage that EXPLICITLY forecasts coupled movement in both — declare them as a correlation group via the optional `correlations` top-level key.
+
+A shared driver couples the variables in a single Monte Carlo trial: if the driver realizes adversely, ALL coupled variables drift together (not independently). Without an explicit correlations declaration, the Monte Carlo samples each variable independently — which lets a single trial pair a p95 of one with a p05 of another, structurally understating joint-tail risk.
+
+Schema (sibling of the per-variable entries):
+
+{
+  ... per-variable bound entries ...,
+  "correlations": [
+    {
+      "group_id": "<short_snake_case_label>",
+      "variables": ["<var_a>", "<var_b>", ...],
+      "rho": 0.6,
+      "rationale": "<plan-internal anchor naming the shared driver>"
+    },
+    ...
+  ]
+}
+
+Rules for declaring a correlation group:
+
+- Only declare a group when the plan ITSELF names a shared driver. Modeller priors like "operational drift," "execution risk," or "macroeconomic factors" are NOT valid anchors. The rationale must name a specific Risk / Issue / Decision / Premortem / Expert-Criticism passage and paraphrase what that passage forecasts. Mirror the SOURCE TAG rule for actual_X base shifts.
+- All variables listed in a group MUST already be declared as per-variable bound entries above. Do not invent variables; do not include actual_X variables alongside their own threshold (the threshold is stripped from bounds and would be a no-op).
+- Rho is a single number in (-1, 1):
+    * Strong shared driver (the named passage forecasts coupled movement in BOTH variables, same direction, at meaningful magnitudes): rho 0.6 to 0.8.
+    * Moderate shared driver (the named passage forecasts a likely coupling but with uncertain magnitude): rho 0.3 to 0.5.
+    * Weak or speculative coupling: do NOT declare a correlation. Independence is the default. Declaring weak correlations adds noise to the simulation without information.
+    * Negative correlation (rare): only when the named passage forecasts that adversity in one variable systematically benefits another. Reserve for explicit hedging relationships.
+- Maximum 5 correlation groups per bounds.json. If more groups would qualify, declare the highest-impact ones (largest budget weight, most binding gates).
+
+Sampler implementation status: the Gaussian-copula sampler that consumes the correlations block lands in Phase 8 of the napkin_math methodology plan. Until Phase 8 ships, the runner preserves the correlations block through `strip_threshold_bounds` and emits a warning, but samples each variable independently (no correlated draws yet). Emit correlations as this section directs; the warning surfaces the assumption in the bounds artifact and documents the intended coupling for Phase 8.
 
 ====================
 UNIT HANDLING
@@ -187,8 +299,8 @@ sampling_discipline must be one of:
 - "integer"         — countable units (people, households, days, kits, sites, …); downstream samplers round draws to the nearest integer and re-clamp to [low, high]
 - "fraction"        — bounded in [0, 1]; downstream samplers clamp draws to that interval
 - "continuous"      — real-valued; downstream samplers do not round or clamp beyond the [low, high] range
-- "lognormal"       — fat-tailed real-valued draw whose [low, high] mean P5 / P95, not hard cutoffs. **Schema-reserved: the Monte Carlo runner accepts this value at validation time but raises NotImplementedError at sample time until Phase 8 lands the matching sampler.** Do not emit yet unless a follow-up rule (megaproject CAPEX default) explicitly directs you to.
-- "pert"            — three-point modified-beta draw centered on base with low/high as the supports. **Schema-reserved with the same Phase-8 caveat as lognormal.** Do not emit yet.
+- "lognormal"       — fat-tailed real-valued draw whose [low, high] mean P5 / P95, not hard cutoffs. **Sampler lands in Phase 8: schema validation accepts this value, but the runner raises NotImplementedError at sample time until Phase 8 ships.** Emit on megaproject-scale CAPEX / major OPEX per the DISTRIBUTION DEFAULT BY PLAN SCALE section below; do not emit on small-to-mid-scale plans.
+- "pert"            — three-point modified-beta draw centered on base with low/high as the supports. **Schema-reserved with the same Phase-8 caveat as lognormal.** No prompt rule currently directs you to emit pert; reserved for a future selection rule once the sampler exists.
 
 Choose sampling_discipline by the variable's nature, not by lexical tokens in its id or unit. The downstream Monte Carlo runner does not pattern-match on unit strings; it reads sampling_discipline directly. There must be no fallback path that re-guesses the discipline.
 
@@ -198,18 +310,18 @@ default_pass_probability:
 - For sampling_discipline "bernoulli_gate": must be a number in [0, 1]; this is the assumed pass probability when the caller does not override it
 - For every other sampling_discipline: must be null
 
-A single optional top-level key `correlations` is reserved alongside the per-variable entries for declaring cross-variable correlation groups. **Schema-reserved with the same Phase-8 caveat as lognormal/pert: the runner preserves the key but does not yet apply correlated sampling.** Do not emit a `correlations` block yet; the detailed selection rules will land alongside the copula sampler.
+A single optional top-level key `correlations` is reserved alongside the per-variable entries for declaring cross-variable correlation groups. **Sampler lands in Phase 8: the runner preserves the key and emits a warning, but samples each variable independently until Phase 8 ships the Gaussian-copula sampler.** Emit per the CORRELATIONS (OPTIONAL TOP-LEVEL BLOCK) section above when the plan ITSELF names a shared driver between two or more bounded variables.
 
 Rules for the output:
 
 - Output only variables selected by the rules above.
 - Do not invent ids.
-- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate (except for the reserved `correlations` key described above, which is not yet emitted).
+- Every top-level key must correspond to a declared id in key_values or missing_values_to_estimate, except for the optional `correlations` key declared per the CORRELATIONS section above.
 - Order keys by importance: critical-priority first, then high, then medium, then remaining missing_values_to_estimate not already placed.
 - rationale must be at most 50 words. The cap exists to discourage prose, not to suppress required disclosures: the named-anchor paraphrase required by ACTUAL-VS-COMMITMENT and the base-vs-threshold clause required by SANITY CHECK are exempt from the cap if they push the rationale past 50 words.
 - Split rationale on whitespace for word count; hyphenated and slash-joined tokens count as one word.
-- source is "data" only when the range is anchored in real-world comparable data or studies.
-- Otherwise use source "assumption".
+- For non-actual_X variables: source is "data" only when the range is anchored in real-world comparable data or studies; otherwise use source "assumption".
+- For actual_X variables: source is "data" only when the BASE is shifted on a named plan-internal anchor; if the base is at the commitment default, source is "assumption" even if the spread shape is anchored elsewhere. See the ACTUAL-VS-COMMITMENT section.
 - Citations in rationale must be substantively correct. If you name "Risk 3" or "Issue 2", the cited artifact must actually contain the claim you attribute to it. Lexical presence is not sufficient.
 - Do not produce code, markdown, or commentary outside the JSON.
 - Do not output a top-level array.
@@ -254,8 +366,8 @@ A valid output:
     "low": 0.40,
     "base": 0.60,
     "high": 0.75,
-    "rationale": "Base centered on plan target 0.6 (DEFAULT, no anchored shift). Spread from comparable European canvasser outreach programs reaching 0.4-0.75 depending on density and trust.",
-    "source": "data",
+    "rationale": "Base centered on plan commitment 0.6 (DEFAULT); no plan-internal passage anchors a shift. Spread from comparable European canvasser outreach programs reaching 0.4-0.75 depending on density and trust.",
+    "source": "assumption",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null
@@ -265,8 +377,8 @@ A valid output:
     "low": 0.55,
     "base": 0.80,
     "high": 0.90,
-    "rationale": "Base centered on plan target 0.8 (DEFAULT). Low-side spread to 0.55 reflects Risk 4 (weather-dependent demand drop in cool summers); high capped at 0.90 by site capacity.",
-    "source": "data",
+    "rationale": "Base centered on plan commitment 0.8 (DEFAULT); no plan-internal passage anchors a base shift. Low-side spread to 0.55 reflects Risk 4 (weather-dependent demand drop in cool summers); high capped at 0.90 by site capacity. Source remains 'assumption' because the source tag tracks BASE anchoring for actual_X variables, and the base is at the default — the Risk-4 anchor applies to the spread shape only.",
+    "source": "assumption",
     "sampling_discipline": "fraction",
     "non_negative": true,
     "default_pass_probability": null

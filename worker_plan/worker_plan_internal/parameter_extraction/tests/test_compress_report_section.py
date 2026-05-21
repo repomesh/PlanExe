@@ -445,3 +445,91 @@ def test_merge_second_pass_items_preserves_emit_order() -> None:
     second = [_si("c", quote="q3"), _si("d", quote="q4"), _si("e", quote="q5")]
     merged, _ = merge_second_pass_items(first, second)
     assert [item.line_english for item in merged] == ["a", "b", "c", "d", "e"]
+
+
+def test_quote_is_in_source_substring_fast_path() -> None:
+    """Verbatim substring match remains the primary signal: a quote copied
+    cleanly from the source should still verify, including across the
+    existing whitespace/dash normalisation."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = "If the lowest qualified bid for OPC UA middleware exceeds $75,000, escalate."
+    assert quote_is_in_source("lowest qualified bid for OPC UA middleware", source) is True
+    # Dash variant: em-dash in quote, hyphen in source.
+    assert quote_is_in_source(
+        "qualified bid—for OPC UA middleware",
+        "qualified bid-for OPC UA middleware",
+    ) is True
+
+
+def test_quote_is_in_source_rejects_empty_and_sentinel() -> None:
+    """Empty and the LLM's explicit absence marker are never grounded."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    assert quote_is_in_source("", "anything goes here") is False
+    assert quote_is_in_source("NOT IN SOURCE", "NOT IN SOURCE appears literally here") is False
+
+
+def test_quote_is_in_source_accepts_paraphrase_token_overlap() -> None:
+    """When the LLM reorders or drops intermediate words while still
+    drawing every content token from the source, the token-overlap fallback
+    should accept it. Substring match would miss it because the word order
+    differs."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = (
+        "If the lowest qualified bid for OPC UA middleware exceeds $75,000, "
+        "the project re-scopes to a single integration vendor."
+    )
+    # Reordered: "middleware" moved before "bid", "for OPC UA" dropped.
+    assert quote_is_in_source(
+        "lowest qualified middleware bid exceeds $75,000",
+        source,
+    ) is True
+
+
+def test_quote_is_in_source_rejects_hallucinated_number() -> None:
+    """Digit-bearing tokens are anchored exactly. A quote that paraphrases
+    the text but swaps the numeric value is not grounded."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = "lowest qualified bid for OPC UA middleware exceeds $75,000"
+    # 80,000 ≠ 75,000 — must fail even though every other token is present.
+    assert quote_is_in_source(
+        "lowest qualified middleware bid exceeds $80,000",
+        source,
+    ) is False
+
+
+def test_quote_is_in_source_rejects_substituted_content_word() -> None:
+    """Token-overlap threshold (90%) blocks single-word substitutions that
+    invert meaning while keeping most surface tokens. ``highest`` is not in
+    the source, so a six-other-tokens overlap fails."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = "lowest qualified bid for OPC UA middleware exceeds $75,000"
+    assert quote_is_in_source(
+        "highest qualified middleware bid exceeds $75,000",
+        source,
+    ) is False
+
+
+def test_quote_is_in_source_rejects_short_unrelated_quote() -> None:
+    """Two- or one-token quotes do not get the token-overlap fallback —
+    too easy to satisfy by coincidence on a large source."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = "lowest qualified bid for OPC UA middleware exceeds $75,000"
+    assert quote_is_in_source("middleware bid", source) is False

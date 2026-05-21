@@ -862,6 +862,38 @@ When to leave it empty (omit the field or use `[]`):
 
 Do not use unmodelled_gates as a dumping ground for risks. Only include gates whose failure would end the plan independently of the financial or operational thresholds the model tests.
 
+Dropped-signal explanations (optional `dropped_signals` field):
+
+A separate top-level array `dropped_signals` documents prior-iteration or source-stated signals that the current artifact deliberately leaves out. The intent is to let a deterministic source-preservation audit distinguish a defensible cap-pressure drop from a silent regression. Each entry must name a structural reason and reference the current signal it was replaced by, made redundant with, or moved to.
+
+Use cases (corpus-agnostic):
+- A prior iteration declared a primitive that has now been computed from named constituents; record the old id with `reason: "replaced_by"` and `replacement_id` pointing at the current calculation's `output_name` or entry id.
+- A prior iteration's signal is mechanically equivalent to a current signal under a different name; record with `reason: "redundant_with"` and `redundant_with_id`.
+- The 8 key_values / 5 missing_values / 5 calc / 5 derived / 5 unmodelled_gate caps forced you to drop a candidate; record with `reason: "cap_pressure"` and `cap_kind` naming the capped array.
+- A prior signal has been re-categorised as an unmodelled gate; record with `reason: "moved_to_unmodelled_gate"` and `replacement_id` pointing at the new unmodelled_gates entry.
+- A prior signal is genuinely out of scope for the current modelling frame; record with `reason: "out_of_scope"` and a one-sentence structural justification.
+
+For each dropped signal, return:
+- id: the prior signal id OR a source_claim_id (12-hex shape `claim_<...>`) — the identifier of what was dropped
+- origin: one of `source_digest` or `prior_baseline`
+- source_anchor: the source section when known (executive_summary, project_plan, selected_scenario, assumptions, review_plan, premortem, expert_criticism, data_collection) or `prior_baseline`
+- expected_section: which section the signal would normally land in (key_values, missing_values_to_estimate, derived_questions, recommended_first_calculations, unmodelled_gates)
+- dropped_from: prior section name when `origin == "prior_baseline"`, otherwise null
+- reason: one of `replaced_by`, `cap_pressure`, `out_of_scope`, `moved_to_unmodelled_gate`, `redundant_with`
+- replacement_id: required for `replaced_by` and `moved_to_unmodelled_gate`; must reference an existing current id or output_name
+- redundant_with_id: required for `redundant_with`; must reference an existing current id or output_name
+- cap_kind: required for `cap_pressure`; must name a capped array (`key_values`, `missing_values_to_estimate`, `derived_questions`, `recommended_first_calculations`, `unmodelled_gates`)
+- rationale: one structural sentence (≤25 words). Plan-neutral wording. Do not use rationale to excuse weak extraction.
+
+Hard limit: at most 8 `dropped_signals`. If more than 8 would need to be recorded, this is a signal that the extraction itself is too lossy and should be redone rather than confessed in a long list.
+
+Do not use `dropped_signals` for:
+- noise items that the source itself frames as decorative or narrative
+- duplicate phrasings of a signal that IS preserved under another id (those are not drops)
+- items you never considered emitting in the first place (the audit only checks signals the prior baseline or the source actually emitted)
+
+Omit the field entirely (or use `[]`) when no prior signal was dropped. Empty is the expected default for first-iteration extractions and for cleanly-preserved iterations.
+
 Return this exact JSON shape:
 
 {
@@ -927,6 +959,20 @@ Return this exact JSON shape:
       "why_it_matters": "",
       "source_anchor": "",
       "consequence_if_false": ""
+    }
+  ],
+  "dropped_signals": [
+    {
+      "id": "",
+      "origin": "",
+      "source_anchor": "",
+      "expected_section": "",
+      "dropped_from": null,
+      "reason": "",
+      "replacement_id": null,
+      "redundant_with_id": null,
+      "cap_kind": null,
+      "rationale": ""
     }
   ]
 }

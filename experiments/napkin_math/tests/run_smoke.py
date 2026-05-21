@@ -223,7 +223,7 @@ def check_summarize_assessment_end_to_end(tmpdir: Path) -> None:
 
 def check_validate_parameters_end_to_end(tmpdir: Path) -> None:
     """Run validate_parameters.py against the smoke fixture and verify it
-    produces a clean validation.json (exit 0, valid: true, 18 checks listed).
+    produces a clean validation.json (exit 0, valid: true, 19 checks listed).
     """
     out = tmpdir / "validation.json"
     validator = NAPKIN_DIR / "validate_parameters.py"
@@ -241,8 +241,8 @@ def check_validate_parameters_end_to_end(tmpdir: Path) -> None:
     body = json.loads(out.read_text())
     _check("validation.json valid: true", body.get("valid") is True)
     _check("validation.json error_count == 0", body.get("error_count") == 0)
-    _check("validation.json lists 18 checks_performed",
-           len(body.get("summary", {}).get("checks_performed", [])) == 18)
+    _check("validation.json lists 19 checks_performed",
+           len(body.get("summary", {}).get("checks_performed", [])) == 19)
 
 
 def check_prepare_extract_input_imports() -> None:

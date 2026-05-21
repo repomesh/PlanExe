@@ -72,6 +72,14 @@ RENAME_JACCARD_THRESHOLD: float = 0.4
 # is advisory — the reviewer wants the top few, not an exhaustive list.
 MAX_RENAME_CANDIDATES: int = 3
 
+# Closed enum of structural reasons accepted in a dropped_signals entry.
+# Matches validate_parameters.DROPPED_SIGNAL_REASONS so a single source
+# of truth governs the schema and the audit's consumption of it.
+DROPPED_SIGNAL_REASONS: frozenset[str] = frozenset({
+    "replaced_by", "cap_pressure", "out_of_scope",
+    "moved_to_unmodelled_gate", "redundant_with",
+})
+
 
 def parse_rhs_tokens(formula: str) -> set[str]:
     """Extract snake_case identifier tokens from the RHS of a
@@ -177,11 +185,50 @@ def find_rename_candidates(
     return scored[:MAX_RENAME_CANDIDATES]
 
 
+def build_dropped_signal_index(params: dict) -> dict[str, dict[str, Any]]:
+    """Index a current artifact's ``dropped_signals`` entries by id, so
+    the audit can reclassify a prior signal whose disappearance the LLM
+    has explained.
+
+    Only well-formed entries are indexed: ``reason`` must be in the
+    closed enum and ``id`` must be a non-empty string. Malformed entries
+    are silently skipped here — ``validate_parameters.py`` is the right
+    place to surface them as ERRORs, not the audit.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for entry in params.get("dropped_signals", []) or []:
+        if not isinstance(entry, dict):
+            continue
+        eid = entry.get("id")
+        reason = entry.get("reason")
+        if not isinstance(eid, str) or not eid:
+            continue
+        if reason not in DROPPED_SIGNAL_REASONS:
+            continue
+        if eid not in out:
+            out[eid] = entry
+    return out
+
+
 def classify_prior_signal(
-    prior_name: str, current_index: dict[str, Any]
+    prior_name: str,
+    current_index: dict[str, Any],
+    dropped_index: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Classify one prior signal name by what evidence the current
-    artifact provides for it.
+    artifact provides for it. ``dropped_index`` (optional) is a map
+    from id → dropped_signals entry; when a prior name matches an entry
+    AND the prior is not otherwise preserved, the audit reclassifies
+    the disappearance as ``explained_drop`` with the structured reason.
+
+    Preservation precedence:
+        preserved_by_id > preserved_by_output_name >
+        preserved_as_formula_dependency > explained_drop >
+        likely_renamed > absent_unexplained
+
+    ``explained_drop`` ranks above ``likely_renamed`` because the LLM
+    has named a specific structural reason and reference; the rename-
+    candidate suggestions become noise once the drop is explained.
     """
     if prior_name in current_index["ids"]:
         return {"status": "preserved_by_id"}
@@ -189,6 +236,15 @@ def classify_prior_signal(
         return {"status": "preserved_by_output_name"}
     if prior_name in current_index["formula_tokens"]:
         return {"status": "preserved_as_formula_dependency"}
+    if dropped_index and prior_name in dropped_index:
+        entry = dropped_index[prior_name]
+        return {
+            "status": "explained_drop",
+            "reason": entry.get("reason"),
+            "replacement_id": entry.get("replacement_id"),
+            "redundant_with_id": entry.get("redundant_with_id"),
+            "cap_kind": entry.get("cap_kind"),
+        }
     candidate_pool = current_index["ids"] | current_index["output_names"]
     candidates = find_rename_candidates(prior_name, candidate_pool)
     if candidates:
@@ -228,18 +284,20 @@ def audit(prior_params: dict, current_params: dict) -> dict[str, Any]:
     """
     prior_index = build_signal_index(prior_params)
     current_index = build_signal_index(current_params)
+    dropped_index = build_dropped_signal_index(current_params)
     summary = {
         "prior_total": len(prior_index["signals"]),
         "preserved_by_id": 0,
         "preserved_by_output_name": 0,
         "preserved_as_formula_dependency": 0,
+        "explained_drop": 0,
         "likely_renamed": 0,
         "absent_unexplained": 0,
     }
     details: list[dict[str, Any]] = []
     for prior_name in sorted(prior_index["signals"]):
         meta = prior_index["signals"][prior_name]
-        cls = classify_prior_signal(prior_name, current_index)
+        cls = classify_prior_signal(prior_name, current_index, dropped_index)
         summary[cls["status"]] = summary[cls["status"]] + 1
         details.append({
             "prior_name": prior_name,
@@ -272,10 +330,25 @@ def render_text_report(report: dict[str, Any]) -> str:
         f"  preserved_by_id                  : {s['preserved_by_id']}",
         f"  preserved_by_output_name         : {s['preserved_by_output_name']}",
         f"  preserved_as_formula_dependency  : {s['preserved_as_formula_dependency']}",
+        f"  explained_drop                   : {s['explained_drop']}",
         f"  likely_renamed                   : {s['likely_renamed']}",
         f"  absent_unexplained               : {s['absent_unexplained']}",
         "",
     ]
+    explained = [d for d in report["details"] if d["status"] == "explained_drop"]
+    if explained:
+        lines.append("EXPLAINED DROPS (dropped_signals entries):")
+        for d in explained:
+            reason = d.get("reason", "?")
+            ref_bits: list[str] = [reason]
+            if d.get("replacement_id"):
+                ref_bits.append(f"→ {d['replacement_id']}")
+            if d.get("redundant_with_id"):
+                ref_bits.append(f"≡ {d['redundant_with_id']}")
+            if d.get("cap_kind"):
+                ref_bits.append(f"cap={d['cap_kind']}")
+            lines.append(f"  {_format_signal_label(d)} :: {' '.join(ref_bits)}")
+        lines.append("")
     renamed = [d for d in report["details"] if d["status"] == "likely_renamed"]
     if renamed:
         lines.append("LIKELY RENAMED:")

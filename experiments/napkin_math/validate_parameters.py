@@ -7,7 +7,7 @@ Replaces the LLM-driven `validate-parameters` skill. Reads a
 the shape that `summarize_assessment.py` consumes (named `checks_performed`
 list + per-violation rule_id/severity/path/message/suggested_fix).
 
-18 structural checks are run:
+19 structural checks are run:
 
     json_parse                                # implicit (file already parsed)
     top_level_structure                       # plan_summary + four arrays
@@ -27,6 +27,7 @@ list + per-violation rule_id/severity/path/message/suggested_fix).
     shared_pool_legitimacy                    # no-op; enforced upstream in the prompt
     aggregate_not_bounded                     # sum-formula LHS not in missing_values
     requirement_has_margin                    # *_required key_value referenced by a calc
+    dropped_signals_schema                    # optional dropped_signals shape + refs
 
 `valid` is true iff `error_count == 0`. WARN-level findings do not
 invalidate the file. Exit code 0 on valid, 1 on invalid, 2 on JSON parse
@@ -49,6 +50,7 @@ CHECKS_PERFORMED = [
     "output_unit_present_when_formula_hint", "no_dead_end_variables",
     "threshold_friendly_naming", "shared_pool_legitimacy",
     "aggregate_not_bounded", "requirement_has_margin",
+    "dropped_signals_schema",
 ]
 
 CAPS = {
@@ -83,8 +85,32 @@ REQUIRED_KEYS = {
 }
 
 # Top-level keys the validator REQUIRES (vs optional). unmodelled_gates is
-# optional — older parameters.json files won't have it.
-OPTIONAL_TOP_LEVEL_KEYS = {"unmodelled_gates"}
+# optional — older parameters.json files won't have it. dropped_signals
+# is optional and only present when the LLM records prior-iteration or
+# source-stated absences (proposal 141 PR 2).
+OPTIONAL_TOP_LEVEL_KEYS = {"unmodelled_gates", "dropped_signals"}
+
+DROPPED_SIGNAL_REASONS: frozenset[str] = frozenset({
+    "replaced_by", "cap_pressure", "out_of_scope",
+    "moved_to_unmodelled_gate", "redundant_with",
+})
+
+# Hard limit on dropped_signals entries. Above this the extraction
+# itself is too lossy and should be redone rather than confessed.
+MAX_DROPPED_SIGNALS: int = 8
+
+# Max words in a dropped_signal.rationale.
+DROPPED_SIGNAL_RATIONALE_WORD_CAP: int = 25
+
+# Origin values for a dropped_signal entry.
+DROPPED_SIGNAL_ORIGINS: frozenset[str] = frozenset({
+    "source_digest", "prior_baseline",
+})
+
+# Reasons whose semantics require a populated replacement_id.
+DROPPED_SIGNAL_REASONS_NEEDING_REPLACEMENT: frozenset[str] = frozenset({
+    "replaced_by", "moved_to_unmodelled_gate",
+})
 
 # Sections whose entries carry an `id` field. Used by uniqueness, snake_case,
 # and reference checks.
@@ -600,6 +626,136 @@ def check_requirement_has_margin(params: dict, violations: list) -> None:
         ))
 
 
+def check_dropped_signals_schema(params: dict, violations: list) -> None:
+    """Validate the optional ``dropped_signals`` array's shape and
+    cross-references. The field is absent on first-iteration extractions
+    and on cleanly-preserved iterations; when present each entry must
+    name a structural reason from the closed enum and resolve its
+    replacement / cap-pressure / redundancy references against current
+    ids or output_names. Malformed entries are not acceptable as
+    explanations and fire ERROR-level violations.
+    """
+    obj = params.get("dropped_signals")
+    if obj is None:
+        return
+    if not isinstance(obj, list):
+        violations.append(violation(
+            "dropped_signals_schema", "ERROR", "$.dropped_signals",
+            "dropped_signals must be a list (or absent)",
+            "use an array of objects, or omit the field entirely",
+        ))
+        return
+    if len(obj) > MAX_DROPPED_SIGNALS:
+        violations.append(violation(
+            "dropped_signals_schema", "ERROR", "$.dropped_signals",
+            f"dropped_signals has {len(obj)} entries; cap is {MAX_DROPPED_SIGNALS}",
+            f"reduce to at most {MAX_DROPPED_SIGNALS} entries — if more drops would need "
+            f"recording, the extraction itself is too lossy and should be redone",
+        ))
+    current_refs = collect_all_ids(params) | collect_output_names(params)
+    unmodelled_ids: set[str] = set()
+    for entry in params.get("unmodelled_gates", []) or []:
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            unmodelled_ids.add(entry["id"])
+    for i, entry in enumerate(obj):
+        path = f"$.dropped_signals[{i}]"
+        if not isinstance(entry, dict):
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", path,
+                "dropped_signals entry is not an object",
+                "use an object with the documented fields",
+            ))
+            continue
+        reason = entry.get("reason")
+        if reason not in DROPPED_SIGNAL_REASONS:
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", f"{path}.reason",
+                f"reason `{reason}` is not in the closed enum",
+                f"use one of {sorted(DROPPED_SIGNAL_REASONS)}",
+            ))
+        origin = entry.get("origin")
+        if origin not in DROPPED_SIGNAL_ORIGINS:
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", f"{path}.origin",
+                f"origin `{origin}` is not in the closed enum",
+                f"use one of {sorted(DROPPED_SIGNAL_ORIGINS)}",
+            ))
+        eid = entry.get("id")
+        if not isinstance(eid, str) or not eid:
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", f"{path}.id",
+                "id must be a non-empty string (prior signal id or source_claim_id)",
+                "supply the prior signal's id",
+            ))
+        rationale = entry.get("rationale")
+        if not isinstance(rationale, str) or not rationale.strip():
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", f"{path}.rationale",
+                "rationale must be a non-empty structural sentence",
+                "name the structural reason in one sentence",
+            ))
+        elif len(rationale.split()) > DROPPED_SIGNAL_RATIONALE_WORD_CAP:
+            violations.append(violation(
+                "dropped_signals_schema", "ERROR", f"{path}.rationale",
+                f"rationale is {len(rationale.split())} words; cap is "
+                f"{DROPPED_SIGNAL_RATIONALE_WORD_CAP}",
+                f"shorten to {DROPPED_SIGNAL_RATIONALE_WORD_CAP} words",
+            ))
+        if reason in DROPPED_SIGNAL_REASONS_NEEDING_REPLACEMENT:
+            rid = entry.get("replacement_id")
+            if not isinstance(rid, str) or not rid:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.replacement_id",
+                    f"reason `{reason}` requires a non-empty replacement_id",
+                    "set replacement_id to the current id or output_name that replaces this signal",
+                ))
+            elif reason == "replaced_by" and rid not in current_refs:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.replacement_id",
+                    f"replacement_id `{rid}` does not match any current id or output_name",
+                    "rename to an existing current id/output_name, or drop the entry",
+                ))
+            elif reason == "moved_to_unmodelled_gate" and rid not in unmodelled_ids:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.replacement_id",
+                    f"replacement_id `{rid}` does not match any unmodelled_gates id",
+                    "set replacement_id to an existing unmodelled_gates entry id",
+                ))
+        if reason == "redundant_with":
+            rid = entry.get("redundant_with_id")
+            if not isinstance(rid, str) or not rid:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.redundant_with_id",
+                    "reason `redundant_with` requires a non-empty redundant_with_id",
+                    "set redundant_with_id to the current id or output_name that subsumes this signal",
+                ))
+            elif rid not in current_refs:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.redundant_with_id",
+                    f"redundant_with_id `{rid}` does not match any current id or output_name",
+                    "rename to an existing current id/output_name, or drop the entry",
+                ))
+        if reason == "cap_pressure":
+            cap_kind = entry.get("cap_kind")
+            if cap_kind not in CAPS:
+                violations.append(violation(
+                    "dropped_signals_schema", "ERROR", f"{path}.cap_kind",
+                    f"cap_kind `{cap_kind}` is not a capped array name",
+                    f"use one of {sorted(CAPS)}",
+                ))
+            else:
+                cap_size = CAPS[cap_kind]
+                actual_size = len(params.get(cap_kind, []) or [])
+                if actual_size < cap_size:
+                    violations.append(violation(
+                        "dropped_signals_schema", "ERROR", f"{path}.cap_kind",
+                        f"cap_pressure claim is not justified: `{cap_kind}` has "
+                        f"{actual_size} entries, below cap {cap_size}",
+                        f"drop this dropped_signals entry, or fill the `{cap_kind}` "
+                        f"array to its cap with the dropped signal first",
+                    ))
+
+
 CHECK_FUNCTIONS = {
     "json_parse": None,  # implicit; failure handled in main()
     "top_level_structure": check_top_level_structure,
@@ -619,6 +775,7 @@ CHECK_FUNCTIONS = {
     "shared_pool_legitimacy": check_shared_pool_legitimacy,
     "aggregate_not_bounded": check_aggregate_not_bounded,
     "requirement_has_margin": check_requirement_has_margin,
+    "dropped_signals_schema": check_dropped_signals_schema,
 }
 
 

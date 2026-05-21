@@ -447,11 +447,13 @@ def test_explained_drop_silently_skips_malformed_entry() -> None:
 
 
 def test_explained_drop_handles_cap_pressure_reason() -> None:
-    """A cap_pressure drop is a legitimate explained_drop — the LLM did
-    consider the signal but couldn't fit it under the cap."""
+    """A cap_pressure drop is a legitimate explained_drop — but the
+    audit consumes the claim only when the named capped array is
+    actually at its cap (matches validator). Here key_values is filled
+    to its cap of 8 so the cap_pressure claim is justified."""
     prior = _build(key_values=[_kv("orphan_cap_pressured_token")])
     current = _build(
-        key_values=[],
+        key_values=[_kv(f"kv_{i}") for i in range(8)],
         dropped_signals=[
             _dropped(
                 "orphan_cap_pressured_token",
@@ -493,3 +495,112 @@ def test_explained_drop_handles_moved_to_unmodelled_gate() -> None:
                   if d["status"] == "explained_drop")
     assert detail["reason"] == "moved_to_unmodelled_gate"
     assert detail["replacement_id"] == "orphan_gate_id"
+
+
+# ─── strict consumption: invalid dropped_signals must not become explained_drop ──
+
+def test_explained_drop_rejects_unresolved_replacement_id() -> None:
+    """Review feedback on PR #752: the audit must not accept a
+    replaced_by entry whose replacement_id does not resolve to a
+    current id or output_name. Otherwise an invalid explanation can
+    hide a real regression."""
+    prior = _build(key_values=[_kv("orphan_token_alpha")])
+    current = _build(
+        # NB: "alpha" is the prior's renamed candidate by tokens; we
+        # use it to confirm the audit falls through to likely_renamed,
+        # not explained_drop, when the replacement_id is bogus.
+        key_values=[_kv("orphan_token_alpha_renamed")],
+        dropped_signals=[
+            _dropped(
+                "orphan_token_alpha",
+                replacement_id="never_declared_anywhere",
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    statuses = {d["prior_name"]: d["status"] for d in report["details"]}
+    # The malformed dropped_signals entry is ignored; the prior signal
+    # falls through to likely_renamed (high token overlap with the
+    # current id) rather than being hidden by the invalid explanation.
+    assert statuses["orphan_token_alpha"] == "likely_renamed"
+    assert report["summary"]["explained_drop"] == 0
+
+
+def test_explained_drop_rejects_source_digest_origin() -> None:
+    """The Fork B audit consumes only prior_baseline-origin entries.
+    source_digest-origin drops are Fork A territory and not consumed
+    here; the prior signal must fall through to its weaker
+    classification rather than being silently reclassified."""
+    prior = _build(key_values=[_kv("orphan_token_alpha")])
+    current = _build(
+        key_values=[_kv("alpha")],
+        dropped_signals=[
+            _dropped(
+                "orphan_token_alpha",
+                origin="source_digest",
+                replacement_id="alpha",
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    assert report["summary"]["explained_drop"] == 0
+
+
+def test_explained_drop_rejects_unresolved_redundant_with_id() -> None:
+    prior = _build(key_values=[_kv("orphan_redundant_token")])
+    current = _build(
+        key_values=[_kv("alpha")],
+        dropped_signals=[
+            _dropped(
+                "orphan_redundant_token",
+                reason="redundant_with",
+                replacement_id=None,
+                redundant_with_id="never_declared",
+                rationale="redundant with the new thing",
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    assert report["summary"]["explained_drop"] == 0
+
+
+def test_explained_drop_rejects_unjustified_cap_pressure() -> None:
+    """cap_pressure must be justified — the named array must actually
+    be at its cap. An empty array (cap-room available) means the LLM
+    could have kept the signal."""
+    prior = _build(key_values=[_kv("orphan_cap_token")])
+    current = _build(
+        # key_values is at 1 entry; cap is 8 → cap_pressure unjustified.
+        key_values=[_kv("alpha")],
+        dropped_signals=[
+            _dropped(
+                "orphan_cap_token",
+                reason="cap_pressure",
+                cap_kind="key_values",
+                replacement_id=None,
+                rationale="dropped under cap pressure",
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    assert report["summary"]["explained_drop"] == 0
+
+
+def test_explained_drop_rejects_moved_to_unmodelled_gate_pointing_at_kv() -> None:
+    """moved_to_unmodelled_gate.replacement_id must resolve to an actual
+    unmodelled_gates entry — not to a regular key_value."""
+    prior = _build(key_values=[_kv("orphan_gate_candidate")])
+    current = _build(
+        key_values=[_kv("alpha")],
+        unmodelled_gates=[],
+        dropped_signals=[
+            _dropped(
+                "orphan_gate_candidate",
+                reason="moved_to_unmodelled_gate",
+                replacement_id="alpha",  # key_value, not an unmodelled_gates id
+                rationale="moved to unmodelled gates layer",
+            ),
+        ],
+    )
+    report = mod.audit(prior, current)
+    assert report["summary"]["explained_drop"] == 0

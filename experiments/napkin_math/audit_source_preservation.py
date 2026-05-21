@@ -4,26 +4,42 @@ to it in the current parameters.json.
 
 Implements Fork B of proposal 141 (source-preservation audit). Reads a
 prior ``parameters.json`` and a current ``parameters.json``, builds the
-prior signal set, and classifies each prior id as one of:
+prior signal set, and classifies each prior signal as one of:
 
-    preserved_by_id                — same id is in current
-    preserved_by_output_name       — prior id appears as an output_name
-    preserved_as_formula_dependency — prior id is on a current formula RHS
-                                      or in a current depends_on list
-    likely_renamed                 — prior id has high snake_case token
-                                      overlap with one or more current ids
+    preserved_by_id                — same name is in current ids
+    preserved_by_output_name       — prior name appears as a current
+                                      output_name
+    preserved_as_formula_dependency — prior name is on a current formula
+                                      RHS or in a current depends_on list
+    explained_drop                 — current parameters.json's
+                                      dropped_signals records the prior
+                                      signal with a SEMANTICALLY VALID
+                                      structural reason (origin =
+                                      prior_baseline, references resolve,
+                                      cap_pressure claim justified)
+    likely_renamed                 — prior name has high snake_case token
+                                      Jaccard overlap with one or more
+                                      candidates from current ids ∪
+                                      output_names
     absent_unexplained             — no preservation evidence found
 
 Advisory only. Exit 0 unless the input is malformed (exit 2). No strict
-mode, no CI gating, no schema changes to extract prompts — those land in
-later proposal 141 PRs after this audit's findings (false-positive rate,
-useful catches) are measured on the corpus.
+mode, no CI gating.
 
-Out of scope for this PR (deferred to later proposal 141 PRs):
+The audit reuses the same semantic checks as ``validate_parameters.py``'s
+``check_dropped_signals_schema``: an entry can be consumed as evidence
+of an ``explained_drop`` only when it would also pass validation. A
+malformed entry (unknown reason, unresolved replacement_id, unjustified
+cap_pressure claim, etc.) is silently ignored by the audit and the prior
+signal falls through to ``likely_renamed`` or ``absent_unexplained``.
+This prevents an invalid explanation from hiding a real regression.
+
+Out of scope for this advisory PR (deferred to later proposal 141 PRs):
   - Fork A (source-digest regex scan against the current artifact).
-  - The optional ``dropped_signals`` schema in extract prompts.
-  - LLM rationale parsing of ``dropped_signals`` entries.
+  - Orchestrator wiring that lets the extract skill see prior baselines
+    (without it the LLM cannot emit prior_baseline-origin drops).
   - Strict-mode exit-non-zero policy.
+  - ``source_claim_ids`` per-entry grounding.
 """
 from __future__ import annotations
 
@@ -79,6 +95,94 @@ DROPPED_SIGNAL_REASONS: frozenset[str] = frozenset({
     "replaced_by", "cap_pressure", "out_of_scope",
     "moved_to_unmodelled_gate", "redundant_with",
 })
+
+# Reasons whose semantics require a populated replacement_id.
+DROPPED_SIGNAL_REASONS_NEEDING_REPLACEMENT: frozenset[str] = frozenset({
+    "replaced_by", "moved_to_unmodelled_gate",
+})
+
+# Section-name → cap. Matches validate_parameters.CAPS; duplicated here
+# so the audit can verify a cap_pressure claim without importing the
+# validator module (the audit can be invoked standalone via CLI).
+DROPPED_SIGNAL_CAPS: dict[str, int] = {
+    "key_values": 8,
+    "derived_questions": 5,
+    "missing_values_to_estimate": 5,
+    "recommended_first_calculations": 5,
+    "unmodelled_gates": 5,
+}
+
+
+def _collect_unmodelled_gate_ids(params: dict) -> set[str]:
+    """The set of declared ``unmodelled_gates`` entry ids in a parameters
+    artifact. Used to validate ``moved_to_unmodelled_gate`` references."""
+    out: set[str] = set()
+    for entry in params.get("unmodelled_gates", []) or []:
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            out.add(entry["id"])
+    return out
+
+
+def is_audit_consumable_drop(
+    entry: dict, current_params: dict, current_index: dict[str, Any]
+) -> bool:
+    """Decide whether a ``dropped_signals`` entry is semantically valid
+    enough that the audit should consume it as evidence of an
+    ``explained_drop``. Mirrors the checks ``validate_parameters.py``'s
+    ``check_dropped_signals_schema`` applies, so an entry that the
+    validator would reject does not get to hide a real regression in
+    the audit.
+
+    Required for any consumption:
+      - ``entry`` is a dict with non-empty string ``id``
+      - ``origin == "prior_baseline"`` (Fork B; source_digest drops are
+        Fork A territory and not consumed here)
+      - ``reason`` is in the closed enum
+
+    Reason-specific reference resolution:
+      - ``replaced_by`` — ``replacement_id`` must be a current id or
+        output_name
+      - ``redundant_with`` — ``redundant_with_id`` must be a current id
+        or output_name
+      - ``moved_to_unmodelled_gate`` — ``replacement_id`` must match an
+        ``unmodelled_gates`` entry id
+      - ``cap_pressure`` — ``cap_kind`` must name a capped array AND
+        that array must actually be at its cap in the current artifact
+      - ``out_of_scope`` — no extra reference required
+    """
+    if not isinstance(entry, dict):
+        return False
+    eid = entry.get("id")
+    if not isinstance(eid, str) or not eid:
+        return False
+    if entry.get("origin") != "prior_baseline":
+        return False
+    reason = entry.get("reason")
+    if reason not in DROPPED_SIGNAL_REASONS:
+        return False
+    current_refs = current_index["ids"] | current_index["output_names"]
+    if reason in DROPPED_SIGNAL_REASONS_NEEDING_REPLACEMENT:
+        rid = entry.get("replacement_id")
+        if not isinstance(rid, str) or not rid:
+            return False
+        if reason == "replaced_by" and rid not in current_refs:
+            return False
+        if reason == "moved_to_unmodelled_gate":
+            if rid not in _collect_unmodelled_gate_ids(current_params):
+                return False
+    if reason == "redundant_with":
+        rid = entry.get("redundant_with_id")
+        if not isinstance(rid, str) or not rid:
+            return False
+        if rid not in current_refs:
+            return False
+    if reason == "cap_pressure":
+        cap_kind = entry.get("cap_kind")
+        if cap_kind not in DROPPED_SIGNAL_CAPS:
+            return False
+        if len(current_params.get(cap_kind, []) or []) < DROPPED_SIGNAL_CAPS[cap_kind]:
+            return False
+    return True
 
 
 def parse_rhs_tokens(formula: str) -> set[str]:
@@ -185,26 +289,27 @@ def find_rename_candidates(
     return scored[:MAX_RENAME_CANDIDATES]
 
 
-def build_dropped_signal_index(params: dict) -> dict[str, dict[str, Any]]:
+def build_dropped_signal_index(
+    params: dict, current_index: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
     """Index a current artifact's ``dropped_signals`` entries by id, so
     the audit can reclassify a prior signal whose disappearance the LLM
     has explained.
 
-    Only well-formed entries are indexed: ``reason`` must be in the
-    closed enum and ``id`` must be a non-empty string. Malformed entries
-    are silently skipped here — ``validate_parameters.py`` is the right
-    place to surface them as ERRORs, not the audit.
+    Only **semantically valid** entries are indexed — see
+    ``is_audit_consumable_drop`` for the rules. Malformed entries are
+    silently skipped (``validate_parameters.py`` is the right place to
+    surface them as ERRORs). The strict filter prevents an invalid
+    explanation from hiding a real regression: an entry whose
+    ``replacement_id`` does not resolve, or whose ``cap_pressure`` claim
+    is not justified, falls through to ``likely_renamed`` or
+    ``absent_unexplained`` in the audit's classification.
     """
     out: dict[str, dict[str, Any]] = {}
     for entry in params.get("dropped_signals", []) or []:
-        if not isinstance(entry, dict):
+        if not is_audit_consumable_drop(entry, params, current_index):
             continue
-        eid = entry.get("id")
-        reason = entry.get("reason")
-        if not isinstance(eid, str) or not eid:
-            continue
-        if reason not in DROPPED_SIGNAL_REASONS:
-            continue
+        eid = entry["id"]
         if eid not in out:
             out[eid] = entry
     return out
@@ -284,7 +389,7 @@ def audit(prior_params: dict, current_params: dict) -> dict[str, Any]:
     """
     prior_index = build_signal_index(prior_params)
     current_index = build_signal_index(current_params)
-    dropped_index = build_dropped_signal_index(current_params)
+    dropped_index = build_dropped_signal_index(current_params, current_index)
     summary = {
         "prior_total": len(prior_index["signals"]),
         "preserved_by_id": 0,

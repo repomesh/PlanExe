@@ -184,11 +184,15 @@ source tag is forced to `assumption` (the plan's commitment is a goal,
 not evidence of realised outcomes). The tag is `data` only when the LLM
 moves `base` off the commitment value because a named Premortem /
 Risk-register / Expert-Criticism passage forecasts a gap, and the
-rationale cites the passage. This is rendered downstream as a `Basis`
-column in the assessment's *Missing inputs ranked by impact* table, so
-the reader can see at a glance whether a given driver is grounded in the
-plan or extrapolated by the model — and whether the base was anchored on
-a plan-internal gap forecast or on the bare commitment.
+rationale cites the passage. The asymmetry is rendered downstream by
+`summarize_assessment.py`: `source: "data"` maps to
+`basis: "report_derived"` and `source: "assumption"` maps to
+`basis: "model_assumption"` in the `Basis` column of the assessment's
+*Missing inputs ranked by impact* table — so the column tells the
+reader whether a driver was anchored in the source report or
+extrapolated by the model. The finer distinction between "anchored on
+a plan-internal gap forecast" and "anchored on the bare commitment"
+lives in the rationale string, not the `Basis` column.
 
 Citations in the rationale are subject to a `SELF-AUDIT: CITATION
 CONTEXT-LEAK` rule in the bounds prompt: a Risk N / Issue N / Decision N

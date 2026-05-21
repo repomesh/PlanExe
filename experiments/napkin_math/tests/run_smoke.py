@@ -241,8 +241,8 @@ def check_validate_parameters_end_to_end(tmpdir: Path) -> None:
     body = json.loads(out.read_text())
     _check("validation.json valid: true", body.get("valid") is True)
     _check("validation.json error_count == 0", body.get("error_count") == 0)
-    _check("validation.json lists 16 checks_performed",
-           len(body.get("summary", {}).get("checks_performed", [])) == 16)
+    _check("validation.json lists 18 checks_performed",
+           len(body.get("summary", {}).get("checks_performed", [])) == 18)
 
 
 def check_prepare_extract_input_imports() -> None:

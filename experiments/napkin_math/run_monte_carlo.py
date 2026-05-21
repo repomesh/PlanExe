@@ -491,11 +491,18 @@ def run(params_path: Path, bounds_path: Path, calc_path: Path,
 
     bounds, stripped_threshold_bounds = strip_threshold_bounds(bounds, params)
     for entry in stripped_threshold_bounds:
-        warnings_text.append(
-            f"stripped threshold variable '{entry['id']}' from bounds "
-            f"(reason: {entry['reason']}); simulation will use the stated value "
-            f"from parameters.json"
-        )
+        if entry["reason"] == "calculation-output":
+            warnings_text.append(
+                f"stripped calculation output '{entry['id']}' from bounds; "
+                f"simulation will compute it from calculations.py instead of "
+                f"sampling it independently"
+            )
+        else:
+            warnings_text.append(
+                f"stripped threshold variable '{entry['id']}' from bounds "
+                f"(reason: {entry['reason']}); simulation will use the stated value "
+                f"from parameters.json"
+            )
 
     input_specs = collect_input_specs(params, bounds)
     plan, plan_warnings = build_calculation_plan(params, module)

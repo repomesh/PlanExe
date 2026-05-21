@@ -219,6 +219,104 @@ class TestSamplingDiscipline(unittest.TestCase):
         self.assertIn("pert", str(ctx.exception))
 
 
+class TestStrippedBoundsWarnings(unittest.TestCase):
+    """Reason-branched warning text for ``strip_threshold_bounds`` results.
+
+    Review feedback on PR #747: the original warning said every stripped
+    item was a "threshold variable" whose value would be read from
+    parameters.json — false for calculation outputs, which are computed
+    from calculations.py instead of read as a stated value.
+    """
+
+    def test_calculation_output_warning_mentions_calculations_py(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            calc = (
+                "def total(a: float, b: float) -> float:\n"
+                "    return a + b\n"
+            )
+            bound_a = make_bound(unit="EUR", low=1, base=2, high=3,
+                                 sampling_discipline="continuous")
+            bound_b = make_bound(unit="EUR", low=4, base=5, high=6,
+                                 sampling_discipline="continuous")
+            bound_total = make_bound(unit="EUR", low=10, base=20, high=30,
+                                     sampling_discipline="continuous")
+            result = run_with_fixture(
+                tmpdir,
+                missing_values=[
+                    {"id": "a", "label": "a", "unit": "EUR",
+                     "why_needed": "x", "suggested_estimation_method": "x"},
+                    {"id": "b", "label": "b", "unit": "EUR",
+                     "why_needed": "x", "suggested_estimation_method": "x"},
+                ],
+                recommended=[{
+                    "id": "c_total", "label": "total",
+                    "formula_hint": "total = a + b",
+                    "output_name": "total", "output_unit": "EUR",
+                    "depends_on": ["a", "b"], "why_first": "x",
+                }],
+                bounds={"a": bound_a, "b": bound_b, "total": bound_total},
+                calc_source=calc,
+                _settings={"n_runs": 100, "seed": 1},
+            )
+
+        stripped = result["bounds_post_processor"]["stripped_threshold_ids"]
+        self.assertEqual(stripped, [{"id": "total", "reason": "calculation-output"}])
+
+        messages = [w["message"] for w in result["warnings"]]
+        calc_warnings = [m for m in messages if "calculation output" in m]
+        self.assertEqual(len(calc_warnings), 1, msg=messages)
+        warning = calc_warnings[0]
+        self.assertIn("'total'", warning)
+        self.assertIn("calculations.py", warning)
+        # The threshold-variable phrasing must NOT appear for a
+        # calculation-output strip — that wording is reserved for
+        # suffix/formula-side strips where the value really does come
+        # from parameters.json.
+        self.assertNotIn("threshold variable", warning)
+        self.assertNotIn("stated value", warning)
+
+    def test_threshold_strip_warning_unchanged(self):
+        """Sibling guard: the original threshold-variable wording is
+        preserved for suffix/formula-side strips."""
+        with tempfile.TemporaryDirectory() as td:
+            tmpdir = Path(td)
+            calc = "def out(x: float) -> float:\n    return x\n"
+            bound_x = make_bound(low=0.1, base=0.2, high=0.3,
+                                 sampling_discipline="fraction")
+            bound_threshold = make_bound(low=0.4, base=0.5, high=0.6,
+                                         sampling_discipline="fraction")
+            result = run_with_fixture(
+                tmpdir,
+                missing_values=[{"id": "x", "label": "x", "unit": "fraction",
+                                 "why_needed": "x", "suggested_estimation_method": "x"}],
+                key_values=[{
+                    "id": "x_threshold", "label": "threshold",
+                    "category": "operational", "value_type": "explicit",
+                    "unit": "fraction", "value": 0.5,
+                    "comment": "x", "formula_hint": None,
+                    "output_name": None, "output_unit": None,
+                    "depends_on": [], "modelling_priority": "high",
+                    "uncertainty": "low", "source_text": "x",
+                }],
+                recommended=[{
+                    "id": "c", "label": "c",
+                    "formula_hint": "out = x",
+                    "output_name": "out", "output_unit": "fraction",
+                    "depends_on": ["x"], "why_first": "x",
+                }],
+                bounds={"x": bound_x, "x_threshold": bound_threshold},
+                calc_source=calc,
+                _settings={"n_runs": 100, "seed": 1},
+            )
+
+        messages = [w["message"] for w in result["warnings"]]
+        threshold_warnings = [m for m in messages if "threshold variable" in m]
+        self.assertEqual(len(threshold_warnings), 1, msg=messages)
+        self.assertIn("'x_threshold'", threshold_warnings[0])
+        self.assertIn("stated value", threshold_warnings[0])
+
+
 class TestSchemaValidation(unittest.TestCase):
     def test_missing_sampling_discipline(self):
         bound = make_bound()

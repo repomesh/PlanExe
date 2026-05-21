@@ -11,7 +11,12 @@ Eight stages:
 
 1. `compress_report_section` — compresses four long sections of the PlanExe
    report (Selected Scenario, Review Plan, Premortem, Expert Criticism)
-   into inline-tagged digests.
+   into inline-tagged digests. Each bucket runs a two-batch emission pass
+   (the second pass sees the first pass's items and is asked only for what
+   was missed), and the deterministic ranking layer accepts paraphrased
+   quotes whose tokens are all present in the source. A code-side
+   cross-bucket promoter reroutes gate-shaped tripwires that the LLM filed
+   under `risks_and_shocks` into `gates_and_thresholds` before ranking.
 2. `prepare_extract_input.py` — concatenates the four compressed digests
    with the four passthrough raw sections (Executive Summary, Project Plan,
    Assumptions, Data Collection) into one `extract_parameters_input.md`
@@ -20,15 +25,44 @@ Eight stages:
    JSON: 4–8 key values, ≤5 missing inputs, ≤5 first calculations, ≤5
    unmodelled existential gates. Inputs carry an inline
    `[source_status | e=N r=N | quote: verified]` tag that records *how* the
-   value is known.
-4. `validate_parameters.py` — enforces 16 structural rules
-   (id uniqueness, dependency declaration, formula-RHS declared, comment
-   word caps, threshold-friendly naming, no dead-end variables, …) before
-   any simulation runs.
+   value is known. Two structural prompt rules govern the output:
+   *source-arithmetic preservation* — when the report names a
+   deterministic relationship (aggregate sum, burn-rate × duration,
+   explicit decomposition block), the relationship is preserved as a
+   calculation rather than collapsed into a flat bounded variable; and
+   *threshold pairing* — every extracted threshold (floor, cap, ceiling,
+   target volume / share / deadline) must be paired with a realised-vs-
+   threshold margin / surplus calculation, never just declared as a
+   value. The optional `dropped_signals` field records ids the extract
+   chose not to carry forward, with a structural reason that the
+   validator and audit consume.
+4. `validate_parameters.py` — enforces 19 structural rules (id
+   uniqueness, dependency declaration, formula-RHS declared, comment word
+   caps, threshold-friendly naming, no dead-end variables,
+   `aggregate_not_bounded` for sum-formula outputs, `requirement_has_margin`
+   for `*_required` companion variables, `dropped_signals_schema`, …)
+   before any simulation runs.
 5. `generate-bounds` — proposes `low / base / high` triangular bounds for
    every missing input and for every key value whose `value_type` or
    `uncertainty` says it needs a distribution. Each bounds entry carries
    `source: "data"` or `source: "assumption"` and a one-sentence rationale.
+   The source label is asymmetric: `data` is reserved for bases that the
+   LLM moves off the commitment value because a named Premortem / Risk-
+   register / Expert-Criticism passage forecasts a gap, and `assumption`
+   is mandatory whenever the base sits on the commitment default. Bounds
+   for any variable declared as the `output_name` of a calculation are
+   stripped before sampling (calculation-output strip rule) so the runner
+   does not double-count an aggregate. The bounds schema reserves a
+   top-level `correlations` block; the LLM may declare grouped rank
+   correlations and the runner surfaces them, but the Gaussian-copula
+   sampler is not yet implemented (Phase 8) — declared correlations
+   produce a loud warning, never a silent independent shim.
+   `sampling_discipline` accepts `fixed / bernoulli_gate / integer /
+   fraction / continuous / lognormal / pert`. The last two are
+   schema-reserved: the LLM may select them for megaproject CAPEX (per
+   Flyvbjerg's iron-law criterion in the bounds prompt) but the sampler
+   raises `NotImplementedError` if a run actually requests them — there
+   is no triangular fallback.
 6. `generate-calculations` — emits one Python function per declared
    formula. The functions are pure: no I/O, no globals, no classes.
 7. `run_monte_carlo.py` — the sampling and threshold-evaluation runner.
@@ -36,6 +70,20 @@ Eight stages:
 8. `summarize_assessment.py` — renders the assessment document with the
    manifest, provenance map, gate verdicts, decision implications, failure
    drivers, missing-input rankings, and scenario sanity-check tables.
+
+An optional advisory step, `audit_source_preservation.py`, sits outside
+the eight stages. It compares the current `parameters.json` against a
+prior baseline (`parameters.json` from the last accepted run) and
+classifies every prior signal as `preserved_by_id`,
+`preserved_by_output_name`, `preserved_as_formula_dependency`,
+`explained_drop` (when the current `dropped_signals` carries a
+semantically valid entry covering it), `likely_renamed` (snake-case
+token Jaccard ≥ 0.4 to a current id or output_name), or
+`absent_unexplained`. The audit is advisory and exits 0 unless its input
+is malformed; it does not gate the pipeline. It exists so a v(N) → v(N+1)
+diff can be classified mechanically as "rename" vs "structural
+restructure" vs "acceptable drop" vs "silent regression" instead of by
+hand.
 
 ## How a single run works
 
@@ -52,8 +100,23 @@ configured `n_runs` (defaulting to 10,000) trials:
    - `bernoulli_gate` — Bernoulli trial with `default_pass_probability`;
      the result is `low` on failure and `high` on success.
    - `fixed` — `low == base == high`; the variable is genuinely pinned.
+   - `lognormal`, `pert` — schema-reserved for megaproject CAPEX and
+     fat-tail cost / duration variables; the Phase-8 samplers ship later
+     and the runner raises `NotImplementedError` loudly if a run requests
+     either today. There is no silent triangular fallback.
    Inputs that are not in bounds.json (key values with a single declared
-   numeric `value`) keep that value across all 10,000 runs.
+   numeric `value`, or any variable that is the declared `output_name` of
+   a calculation, whose bounds the runner strips before sampling) keep
+   their declared / computed value across all 10,000 runs.
+
+   Variables are sampled independently. The bounds schema may carry an
+   optional top-level `correlations` block declaring rank-correlated
+   groups (the typical pattern: cost variables that co-move under a
+   shared inflation or vendor-pricing pressure). The runner reads the
+   block but the Gaussian-copula sampler is not yet implemented; when a
+   run sees a non-empty `correlations` block it emits a warning naming
+   the group count and proceeds to sample independently, so joint-tail
+   risk is structurally understated until the sampler ships.
 
 2. **Run the deterministic calculations.** The runner invokes each function
    in `calculations.py` in declaration order. Inputs are pulled from the
@@ -115,10 +178,23 @@ variable, `low / base / high` is chosen informed by:
 **The label that exposes this to the reader.** Every bounds entry carries
 `"source": "data"` (anchored on a source-report number that the rationale
 must cite) or `"source": "assumption"` (extrapolated where the report is
-silent). This is rendered downstream as a `Basis` column in the
-assessment's *Missing inputs ranked by impact* table, so the reader can
-see at a glance whether a given driver is grounded in the plan or
-extrapolated by the model.
+silent). The label is **asymmetric on the commitment default**: for an
+`actual_X` variable whose `base` sits on the plan's committed `X`, the
+source tag is forced to `assumption` (the plan's commitment is a goal,
+not evidence of realised outcomes). The tag is `data` only when the LLM
+moves `base` off the commitment value because a named Premortem /
+Risk-register / Expert-Criticism passage forecasts a gap, and the
+rationale cites the passage. This is rendered downstream as a `Basis`
+column in the assessment's *Missing inputs ranked by impact* table, so
+the reader can see at a glance whether a given driver is grounded in the
+plan or extrapolated by the model — and whether the base was anchored on
+a plan-internal gap forecast or on the bare commitment.
+
+Citations in the rationale are subject to a `SELF-AUDIT: CITATION
+CONTEXT-LEAK` rule in the bounds prompt: a Risk N / Issue N / Decision N
+token that appears lexically in the rationale must substantively support
+the proposed range. Citing Risk 5 by number when Risk 5's topic is
+unrelated to the variable is a context leak, not a citation.
 
 The pipeline never claims the bounds *are* the truth. It claims the bounds
 make every assumption visible and editable in a single 10-line JSON
@@ -201,6 +277,13 @@ roster slides land on a reader who already trusts the pipeline.
 - Existential gates that cannot be tested as numbers (regulatory approval,
   political signoff, supply continuity) are listed in `unmodelled_gates`.
   They qualify the modelled verdict but never enter the simulation.
+- Inputs are sampled **independently**. The bounds schema reserves an
+  optional `correlations` block; until the Gaussian-copula sampler ships,
+  any declared correlation produces a loud warning and joint-tail risk is
+  structurally understated. The schema also reserves the `lognormal` and
+  `pert` disciplines for megaproject CAPEX — the LLM may select them but
+  the runner raises a loud `NotImplementedError` rather than silently
+  falling back to triangular.
 
 *The model produces a categorical verdict per gate. It does not produce a
 calibrated whole-plan probability.*
@@ -219,10 +302,17 @@ calibrated whole-plan probability.*
   uncertainty band) only where the plan is silent.
 - Every bounds entry carries a `source` label: **`data`** (anchored on a
   source-report number that the rationale must cite) or **`assumption`**
-  (extrapolated where the report is silent). The assessment surfaces this
-  as the `Basis` column in *Missing inputs ranked by impact* so the reader
-  sees, for each driver, whether the bound came from the plan or was
-  extrapolated.
+  (extrapolated where the report is silent). The label is asymmetric on
+  commitment defaults — when `base` sits on a stated commitment, the tag
+  is `assumption` (a commitment is a goal, not realised evidence); `data`
+  is reserved for bases the LLM has moved *off* the commitment because a
+  named Premortem / Risk-register / Expert-Criticism passage forecasts a
+  gap. The assessment surfaces this as the `Basis` column in *Missing
+  inputs ranked by impact* so the reader sees, for each driver, whether
+  the bound came from the plan or was extrapolated.
+- Citations in the rationale pass a `CITATION CONTEXT-LEAK` self-audit:
+  a Risk N / Issue N / Decision N token that appears lexically must
+  substantively support the proposed range, not just appear by number.
 
 **Thresholds (the pass/fail gates):**
 

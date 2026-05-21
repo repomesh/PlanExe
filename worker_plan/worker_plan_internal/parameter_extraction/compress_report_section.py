@@ -920,7 +920,6 @@ def normalise_for_quote_match(text: str) -> str:
 
 WORD_TOKEN_PATTERN: re.Pattern[str] = re.compile(r"\w+", re.UNICODE)
 
-QUOTE_MATCH_OVERLAP_THRESHOLD: float = 0.9
 QUOTE_MATCH_MIN_TOKENS: int = 3
 
 
@@ -929,8 +928,7 @@ def tokenize_for_quote_match(text: str) -> list[str]:
 
     Language- and domain-neutral: it splits on whatever the Unicode word
     class considers a word character. Numeric tokens like ``$75,000`` split
-    into ``["75", "000"]`` consistently in both quote and source, so digit
-    anchoring still works.
+    into ``["75", "000"]`` consistently in both quote and source.
     """
     return WORD_TOKEN_PATTERN.findall(normalise_for_quote_match(text))
 
@@ -940,12 +938,12 @@ def quote_is_in_source(quote: str, section_markdown: str) -> bool:
 
     Fast path is the existing substring check after normalisation. When the
     LLM paraphrases (drops intermediate words, reorders the noun phrase),
-    that fast path misses even though the quote is faithful to the source.
-    A token-overlap fallback catches those cases without letting hallucinated
-    numbers or substituted content words through: every digit-bearing token
-    in the quote must appear in the source, and at least
-    ``QUOTE_MATCH_OVERLAP_THRESHOLD`` of all quote tokens must appear in the
-    source token set.
+    that fast path misses even though every content token came from the
+    source. The fallback requires every quote token to appear in the source
+    token set, which accepts reordering and elision but rejects any
+    substituted word — including numeric substitutions, since digit-bearing
+    tokens fall under the same all-tokens rule. A short-quote floor avoids
+    trivial overlap on a large source.
     """
     if not quote:
         return False
@@ -959,11 +957,7 @@ def quote_is_in_source(quote: str, section_markdown: str) -> bool:
     if len(quote_tokens) < QUOTE_MATCH_MIN_TOKENS:
         return False
     source_tokens = set(tokenize_for_quote_match(section_markdown))
-    for tok in quote_tokens:
-        if any(ch.isdigit() for ch in tok) and tok not in source_tokens:
-            return False
-    matched = sum(1 for tok in quote_tokens if tok in source_tokens)
-    return matched / len(quote_tokens) >= QUOTE_MATCH_OVERLAP_THRESHOLD
+    return all(tok in source_tokens for tok in quote_tokens)
 
 
 def numeric_density_bonus(text: str) -> float:

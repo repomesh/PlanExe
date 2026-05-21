@@ -510,9 +510,9 @@ def test_quote_is_in_source_rejects_hallucinated_number() -> None:
 
 
 def test_quote_is_in_source_rejects_substituted_content_word() -> None:
-    """Token-overlap threshold (90%) blocks single-word substitutions that
-    invert meaning while keeping most surface tokens. ``highest`` is not in
-    the source, so a six-other-tokens overlap fails."""
+    """All-tokens-in-source rule blocks single-word substitutions that invert
+    meaning while keeping most surface tokens. ``highest`` is not in the
+    source, so even a six-other-tokens overlap fails."""
     from worker_plan_internal.parameter_extraction.compress_report_section import (
         quote_is_in_source,
     )
@@ -522,6 +522,30 @@ def test_quote_is_in_source_rejects_substituted_content_word() -> None:
         "highest qualified middleware bid exceeds $75,000",
         source,
     ) is False
+
+
+def test_quote_is_in_source_rejects_substitution_in_long_quote() -> None:
+    """A longer quote with one substituted content word must still fail —
+    high fractional overlap is not a free pass. The all-tokens rule rejects
+    on the single missing token regardless of quote length, which a
+    fractional threshold like ≥90% would let through."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        quote_is_in_source,
+    )
+
+    source = (
+        "If the lowest qualified bid for OPC UA middleware exceeds $75,000, "
+        "then the project reverts to the current rule-based integration "
+        "vendor and escalates to the steering committee."
+    )
+    # Same 14-token clause; only ``lowest`` swapped for ``highest``. 13/14 of
+    # the tokens still appear in source, but the substituted word inverts
+    # the meaning and must not verify.
+    quote = (
+        "highest qualified bid for OPC UA middleware exceeds $75,000 "
+        "then project reverts to integration vendor"
+    )
+    assert quote_is_in_source(quote, source) is False
 
 
 def test_quote_is_in_source_rejects_short_unrelated_quote() -> None:

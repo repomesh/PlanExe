@@ -765,17 +765,6 @@ rejection. It is NOT the same as a gate/threshold (which is a pass/fail
 condition you actively check). If you have already produced an item in
 gates_and_thresholds, do not restate it here.
 
-Structural priority of gates_and_thresholds: do NOT emit a sentence here
-when its source side has the 'If <metric> <comparator> <numeric
-threshold>, then <consequence>' shape — that shape belongs in
-gates_and_thresholds, even when the consequence is a downside (cost,
-schedule, scope, penalty, vendor switch). A risk is a trigger whose
-source side is NOT a metric-vs-threshold check: the trigger is a
-qualitative event (a rejection, a delay, a disruption, a protocol
-mismatch) coupled with a quantitative impact on the consequence side.
-A sentence whose if-clause names a metric, a comparator, and a numeric
-threshold is a gate even when its then-clause is risk-flavoured.
-
 Skip purely qualitative risks that do not name a number, a date, a capacity,
 or an operationally specific failure mode. If you include a scenario
 shock whose magnitude the source does not state, set source_status to
@@ -902,6 +891,15 @@ SCORED_LIST_FIELDS: tuple[str, ...] = (
     "gates_and_thresholds",
     "risks_and_shocks",
     "missing_data_to_estimate",
+)
+
+# Buckets whose top-N filter is deferred until both have emitted, so a
+# cross-bucket promoter can move gate-shaped items from risks_and_shocks
+# into the gates_and_thresholds candidate pool before either is filtered
+# down to its public top-N.
+CROSS_BUCKET_PROMOTION_FIELDS: tuple[str, ...] = (
+    "gates_and_thresholds",
+    "risks_and_shocks",
 )
 
 # For buckets where the bucket name already determines the right
@@ -1076,6 +1074,101 @@ SECOND_PASS_USER_PROMPT_TEMPLATE = (
 )
 
 
+GATE_SHAPE_PATTERN: re.Pattern[str] = re.compile(
+    r"\bif\b.*?\d.*?\bthen\b",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def has_gate_shape(line: str) -> bool:
+    """A line has the gate structural shape when its surface form reads
+    ``If <something with a numeric token> ... then <consequence>``.
+
+    Used by the cross-bucket promoter: a sentence with this shape is a
+    deterministic pass/fail check the downstream model needs to evaluate,
+    regardless of which bucket the LLM filed it under. Detection is
+    syntactic and language-neutral — digits are digits in any locale,
+    and the ``if`` / ``then`` keywords are required by the bucket prompt's
+    own template instructions.
+    """
+    if not isinstance(line, str):
+        return False
+    return bool(GATE_SHAPE_PATTERN.search(line))
+
+
+def promote_gate_shaped_risks(
+    gates_items: list[ScoredItem],
+    risks_items: list[ScoredItem],
+) -> tuple[list[ScoredItem], list[ScoredItem], int]:
+    """Move risks_and_shocks items whose surface form has the if/then
+    numeric-threshold gate shape into the gates_and_thresholds candidate
+    pool, when the same source_quote is not already represented there.
+
+    Background: the gates bucket emits before risks in BUCKET_SPECS, so
+    the LLM occasionally files a tripwire ('If $X exceeds Y, then
+    re-scope') under risks instead of gates — sometimes because the
+    consequence is downside-framed and the LLM keys on the framing
+    rather than the structural shape. The deterministic top-N filter
+    then runs per bucket; the misfiled item competes against actual
+    risks rather than against actual gates, and can fall out of the
+    public output entirely.
+
+    A prompt-side rule on the risks bucket cannot fix this (risks runs
+    after gates, so a risks-side rule can only suppress emission, not
+    cause it elsewhere) and risks creating a worse failure mode where
+    both buckets miss the item. A deterministic post-processor on the
+    combined candidate pools is the right shape: it sees what the LLM
+    actually produced and reroutes by structural shape.
+
+    Rules:
+    - A risk item is promoted when ``has_gate_shape(line_english)`` is
+      true AND its normalised source_quote is NOT already represented in
+      the gates pool.
+    - Promoted items are removed from the risks pool (the slot is
+      reclaimed for an actual risk; the public output should not show
+      the same source claim in both buckets).
+    - A risk item that is gate-shaped but whose quote IS already in
+      gates is left in risks untouched — that within-bucket duplication
+      is a separate concern handled by the existing 'do not restate'
+      rule in the risks prompt and the per-bucket dedupe at top-N time.
+    - The augmented gates pool is returned with the promoted items
+      appended; the per-bucket ``annotate_scored_items`` call then
+      scores them against the rest of the gates field and picks the
+      top-N survivors. A promoted item that scores below the existing
+      gates field is dropped at top-N filter time, same as any other
+      candidate.
+
+    Returns ``(augmented_gates, remaining_risks, promoted_count)``. The
+    input lists are NOT mutated.
+    """
+    existing_gate_quotes: set[str] = {
+        normalise_for_quote_match(g.source_quote)
+        for g in gates_items
+        if isinstance(g, ScoredItem) and g.source_quote
+    }
+    augmented_gates: list[ScoredItem] = list(gates_items)
+    remaining_risks: list[ScoredItem] = []
+    promoted_count = 0
+    for risk_item in risks_items:
+        if not isinstance(risk_item, ScoredItem):
+            remaining_risks.append(risk_item)
+            continue
+        if not has_gate_shape(risk_item.line_english):
+            remaining_risks.append(risk_item)
+            continue
+        if not risk_item.source_quote:
+            remaining_risks.append(risk_item)
+            continue
+        normalised = normalise_for_quote_match(risk_item.source_quote)
+        if normalised in existing_gate_quotes:
+            remaining_risks.append(risk_item)
+            continue
+        augmented_gates.append(risk_item)
+        existing_gate_quotes.add(normalised)
+        promoted_count += 1
+    return augmented_gates, remaining_risks, promoted_count
+
+
 def merge_second_pass_items(
     first_pass: list[ScoredItem],
     second_pass: list[ScoredItem],
@@ -1192,6 +1285,8 @@ class CompressReportSection:
 
         bucket_values: dict[str, Any] = {}
         per_bucket_metadata: dict[str, dict[str, Any]] = {}
+        deferred_cross_bucket_items: dict[str, list[ScoredItem]] = {}
+        deferred_cross_bucket_metadata: dict[str, dict[str, Any]] = {}
         total_start = time.perf_counter()
 
         for turn_index, spec in enumerate(BUCKET_SPECS):
@@ -1349,15 +1444,43 @@ class CompressReportSection:
                     }
                 )
 
-            if spec.field_name in SCORED_LIST_FIELDS:
+            if spec.field_name in CROSS_BUCKET_PROMOTION_FIELDS:
+                # Defer the top-N filter for gates_and_thresholds and
+                # risks_and_shocks; the cross-bucket promoter (below)
+                # needs to see the full merged candidate pools of BOTH
+                # buckets before either is filtered down to top-N. The
+                # promoter runs after the bucket loop finishes.
+                deferred_cross_bucket_items[spec.field_name] = raw_field_value
+                deferred_cross_bucket_metadata[spec.field_name] = bucket_metadata
+            elif spec.field_name in SCORED_LIST_FIELDS:
                 bucket_values[spec.field_name], scored_items = annotate_scored_items(
                     raw_field_value, section_markdown, spec.field_name
                 )
                 bucket_metadata["scored_items"] = scored_items
+                per_bucket_metadata[spec.field_name] = bucket_metadata
             else:
                 bucket_values[spec.field_name] = raw_field_value
+                per_bucket_metadata[spec.field_name] = bucket_metadata
 
-            per_bucket_metadata[spec.field_name] = bucket_metadata
+        gates_raw = deferred_cross_bucket_items.get("gates_and_thresholds", []) or []
+        risks_raw = deferred_cross_bucket_items.get("risks_and_shocks", []) or []
+        augmented_gates, remaining_risks, promoted_count = promote_gate_shaped_risks(
+            gates_raw, risks_raw
+        )
+        for field_name, pool in (
+            ("gates_and_thresholds", augmented_gates),
+            ("risks_and_shocks", remaining_risks),
+        ):
+            if field_name not in deferred_cross_bucket_items:
+                continue
+            kept, scored_items = annotate_scored_items(
+                pool, section_markdown, field_name
+            )
+            bucket_values[field_name] = kept
+            bucket_metadata = deferred_cross_bucket_metadata[field_name]
+            bucket_metadata["scored_items"] = scored_items
+            bucket_metadata["cross_bucket_promoted_count"] = promoted_count
+            per_bucket_metadata[field_name] = bucket_metadata
 
         total_duration = int(ceil(time.perf_counter() - total_start))
 

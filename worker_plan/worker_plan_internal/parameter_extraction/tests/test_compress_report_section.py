@@ -557,3 +557,172 @@ def test_quote_is_in_source_rejects_short_unrelated_quote() -> None:
 
     source = "lowest qualified bid for OPC UA middleware exceeds $75,000"
     assert quote_is_in_source("middleware bid", source) is False
+
+
+def test_has_gate_shape_accepts_canonical_if_then_numeric() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("If the cost exceeds $75,000, then the project re-scopes.") is True
+    assert has_gate_shape("If manual work exceeds 2 hours per week, then the goal fails.") is True
+
+
+def test_has_gate_shape_rejects_qualitative_if_then() -> None:
+    """No numeric token between if and then → not a gate shape. Such
+    sentences may still be legitimate gates (categorical / approval
+    gates) but the cross-bucket promoter only fires on the numeric
+    pattern to avoid stealing genuine risks."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("If the regulator rejects the application, then the timeline slips.") is False
+
+
+def test_has_gate_shape_rejects_no_then() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape("Costs above $75,000 force a scope cut.") is False
+
+
+def test_has_gate_shape_rejects_non_string() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        has_gate_shape,
+    )
+
+    assert has_gate_shape(None) is False
+    assert has_gate_shape(123) is False
+    assert has_gate_shape("") is False
+
+
+def test_promote_gate_shaped_risks_moves_misfiled_gate() -> None:
+    """Focal v53c scenario: gates emitted some items but missed a tripwire;
+    risks emitted the tripwire with if/then numeric shape. Promotion
+    should move the misfiled item into the gates pool and remove it
+    from risks (the slot is reclaimed)."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    existing_gate = ScoredItem(
+        line_english="If manual work exceeds 2 hours per week, then the goal fails.",
+        line_original="If manual work exceeds 2 hours per week, then the goal fails.",
+        modelling_relevance=5,
+        source_evidence=4,
+        source_status="explicit",
+        source_quote="manual work exceeds 2 hours per week",
+    )
+    misfiled = ScoredItem(
+        line_english="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        line_original="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        modelling_relevance=5,
+        source_evidence=3,
+        source_status="stress_test",
+        source_quote="lowest qualified bid exceeds $75,000",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([existing_gate], [misfiled])
+    assert promoted == 1
+    assert len(augmented) == 2
+    assert augmented[-1].source_quote == "lowest qualified bid exceeds $75,000"
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_skips_qualitative_risks() -> None:
+    """A risks item whose surface form does not match the if/then
+    numeric-threshold shape is left in risks untouched — the promoter
+    must not steal genuine risks (triggers with a qualitative source side
+    and quantitative consequence) into the gates pool."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    qualitative_risk = ScoredItem(
+        line_english="Supply chain disruption: 4 to 6 weeks development delay and $15,000 cost increase.",
+        line_original="Supply chain disruption: 4 to 6 weeks development delay and $15,000 cost increase.",
+        modelling_relevance=4,
+        source_evidence=4,
+        source_status="stress_test",
+        source_quote="supply chain delays cause weeks of delay",
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [qualitative_risk])
+    assert promoted == 0
+    assert augmented == []
+    assert remaining == [qualitative_risk]
+
+
+def test_promote_gate_shaped_risks_skips_duplicate_quote_in_gates() -> None:
+    """If the same source_quote is already represented in gates (LLM
+    violated do-not-restate), the risks item is left in risks rather
+    than added to gates again. Within-bucket dedupe is a separate
+    concern handled at top-N time."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    quote = "lowest qualified bid exceeds $75,000"
+    in_gates = ScoredItem(
+        line_english="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        line_original="If the lowest qualified bid exceeds $75,000, then the project re-scopes.",
+        modelling_relevance=5,
+        source_evidence=4,
+        source_status="stress_test",
+        source_quote=quote,
+    )
+    same_in_risks = ScoredItem(
+        line_english="If the middleware bid exceeds $75,000, then the architecture is re-scoped.",
+        line_original="If the middleware bid exceeds $75,000, then the architecture is re-scoped.",
+        modelling_relevance=4,
+        source_evidence=3,
+        source_status="stress_test",
+        source_quote=quote,
+    )
+    augmented, remaining, promoted = promote_gate_shaped_risks([in_gates], [same_in_risks])
+    assert promoted == 0
+    assert len(augmented) == 1
+    assert remaining == [same_in_risks]
+
+
+def test_promote_gate_shaped_risks_handles_empty_inputs() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        promote_gate_shaped_risks,
+    )
+
+    augmented, remaining, promoted = promote_gate_shaped_risks([], [])
+    assert promoted == 0
+    assert augmented == []
+    assert remaining == []
+
+
+def test_promote_gate_shaped_risks_does_not_mutate_inputs() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        ScoredItem,
+        promote_gate_shaped_risks,
+    )
+
+    gates = [
+        ScoredItem(
+            line_english="If A exceeds 100, then B.",
+            line_original="If A exceeds 100, then B.",
+            modelling_relevance=5, source_evidence=5,
+            source_status="explicit", source_quote="A exceeds 100",
+        ),
+    ]
+    risks = [
+        ScoredItem(
+            line_english="If C exceeds 50, then D.",
+            line_original="If C exceeds 50, then D.",
+            modelling_relevance=4, source_evidence=4,
+            source_status="stress_test", source_quote="C exceeds 50",
+        ),
+    ]
+    promote_gate_shaped_risks(gates, risks)
+    assert len(gates) == 1
+    assert len(risks) == 1
+    assert gates[0].source_quote == "A exceeds 100"
+    assert risks[0].source_quote == "C exceeds 50"

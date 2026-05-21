@@ -7,7 +7,7 @@ Replaces the LLM-driven `validate-parameters` skill. Reads a
 the shape that `summarize_assessment.py` consumes (named `checks_performed`
 list + per-violation rule_id/severity/path/message/suggested_fix).
 
-16 structural checks are run:
+18 structural checks are run:
 
     json_parse                                # implicit (file already parsed)
     top_level_structure                       # plan_summary + four arrays
@@ -25,6 +25,8 @@ list + per-violation rule_id/severity/path/message/suggested_fix).
     no_dead_end_variables                     # every kv/mv consumed by a calc
     threshold_friendly_naming                 # WARN on _gap/_deficit/_shortfall outputs
     shared_pool_legitimacy                    # no-op; enforced upstream in the prompt
+    aggregate_not_bounded                     # sum-formula LHS not in missing_values
+    requirement_has_margin                    # *_required key_value referenced by a calc
 
 `valid` is true iff `error_count == 0`. WARN-level findings do not
 invalidate the file. Exit code 0 on valid, 1 on invalid, 2 on JSON parse
@@ -46,6 +48,7 @@ CHECKS_PERFORMED = [
     "source_text_word_caps", "output_name_present_when_formula_hint",
     "output_unit_present_when_formula_hint", "no_dead_end_variables",
     "threshold_friendly_naming", "shared_pool_legitimacy",
+    "aggregate_not_bounded", "requirement_has_margin",
 ]
 
 CAPS = {
@@ -103,6 +106,10 @@ FORMULA_BUILTINS = {"min", "max", "abs", "sum", "round", "int", "float"}
 # — avoids false positives on names that happen to contain the substring
 # elsewhere.
 THRESHOLD_UNFRIENDLY_PATTERN = re.compile(r"_(gap|deficit|shortfall)(_[a-z0-9_]+)?$")
+
+# Output-name suffixes recognised as a realised-vs-required margin shape.
+# Matched as a token at the end or just before a unit/qualifier suffix.
+MARGIN_SUFFIX_PATTERN = re.compile(r"_(margin|surplus|buffer|coverage)(_[a-z0-9_]+)?$")
 
 
 def violation(rule_id: str, severity: str, path: str,
@@ -461,6 +468,138 @@ def check_shared_pool_legitimacy(params: dict, violations: list) -> None:
     return
 
 
+def is_pure_sum_formula(formula: object) -> bool:
+    """A formula is a pure sum aggregate when its RHS is a chain of
+    snake_case identifiers joined by ``+`` and nothing else. Constants,
+    multiplication, division, subtraction, function calls, and unary
+    minus all disqualify it. The intent is to flag only the unambiguous
+    ``total = A + B + C`` shape — a flat bounded variable for the LHS
+    would conflict with the constituent decomposition. Mixed expressions
+    like ``A*B + C`` are out of scope here because their semantics are
+    not unambiguously "aggregate of the named parts".
+    """
+    if not isinstance(formula, str) or not formula:
+        return False
+    rhs = formula.split("=", 1)[1] if "=" in formula else formula
+    rhs = rhs.strip()
+    while rhs.startswith("(") and rhs.endswith(")"):
+        rhs = rhs[1:-1].strip()
+    if not rhs or "+" not in rhs:
+        return False
+    if any(op in rhs for op in ("*", "/", "-")):
+        return False
+    parts = [p.strip() for p in rhs.split("+")]
+    if len(parts) < 2:
+        return False
+    return all(SNAKE_CASE_RE.match(p) for p in parts)
+
+
+def check_aggregate_not_bounded(params: dict, violations: list) -> None:
+    """A variable computed as a pure sum of named constituents MUST NOT
+    also appear in ``missing_values_to_estimate``.
+
+    When a total is sampled independently of its named sub-components, a
+    single Monte Carlo trial can pair sub-component p95s with a total
+    p05 (or vice versa). The total is a calculation over the
+    constituents, not a primitive input that needs estimation.
+    """
+    missing_ids: set[str] = set()
+    for entry in params.get("missing_values_to_estimate", []) or []:
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str):
+            missing_ids.add(entry["id"])
+    if not missing_ids:
+        return
+    for section in ("key_values", "derived_questions", "recommended_first_calculations"):
+        for i, entry in enumerate(params.get(section, []) or []):
+            if not isinstance(entry, dict):
+                continue
+            if not is_pure_sum_formula(entry.get("formula_hint")):
+                continue
+            output_name = entry.get("output_name")
+            if not isinstance(output_name, str):
+                continue
+            if output_name not in missing_ids:
+                continue
+            violations.append(violation(
+                "aggregate_not_bounded", "ERROR",
+                f"$.{section}[{i}].output_name",
+                f"`{output_name}` is computed as a sum of named constituents AND also appears in "
+                f"missing_values_to_estimate; bounding the aggregate flat lets a single Monte Carlo "
+                f"trial pair sub-component p95s with a total p05",
+                f"drop `{output_name}` from missing_values_to_estimate (the named constituents are the primitives)",
+            ))
+
+
+def check_requirement_has_margin(params: dict, violations: list) -> None:
+    """A key_value whose id ends in ``_required`` names a stated
+    requirement floor. At least one calculation must declare a real
+    realised-vs-required margin against it. Three properties together
+    constitute a margin:
+
+    1. The requirement id appears on the formula RHS (the calculation
+       actually consumes the required value).
+    2. The formula contains a subtraction or ratio operator (the
+       calculation compares the realised quantity to the requirement,
+       rather than adding the requirement into an aggregate).
+    3. The output_name carries a positive-pass margin suffix
+       (``_margin``/``_surplus``/``_buffer``/``_coverage``), so a
+       downstream ``>= 0`` threshold reads correctly.
+
+    A bare reference inside a sum (e.g. ``combined = actual + required``)
+    consumes the value but does not test whether the realised quantity
+    meets the requirement. Without a real margin, the gate defaults to
+    ``>= 0`` against an absolute quantity and passes for any non-negative
+    realisation regardless of whether it meets the requirement.
+    """
+    required_kv: list[tuple[int, str]] = []
+    for i, entry in enumerate(params.get("key_values", []) or []):
+        if not isinstance(entry, dict):
+            continue
+        eid = entry.get("id")
+        if isinstance(eid, str) and eid.endswith("_required"):
+            required_kv.append((i, eid))
+    if not required_kv:
+        return
+    for i, rid in required_kv:
+        satisfied = False
+        for section in ("derived_questions", "recommended_first_calculations"):
+            for entry in params.get(section, []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                formula = entry.get("formula_hint")
+                if not isinstance(formula, str) or not formula:
+                    continue
+                if rid not in parse_rhs_vars(formula):
+                    continue
+                rhs = formula.split("=", 1)[1] if "=" in formula else formula
+                if "-" not in rhs and "/" not in rhs:
+                    continue
+                output_name = entry.get("output_name")
+                if not isinstance(output_name, str):
+                    continue
+                if not MARGIN_SUFFIX_PATTERN.search(output_name):
+                    continue
+                satisfied = True
+                break
+            if satisfied:
+                break
+        if satisfied:
+            continue
+        violations.append(violation(
+            "requirement_has_margin", "ERROR",
+            f"$.key_values[{i}].id",
+            f"key_value `{rid}` names a requirement but no calculation declares a "
+            f"realised-vs-required margin against it; expected a derived_question or "
+            f"recommended_first_calculation whose formula references `{rid}` with a "
+            f"subtraction or ratio operator AND whose output_name ends in "
+            f"_margin/_surplus/_buffer/_coverage",
+            f"add a calculation like `<base>_margin = <actual> - {rid}` (or "
+            f"`<base>_coverage = <actual> / {rid}`) so a >= 0 / >= 1 threshold tests the "
+            f"realised value against the requirement; or rename the key_value if it "
+            f"isn't actually a requirement",
+        ))
+
+
 CHECK_FUNCTIONS = {
     "json_parse": None,  # implicit; failure handled in main()
     "top_level_structure": check_top_level_structure,
@@ -478,6 +617,8 @@ CHECK_FUNCTIONS = {
     "no_dead_end_variables": check_no_dead_end_variables,
     "threshold_friendly_naming": check_threshold_friendly_naming,
     "shared_pool_legitimacy": check_shared_pool_legitimacy,
+    "aggregate_not_bounded": check_aggregate_not_bounded,
+    "requirement_has_margin": check_requirement_has_margin,
 }
 
 

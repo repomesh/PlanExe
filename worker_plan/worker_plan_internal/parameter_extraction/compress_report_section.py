@@ -765,6 +765,17 @@ rejection. It is NOT the same as a gate/threshold (which is a pass/fail
 condition you actively check). If you have already produced an item in
 gates_and_thresholds, do not restate it here.
 
+Structural priority of gates_and_thresholds: do NOT emit a sentence here
+when its source side has the 'If <metric> <comparator> <numeric
+threshold>, then <consequence>' shape — that shape belongs in
+gates_and_thresholds, even when the consequence is a downside (cost,
+schedule, scope, penalty, vendor switch). A risk is a trigger whose
+source side is NOT a metric-vs-threshold check: the trigger is a
+qualitative event (a rejection, a delay, a disruption, a protocol
+mismatch) coupled with a quantitative impact on the consequence side.
+A sentence whose if-clause names a metric, a comparator, and a numeric
+threshold is a gate even when its then-clause is risk-flavoured.
+
 Skip purely qualitative risks that do not name a number, a date, a capacity,
 or an operationally specific failure mode. If you include a scenario
 shock whose magnitude the source does not state, set source_status to

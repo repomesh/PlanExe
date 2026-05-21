@@ -393,3 +393,55 @@ def test_composite_score_prefers_quantified_over_prose() -> None:
     # numeric-density bonus alone.
     assert kept[0].line_english.startswith("Reserve buffer is 15%")
     assert kept[1].line_english.startswith("The plan emphasizes community")
+
+
+def test_merge_second_pass_items_keeps_first_pass_when_second_pass_empty() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        merge_second_pass_items,
+    )
+
+    first = [_si("alpha", quote="alpha quote"), _si("beta", quote="beta quote")]
+    merged, added = merge_second_pass_items(first, [])
+    assert added == 0
+    assert [item.line_english for item in merged] == ["alpha", "beta"]
+
+
+def test_merge_second_pass_items_appends_genuinely_new_items() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        merge_second_pass_items,
+    )
+
+    first = [_si("alpha", quote="alpha quote")]
+    second = [_si("gamma", quote="gamma quote"), _si("delta", quote="delta quote")]
+    merged, added = merge_second_pass_items(first, second)
+    assert added == 2
+    assert [item.line_english for item in merged] == ["alpha", "gamma", "delta"]
+
+
+def test_merge_second_pass_items_dedupes_by_normalised_source_quote() -> None:
+    """Second pass occasionally re-emits a first-pass item with surface
+    differences (case, whitespace, punctuation). Normalisation should catch
+    these so the merged pool does not double-count."""
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        merge_second_pass_items,
+    )
+
+    first = [_si("alpha", quote="Threshold: 100 units")]
+    second = [
+        _si("alpha-variant", quote="threshold: 100 UNITS"),  # same quote, different casing/punct
+        _si("beta", quote="some other 50 metric"),
+    ]
+    merged, added = merge_second_pass_items(first, second)
+    assert added == 1
+    assert [item.line_english for item in merged] == ["alpha", "beta"]
+
+
+def test_merge_second_pass_items_preserves_emit_order() -> None:
+    from worker_plan_internal.parameter_extraction.compress_report_section import (
+        merge_second_pass_items,
+    )
+
+    first = [_si("a", quote="q1"), _si("b", quote="q2")]
+    second = [_si("c", quote="q3"), _si("d", quote="q4"), _si("e", quote="q5")]
+    merged, _ = merge_second_pass_items(first, second)
+    assert [item.line_english for item in merged] == ["a", "b", "c", "d", "e"]

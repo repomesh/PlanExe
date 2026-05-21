@@ -1019,6 +1019,52 @@ def format_scored_item_line(item: PublicScoredItem) -> str:
     return f"{item.line_english}  {tag}"
 
 
+SECOND_PASS_USER_PROMPT_TEMPLATE = (
+    "Review the {field_name} items you just produced above. "
+    "Identify items present in the section that you missed. "
+    "Emit only NEW items not already covered above; do not repeat or "
+    "rephrase items you already produced. "
+    "Apply the same bucket rules. "
+    "Up to 8 new items. "
+    "If you captured everything important on the first pass, return an "
+    "empty list."
+)
+
+
+def merge_second_pass_items(
+    first_pass: list[ScoredItem],
+    second_pass: list[ScoredItem],
+) -> tuple[list[ScoredItem], int]:
+    """Merge two batches of ScoredItem, de-duplicating second-pass items
+    whose normalised source_quote already appears in the first pass.
+
+    The second pass is gated by a "what did you miss?" prompt that asks the
+    LLM to surface candidates absent from the first batch. Smaller models
+    can mis-count near the per-bucket cap; the two-batch protocol keeps each
+    call's cognitive load comparable to the original single-batch flow, and
+    leaves the deterministic top-N filter (``annotate_scored_items``) to
+    pick the survivors from the combined pool.
+
+    Sometimes the model re-emits a first-pass item anyway; this merger
+    drops those duplicates while preserving order: first-pass items come
+    first, second-pass items follow in their emitted order, and any
+    duplicate from the second pass is silently skipped.
+
+    Returns ``(merged_list, newly_added_count)``.
+    """
+    seen = {normalise_for_quote_match(item.source_quote) for item in first_pass}
+    merged = list(first_pass)
+    newly_added = 0
+    for item in second_pass:
+        key = normalise_for_quote_match(item.source_quote)
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(item)
+        newly_added += 1
+    return merged, newly_added
+
+
 def infer_section_type_from_path(file_path: str | Path) -> str:
     """Infer the section type from a filename whose stem matches one of the
     known section names. Returns ``"unknown"`` if the stem is not recognised.
@@ -1162,6 +1208,102 @@ class CompressReportSection:
                 "response_byte_count": bucket_byte_count,
                 "user_prompt": user_content,
             }
+
+            # Append the first-pass assistant turn so the second pass (and
+            # subsequent buckets) can see what was already produced and avoid
+            # duplicating it.
+            assistant_content_first = json.dumps(obj.model_dump(), separators=(",", ":"))
+            accumulated_chat.append(
+                ChatMessage(role=MessageRole.ASSISTANT, content=assistant_content_first)
+            )
+
+            # Second pass: for scored-list buckets only, ask the LLM what it
+            # missed. Smaller models can mis-count near the per-bucket cap and
+            # silently drop high-signal items on a single pass; the two-batch
+            # protocol keeps each call's cognitive load comparable to the
+            # original flow, with the deterministic scorer (annotate_scored_items
+            # below) picking the survivors from the combined pool.
+            if spec.field_name in SCORED_LIST_FIELDS:
+                second_pass_user_content = SECOND_PASS_USER_PROMPT_TEMPLATE.format(
+                    field_name=spec.field_name
+                )
+                accumulated_chat.append(
+                    ChatMessage(role=MessageRole.USER, content=second_pass_user_content)
+                )
+
+                second_pass_start = time.perf_counter()
+                second_pass_obj = None
+                second_pass_chat_response = None
+                second_pass_last_error: Optional[Exception] = None
+                for retry in range(PER_BUCKET_MAX_ATTEMPTS):
+                    logger.debug(
+                        f"Bucket {spec.field_name} second pass: starting LLM call "
+                        f"(attempt {retry + 1}/{PER_BUCKET_MAX_ATTEMPTS})"
+                    )
+                    try:
+                        second_pass_chat_response = sllm.chat(accumulated_chat)
+                        second_pass_obj = second_pass_chat_response.raw
+                        if second_pass_obj is None:
+                            raise ValueError(
+                                f"Structured LLM returned None for bucket "
+                                f"{spec.field_name!r} (second pass)."
+                            )
+                        break
+                    except Exception as e:
+                        second_pass_last_error = e
+                        logger.warning(
+                            f"Bucket {spec.field_name} second pass attempt "
+                            f"{retry + 1} failed: {type(e).__name__}: "
+                            f"{str(e)[:160]}"
+                        )
+                if second_pass_obj is None:
+                    raise ValueError(
+                        f"Bucket {spec.field_name!r} second pass failed after "
+                        f"{PER_BUCKET_MAX_ATTEMPTS} attempts. Last error: "
+                        f"{type(second_pass_last_error).__name__}: "
+                        f"{second_pass_last_error}"
+                    ) from second_pass_last_error
+                second_pass_duration = int(ceil(time.perf_counter() - second_pass_start))
+                second_pass_byte_count = len(
+                    second_pass_chat_response.message.content.encode("utf-8")
+                )
+                logger.info(
+                    f"Bucket {spec.field_name} second pass: completed in "
+                    f"{second_pass_duration}s, {second_pass_byte_count} bytes"
+                )
+
+                first_pass_items = list(raw_field_value or [])
+                second_pass_items = list(
+                    getattr(second_pass_obj, spec.field_name) or []
+                )
+                merged_items, newly_added_count = merge_second_pass_items(
+                    first_pass_items, second_pass_items
+                )
+                raw_field_value = merged_items
+
+                # Append the second-pass assistant turn so subsequent buckets
+                # see the full pool the LLM produced.
+                assistant_content_second = json.dumps(
+                    second_pass_obj.model_dump(), separators=(",", ":")
+                )
+                accumulated_chat.append(
+                    ChatMessage(
+                        role=MessageRole.ASSISTANT,
+                        content=assistant_content_second,
+                    )
+                )
+
+                bucket_metadata.update(
+                    {
+                        "second_pass_duration": second_pass_duration,
+                        "second_pass_response_byte_count": second_pass_byte_count,
+                        "second_pass_user_prompt": second_pass_user_content,
+                        "first_pass_item_count": len(first_pass_items),
+                        "second_pass_item_count": len(second_pass_items),
+                        "newly_added_count": newly_added_count,
+                    }
+                )
+
             if spec.field_name in SCORED_LIST_FIELDS:
                 bucket_values[spec.field_name], scored_items = annotate_scored_items(
                     raw_field_value, section_markdown, spec.field_name
@@ -1169,13 +1311,6 @@ class CompressReportSection:
                 bucket_metadata["scored_items"] = scored_items
             else:
                 bucket_values[spec.field_name] = raw_field_value
-
-            # Append the assistant turn as compact JSON so the next bucket call
-            # can see what has already been produced and avoid duplicating it.
-            assistant_content = json.dumps(obj.model_dump(), separators=(",", ":"))
-            accumulated_chat.append(
-                ChatMessage(role=MessageRole.ASSISTANT, content=assistant_content)
-            )
 
             per_bucket_metadata[spec.field_name] = bucket_metadata
 
